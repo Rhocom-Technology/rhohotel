@@ -1,0 +1,360 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "format:FDR-{YYYY}-{#####}",
+  "creation": "2025-12-01 12:00:00",
+  "doctype": "DocType",
+  "document_type": "Document",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "reservation_number",
+    "column_break_1",
+    "created_at",
+    "guest_details_section",
+    "corporate_guest",
+    "customer",
+    "column_break_guest",
+    "primary_guest_name",
+    "primary_guest_email",
+    "primary_guest_phone",
+    "dates_section",
+    "from_date",
+    "number_of_nights",
+    "column_break_dates",
+    "to_date",
+    "room_filter_section",
+    "filter_by_room_type",
+    "rooms_section",
+    "rooms",
+    "total_rooms",
+    "pricing_section",
+    "subtotal",
+    "discount_type",
+    "discount",
+    "column_break_pricing",
+    "discount_amount",
+    "total_amount",
+    "column_break_payment",
+    "sales_invoice",
+    "payment_entry",
+    "status_section",
+    "column_break_stgm",
+    "column_break_status",
+    "amended_from",
+    "invoices_section",
+    "sales_invoices",
+    "adjustment_invoices_section",
+    "adjustment_invoices",
+    "reservation_type"
+  ],
+  "fields": [
+    {
+      "default": "Corporate",
+      "fieldname": "reservation_type",
+      "fieldtype": "Select",
+      "hidden": 1,
+      "label": "Reservation Type",
+      "options": "Corporate\nIndividual",
+      "reqd": 1
+    },
+    {
+      "fieldname": "reservation_number",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Reservation Number",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "now",
+      "fieldname": "created_at",
+      "fieldtype": "Datetime",
+      "hidden": 1,
+      "label": "Created At",
+      "read_only": 1
+    },
+    {
+      "fieldname": "guest_details_section",
+      "fieldtype": "Section Break",
+      "label": "Guest Details"
+    },
+    {
+      "description": "Select corporate client (Hotel Guest with type=Corporate)",
+      "fieldname": "corporate_guest",
+      "fieldtype": "Link",
+      "label": "Corporate Guest",
+      "options": "Hotel Guest",
+      "reqd": 1
+    },
+    {
+      "description": "Auto-fetched from Corporate Guest",
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "label": "Customer",
+      "options": "Customer",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_guest",
+      "fieldtype": "Column Break"
+    },
+    {
+      "description": "Main contact person",
+      "fieldname": "primary_guest_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Contact Person Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "primary_guest_email",
+      "fieldtype": "Data",
+      "label": "Contact Person Email",
+      "options": "Email"
+    },
+    {
+      "fieldname": "primary_guest_phone",
+      "fieldtype": "Data",
+      "label": "Contact Person Phone Number",
+      "reqd": 1
+    },
+    {
+      "fieldname": "dates_section",
+      "fieldtype": "Section Break",
+      "label": "Booking Dates"
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Check-In Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Check-Out Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "number_of_nights",
+      "fieldtype": "Int",
+      "label": "Number of Nights",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_dates",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "room_filter_section",
+      "fieldtype": "Section Break",
+      "label": "Room Selection"
+    },
+    {
+      "description": "Filter available rooms by type",
+      "fieldname": "filter_by_room_type",
+      "fieldtype": "Link",
+      "label": "Filter by Room Type (Optional)",
+      "options": "Hotel Room Type"
+    },
+    {
+      "fieldname": "rooms_section",
+      "fieldtype": "Section Break",
+      "label": "Rooms & Guests"
+    },
+    {
+      "description": "Add multiple rooms and assign guests to each",
+      "fieldname": "rooms",
+      "fieldtype": "Table",
+      "label": "Rooms",
+      "options": "Front Desk Reservation Room",
+      "reqd": 1
+    },
+    {
+      "fieldname": "total_rooms",
+      "fieldtype": "Int",
+      "label": "Total Rooms",
+      "read_only": 1
+    },
+    {
+      "fieldname": "pricing_section",
+      "fieldtype": "Section Break",
+      "label": "Pricing"
+    },
+    {
+      "fieldname": "subtotal",
+      "fieldtype": "Currency",
+      "label": "Subtotal",
+      "read_only": 1
+    },
+    {
+      "fieldname": "discount_type",
+      "fieldtype": "Select",
+      "label": "Discount Type",
+      "options": "\nPercentage\nFixed Amount"
+    },
+    {
+      "depends_on": "eval:doc.discount_type",
+      "fieldname": "discount",
+      "fieldtype": "Float",
+      "label": "Discount"
+    },
+    {
+      "fieldname": "column_break_pricing",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "discount_amount",
+      "fieldtype": "Currency",
+      "label": "Discount Amount",
+      "read_only": 1
+    },
+    {
+      "bold": 1,
+      "fieldname": "total_amount",
+      "fieldtype": "Currency",
+      "label": "Total Amount",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_payment",
+      "fieldtype": "Column Break"
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "sales_invoice",
+      "fieldtype": "Link",
+      "label": "Sales Invoice",
+      "options": "Sales Invoice",
+      "read_only": 1
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "payment_entry",
+      "fieldtype": "Link",
+      "label": "Payment Entry",
+      "options": "Payment Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "status_section",
+      "fieldtype": "Section Break",
+      "label": "Status & Notes"
+    },
+    {
+      "fieldname": "column_break_status",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "invoices_section",
+      "fieldtype": "Section Break",
+      "label": "Invoices"
+    },
+    {
+      "description": "All Sales Invoices created for this reservation (one per room)",
+      "fieldname": "sales_invoices",
+      "fieldtype": "Table",
+      "label": "Sales Invoices",
+      "options": "Hotel Front Desk Reservation Invoice",
+      "read_only": 1
+    },
+    {
+      "fieldname": "adjustment_invoices_section",
+      "fieldtype": "Section Break",
+      "label": "Extension & Reduction Invoices"
+    },
+    {
+      "fieldname": "adjustment_invoices",
+      "fieldtype": "Table",
+      "label": "Extension & Reduction Invoices",
+      "options": "Hotel Room Check In Stay Adjustments",
+      "read_only": 1
+    },
+    {
+      "fieldname": "amended_from",
+      "fieldtype": "Link",
+      "label": "Amended From",
+      "no_copy": 1,
+      "options": "Hotel Front Desk Reservation",
+      "print_hide": 1,
+      "read_only": 1,
+      "search_index": 1
+    },
+    {
+      "fieldname": "column_break_stgm",
+      "fieldtype": "Column Break"
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "is_submittable": 1,
+  "links": [
+    {
+      "link_doctype": "Hotel Room Reservation",
+      "link_fieldname": "front_desk_reservation"
+    },
+    {
+      "link_doctype": "Hotel Room Check In",
+      "link_fieldname": "front_desk_reservation"
+    }
+  ],
+  "modified": "2026-02-03 15:08:47.798935",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Hotel Front Desk Reservation",
+  "naming_rule": "Expression (old style)",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "amend": 1,
+      "cancel": 1,
+      "create": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Hotel Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "email": 1,
+      "print": 1,
+      "read": 1,
+      "role": "Hotel Receptionist",
+      "submit": 1,
+      "write": 1
+    }
+  ],
+  "row_format": "Dynamic",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1,
+  "track_seen": 1
+}

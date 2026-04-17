@@ -1,0 +1,136 @@
+{
+ "actions": [],
+ "creation": "2025-10-25 21:56:10.015728",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "request_details_section",
+  "room",
+  "request_date",
+  "housekeeping_task",
+  "column_break_slbb",
+  "requested_by",
+  "guest_name",
+  "status",
+  "approval_time",
+  "request_details_section_section",
+  "request_details"
+ ],
+ "fields": [
+  {
+   "fieldname": "request_details_section",
+   "fieldtype": "Section Break",
+   "label": "About Request"
+  },
+  {
+   "fieldname": "request_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Request Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Room",
+   "options": "Hotel Room",
+   "reqd": 1,
+   "get_route_options_method": "get_occupied_rooms"
+  },
+  {
+   "fieldname": "column_break_slbb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Select",
+   "label": "Requested By",
+   "options": "Guest\nFront Desk\nRoom Service\nManagement",
+   "reqd": 1
+  },
+  {
+   "fieldname": "guest_name",
+   "fieldtype": "Data",
+   "label": "Guest Name"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Pending\nApproved\nCompleted\nCancelled",
+   "reqd": 1
+  },
+  {
+   "fieldname": "housekeeping_task",
+   "fieldtype": "Link",
+   "label": "Housekeeping Task",
+   "options": "Housekeeping Task",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_time",
+   "fieldtype": "Datetime",
+   "label": "Approval Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "request_details_section_section",
+   "fieldtype": "Section Break",
+   "label": "Request Details Section"
+  },
+  {
+   "fieldname": "request_details",
+   "fieldtype": "Text Editor",
+   "label": "Request Details"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-11-10 11:56:43.164786",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Housekeeping Request",
+ "naming_rule": "Expression (old style)",
+ "owner": "t.ajani@rhocom.ng",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

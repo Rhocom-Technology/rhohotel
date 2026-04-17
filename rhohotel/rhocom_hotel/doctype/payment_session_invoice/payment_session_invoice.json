@@ -1,0 +1,42 @@
+{
+    "actions": [],
+    "creation": "2025-11-05 15:23:45.948921",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "invoice_number",
+        "invoice_amount"
+    ],
+    "fields": [
+        {
+            "fieldname": "invoice_number",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Invoice Number",
+            "options": "Sales Invoice",
+            "reqd": 1
+        },
+        {
+            "fieldname": "invoice_amount",
+            "fieldtype": "Currency",
+            "in_list_view": 1,
+            "label": "Amount",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "istable": 1,
+    "links": [],
+    "modified": "2025-11-28 16:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Payment Session Invoice",
+    "owner": "Administrator",
+    "permissions": [],
+    "row_format": "Dynamic",
+    "rows_threshold_for_grid_search": 20,
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}
