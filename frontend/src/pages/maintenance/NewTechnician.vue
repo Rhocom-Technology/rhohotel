@@ -1,0 +1,177 @@
+<template>
+  <div style="background:#f1f5f9;min-height:100%;" class="p-6 space-y-4">
+
+    <!-- Header -->
+    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-gray-900">Technician Setup Control</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Capture identity, source type, specialization, contact details, availability, and vendor or employee linkage.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button @click="router.push('/maintenance/technicians')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+        <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Save</button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;">
+
+      <!-- Left -->
+      <div class="space-y-4">
+
+        <!-- Technician Details -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Technician Details</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Technician ID</p>
+              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Auto generated on save</div>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Technician Type</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+                <option value="">Select type</option>
+                <option>In-House</option>
+                <option>Outsourced</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Availability</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
+                <option>Available</option>
+                <option>On Call</option>
+                <option>Unavailable</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Identity & Source -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Identity & Source</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Full Name / Company Name</p>
+              <input type="text" placeholder="Enter full name or company name"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Employee / Vendor Link</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+                <option value="">Select employee or vendor</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Primary Specialization</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+                <option value="">Select specialization</option>
+                <option>Laundry / Mechanical</option>
+                <option>Boiler / Heating</option>
+                <option>Electrical / Electronics</option>
+                <option>HVAC</option>
+                <option>Plumbing / Pump</option>
+                <option>TV / Smart Lock / IT</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Secondary Skills</p>
+              <input type="text" placeholder="Electrical, HVAC, plumbing, electronics..."
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Phone</p>
+              <input type="text" placeholder="Enter phone number"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Email</p>
+              <input type="email" placeholder="Enter email address"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Shift / Working Window</p>
+              <input type="text" value="08:00 AM - 05:00 PM"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Response Priority Group</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
+                <option>Standard</option>
+                <option>Priority</option>
+                <option>Emergency</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes & Categories -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="mb-4">
+            <p class="text-xs text-gray-500 mb-1.5">Notes</p>
+            <textarea rows="3" placeholder="Enter service scope, experience note, preferred sites, safety instruction, or escalation note..."
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none"></textarea>
+          </div>
+          <div class="mb-4">
+            <p class="text-xs text-gray-500 mb-1.5">Supported Asset Categories</p>
+            <textarea rows="2" placeholder="Laundry equipment, HVAC, pumps, room electronics, power systems..."
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none"></textarea>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 mb-1.5">Certification / License</p>
+            <input type="text" placeholder="Enter license, vendor approval, or professional certification"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Setup Summary -->
+      <div class="space-y-4">
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Setup Summary</h3>
+          <p class="text-xs text-gray-400 mb-2">Technician Preview</p>
+          <div class="bg-blue-50 rounded-xl border border-blue-100 p-4 mb-4">
+            <h4 class="text-xs font-bold text-blue-700 mb-2">New Technician Preview</h4>
+            <p class="text-xs text-blue-600">Type: Not selected</p>
+            <p class="text-xs text-blue-600 mt-0.5">Name: Pending</p>
+            <p class="text-xs text-blue-600 mt-0.5">Availability: Available</p>
+          </div>
+
+          <p class="text-xs text-gray-500 mb-2">Quick Toggles</p>
+          <div class="space-y-2 mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="w-4 h-4 accent-green-500" />
+              <span class="text-xs text-gray-700">Can receive urgent tasks</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="w-4 h-4 accent-green-500" />
+              <span class="text-xs text-gray-700">Visible for task assignment</span>
+            </label>
+          </div>
+
+          <p class="text-xs text-gray-500 mb-2">Reference Attachment</p>
+          <button class="w-full py-2.5 text-xs font-medium text-blue-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 mb-4">
+            Upload profile doc
+          </button>
+
+          <p class="text-xs text-gray-500 mb-2">Current Defaults</p>
+          <div class="bg-gray-50 rounded-lg border border-gray-100 p-3">
+            <p class="text-xs text-gray-600">Initial status: Available</p>
+            <p class="text-xs text-gray-600 mt-0.5">Open tasks: 0</p>
+            <p class="text-xs text-gray-600 mt-0.5">Source: employee/vendor linked</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { useRouter } from 'vue-router'
+const router = useRouter()
+</script>

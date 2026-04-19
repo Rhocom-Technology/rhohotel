@@ -1,0 +1,1 @@
+import{_ as e,o as t,d as s}from"./index.js";const n={},a={class:"p-6 text-gray-400 text-sm"};function o(c,r){return t(),s("div",a,"AssetManagement \u2014 Coming soon")}var m=e(n,[["render",o]]);export{m as default};

@@ -1,0 +1,1 @@
+import{_ as t,o as s,d as o,e as n}from"./index.js";const r={},c={class:"flex flex-col items-center justify-center py-24"};function a(i,e){return s(),o("div",c,[...e[0]||(e[0]=[n("p",{class:"text-sm font-medium text-gray-400"},"Billing \u2014 Coming soon",-1)])])}var f=t(r,[["render",a]]);export{f as default};

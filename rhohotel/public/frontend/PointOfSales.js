@@ -1,0 +1,1 @@
+import{_ as e,o as t,d as o}from"./index.js";const s={},n={class:"p-6 text-gray-400 text-sm"};function a(c,r){return t(),o("div",n,"PointOfSales \u2014 Coming soon")}var f=e(s,[["render",a]]);export{f as default};

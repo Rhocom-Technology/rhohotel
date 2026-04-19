@@ -1,0 +1,186 @@
+<template>
+  <div style="background:#f1f5f9;min-height:100%;" class="p-6 space-y-4">
+
+    <!-- Header -->
+    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-gray-900">Request Control</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Capture request source, location or asset, urgency, issue details, and any evidence needed for quick response.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button @click="router.push('/maintenance/request')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+        <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Submit Request</button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;">
+
+      <!-- Left -->
+      <div class="space-y-4">
+
+        <!-- Request Details -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Request Details</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Request ID</p>
+              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Auto generated on save</div>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Request Type</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
+                <option>Corrective Request</option>
+                <option>Preventive Request</option>
+                <option>Inspection Request</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Priority</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+                <option value="">Select priority</option>
+                <option>Urgent</option>
+                <option>High</option>
+                <option>Medium</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Requester Information -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Requester Information</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Requested By</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+                <option value="">Select staff / requester</option>
+                <option>Mary Bello</option>
+                <option>John Ude</option>
+                <option>Rita James</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Department</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
+                <option>Housekeeping</option>
+                <option>Front Desk</option>
+                <option>Engineering</option>
+                <option>Laundry</option>
+                <option>Security</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Issue Target -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Issue Target</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-4">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Target Type</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
+                <option>Location / Room / Asset</option>
+                <option>Room</option>
+                <option>Asset</option>
+                <option>Location</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Location / Room</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
+                <option>Room 305</option>
+                <option>Room 214</option>
+                <option>Laundry Room</option>
+                <option>Power House</option>
+                <option>Boiler Room</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Asset Reference</p>
+              <input type="text" placeholder="Optional asset selection"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-400" />
+            </div>
+          </div>
+          <div class="mb-4">
+            <p class="text-xs text-gray-500 mb-1.5">Issue Title</p>
+            <input type="text" placeholder="Example: AC not cooling in Room 305"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+          </div>
+          <div class="mb-4">
+            <p class="text-xs text-gray-500 mb-1.5">Issue Description</p>
+            <textarea rows="4" placeholder="Describe the fault, when it started, observed symptoms, any guest impact, and temporary measures already taken..."
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none"></textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Preferred Access Time</p>
+              <input type="text" placeholder="Select preferred access time"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Guest Impact</p>
+              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+                <option>Low / Medium / High</option>
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 mb-1.5">Evidence / Attachment</p>
+            <button class="w-full py-4 text-xs font-medium text-blue-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
+              Upload photo, note, or document
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Setup Summary -->
+      <div class="space-y-4">
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Request Setup Summary</h3>
+          <p class="text-xs text-gray-400 mb-2">Preview</p>
+          <div class="bg-blue-50 rounded-xl border border-blue-100 p-4 mb-4">
+            <h4 class="text-xs font-bold text-blue-700 mb-2">New Request Preview</h4>
+            <p class="text-xs text-blue-600">Type: Corrective</p>
+            <p class="text-xs text-blue-600 mt-0.5">Target: Pending</p>
+            <p class="text-xs text-blue-600 mt-0.5">Priority: Not set</p>
+          </div>
+
+          <p class="text-xs text-gray-500 mb-2">Quick Toggles</p>
+          <div class="space-y-2 mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="w-4 h-4 accent-green-500" />
+              <span class="text-xs text-gray-700">Allow urgent escalation</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="w-4 h-4 accent-green-500" />
+              <span class="text-xs text-gray-700">Notify supervisor on submit</span>
+            </label>
+          </div>
+
+          <p class="text-xs text-gray-500 mb-2">Suggested Routing</p>
+          <div class="bg-gray-50 rounded-lg border border-gray-100 p-3 mb-4">
+            <p class="text-xs text-gray-500">Based on issue target and type, the request can route to:</p>
+            <p class="text-xs font-bold text-gray-900 mt-1">Maintenance Supervisor</p>
+            <p class="text-xs text-gray-400 mt-0.5">then assign to available technician</p>
+          </div>
+
+          <p class="text-xs text-gray-500 mb-2">Status Defaults</p>
+          <div class="bg-gray-50 rounded-lg border border-gray-100 p-3">
+            <p class="text-xs text-gray-600">Initial status: Open</p>
+            <p class="text-xs text-gray-600 mt-0.5">Assignment: Pending review</p>
+            <p class="text-xs text-gray-600 mt-0.5">Tracking starts on submit</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { useRouter } from 'vue-router'
+const router = useRouter()
+</script>

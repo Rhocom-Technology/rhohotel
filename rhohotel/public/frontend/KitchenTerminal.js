@@ -1,0 +1,1 @@
+import{_ as e,o as t,d as n}from"./index.js";const c={},o={class:"p-6 text-gray-400 text-sm"};function r(s,a){return t(),n("div",o,"KitchenTerminal \u2014 Coming soon")}var i=e(c,[["render",r]]);export{i as default};

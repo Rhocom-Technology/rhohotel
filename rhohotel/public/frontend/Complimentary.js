@@ -1,0 +1,1 @@
+import{_ as e,o as t,d as o}from"./index.js";const r={},n={class:"p-6 text-gray-400 text-sm"};function s(a,c){return t(),o("div",n,"Complimentary \u2014 Coming soon")}var m=e(r,[["render",s]]);export{m as default};
