@@ -1,14 +1,94 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+
+#app,
+#app * {
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+}
+
+#app {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+#app input,
+#app select,
+#app textarea,
+#app button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+
+/* Force override Frappe styles */
+#app {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+#app .text-xs {
+  font-size: 0.75rem !important;
+  line-height: 1rem !important;
+}
+
+#app .text-sm {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
+
+#app .text-base {
+  font-size: 1rem !important;
+  line-height: 1.5rem !important;
+}
+
+#app .text-lg {
+  font-size: 1.125rem !important;
+  line-height: 1.75rem !important;
+}
+
+#app .text-xl {
+  font-size: 1.25rem !important;
+  line-height: 1.75rem !important;
+}
+
+#app .text-2xl {
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
+}
+
+#app .text-3xl {
+  font-size: 1.875rem !important;
+  line-height: 2.25rem !important;
+}
+
+#app .font-medium {
+  font-weight: 500 !important;
+}
+
+#app .font-semibold {
+  font-weight: 600 !important;
+}
+
+#app .font-bold {
+  font-weight: 700 !important;
+}
+
+#app * {
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif !important;
+}
+
 @layer base {
   .theme {
     --font-heading: var(--font-sans)
   }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -36,6 +116,7 @@
     --chart-5: 27 87% 67%;
     --radius: 0.5rem
   }
+
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -68,6 +149,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
