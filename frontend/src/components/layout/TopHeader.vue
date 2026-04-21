@@ -47,7 +47,7 @@ const pageMeta = {
   'HousekeepingDashboard':    { title: 'Housekeeping Dashboard', subtitle: 'Room operations • cleaning status • team workload' },
   'HousekeepingTask':         { title: 'Housekeeping Task', subtitle: 'Task detail • room assignment, cleaning checklist, inventory updates, and status control' },
   'NewHousekeepingTask':      { title: 'Housekeeping Task', subtitle: 'Task detail • room assignment, cleaning checklist, inventory updates, and status control' },
-  'StayReport':               { title: 'Stay Report', subtitle: 'Room occupancy and stay analytics' },
+  'HousekeepingReport':               { title: 'Housekeeping Report', subtitle: 'Housekeeping operations and stay analytics' },
 
   // Maintenance
   'MaintenanceList':          { title: 'Maintenance List', subtitle: 'Operations • full maintenance register for preventive and corrective tasks' },

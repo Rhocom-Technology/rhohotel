@@ -1,40 +1,66 @@
 {
     "actions": [],
     "allow_rename": 1,
-    "autoname": "MNT-TASK-{YYYY}-{#####}",
+    "autoname": "MNT-TASK-.YYYY.-.#####",
     "creation": "2025-10-27 12:13:19.867021",
-    "custom": 1,
+    "custom": 0,
     "doctype": "DocType",
     "engine": "InnoDB",
     "field_order": [
-        "section_break_sqbb",
+        "task_details_section",
+        "task_type",
         "maintenance_request",
-        "room",
-        "asset",
         "priority",
-        "amended_from",
-        "column_break_qiil",
-        "assigned_to",
         "status",
-        "description_section",
-        "task_description",
+        "amended_from",
+        "column_break_main",
+        "assigned_to",
+        "supervisor",
         "timing_section",
         "start_time",
-        "column_break_piyn",
+        "column_break_timing",
         "end_time",
-        "work_performed_section",
+        "expected_duration",
+        "location_section",
+        "location",
+        "column_break_loc_asset",
+        "asset",
+        "final_asset_status",
+        "description_section",
+        "task_description",
+        "column_break_desc",
         "work_performed",
+        "completion_section",
+        "inspection_required",
+        "completion_notes",
+        "checklist_section",
+        "fault_diagnosed",
+        "parts_replaced",
+        "column_break_checklist",
+        "test_run_passed",
+        "supervisor_verified",
+        "parts_section",
+        "parts_approval_status",
+        "parts_approved_by",
+        "parts_approved_on",
         "parts_used",
-        "tracking_section",
-        "cost_center",
-        "column_break_zrlq",
-        "timesheet"
+        "stock_entry"
     ],
     "fields": [
         {
-            "fieldname": "section_break_sqbb",
+            "fieldname": "task_details_section",
             "fieldtype": "Section Break",
             "label": "Task Details"
+        },
+        {
+            "fieldname": "task_type",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Task Type",
+            "options": "Corrective\nPreventive\nRoutine\nInspection",
+            "reqd": 1,
+            "default": "Corrective"
         },
         {
             "fieldname": "maintenance_request",
@@ -42,26 +68,7 @@
             "in_list_view": 1,
             "in_standard_filter": 1,
             "label": "Maintenance Request",
-            "options": "Maintenance Request",
-            "reqd": 1
-        },
-        {
-            "fieldname": "room",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Room",
-            "options": "Hotel Room",
-            "reqd": 1
-        },
-        {
-            "fieldname": "asset",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Asset",
-            "options": "Asset",
-            "reqd": 1
+            "options": "Maintenance Request"
         },
         {
             "fieldname": "priority",
@@ -69,8 +76,18 @@
             "in_list_view": 1,
             "in_standard_filter": 1,
             "label": "Priority",
-            "options": "Low\nMedium\nHigh\nCritical",
-            "reqd": 1
+            "options": "Low\nMedium\nHigh",
+            "reqd": 1,
+            "default": "Medium"
+        },
+        {
+            "fieldname": "status",
+            "label": "Status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "options": "Open\nIn Progress\nDone\nHold\nCancelled",
+            "default": "Open"
         },
         {
             "fieldname": "amended_from",
@@ -83,7 +100,7 @@
             "search_index": 1
         },
         {
-            "fieldname": "column_break_qiil",
+            "fieldname": "column_break_main",
             "fieldtype": "Column Break"
         },
         {
@@ -91,27 +108,16 @@
             "fieldtype": "Link",
             "in_list_view": 1,
             "in_standard_filter": 1,
-            "label": "Assigned To",
+            "label": "Assigned Technician",
             "options": "Employee",
             "reqd": 1
         },
         {
-            "fieldname": "status",
-            "fieldtype": "Select",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Status",
-            "reqd": 1
-        },
-        {
-            "fieldname": "description_section",
-            "fieldtype": "Section Break",
-            "label": "Description"
-        },
-        {
-            "fieldname": "task_description",
-            "fieldtype": "Text Editor",
-            "label": "Task Description"
+            "fieldname": "supervisor",
+            "fieldtype": "Link",
+            "in_list_view": 0,
+            "label": "Supervisor",
+            "options": "Employee"
         },
         {
             "fieldname": "timing_section",
@@ -125,7 +131,12 @@
             "label": "Start Time"
         },
         {
-            "fieldname": "column_break_piyn",
+            "fieldname": "expected_duration",
+            "fieldtype": "Duration",
+            "label": "Expected Duration"
+        },
+        {
+            "fieldname": "column_break_timing",
             "fieldtype": "Column Break"
         },
         {
@@ -135,14 +146,140 @@
             "label": "End Time"
         },
         {
-            "fieldname": "work_performed_section",
+            "fieldname": "location_section",
             "fieldtype": "Section Break",
-            "label": "Work Performed"
+            "label": "Location"
+        },
+        {
+            "fieldname": "location",
+            "fieldtype": "Data",
+            "label": "Location",
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "column_break_loc_asset",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "asset",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Asset",
+            "options": "Asset",
+            "reqd": 1
+        },
+        {
+            "fieldname": "final_asset_status",
+            "fieldtype": "Select",
+            "label": "Final Asset Status",
+            "options": "\nOperational\nOut of Service\nUnder Repair\nDecommissioned",
+            "reqd": 0,
+            "mandatory_depends_on": "eval:doc.workflow_state === 'Completed'"
+        },
+        {
+            "fieldname": "description_section",
+            "fieldtype": "Section Break",
+            "label": "Description & Work Performed"
+        },
+        {
+            "fieldname": "task_description",
+            "fieldtype": "Small Text",
+            "label": "Task Description"
+        },
+        {
+            "fieldname": "column_break_desc",
+            "fieldtype": "Column Break"
         },
         {
             "fieldname": "work_performed",
-            "fieldtype": "Text Editor",
-            "label": "Work Performed"
+            "fieldtype": "Small Text",
+            "label": "Work Performed",
+            "mandatory_depends_on": "eval:doc.workflow_state === 'Completed'"
+        },
+        {
+            "fieldname": "completion_section",
+            "fieldtype": "Section Break",
+            "label": "Completion"
+        },
+        {
+            "fieldname": "inspection_required",
+            "fieldtype": "Check",
+            "label": "Inspection Required (Inspector must verify)",
+            "default": "0"
+        },
+        {
+            "fieldname": "completion_notes",
+            "fieldtype": "Small Text",
+            "label": "Completion Notes"
+        },
+        {
+            "fieldname": "checklist_section",
+            "fieldtype": "Section Break",
+            "label": "Maintenance Checklist"
+        },
+        {
+            "fieldname": "fault_diagnosed",
+            "fieldtype": "Check",
+            "label": "Fault Diagnosed",
+            "default": "0"
+        },
+        {
+            "fieldname": "parts_replaced",
+            "fieldtype": "Check",
+            "label": "Parts Replaced",
+            "default": "0"
+        },
+        {
+            "fieldname": "column_break_checklist",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "test_run_passed",
+            "fieldtype": "Check",
+            "label": "Test Run Passed",
+            "default": "0"
+        },
+        {
+            "fieldname": "supervisor_verified",
+            "fieldtype": "Check",
+            "label": "Supervisor Verified",
+            "default": "0",
+            "depends_on": "eval:doc.inspection_required == 1"
+        },
+        {
+            "fieldname": "parts_section",
+            "fieldtype": "Section Break",
+            "label": "Parts / Material Usage"
+        },
+        {
+            "fieldname": "parts_approval_status",
+            "fieldtype": "Select",
+            "label": "Parts Approval Status",
+            "options": "\nPending Approval\nApproved",
+            "default": "",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "read_only": 1,
+            "description": "Set automatically when parts are added. Must be approved by Admin/Hotel Manager before submission."
+        },
+        {
+            "fieldname": "column_break_parts_approval",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "parts_approved_by",
+            "fieldtype": "Link",
+            "label": "Parts Approved By",
+            "options": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "parts_approved_on",
+            "fieldtype": "Datetime",
+            "label": "Parts Approved On",
+            "read_only": 1
         },
         {
             "fieldname": "parts_used",
@@ -151,33 +288,18 @@
             "options": "Maintenance Parts Used"
         },
         {
-            "fieldname": "tracking_section",
-            "fieldtype": "Section Break",
-            "label": "Tracking"
-        },
-        {
-            "fieldname": "cost_center",
+            "fieldname": "stock_entry",
             "fieldtype": "Link",
-            "label": "Cost Center",
-            "options": "Cost Center"
-        },
-        {
-            "fieldname": "column_break_zrlq",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "timesheet",
-            "fieldtype": "Link",
-            "label": "Timesheet",
-            "options": "Timesheet"
+            "label": "Stock Entry",
+            "options": "Stock Entry",
+            "read_only": 1,
+            "in_list_view": 0
         }
     ],
     "grid_page_length": 50,
     "index_web_pages_for_search": 1,
     "is_submittable": 1,
     "links": [],
-    "modified": "2025-10-27 12:29:13.266355",
-    "modified_by": "t.ajani@rhocom.ng",
     "module": "Rhocom Hotel",
     "name": "Maintenance Task",
     "naming_rule": "Expression (old style)",
@@ -194,13 +316,63 @@
             "role": "System Manager",
             "share": 1,
             "submit": 1,
+            "cancel": 1,
+            "amend": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "share": 1,
+            "submit": 1,
+            "cancel": 1,
+            "amend": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk",
+            "share": 1,
+            "submit": 0,
             "write": 1
         }
     ],
     "row_format": "Dynamic",
-    "rows_threshold_for_grid_search": 20,
     "sort_field": "modified",
     "sort_order": "DESC",
-    "states": [],
+    "states": [
+        {
+            "color": "Gray",
+            "title": "Open"
+        },
+        {
+            "color": "Blue",
+            "title": "In Progress"
+        },
+        {
+            "color": "Green",
+            "title": "Done"
+        },
+        {
+            "color": "Yellow",
+            "title": "Hold"
+        },
+        {
+            "color": "Red",
+            "title": "Cancelled"
+        }
+    ],
     "track_changes": 1
 }
