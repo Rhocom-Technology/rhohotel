@@ -1390,6 +1390,9 @@ from .shared_utilities import (
     get_room_type_details,
     get_room_images
 )
+from rhohotel.rhocom_hotel.utils.room_availability import (
+    get_available_rooms as get_central_available_rooms,
+)
 
 
 @frappe.whitelist(allow_guest=True, methods=['POST'])
@@ -1504,69 +1507,10 @@ def search_available_rooms(check_in_date, check_out_date, num_rooms=1, adults=1,
                 continue
             
             # === COUNT AVAILABLE ROOMS ===
-            # Step 1: Get all vacant rooms of this type
-            total_vacant = frappe.db.count(
-                "Hotel Room",
-                filters={
-                    "room_type": room_type_name,
-                    "status": "Vacant",
-                    "maintenance_flag": 0,
-                    "operational_status": "In Service"
-                }
+            room_list = get_available_room_list_excluding_held(
+                room_type_name, check_in_str, check_out_str
             )
-            
-            # Step 2: Get rooms with reservations that overlap the requested dates
-            # ✅ FIXED: Only count Vacant rooms (status = 'Vacant')
-            booked_rooms = frappe.db.sql("""
-                SELECT COUNT(DISTINCT hr.room_number) 
-                FROM `tabHotel Room Reservation` hr
-                INNER JOIN `tabHotel Room` room ON hr.room_number = room.name
-                WHERE room.room_type = %s 
-                AND room.operational_status = 'In Service'
-                AND room.status = 'Vacant'
-                AND hr.status != 'Cancelled'
-                AND hr.from_date < %s
-                AND hr.to_date > %s
-            """, (room_type_name, check_out_str, check_in_str))
-            
-            booked_count = booked_rooms[0][0] if booked_rooms else 0
-            
-            # Step 3: Get rooms with active check-ins during the requested dates
-            # ✅ FIXED: Only count Vacant rooms (status = 'Vacant')
-            checked_in_rooms = frappe.db.sql("""
-                SELECT COUNT(DISTINCT chkin.room_number)
-                FROM `tabHotel Room Check In` chkin
-                INNER JOIN `tabHotel Room` room ON chkin.room_number = room.name
-                WHERE room.room_type = %s
-                AND room.operational_status = 'In Service'
-                AND room.status = 'Vacant'
-                AND chkin.status IN ('Draft', 'Checked In')
-                AND DATE(chkin.check_in_datetime) < %s
-                AND DATE(chkin.expected_check_out_datetime) > %s
-            """, (room_type_name, check_out_str, check_in_str))
-            
-            checked_in_count = checked_in_rooms[0][0] if checked_in_rooms else 0
-            
-            # Step 4: Get rooms currently held by active temporary bookings
-            # ✅ UPDATED: Query Temporary Booking instead of Hotel Room
-            held_rooms_query = frappe.db.sql("""
-                SELECT COUNT(DISTINCT tbr.room_number)
-                FROM `tabTemporary Booking` tb
-                INNER JOIN `tabTemporary Booking Room` tbr ON tb.name = tbr.parent
-                INNER JOIN `tabHotel Room` room ON tbr.room_number = room.name
-                WHERE room.room_type = %s
-                AND room.operational_status = 'In Service'
-                AND tb.status IN ('Hold', 'Payment Link Generated')
-                AND tb.payment_status = 'Pending'
-                AND tb.booking_status = 'Held'
-                AND tb.hold_expires_at > %s
-            """, (room_type_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            
-            held_count = held_rooms_query[0][0] if held_rooms_query else 0
-            
-            # Calculate available rooms: total vacant minus booked minus checked-in minus held
-            unavailable_count = booked_count + checked_in_count + held_count
-            available_count = total_vacant - unavailable_count
+            available_count = len(room_list)
             
             # Skip if not enough rooms available
             if available_count < num_rooms:
@@ -1587,10 +1531,6 @@ def search_available_rooms(check_in_date, check_out_date, num_rooms=1, adults=1,
             price_info["total_price"] = price_info["total_price"] * num_rooms
             
             # === GET ROOM DETAILS ===
-            room_list = get_available_room_list_excluding_held(
-                room_type_name, check_in_str, check_out_str
-            )
-            
             if len(room_list) < num_rooms:
                 continue
             
@@ -1677,49 +1617,21 @@ def get_available_room_list_excluding_held(room_type, check_in_date, check_out_d
     ✅ UPDATED: Uses Temporary Booking for hold status instead of Hotel Room
     """
     try:
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        rooms = frappe.db.sql("""
-            SELECT 
-                room.name as room_number,
-                room.capacity,
-                room.floor,
-                room.room_type
-            FROM `tabHotel Room` room
-            WHERE room.room_type = %s
-            AND room.operational_status = 'In Service'
-            AND room.status = 'Vacant'
-            AND room.maintenance_flag = 0
-            -- EXCLUDE rooms held by active temporary bookings
-            AND NOT EXISTS (
-                SELECT 1 FROM `tabTemporary Booking` tb
-                INNER JOIN `tabTemporary Booking Room` tbr ON tb.name = tbr.parent
-                WHERE tbr.room_number = room.name
-                AND tb.status IN ('Hold', 'Payment Link Generated')
-                AND tb.payment_status = 'Pending'
-                AND tb.booking_status = 'Held'
-                AND tb.hold_expires_at > %s
-            )
-            -- EXCLUDE booked rooms
-            AND NOT EXISTS (
-                SELECT 1 FROM `tabHotel Room Reservation` res
-                WHERE res.room_number = room.name
-                AND res.status != 'Cancelled'
-                AND res.from_date < %s
-                AND res.to_date > %s
-            )
-            -- EXCLUDE checked-in rooms
-            AND NOT EXISTS (
-                SELECT 1 FROM `tabHotel Room Check In` chkin
-                WHERE chkin.room_number = room.name
-                AND chkin.status IN ('Draft', 'Checked In')
-                AND DATE(chkin.check_in_datetime) < %s
-                AND DATE(chkin.expected_check_out_datetime) > %s
-            )
-            ORDER BY room.name ASC
-        """, (room_type, current_time, check_out_date, check_in_date, check_out_date, check_in_date), as_dict=True)
-        
-        return [{"room_number": r["room_number"], "capacity": r["capacity"], "floor": r["floor"]} for r in rooms]
+        rooms = get_central_available_rooms(
+            check_in_date,
+            check_out_date,
+            room_type=room_type,
+            require_vacant=True,
+        )
+
+        return [
+            {
+                "room_number": r.get("name"),
+                "capacity": r.get("capacity"),
+                "floor": r.get("floor"),
+            }
+            for r in rooms
+        ]
     
     except Exception as e:
         frappe.log_error(f"Error getting available rooms: {str(e)}")

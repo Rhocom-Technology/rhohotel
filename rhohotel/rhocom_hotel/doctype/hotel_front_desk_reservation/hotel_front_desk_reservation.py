@@ -236,39 +236,16 @@ class HotelFrontDeskReservation(frappe.model.document.Document):
 					room.season_type = season_type or ""
 
 	def is_room_available(self, room_number):
-		"""Check room availability"""
-		# Check overlapping reservations
-		overlapping = frappe.db.sql(
-			"""
-            SELECT COUNT(*) as count
-            FROM `tabHotel Room Reservation`
-            WHERE room_number = %s
-            AND status NOT IN ('Cancelled', 'Completed')
-            AND from_date < %s
-            AND to_date > %s
-        """,
-			(room_number, self.to_date, self.from_date),
-			as_dict=True,
+		"""Check room availability using the centralized utility."""
+		from rhohotel.rhocom_hotel.utils.room_availability import (
+			check_reservation_conflict,
+			check_checkin_conflict,
 		)
-
-		if overlapping and overlapping[0].count > 0:
+		if check_reservation_conflict(room_number, self.from_date, self.to_date):
 			return False
-
-		# Check active check-ins
-		checked_in = frappe.db.sql(
-			"""
-            SELECT COUNT(*) as count
-            FROM `tabHotel Room Check In`
-            WHERE room_number = %s
-            AND status IN ('Draft', 'Checked In')
-            AND DATE(check_in_datetime) < %s
-            AND DATE(expected_check_out_datetime) > %s
-        """,
-			(room_number, self.to_date, self.from_date),
-			as_dict=True,
-		)
-
-		return not (checked_in and checked_in[0].count > 0)
+		if check_checkin_conflict(room_number, self.from_date, self.to_date):
+			return False
+		return True
 
 	def calculate_pricing(self):
 		"""Calculate totals"""
@@ -482,87 +459,9 @@ class HotelFrontDeskReservation(frappe.model.document.Document):
 
 @frappe.whitelist()
 def get_available_rooms(from_date, to_date, room_type=None):
-	"""Get available rooms"""
-	try:
-		from_date_obj = getdate(from_date)
-		to_date_obj = getdate(to_date)
-
-		if to_date_obj <= from_date_obj:
-			frappe.throw(_("Check-out must be after check-in"))
-
-		filters = {"room_type": room_type} if room_type else {}
-		all_rooms = frappe.get_all(
-			"Hotel Room", filters=filters, fields=["name", "room_type", "floor", "capacity"]
-		)
-
-		if not all_rooms:
-			return []
-
-		room_numbers = [r.name for r in all_rooms]
-		current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-		# Exclude held rooms
-		held_rooms = frappe.db.sql(
-			"""
-            SELECT DISTINCT tbr.room_number
-            FROM `tabTemporary Booking` tb
-            INNER JOIN `tabTemporary Booking Room` tbr ON tb.name = tbr.parent
-            WHERE tbr.room_number IN ({rooms})
-            AND tb.status IN ('Hold', 'Payment Link Generated')
-            AND tb.payment_status = 'Pending'
-            AND tb.booking_status = 'Held'
-            AND tb.hold_expires_at > %s
-        """.format(rooms=", ".join(["%s"] * len(room_numbers))),
-			tuple(room_numbers) + (current_time,),
-			as_dict=True,
-		)
-
-		# Exclude reserved rooms
-		overlapping = frappe.db.sql(
-			"""
-            SELECT DISTINCT room_number
-            FROM `tabHotel Room Reservation`
-            WHERE room_number IN ({rooms})
-            AND status NOT IN ('Cancelled', 'Completed')
-            AND from_date < %s AND to_date > %s
-        """.format(rooms=", ".join(["%s"] * len(room_numbers))),
-			tuple(room_numbers) + (to_date, from_date),
-			as_dict=True,
-		)
-
-		# Exclude checked-in rooms
-		checked_in = frappe.db.sql(
-			"""
-            SELECT DISTINCT room_number
-            FROM `tabHotel Room Check In`
-            WHERE room_number IN ({rooms})
-            AND status IN ('Draft', 'Checked In')
-            AND DATE(check_in_datetime) < %s
-            AND DATE(expected_check_out_datetime) > %s
-        """.format(rooms=", ".join(["%s"] * len(room_numbers))),
-			tuple(room_numbers) + (to_date, from_date),
-			as_dict=True,
-		)
-
-		unavailable = set(
-			[r.room_number for r in held_rooms]
-			+ [r.room_number for r in overlapping]
-			+ [r.room_number for r in checked_in]
-		)
-
-		available_rooms = [r for r in all_rooms if r.name not in unavailable]
-
-		# Add pricing
-		for room in available_rooms:
-			rate = get_room_rate(room.room_type, check_in_date=str(from_date))
-			room["rate_per_night"] = rate
-			room["total_amount"] = rate * date_diff(to_date_obj, from_date_obj)
-
-		return available_rooms
-
-	except Exception as e:
-		frappe.log_error(frappe.get_traceback(), "Get Available Rooms Error")
-		frappe.throw(_("Error: {0}").format(str(e)))
+	"""Get available rooms. Delegates to the centralized utility."""
+	from rhohotel.rhocom_hotel.utils.room_availability import get_available_rooms as _get_available_rooms
+	return _get_available_rooms(from_date, to_date, room_type=room_type)
 
 
 @frappe.whitelist()

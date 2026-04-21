@@ -8,6 +8,11 @@ Location: rhohotel/rhohotel/shared_utilities.py
 import frappe
 from datetime import datetime, timedelta
 import secrets
+from rhohotel.rhocom_hotel.utils.room_availability import (
+	get_available_rooms as get_central_available_rooms,
+	check_reservation_conflict,
+	check_checkin_conflict,
+)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -274,47 +279,21 @@ def get_available_room_list(room_type, check_in_date_str, check_out_date_str):
 	    list: [{room_number, floor, capacity}, ...]
 	"""
 	try:
-		vacant_rooms = frappe.db.get_list(
-			"Hotel Room",
-			filters={
-				"room_type": room_type,
-				"status": "Vacant",
-				"maintenance_flag": 0,
-				"operational_status": "In Service",
-			},
-			fields=["name", "floor", "capacity"],
+		available_rooms = get_central_available_rooms(
+			check_in_date_str,
+			check_out_date_str,
+			room_type=room_type,
+			require_vacant=True,
 		)
 
-		# Get booked rooms during this period
-		booked_rooms_list = frappe.db.sql(
-			"""
-            SELECT DISTINCT hr.room_number
-            FROM `tabHotel Room Reservation` hr
-            INNER JOIN `tabHotel Room` room ON hr.room_number = room.name
-            WHERE room.room_type = %s 
-            AND room.operational_status = 'In Service'
-            AND hr.status != 'Cancelled'
-            AND hr.from_date < %s
-            AND hr.to_date > %s
-        """,
-			(room_type, check_out_date_str, check_in_date_str),
-		)
-
-		booked_room_numbers = [row[0] for row in booked_rooms_list]
-
-		# Filter to only available rooms
-		available = []
-		for room in vacant_rooms:
-			if room["name"] not in booked_room_numbers:
-				available.append(
-					{
-						"room_number": room["name"],
-						"floor": room.get("floor", "N/A"),
-						"capacity": room.get("capacity", 1),
-					}
-				)
-
-		return available
+		return [
+			{
+				"room_number": room.get("name"),
+				"floor": room.get("floor", "N/A"),
+				"capacity": room.get("capacity", 1),
+			}
+			for room in available_rooms
+		]
 
 	except Exception as e:
 		frappe.log_error(f"Error getting available room list: {str(e)}")
@@ -337,32 +316,13 @@ def get_available_room_count(room_type, check_in_date, check_out_date):
 		check_in_str, _ = parse_date(check_in_date, "check_in_date")
 		check_out_str, _ = parse_date(check_out_date, "check_out_date")
 
-		total_vacant_rooms = frappe.db.count(
-			"Hotel Room",
-			filters={
-				"room_type": room_type,
-				"status": "Vacant",
-				"maintenance_flag": 0,
-				"operational_status": "In Service",
-			},
+		available_rooms = get_central_available_rooms(
+			check_in_str,
+			check_out_str,
+			room_type=room_type,
+			require_vacant=True,
 		)
-
-		booked_rooms = frappe.db.sql(
-			"""
-            SELECT COUNT(DISTINCT hr.room_number) 
-            FROM `tabHotel Room Reservation` hr
-            INNER JOIN `tabHotel Room` room ON hr.room_number = room.name
-            WHERE room.room_type = %s 
-            AND room.operational_status = 'In Service'
-            AND hr.status != 'Cancelled'
-            AND hr.from_date < %s
-            AND hr.to_date > %s
-        """,
-			(room_type, check_out_str, check_in_str),
-		)
-
-		booked_count = booked_rooms[0][0] if booked_rooms else 0
-		return total_vacant_rooms - booked_count
+		return len(available_rooms)
 
 	except Exception as e:
 		frappe.log_error(f"Error getting available room count: {str(e)}")
@@ -402,20 +362,11 @@ def validate_room_for_booking(room_number, check_in_date_str, check_out_date_str
 		if room.get("maintenance_flag"):
 			raise frappe.ValidationError(f"Room {room_number} is under maintenance")
 
-		# Check if already booked
-		existing_booking = frappe.db.sql(
-			"""
-            SELECT name FROM `tabHotel Room Reservation`
-            WHERE room_number = %s
-            AND status NOT IN ('Cancelled')
-            AND from_date < %s
-            AND to_date > %s
-        """,
-			(room_number, check_out_date_str, check_in_date_str),
-		)
-
-		if existing_booking:
+		if check_reservation_conflict(room_number, check_in_date_str, check_out_date_str):
 			raise frappe.ValidationError(f"Room {room_number} is already booked for selected dates")
+
+		if check_checkin_conflict(room_number, check_in_date_str, check_out_date_str):
+			raise frappe.ValidationError(f"Room {room_number} is already occupied for selected dates")
 
 		return room
 

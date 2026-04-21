@@ -16,7 +16,7 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
           Refresh
         </button>
         <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
@@ -111,8 +111,16 @@
         <p class="text-xs text-gray-400">Showing 1–{{ Math.min(pageSize, filteredList.length) }} of {{ filteredList.length }} records</p>
       </div>
 
+      <div v-if="checkOutResource.loading" class="flex items-center justify-center py-14">
+        <p class="text-sm text-gray-400">Loading check-outs...</p>
+      </div>
+
+      <div v-else-if="checkOutResource.error" class="px-6 py-10 text-center">
+        <p class="text-sm font-medium text-red-500">Unable to load check-out records.</p>
+      </div>
+
       <!-- Empty -->
-      <div v-if="filteredList.length === 0" class="flex flex-col items-center justify-center py-16">
+      <div v-else-if="filteredList.length === 0" class="flex flex-col items-center justify-center py-16">
         <LogOut class="w-10 h-10 text-gray-200 mb-3" />
         <p class="text-sm font-medium text-gray-400">No check-out records found</p>
       </div>
@@ -179,8 +187,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { LogOut } from 'lucide-vue-next'
+import { createResource } from 'frappe-ui'
 
 const search = ref('')
 const filterDateRange = ref('month')
@@ -189,28 +198,44 @@ const filterSource = ref('')
 const page = ref(1)
 const pageSize = 25
 
+const checkOutResource = createResource({
+  url: 'frappe.client.get_list',
+  params: {
+    doctype: 'Hotel Room Check In',
+    fields: [
+      'name',
+      'guest',
+      'room_number',
+      'check_in_datetime',
+      'actual_check_out_datetime',
+      'expected_check_out_datetime',
+      'reservation_source',
+      'total_outstanding_amount',
+      'status',
+    ],
+    filters: [['status', '=', 'Checked Out']],
+    order_by: 'actual_check_out_datetime desc',
+    limit_page_length: 500,
+  },
+  auto: true,
+})
+
+const checkouts = computed(() => (checkOutResource.data || []).map((row) => ({
+  ...row,
+  guest: row.guest || '—',
+  reservation_source: row.reservation_source || 'Walk In',
+  check_out_date_value: row.actual_check_out_datetime || row.expected_check_out_datetime,
+})))
+
 const stats = computed(() => ({
-  total: 87,
-  thisWeek: 12,
-  thisMonth: 38,
-  balanceFollowUp: 5,
+  total: checkouts.value.length,
+  thisWeek: checkouts.value.filter((r) => inDateRange(r.check_out_date_value, 'week')).length,
+  thisMonth: checkouts.value.filter((r) => inDateRange(r.check_out_date_value, 'month')).length,
+  balanceFollowUp: checkouts.value.filter((r) => Number(r.total_outstanding_amount || 0) > 0).length,
 }))
 
-const checkouts = [
-  { name: 'FOL-2026-00431', guest: 'Sarah Johnson', room_number: '305', check_in_datetime: '2026-04-15', actual_check_out_datetime: '2026-04-18', reservation_source: 'Reservation', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00430', guest: 'Daniel Ayo', room_number: '118', check_in_datetime: '2026-04-10', actual_check_out_datetime: '2026-04-14', reservation_source: 'Reservation', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00429', guest: 'Grace Kelvin', room_number: '219', check_in_datetime: '2026-04-09', actual_check_out_datetime: '2026-04-12', reservation_source: 'Online Booking', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00428', guest: 'Ngozi Cole', room_number: '511', check_in_datetime: '2026-04-12', actual_check_out_datetime: '2026-04-13', reservation_source: 'Walk in', total_outstanding_amount: 41000 },
-  { name: 'FOL-2026-00427', guest: 'Michael Duke', room_number: '603', check_in_datetime: '2026-04-05', actual_check_out_datetime: '2026-04-08', reservation_source: 'Walk in', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00426', guest: 'Blessing Owen', room_number: '214', check_in_datetime: '2026-04-03', actual_check_out_datetime: '2026-04-06', reservation_source: 'Reservation', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00425', guest: 'Emeka Adeyemi', room_number: '401', check_in_datetime: '2026-04-01', actual_check_out_datetime: '2026-04-05', reservation_source: 'Corporate', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00424', guest: 'Fatima Ahmed', room_number: '312', check_in_datetime: '2026-03-28', actual_check_out_datetime: '2026-04-02', reservation_source: 'Online Booking', total_outstanding_amount: 25000 },
-  { name: 'FOL-2026-00423', guest: 'Tunde Balogun', room_number: '205', check_in_datetime: '2026-03-25', actual_check_out_datetime: '2026-03-30', reservation_source: 'Walk in', total_outstanding_amount: 0 },
-  { name: 'FOL-2026-00422', guest: 'Amina Yusuf', room_number: '108', check_in_datetime: '2026-03-22', actual_check_out_datetime: '2026-03-26', reservation_source: 'Reservation', total_outstanding_amount: 0 },
-]
-
 const filteredList = computed(() => {
-  let list = checkouts
+  let list = checkouts.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
@@ -222,6 +247,7 @@ const filteredList = computed(() => {
   if (filterPayment.value === 'settled') list = list.filter(r => (r.total_outstanding_amount || 0) === 0)
   if (filterPayment.value === 'balance') list = list.filter(r => (r.total_outstanding_amount || 0) > 0)
   if (filterSource.value) list = list.filter(r => r.reservation_source === filterSource.value)
+  list = list.filter((r) => inDateRange(r.check_out_date_value, filterDateRange.value))
   return list
 })
 
@@ -240,4 +266,34 @@ function formatDate(dt) {
   if (!dt) return '—'
   return new Date(dt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
+
+function inDateRange(dateValue, rangeKey) {
+  if (!dateValue || rangeKey === 'all') return true
+  const value = new Date(dateValue)
+  if (Number.isNaN(value.getTime())) return false
+  const now = new Date()
+  const start = new Date(now)
+
+  if (rangeKey === 'today') {
+    start.setHours(0, 0, 0, 0)
+    return value >= start
+  }
+  if (rangeKey === 'week') {
+    start.setDate(now.getDate() - 7)
+    return value >= start
+  }
+  if (rangeKey === 'month') {
+    start.setMonth(now.getMonth() - 1)
+    return value >= start
+  }
+  return true
+}
+
+function refreshData() {
+  checkOutResource.reload()
+}
+
+watch([search, filterDateRange, filterPayment, filterSource], () => {
+  page.value = 1
+})
 </script>

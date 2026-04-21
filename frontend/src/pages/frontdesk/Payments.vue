@@ -15,28 +15,28 @@
           <p class="text-xs text-gray-400">Payments Today</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Posted</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">86</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.paymentsToday }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Collected</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦12.8M</p>
+        <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(stats.totalCollectedToday) }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Unallocated</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Review</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">14</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.unallocated }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Outstanding Balance</p>
+          <p class="text-xs text-gray-400">Pending Amount</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Due</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦18.4M</p>
+        <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(stats.pendingAmount) }}</p>
       </div>
     </div>
 
@@ -74,7 +74,7 @@
         </div>
         <div style="flex:1;min-width:120px;">
           <p class="text-xs text-gray-500 mb-1.5">Payment Date</p>
-          <input v-model="filterDate" type="text" placeholder="Today"
+          <input v-model="filterDate" type="date" placeholder="Today"
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600" />
         </div>
         <div class="flex items-center gap-2 pb-0.5">
@@ -91,7 +91,15 @@
         <p class="text-xs text-gray-400">Showing 1–{{ Math.min(pageSize, filteredList.length) }} of {{ filteredList.length.toLocaleString() }} payments</p>
       </div>
 
-      <div class="overflow-x-auto">
+      <div v-if="paymentResource.loading" class="flex items-center justify-center py-14">
+        <p class="text-sm text-gray-400">Loading payments...</p>
+      </div>
+
+      <div v-else-if="paymentResource.error" class="px-6 py-10 text-center">
+        <p class="text-sm font-medium text-red-500">Unable to load payments.</p>
+      </div>
+
+      <div v-else class="overflow-x-auto">
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-100">
@@ -163,7 +171,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
 const search = ref('')
 const filterMethod = ref('')
@@ -172,31 +181,58 @@ const filterDate = ref('')
 const page = ref(1)
 const pageSize = 10
 
-const payments = [
-  { id: 'PMT-2026-01152', date: '15 Apr 2026 • 10:08 AM', guest: 'Chinedu Okafor', reservation: 'RES-2026-00481', method: 'POS', reference: 'MON-883921', amount: 80000, status: 'Posted' },
-  { id: 'PMT-2026-01153', date: '15 Apr 2026 • 10:15 AM', guest: 'Sarah Johnson', reservation: 'RES-2026-00483', method: 'Card', reference: 'STR-204188', amount: 220000, status: 'Posted' },
-  { id: 'PMT-2026-01154', date: '15 Apr 2026 • 10:23 AM', guest: 'Apex Holdings', reservation: 'RES-2026-00482', method: 'Bank Transfer', reference: 'TRF-991204', amount: 1500000, status: 'Pending' },
-  { id: 'PMT-2026-01155', date: '15 Apr 2026 • 10:30 AM', guest: 'Emeka Adeyemi', reservation: 'RES-2026-00490', method: 'Cash', reference: 'CSH-000381', amount: 120000, status: 'Posted' },
-  { id: 'PMT-2026-01156', date: '15 Apr 2026 • 10:38 AM', guest: 'Grace Cole', reservation: 'RES-2026-00491', method: 'POS', reference: 'MON-883977', amount: 64000, status: 'Reversed' },
-  { id: 'PMT-2026-01157', date: '15 Apr 2026 • 10:45 AM', guest: 'Bamidele Akin', reservation: 'RES-2026-00488', method: 'Card', reference: 'STR-204230', amount: 180000, status: 'Posted' },
-  { id: 'PMT-2026-01158', date: '15 Apr 2026 • 10:52 AM', guest: 'Ngozi Lawson', reservation: 'RES-2026-00482', method: 'POS', reference: 'CRD-APX-09', amount: 820000, status: 'Pending' },
-  { id: 'PMT-2026-01159', date: '15 Apr 2026 • 10:00 AM', guest: 'Fatima Ahmed', reservation: 'RES-2026-00492', method: 'Bank Transfer', reference: 'TRF-991240', amount: 54000, status: 'Posted' },
-  { id: 'PMT-2026-01160', date: '14 Apr 2026 • 09:15 AM', guest: 'Tunde Balogun', reservation: 'RES-2026-00477', method: 'Cash', reference: 'CSH-000375', amount: 95000, status: 'Posted' },
-  { id: 'PMT-2026-01161', date: '14 Apr 2026 • 09:45 AM', guest: 'Amina Yusuf', reservation: 'RES-2026-00478', method: 'Card', reference: 'STR-204100', amount: 310000, status: 'Posted' },
-  { id: 'PMT-2026-01162', date: '14 Apr 2026 • 11:00 AM', guest: 'Chibuzor Nweke', reservation: 'RES-2026-00479', method: 'POS', reference: 'MON-883800', amount: 75000, status: 'Pending' },
-  { id: 'PMT-2026-01163', date: '14 Apr 2026 • 11:30 AM', guest: 'Oluwaseun Adisa', reservation: 'RES-2026-00480', method: 'Bank Transfer', reference: 'TRF-991100', amount: 450000, status: 'Posted' },
-  { id: 'PMT-2026-01164', date: '13 Apr 2026 • 08:00 AM', guest: 'Kemi Obi', reservation: 'RES-2026-00470', method: 'Cash', reference: 'CSH-000360', amount: 60000, status: 'Reversed' },
-  { id: 'PMT-2026-01165', date: '13 Apr 2026 • 08:45 AM', guest: 'Emeka Eze', reservation: 'RES-2026-00471', method: 'Card', reference: 'STR-204050', amount: 200000, status: 'Posted' },
-  { id: 'PMT-2026-01166', date: '13 Apr 2026 • 09:30 AM', guest: 'Halima Musa', reservation: 'RES-2026-00472', method: 'POS', reference: 'MON-883700', amount: 130000, status: 'Posted' },
-  { id: 'PMT-2026-01167', date: '12 Apr 2026 • 14:00 PM', guest: 'Biodun Fashola', reservation: 'RES-2026-00465', method: 'Bank Transfer', reference: 'TRF-991000', amount: 980000, status: 'Pending' },
-  { id: 'PMT-2026-01168', date: '12 Apr 2026 • 14:30 PM', guest: 'Chioma Okafor', reservation: 'RES-2026-00466', method: 'Cash', reference: 'CSH-000350', amount: 45000, status: 'Posted' },
-  { id: 'PMT-2026-01169', date: '12 Apr 2026 • 15:00 PM', guest: 'Samuel Dada', reservation: 'RES-2026-00467', method: 'Card', reference: 'STR-203990', amount: 275000, status: 'Posted' },
-  { id: 'PMT-2026-01170', date: '11 Apr 2026 • 10:00 AM', guest: 'Rukayat Bello', reservation: 'RES-2026-00460', method: 'POS', reference: 'MON-883600', amount: 88000, status: 'Posted' },
-  { id: 'PMT-2026-01171', date: '11 Apr 2026 • 10:30 AM', guest: 'Tokunbo Adewale', reservation: 'RES-2026-00461', method: 'Bank Transfer', reference: 'TRF-990900', amount: 620000, status: 'Pending' },
-]
+const paymentResource = createResource({
+  url: 'frappe.client.get_list',
+  params: {
+    doctype: 'Payment Entry',
+    fields: [
+      'name',
+      'posting_date',
+      'posting_time',
+      'mode_of_payment',
+      'reference_no',
+      'party',
+      'party_name',
+      'paid_amount',
+      'received_amount',
+      'custom_hotel_room_check_in',
+      'docstatus',
+    ],
+    order_by: 'posting_date desc, modified desc',
+    limit_page_length: 500,
+  },
+  auto: true,
+})
+
+const payments = computed(() => (paymentResource.data || []).map((row) => {
+  const amount = Number(row.received_amount || row.paid_amount || 0)
+  return {
+    id: row.name,
+    date: formatPaymentDate(row.posting_date, row.posting_time),
+    paymentDate: row.posting_date,
+    guest: row.party_name || row.party || '—',
+    reservation: row.custom_hotel_room_check_in || '—',
+    method: row.mode_of_payment || '—',
+    reference: row.reference_no || '—',
+    amount,
+    status: mapDocstatus(row.docstatus),
+  }
+}))
+
+const stats = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  const todayPosted = payments.value.filter((p) => p.paymentDate === today && p.status === 'Posted')
+  const pending = payments.value.filter((p) => p.status === 'Pending')
+  return {
+    paymentsToday: todayPosted.length,
+    totalCollectedToday: todayPosted.reduce((sum, p) => sum + p.amount, 0),
+    unallocated: pending.length,
+    pendingAmount: pending.reduce((sum, p) => sum + p.amount, 0),
+  }
+})
 
 const filteredList = computed(() => {
-  let list = payments
+  let list = payments.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
@@ -208,6 +244,7 @@ const filteredList = computed(() => {
   }
   if (filterMethod.value) list = list.filter(r => r.method === filterMethod.value)
   if (filterStatus.value) list = list.filter(r => r.status === filterStatus.value)
+  if (filterDate.value) list = list.filter(r => r.paymentDate === filterDate.value)
   return list
 })
 
@@ -233,4 +270,22 @@ function statusClass(status) {
 function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString('en-NG')}`
 }
+
+function mapDocstatus(docstatus) {
+  if (Number(docstatus) === 1) return 'Posted'
+  if (Number(docstatus) === 2) return 'Reversed'
+  return 'Pending'
+}
+
+function formatPaymentDate(dateValue, timeValue) {
+  if (!dateValue) return '—'
+  const baseDate = new Date(dateValue)
+  const dateLabel = baseDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (!timeValue) return dateLabel
+  return `${dateLabel} • ${String(timeValue).slice(0, 5)}`
+}
+
+watch([search, filterMethod, filterStatus, filterDate], () => {
+  page.value = 1
+})
 </script>

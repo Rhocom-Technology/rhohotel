@@ -14,11 +14,11 @@
         <div>
           <h2 class="text-sm font-bold text-gray-900">Check-in Overview</h2>
           <p class="text-xs text-gray-400 mt-0.5">
-            128 total check-ins • 41 currently in house • 87 past stays • 6 extended stays • 4 payment follow-ups
+            {{ stats.total }} total check-ins • {{ stats.inHouse }} currently in house • {{ stats.checkedOut }} past stays • {{ stats.extended }} extended stays • {{ stats.paymentFollowUp }} payment follow-ups
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Refresh
           </button>
           <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
@@ -38,28 +38,28 @@
           <p class="text-xs text-gray-400">Total Check-ins</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">All Time</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">128</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.total }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Currently In House</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Active</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">41</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.inHouse }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Checked Out</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Past</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">87</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.checkedOut }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Payment Follow-up</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Alert</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">4</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.paymentFollowUp }}</p>
       </div>
     </div>
 
@@ -116,8 +116,16 @@
         <p class="text-xs text-gray-400">Showing 1–{{ paginatedList.length }} of {{ filteredList.length }} check-ins</p>
       </div>
 
+      <div v-if="checkInResource.loading" class="flex items-center justify-center py-14">
+        <p class="text-sm text-gray-400">Loading check-ins...</p>
+      </div>
+
+      <div v-else-if="checkInResource.error" class="px-6 py-10 text-center">
+        <p class="text-sm font-medium text-red-500">Unable to load check-ins.</p>
+      </div>
+
       <!-- Empty -->
-      <div v-if="filteredList.length === 0" class="flex flex-col items-center justify-center py-16">
+      <div v-else-if="filteredList.length === 0" class="flex flex-col items-center justify-center py-16">
         <UserCheck class="w-10 h-10 text-gray-200 mb-3" />
         <p class="text-sm font-medium text-gray-400">No check-ins found</p>
       </div>
@@ -204,8 +212,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { UserCheck } from 'lucide-vue-next'
+import { createResource } from 'frappe-ui'
 import CheckInDetail from '@/components/checkin/CheckInDetail.vue'
 
 const search = ref('')
@@ -216,23 +225,60 @@ const page = ref(1)
 const pageSize = 25
 const selectedCheckIn = ref(null)
 
-const checkins = [
-  { name: 'CHK-2026-000421', guest: 'Sarah Johnson', check_in_date: '15 Apr 2026', check_out_date: '18 Apr 2026', room: '305', source: 'Reservation', payment: 'Paid', stayStatus: 'In House', overdue: false, room_number: '305', check_in_datetime: '2026-04-15', expected_check_out_datetime: '2026-04-18', total_outstanding_amount: 0, reservation_source: 'Reservation', number_of_nights: 3 },
-  { name: 'CHK-2026-000420', guest: 'Uche Bassey', check_in_date: '14 Apr 2026', check_out_date: '16 Apr 2026', room: '402', source: 'Corporate', payment: 'Company Bill', stayStatus: 'In House', overdue: false, room_number: '402', check_in_datetime: '2026-04-14', expected_check_out_datetime: '2026-04-16', total_outstanding_amount: 0, reservation_source: 'Corporate', number_of_nights: 2 },
-  { name: 'CHK-2026-000419', guest: 'Ngozi Cole', check_in_date: '12 Apr 2026', check_out_date: '13 Apr 2026', room: '511', source: 'Walk-in', payment: 'Balance Due', stayStatus: 'Checked Out', overdue: false, room_number: '511', check_in_datetime: '2026-04-12', expected_check_out_datetime: '2026-04-13', total_outstanding_amount: 41000, reservation_source: 'Walk in', number_of_nights: 1 },
-  { name: 'CHK-2026-000418', guest: 'Daniel Ayo', check_in_date: '10 Apr 2026', check_out_date: '14 Apr 2026', room: '118', source: 'Reservation', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '118', check_in_datetime: '2026-04-10', expected_check_out_datetime: '2026-04-14', total_outstanding_amount: 0, reservation_source: 'Reservation', number_of_nights: 4 },
-  { name: 'CHK-2026-000417', guest: 'Grace Kelvin', check_in_date: '09 Apr 2026', check_out_date: '12 Apr 2026', room: '219', source: 'Online Booking', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '219', check_in_datetime: '2026-04-09', expected_check_out_datetime: '2026-04-12', total_outstanding_amount: 0, reservation_source: 'Online Booking', number_of_nights: 3 },
-  { name: 'CHK-2026-000416', guest: 'Michael Duke', check_in_date: '08 Apr 2026', check_out_date: '13 Apr 2026', room: '603', source: 'Walk-in', payment: 'Balance Due', stayStatus: 'Extended', overdue: true, room_number: '603', check_in_datetime: '2026-04-08', expected_check_out_datetime: '2026-04-13', total_outstanding_amount: 65000, reservation_source: 'Walk in', number_of_nights: 5 },
-  { name: 'CHK-2026-000415', guest: 'Blessing Owen', check_in_date: '07 Apr 2026', check_out_date: '10 Apr 2026', room: '214', source: 'Reservation', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '214', check_in_datetime: '2026-04-07', expected_check_out_datetime: '2026-04-10', total_outstanding_amount: 0, reservation_source: 'Reservation', number_of_nights: 3 },
-  { name: 'CHK-2026-000414', guest: 'Emeka Adeyemi', check_in_date: '06 Apr 2026', check_out_date: '09 Apr 2026', room: '401', source: 'Corporate', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '401', check_in_datetime: '2026-04-06', expected_check_out_datetime: '2026-04-09', total_outstanding_amount: 0, reservation_source: 'Corporate', number_of_nights: 3 },
-  { name: 'CHK-2026-000413', guest: 'Fatima Ahmed', check_in_date: '05 Apr 2026', check_out_date: '08 Apr 2026', room: '312', source: 'Online Booking', payment: 'Balance Due', stayStatus: 'Checked Out', overdue: false, room_number: '312', check_in_datetime: '2026-04-05', expected_check_out_datetime: '2026-04-08', total_outstanding_amount: 28000, reservation_source: 'Online Booking', number_of_nights: 3 },
-  { name: 'CHK-2026-000412', guest: 'Tunde Balogun', check_in_date: '04 Apr 2026', check_out_date: '07 Apr 2026', room: '205', source: 'Walk-in', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '205', check_in_datetime: '2026-04-04', expected_check_out_datetime: '2026-04-07', total_outstanding_amount: 0, reservation_source: 'Walk in', number_of_nights: 3 },
-  { name: 'CHK-2026-000411', guest: 'Amina Yusuf', check_in_date: '03 Apr 2026', check_out_date: '06 Apr 2026', room: '108', source: 'Reservation', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '108', check_in_datetime: '2026-04-03', expected_check_out_datetime: '2026-04-06', total_outstanding_amount: 0, reservation_source: 'Reservation', number_of_nights: 3 },
-  { name: 'CHK-2026-000410', guest: 'Chibuzor Nweke', check_in_date: '02 Apr 2026', check_out_date: '05 Apr 2026', room: '507', source: 'Walk-in', payment: 'Paid', stayStatus: 'Checked Out', overdue: false, room_number: '507', check_in_datetime: '2026-04-02', expected_check_out_datetime: '2026-04-05', total_outstanding_amount: 0, reservation_source: 'Walk in', number_of_nights: 3 },
-]
+const checkInResource = createResource({
+  url: 'frappe.client.get_list',
+  params: {
+    doctype: 'Hotel Room Check In',
+    fields: [
+      'name',
+      'guest',
+      'room_number',
+      'check_in_datetime',
+      'expected_check_out_datetime',
+      'actual_check_out_datetime',
+      'status',
+      'reservation_source',
+      'total_outstanding_amount',
+      'number_of_nights',
+    ],
+    order_by: 'check_in_datetime desc',
+    limit_page_length: 500,
+  },
+  auto: true,
+})
+
+const checkins = computed(() => (checkInResource.data || []).map((row) => {
+  const overdue = isOverdue(row)
+  const stayStatus = mapStayStatus(row.status, overdue)
+  const payment = Number(row.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Paid'
+  return {
+    ...row,
+    guest: row.guest || '—',
+    room: row.room_number || '—',
+    source: row.reservation_source || 'Walk In',
+    payment,
+    stayStatus,
+    overdue,
+    check_in_date: formatDate(row.check_in_datetime),
+    check_out_date: formatDate(row.actual_check_out_datetime || row.expected_check_out_datetime),
+  }
+}))
+
+const stats = computed(() => {
+  const list = checkins.value
+  const inHouse = list.filter((r) => r.stayStatus === 'In House').length
+  const extended = list.filter((r) => r.stayStatus === 'Extended').length
+  return {
+    total: list.length,
+    inHouse,
+    checkedOut: list.filter((r) => r.stayStatus === 'Checked Out').length,
+    extended,
+    paymentFollowUp: list.filter((r) => Number(r.total_outstanding_amount || 0) > 0).length,
+  }
+})
 
 const filteredList = computed(() => {
-  let list = checkins
+  let list = checkins.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
@@ -245,6 +291,7 @@ const filteredList = computed(() => {
   if (filterStatus.value) list = list.filter(r => r.stayStatus === filterStatus.value)
   if (filterPayment.value === 'paid') list = list.filter(r => r.payment === 'Paid' || r.payment === 'Company Bill')
   if (filterPayment.value === 'outstanding') list = list.filter(r => r.payment === 'Balance Due')
+  list = list.filter(r => inDateRange(r.check_in_datetime, filterDateRange.value))
   return list
 })
 
@@ -272,4 +319,51 @@ function openDetail(item) {
   if (!item) return
   selectedCheckIn.value = { ...item }
 }
+
+function refreshData() {
+  checkInResource.reload()
+}
+
+function mapStayStatus(status, overdue) {
+  if (status === 'Checked In' && overdue) return 'Extended'
+  if (status === 'Checked In') return 'In House'
+  if (status === 'Checked Out') return 'Checked Out'
+  return status || 'Draft'
+}
+
+function isOverdue(item) {
+  if (item.status !== 'Checked In' || !item.expected_check_out_datetime) return false
+  return new Date(item.expected_check_out_datetime) < new Date()
+}
+
+function formatDate(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function inDateRange(dateValue, rangeKey) {
+  if (!dateValue || rangeKey === 'all') return true
+  const value = new Date(dateValue)
+  if (Number.isNaN(value.getTime())) return false
+
+  const now = new Date()
+  const start = new Date(now)
+  if (rangeKey === 'today') {
+    start.setHours(0, 0, 0, 0)
+    return value >= start
+  }
+  if (rangeKey === 'week') {
+    start.setDate(now.getDate() - 7)
+    return value >= start
+  }
+  if (rangeKey === 'month') {
+    start.setMonth(now.getMonth() - 1)
+    return value >= start
+  }
+  return true
+}
+
+watch([search, filterStatus, filterDateRange, filterPayment], () => {
+  page.value = 1
+})
 </script>

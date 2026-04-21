@@ -127,62 +127,15 @@ class HotelRoomCheckIn(Document):
 		if self.front_desk_reservation:
 			return
 
-		# Normalize datetime
-		if isinstance(self.check_in_datetime, str):
-			self.check_in_datetime = datetime.strptime(
-				self.check_in_datetime, "%Y-%m-%d %H:%M:%S"
-			)
+		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
-		check_in = self.check_in_datetime
-		check_out = self.expected_check_out_datetime
-
-		if not check_out:
-			frappe.throw("Check-out date is required for reservation validation.")
-
-		# 🔥 Correct overlap logic
-		reservations = frappe.get_all(
-			"Hotel Room Reservation",
-			filters={
-				"name": ["!=", self.reservation],
-				"room_number": self.room_number,
-				"guest_name": ["!=", self.name],
-				"docstatus": ["!=", 2],
-				"status": ["in", ["Booked", "Confirmed", "Pending Payment", "Checked-In", "Draft"]],
-				"from_date": ["<=", check_out],
-				"to_date": [">=", check_in],
-			},
-			fields=["name", "from_date", "to_date", "guest_name"],
+		assert_room_available(
+			self.room_number,
+			self.check_in_datetime,
+			self.expected_check_out_datetime,
+			exclude_reservation=self.reservation or "",
+			exclude_checkin=self.name if not self.is_new() else "",
 		)
-
-		for res in reservations:
-			# ✅ Allow if SAME guest and SAME dates
-			if (
-				res.guest_name == self.guest and
-				str(res.from_date) == str(check_in) and
-				str(res.to_date) == str(check_out)
-			):
-				continue  # ✅ valid reservation → allow
-
-			# ❌ Otherwise block
-			frappe.log_error(
-				title="Room Reservation Conflict Debug",
-				message=(
-					f"Room: {self.room_number}\n"
-					f"Check-in: {check_in}\n"
-					f"Check-out: {check_out}\n"
-					f"Guest: {self.guest}\n"
-					f"Conflicting Reservation:\n{frappe.as_json(res)}"
-				),
-			)
-
-			frappe.throw(
-				_("Room {0} is already reserved from {1} to {2} by {3}").format(
-					self.room_number,
-					res.from_date,
-					res.to_date,
-					res.guest_name
-				)
-			)
 
 	def validate_dates(self):
 		if get_datetime(self.check_in_datetime) > get_datetime(self.expected_check_out_datetime):
@@ -547,42 +500,14 @@ def extend_stay(check_in_name, number_of_nights):
 	new_checkout_dt = utils.add_to_date(current_checkout_dt, days=number_of_nights)
 	new_expected_checkout = new_checkout_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-	# Check for room availability during the extension period
-	conflicting_reservation = frappe.db.exists(
-		"Hotel Room Reservation",
-		{
-			"room_number": check_in_doc.room_number,
-			"status": ["not in", ["Cancelled", "No Show"]],
-			"from_date": ["<", new_checkout_dt.date()],
-			"to_date": [">", current_checkout_dt.date()],
-		},
+	# Check for conflicts during the extension period
+	from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+	assert_room_available(
+		check_in_doc.room_number,
+		current_checkout_dt,
+		new_checkout_dt,
+		exclude_checkin=check_in_doc.name,
 	)
-
-	if conflicting_reservation:
-		frappe.throw(
-			_(
-				"Room {0} is not available for the selected extension period. It is reserved under {1}."
-			).format(check_in_doc.room_number, conflicting_reservation)
-		)
-
-	# Check for conflicting check-ins during the extension period
-	conflicting_check_in = frappe.db.exists(
-		"Hotel Room Check In",
-		{
-			"room_number": check_in_doc.room_number,
-			"status": ["in", ["Checked In", "Draft"]],
-			"name": ["!=", check_in_doc.name],
-			"check_in_datetime": ["<", new_checkout_dt],
-			"expected_check_out_datetime": [">", current_checkout_dt],
-		},
-	)
-
-	if conflicting_check_in:
-		frappe.throw(
-			_(
-				"Room {0} is not available for the selected extension period. It is occupied by another guest under Check In {1}."
-			).format(check_in_doc.room_number, conflicting_check_in)
-		)
 
 	# Create a new Sales Invoice for the extension
 	extension_amount = number_of_nights * check_in_doc.rate_amount
@@ -793,51 +718,13 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 
 	# === Making sure no reservations or check-ins conflict with the new dates ===
 	if adjustment_type == "Extension":
-		conflicting_reservation = frappe.db.exists(
-			"Hotel Room Reservation",
-			{
-				"room_number": doc.room_number,
-				"status": ["not in", ["Cancelled", "No Show", "Completed"]],
-				"docstatus": ["not in", [2, 1]],
-				"from_date": ["<", new_dt.date()],
-				"to_date": [">", current_dt.date()],
-			},
+		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+		assert_room_available(
+			doc.room_number,
+			current_dt,
+			new_dt,
+			exclude_checkin=doc.name,
 		)
-
-		if conflicting_reservation:
-			reservation_guest = (
-				frappe.db.get_value("Hotel Room Reservation", conflicting_reservation, "guest_name")
-				if conflicting_reservation
-				else ""
-			)
-			frappe.throw(
-				_(
-					"{0} is not available for the selected extension period. It is reserved for guest {1} under {2}."
-				).format(doc.room_number, reservation_guest, conflicting_reservation)
-			)
-
-		conflicting_check_in = frappe.db.exists(
-			"Hotel Room Check In",
-			{
-				"room_number": doc.room_number,
-				"status": ["in", ["Checked In", "Draft"]],
-				"name": ["!=", doc.name],
-				"check_in_datetime": ["<", new_dt],
-				"expected_check_out_datetime": [">", current_dt],
-			},
-		)
-
-		if conflicting_check_in:
-			reservation_guest = (
-				frappe.db.get_value("Hotel Room Check In", conflicting_check_in, "guest_name")
-				if conflicting_reservation
-				else ""
-			)
-			frappe.throw(
-				_(
-					"{0} is not available for the selected extension period. It is occupied by another guest {1} under Check In {2} ."
-				).format(doc.room_number, reservation_guest, conflicting_check_in)
-			)
 
 	amount = flt(doc.rate_amount) * diff_nights
 	amount_with_discount = flt(amount) - flt(new_discount) if flt(new_discount) > 0 else 0

@@ -65,41 +65,9 @@ class CorporateCheckIn(Document):
             if room_doc.housekeeping_status != "Clean":
                 frappe.throw(f"Room {room.room_number} housekeeping status is {room_doc.housekeeping_status}. Only clean rooms can be checked in.")
             
-            # Check for overlapping reservations
-            overlapping_reservations = frappe.db.sql("""
-                SELECT name, from_date, to_date 
-                FROM `tabHotel Room Reservation`
-                WHERE room_number = %s
-                AND docstatus = 1
-                AND status IN ('Confirmed', 'Booked')
-                AND (
-                    (from_date <= %s AND to_date > %s)
-                    OR (from_date < %s AND to_date >= %s)
-                    OR (from_date >= %s AND to_date <= %s)
-                )
-            """, (room.room_number, check_in_dt, check_in_dt, check_out_dt, check_out_dt, check_in_dt, check_out_dt), as_dict=True)
-            
-            if overlapping_reservations:
-                reservation_details = ", ".join([f"{r.name} ({r.from_date} to {r.to_date})" for r in overlapping_reservations])
-                frappe.throw(f"Room {room.room_number} has overlapping reservation(s): {reservation_details}. Please choose another room or date.")
-            
-            # Check for overlapping check-ins
-            overlapping_checkins = frappe.db.sql("""
-                SELECT name, check_in_datetime, expected_check_out_datetime 
-                FROM `tabHotel Room Check In`
-                WHERE room_number = %s
-                AND docstatus = 1
-                AND status = 'Checked In'
-                AND (
-                    (check_in_datetime <= %s AND expected_check_out_datetime > %s)
-                    OR (check_in_datetime < %s AND expected_check_out_datetime >= %s)
-                    OR (check_in_datetime >= %s AND expected_check_out_datetime <= %s)
-                )
-            """, (room.room_number, check_in_dt, check_in_dt, check_out_dt, check_out_dt, check_in_dt, check_out_dt), as_dict=True)
-            
-            if overlapping_checkins:
-                checkin_details = ", ".join([f"{c.name} ({c.check_in_datetime} to {c.expected_check_out_datetime})" for c in overlapping_checkins])
-                frappe.throw(f"Room {room.room_number} is already checked in: {checkin_details}. Please choose another room.")
+            # Check for overlapping reservations or active check-ins
+            from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+            assert_room_available(room.room_number, check_in_dt, check_out_dt)
             
             # Validate guest details
             if not room.guest_name:
@@ -321,61 +289,11 @@ class CorporateCheckIn(Document):
 
 @frappe.whitelist()
 def get_available_rooms(check_in_datetime, expected_check_out_datetime, room_type=None):
-    """Get list of available rooms for the given date range"""
-    check_in_dt = get_datetime(check_in_datetime)
-    check_out_dt = get_datetime(expected_check_out_datetime)
-    
-    # Build room type filter
-    room_type_condition = ""
-    if room_type:
-        room_type_condition = f"AND hotel_room_type = '{room_type}'"
-    
-    # Get all vacant and clean rooms
-    available_rooms = frappe.db.sql(f"""
-        SELECT name, hotel_room_type, status, housekeeping_status
-        FROM `tabHotel Room`
-        WHERE status = 'Vacant'
-        AND housekeeping_status = 'Clean'
-        {room_type_condition}
-    """, as_dict=True)
-    
-    # Filter out rooms with overlapping reservations or check-ins
-    filtered_rooms = []
-    for room in available_rooms:
-        # Check reservations
-        has_reservation = frappe.db.sql("""
-            SELECT name 
-            FROM `tabHotel Room Reservation`
-            WHERE room_number = %s
-            AND docstatus = 1
-            AND status IN ('Confirmed', 'Booked')
-            AND (
-                (from_date <= %s AND to_date > %s)
-                OR (from_date < %s AND to_date >= %s)
-                OR (from_date >= %s AND to_date <= %s)
-            )
-            LIMIT 1
-        """, (room.name, check_in_dt, check_in_dt, check_out_dt, check_out_dt, check_in_dt, check_out_dt))
-        
-        if has_reservation:
-            continue
-        
-        # Check existing check-ins
-        has_checkin = frappe.db.sql("""
-            SELECT name 
-            FROM `tabHotel Room Check In`
-            WHERE room_number = %s
-            AND docstatus = 1
-            AND status = 'Checked In'
-            AND (
-                (check_in_datetime <= %s AND expected_check_out_datetime > %s)
-                OR (check_in_datetime < %s AND expected_check_out_datetime >= %s)
-                OR (check_in_datetime >= %s AND expected_check_out_datetime <= %s)
-            )
-            LIMIT 1
-        """, (room.name, check_in_dt, check_in_dt, check_out_dt, check_out_dt, check_in_dt, check_out_dt))
-        
-        if not has_checkin:
-            filtered_rooms.append(room)
-    
-    return filtered_rooms
+    """Get list of available rooms for the given date range. Delegates to the centralized utility."""
+    from rhohotel.rhocom_hotel.utils.room_availability import get_available_rooms as _get_available_rooms
+    return _get_available_rooms(
+        check_in_datetime,
+        expected_check_out_datetime,
+        room_type=room_type,
+        require_clean=True,
+    )

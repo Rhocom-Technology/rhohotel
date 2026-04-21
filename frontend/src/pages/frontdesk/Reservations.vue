@@ -15,28 +15,28 @@
           <p class="text-xs text-gray-400">Total Reservations</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">This Month</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">1,248</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.total }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Pending Arrival</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">142</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.pendingArrivalToday }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Checked In</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">In House</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">96</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.checkedIn }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Outstanding Balance</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Review</span>
+          <p class="text-xs text-gray-400">Booked Value</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Total</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦18.4M</p>
+        <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(stats.bookedValue) }}</p>
       </div>
     </div>
 
@@ -62,18 +62,15 @@
         </div>
         <div style="flex:1;min-width:120px;">
           <p class="text-xs text-gray-500 mb-1.5">Arrival Date</p>
-          <input v-model="filterArrival" type="text" placeholder="Today"
+          <input v-model="filterArrival" type="date" placeholder="Today"
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600" />
         </div>
         <div style="flex:1;min-width:120px;">
           <p class="text-xs text-gray-500 mb-1.5">Source</p>
           <select v-model="filterSource" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Sources</option>
-            <option value="Walk-in">Walk-in</option>
+            <option value="Individual">Individual</option>
             <option value="Corporate">Corporate</option>
-            <option value="OTA">OTA</option>
-            <option value="Website">Website</option>
-            <option value="Travel Agent">Travel Agent</option>
           </select>
         </div>
         <div class="flex items-center gap-2 pb-0.5">
@@ -92,7 +89,15 @@
         <p class="text-xs text-gray-400">Showing 1–{{ Math.min(pageSize, filteredList.length) }} of {{ filteredList.length.toLocaleString() }} reservations</p>
       </div>
 
-      <div class="overflow-x-auto">
+      <div v-if="reservationResource.loading" class="flex items-center justify-center py-14">
+        <p class="text-sm text-gray-400">Loading reservations...</p>
+      </div>
+
+      <div v-else-if="reservationResource.error" class="px-6 py-10 text-center">
+        <p class="text-sm font-medium text-red-500">Unable to load reservations.</p>
+      </div>
+
+      <div v-else class="overflow-x-auto">
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-100">
@@ -118,7 +123,7 @@
               </td>
               <td class="px-4 py-4">
                 <p class="text-xs font-semibold text-gray-900">{{ item.primary_guest_name }}</p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ item.reservation_type === 'Corporate' ? item.customer : 'Individual Guest' }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ item.reservation_type === 'Corporate' ? (item.customer || 'Corporate') : 'Individual Guest' }}</p>
               </td>
               <td class="px-4 py-4">
                 <p class="text-xs text-gray-700">{{ formatDateShort(item.from_date) }} – {{ formatDateShort(item.to_date) }}</p>
@@ -209,9 +214,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, Building2 } from 'lucide-vue-next'
+import { createResource } from 'frappe-ui'
 
 const router = useRouter()
 const search = ref('')
@@ -222,27 +228,54 @@ const page = ref(1)
 const pageSize = 10
 const showNewReservation = ref(false)
 
-const reservations = [
-  { name: 'RES-2026-00481', reservation_type: 'Walk-in', primary_guest_name: 'Chinedu Okafor', customer: 'Chinedu Okafor', from_date: '2026-04-12', to_date: '2026-04-14', number_of_nights: 2, total_rooms: 1, room_type: 'Executive Deluxe', total_amount: 171000, statusLabel: 'Partly Paid' },
-  { name: 'RES-2026-00482', reservation_type: 'Corporate', primary_guest_name: 'Apex Holdings Retreat', customer: 'Apex Holdings', from_date: '2026-04-18', to_date: '2026-04-21', number_of_nights: 3, total_rooms: 12, room_type: 'Executive Deluxe', total_amount: 4320000, statusLabel: 'Confirmed' },
-  { name: 'RES-2026-00483', reservation_type: 'OTA', primary_guest_name: 'Sarah Johnson', customer: 'Booking.com', from_date: '2026-04-11', to_date: '2026-04-13', number_of_nights: 2, total_rooms: 1, room_type: 'Premium Queen', total_amount: 220000, statusLabel: 'Checked In' },
-  { name: 'RES-2026-00484', reservation_type: 'Website', primary_guest_name: 'Emeka Obi', customer: 'Emeka Obi', from_date: '2026-04-15', to_date: '2026-04-16', number_of_nights: 1, total_rooms: 1, room_type: 'Standard King', total_amount: 85000, statusLabel: 'Cancelled' },
-  { name: 'RES-2026-00485', reservation_type: 'Travel Agent', primary_guest_name: 'Grace Adeniyi', customer: 'GDS Partner', from_date: '2026-04-13', to_date: '2026-04-17', number_of_nights: 4, total_rooms: 1, room_type: 'Executive Suite', total_amount: 640000, statusLabel: 'Pending' },
-  { name: 'RES-2026-00486', reservation_type: 'Walk-in', primary_guest_name: 'Michael Lawson', customer: 'Michael Lawson', from_date: '2026-04-10', to_date: '2026-04-12', number_of_nights: 2, total_rooms: 1, room_type: 'Deluxe Twin', total_amount: 150000, statusLabel: 'Checked Out' },
-  { name: 'RES-2026-00487', reservation_type: 'Corporate', primary_guest_name: 'Zenith Bank Team', customer: 'Agency Desk', from_date: '2026-04-20', to_date: '2026-04-23', number_of_nights: 3, total_rooms: 8, room_type: 'Mixed Room Types', total_amount: 2880000, statusLabel: 'Confirmed' },
-  { name: 'RES-2026-00488', reservation_type: 'Website', primary_guest_name: 'Bamidele Cole', customer: 'Bamidele Cole', from_date: '2026-04-14', to_date: '2026-04-16', number_of_nights: 2, total_rooms: 1, room_type: 'Premium Queen', total_amount: 198000, statusLabel: 'Due Today' },
-  { name: 'RES-2026-00489', reservation_type: 'Walk-in', primary_guest_name: 'Ngozi Adeyemi', customer: 'Ngozi Adeyemi', from_date: '2026-04-16', to_date: '2026-04-18', number_of_nights: 2, total_rooms: 1, room_type: 'Deluxe Room', total_amount: 240000, statusLabel: 'Confirmed' },
-  { name: 'RES-2026-00490', reservation_type: 'OTA', primary_guest_name: 'Tunde Fashola', customer: 'Expedia', from_date: '2026-04-19', to_date: '2026-04-22', number_of_nights: 3, total_rooms: 1, room_type: 'Executive Room', total_amount: 360000, statusLabel: 'Pending' },
-]
+const reservationResource = createResource({
+  url: 'frappe.client.get_list',
+  params: {
+    doctype: 'Hotel Front Desk Reservation',
+    fields: [
+      'name',
+      'reservation_type',
+      'primary_guest_name',
+      'customer',
+      'from_date',
+      'to_date',
+      'number_of_nights',
+      'total_rooms',
+      'total_amount',
+      'status',
+      'docstatus',
+    ],
+    order_by: 'creation desc',
+    limit_page_length: 500,
+  },
+  auto: true,
+})
+
+const reservations = computed(() => (reservationResource.data || []).map((row) => ({
+  ...row,
+  reservation_type: row.reservation_type || 'Individual',
+  primary_guest_name: row.primary_guest_name || '—',
+  total_rooms: Number(row.total_rooms || 0),
+  total_amount: Number(row.total_amount || 0),
+  number_of_nights: Number(row.number_of_nights || 0),
+  statusLabel: mapReservationStatus(row),
+})))
+
+const stats = computed(() => ({
+  total: reservations.value.length,
+  pendingArrivalToday: reservations.value.filter((r) => isToday(r.from_date) && ['Confirmed', 'Pending', 'Due Today'].includes(r.statusLabel)).length,
+  checkedIn: reservations.value.filter((r) => r.statusLabel === 'Checked In').length,
+  bookedValue: reservations.value.reduce((sum, r) => sum + Number(r.total_amount || 0), 0),
+}))
 
 const filteredList = computed(() => {
-  let list = reservations
+  let list = reservations.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
       r.name.toLowerCase().includes(q) ||
       r.primary_guest_name.toLowerCase().includes(q) ||
-      r.customer.toLowerCase().includes(q)
+      String(r.customer || '').toLowerCase().includes(q)
     )
   }
   if (filterStatus.value) list = list.filter(r => r.statusLabel === filterStatus.value)
@@ -292,4 +325,31 @@ function startNewReservation(type) {
 function openReservation(item) {
   router.push({ name: 'SavedReservation', params: { id: item.name } })
 }
+
+function mapReservationStatus(item) {
+  const rawStatus = item.status || ''
+  if (rawStatus) {
+    if (rawStatus.toLowerCase() === 'checked in') return 'Checked In'
+    if (rawStatus.toLowerCase() === 'checked out') return 'Checked Out'
+    if (rawStatus.toLowerCase() === 'cancelled') return 'Cancelled'
+    if (rawStatus.toLowerCase() === 'pending') return 'Pending'
+    if (rawStatus.toLowerCase() === 'confirmed') return 'Confirmed'
+    return rawStatus
+  }
+  if (Number(item.docstatus) === 2) return 'Cancelled'
+  if (isToday(item.from_date)) return 'Due Today'
+  if (Number(item.docstatus) === 1) return 'Confirmed'
+  return 'Pending'
+}
+
+function isToday(dateValue) {
+  if (!dateValue) return false
+  const today = new Date()
+  const date = new Date(dateValue)
+  return date.toDateString() === today.toDateString()
+}
+
+watch([search, filterStatus, filterArrival, filterSource], () => {
+  page.value = 1
+})
 </script>
