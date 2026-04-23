@@ -15,6 +15,7 @@ const router = createRouter({
     { path: '/reservations/new', name: 'NewReservation', component: () => import('@/pages/frontdesk/NewReservation.vue') },
     { path: '/reservations/:id', name: 'SavedReservation', component: () => import('@/pages/frontdesk/SavedReservation.vue') },
     { path: '/payments', name: 'Payments', component: () => import('@/pages/frontdesk/Payments.vue') },
+    { path: '/guests', name: 'GuestList', component: () => import('@/pages/frontdesk/GuestList.vue') },
     { path: '/night-audit', name: 'NightAudit', component: () => import('@/pages/frontdesk/NightAudit.vue') },
 
     // Housekeeping
@@ -36,10 +37,14 @@ const router = createRouter({
     { path: '/maintenance/technicians/:id', name: 'TechnicianView', component: () => import('@/pages/maintenance/TechnicianView.vue') },
     { path: '/maintenance/new-technician', name: 'NewTechnician', component: () => import('@/pages/maintenance/NewTechnician.vue') },
 
+    // POS
+    { path: '/pos', name: 'PointOfSales', component: () => import('@/pages/pos/PointOfSales.vue') },
+    { path: '/pos/shift-close', name: 'POSShiftClose', component: () => import('@/pages/pos/POSShiftClose.vue') },
+    { path: '/pos/invoices', name: 'POSInvoiceList', component: () => import('@/pages/pos/POSInvoiceList.vue') },
+
     // Others
     { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
     { path: '/reports', name: 'Reports', component: () => import('@/pages/reports/Reports.vue') },
-    { path: '/pos', name: 'PointOfSales', component: () => import('@/pages/pos/PointOfSales.vue') },
     { path: '/kitchen', name: 'KitchenTerminal', component: () => import('@/pages/kitchen/KitchenTerminal.vue') },
     { path: '/complimentary', name: 'Complimentary', component: () => import('@/pages/complimentary/Complimentary.vue') },
     { path: '/assets-mgmt', name: 'AssetManagement', component: () => import('@/pages/assets/AssetManagement.vue') },

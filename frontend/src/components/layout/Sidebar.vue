@@ -81,6 +81,7 @@ const navGroups = [
       { label: 'Check-outs', to: '/check-outs' },
       { label: 'Reservations', to: '/reservations' },
       { label: 'Payments', to: '/payments' },
+      { label: 'Guest List', to: '/guests' },
       { label: 'Night Audit', to: '/night-audit' },
     ],
   },
@@ -122,6 +123,7 @@ const navGroups = [
     icon: ShoppingCart,
     children: [
       { label: 'POS Dashboard', to: '/pos' },
+      { label: 'POS Invoice List', to: '/pos/invoices' },
     ],
   },
   {
