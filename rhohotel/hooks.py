@@ -302,6 +302,49 @@ override_doctype_class = {
 doc_events = {"Sales Invoice": {"validate": "rhohotel.overrides.sales_invoice.validate_sales_invoice"}}
 
 
+# website_route_rules = [
+#     {"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/front-desk", "to_route": "front-desk"},
+# ]
+
+# website_route_rules = [
+#     {"from_route": "/app/front-desk/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/app/front-desk", "to_route": "front-desk"},
+# ]
+
+# website_route_rules = [
+#     {"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/front-desk", "to_route": "front-desk"},
+#     {"from_route": "/room-view", "to_route": "front-desk"},
+#     {"from_route": "/check-ins", "to_route": "front-desk"},
+#     {"from_route": "/check-ins/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/check-outs", "to_route": "front-desk"},
+#     {"from_route": "/check-outs/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/reservations", "to_route": "front-desk"},
+#     {"from_route": "/reservations/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/pos/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/pos", "to_route": "front-desk"},
+#     {"from_route": "/guests/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/guests", "to_route": "front-desk"},
+#     {"from_route": "/billing/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/billing", "to_route": "front-desk"},
+#     {"from_route": "/kitchen", "to_route": "front-desk"},
+#     {"from_route": "/complimentary/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/complimentary", "to_route": "front-desk"},
+#     {"from_route": "/assets-mgmt/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/assets-mgmt", "to_route": "front-desk"},
+#     {"from_route": "/housekeeping/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/housekeeping", "to_route": "front-desk"},
+#     {"from_route": "/maintenance/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/maintenance", "to_route": "front-desk"},
+#     {"from_route": "/rooms/<path:app_path>", "to_route": "front-desk"},
+#     {"from_route": "/night-audit", "to_route": "front-desk"},
+#     {"from_route": "/payments", "to_route": "front-desk"},
+#     {"from_route": "/reports", "to_route": "front-desk"},
+# ]
+
+
+
 website_route_rules = [
     {"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
     {"from_route": "/front-desk", "to_route": "front-desk"},

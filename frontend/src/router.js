@@ -1,8 +1,9 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { createWebHistory } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory('/front-desk/'),
   routes: [
     { path: '/', redirect: '/room-view' },
     { path: '/login', name: 'Login', component: () => import('@/pages/Login.vue') },

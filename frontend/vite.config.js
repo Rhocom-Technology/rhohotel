@@ -8,7 +8,8 @@ export default defineConfig(({ command }) => {
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
     },
     plugins: [vue()],
-    base: command === 'build' ? '/assets/rhohotel/frontend/' : '/',
+    // base: command === 'build' ? '/assets/rhohotel/frontend/' : '/',
+    base: command === 'build' ? '/assets/rhohotel/frontend/' : '/front-desk/',
     server: {
       port: 8080,
       proxy: {
