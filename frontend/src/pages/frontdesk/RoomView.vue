@@ -278,6 +278,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { Search } from "lucide-vue-next";
+import { createResource } from "frappe-ui";
 import RoomControlModal from "@/components/roomview/RoomControlModal.vue";
 const selectedRoom = ref(null);
 
@@ -301,510 +302,95 @@ const tabs = [
 	{ label: "Night Audit", to: "/night-audit" },
 ];
 
-const rooms = [
-	// Floor 1
-	{
-		name: "101",
-		room_number: "101",
-		room_type: "Standard King",
-		floor: "1",
-		status: "Vacant",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
+const roomList = createResource({
+	url: "frappe.client.get_list",
+	params: {
+		doctype: "Hotel Room",
+		fields: [
+			"name",
+			"room_number",
+			"room_type",
+			"floor",
+			"status",
+			"housekeeping_status",
+			"current_guest",
+		],
+		order_by: "room_number asc",
+		limit_page_length: 500,
 	},
-	{
-		name: "102",
-		room_number: "102",
-		room_type: "Deluxe Twin",
-		floor: "1",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Sarah Johnson",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 21 Apr • 12:00 PM",
-	},
-	{
-		name: "103",
-		room_number: "103",
-		room_type: "Deluxe Twin",
-		floor: "1",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Ngozi Cole",
-		overdue: true,
-		unpaid: true,
-		subtitle: "Check-out: 18 Apr • 12:00 PM",
-	},
-	{
-		name: "104",
-		room_number: "104",
-		room_type: "Standard King",
-		floor: "1",
-		status: "Vacant",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Needs housekeeping attention",
-	},
-	{
-		name: "105",
-		room_number: "105",
-		room_type: "Deluxe Room",
-		floor: "1",
-		status: "Maintenance",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Under maintenance",
-	},
-	{
-		name: "106",
-		room_number: "106",
-		room_type: "Standard King",
-		floor: "1",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Emeka Adeyemi",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 22 Apr • 12:00 PM",
-	},
-	{
-		name: "107",
-		room_number: "107",
-		room_type: "Deluxe Room",
-		floor: "1",
-		status: "Vacant",
-		housekeeping_status: "Inspected",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "108",
-		room_number: "108",
-		room_type: "Deluxe Twin",
-		floor: "1",
-		status: "Reserved",
-		housekeeping_status: "Clean",
-		current_guest: "Amina Yusuf",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Arrival expected today 2:00 PM",
-	},
+	auto: true,
+});
 
-	// Floor 2
-	{
-		name: "201",
-		room_number: "201",
-		room_type: "Executive Suite",
-		floor: "2",
-		status: "Occupied",
-		housekeeping_status: "In Progress",
-		current_guest: "Daniel Ayo",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 23 Apr • 12:00 PM",
+const checkInList = createResource({
+	url: "frappe.client.get_list",
+	params: {
+		doctype: "Hotel Room Check In",
+		fields: [
+			"name",
+			"room_number",
+			"expected_check_out_datetime",
+			"total_outstanding_amount",
+		],
+		filters: [["status", "=", "Checked In"]],
+		limit_page_length: 500,
 	},
-	{
-		name: "202",
-		room_number: "202",
-		room_type: "Executive Suite",
-		floor: "2",
-		status: "Vacant",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "203",
-		room_number: "203",
-		room_type: "Premium Queen",
-		floor: "2",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Michael Duke",
-		overdue: true,
-		unpaid: false,
-		subtitle: "Check-out: 17 Apr • 12:00 PM",
-	},
-	{
-		name: "204",
-		room_number: "204",
-		room_type: "Premium Queen",
-		floor: "2",
-		status: "Vacant",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Needs housekeeping attention",
-	},
-	{
-		name: "205",
-		room_number: "205",
-		room_type: "Executive Suite",
-		floor: "2",
-		status: "Reserved",
-		housekeeping_status: "Clean",
-		current_guest: "Apex Holdings",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Arrival expected today 3:00 PM",
-	},
-	{
-		name: "206",
-		room_number: "206",
-		room_type: "Premium Queen",
-		floor: "2",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Fatima Ahmed",
-		overdue: false,
-		unpaid: true,
-		subtitle: "Check-out: 24 Apr • 12:00 PM",
-	},
-	{
-		name: "207",
-		room_number: "207",
-		room_type: "Executive Suite",
-		floor: "2",
-		status: "Vacant",
-		housekeeping_status: "Inspected",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "208",
-		room_number: "208",
-		room_type: "Premium Queen",
-		floor: "2",
-		status: "Maintenance",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Plumbing repair pending",
-	},
+	auto: true,
+});
 
-	// Floor 3
-	{
-		name: "301",
-		room_number: "301",
-		room_type: "Deluxe King",
-		floor: "3",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Blessing Owen",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 22 Apr • 12:00 PM",
-	},
-	{
-		name: "302",
-		room_number: "302",
-		room_type: "Deluxe King",
-		floor: "3",
-		status: "Vacant",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "303",
-		room_number: "303",
-		room_type: "Standard King",
-		floor: "3",
-		status: "Reserved",
-		housekeeping_status: "Clean",
-		current_guest: "Zenith Bank Team",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Arrival expected today 4:00 PM",
-	},
-	{
-		name: "304",
-		room_number: "304",
-		room_type: "Standard King",
-		floor: "3",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Tunde Fashola",
-		overdue: true,
-		unpaid: true,
-		subtitle: "Check-out: 16 Apr • 12:00 PM",
-	},
-	{
-		name: "305",
-		room_number: "305",
-		room_type: "Executive Suite",
-		floor: "3",
-		status: "Occupied",
-		housekeeping_status: "In Progress",
-		current_guest: "Grace Cole",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 25 Apr • 12:00 PM",
-	},
-	{
-		name: "306",
-		room_number: "306",
-		room_type: "Deluxe King",
-		floor: "3",
-		status: "Vacant",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Needs housekeeping attention",
-	},
-	{
-		name: "307",
-		room_number: "307",
-		room_type: "Standard King",
-		floor: "3",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Chibuzor Nweke",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 21 Apr • 12:00 PM",
-	},
-	{
-		name: "308",
-		room_number: "308",
-		room_type: "Deluxe King",
-		floor: "3",
-		status: "Vacant",
-		housekeeping_status: "Inspected",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
+const checkInMap = computed(() => {
+	const map = {};
+	for (const ci of checkInList.data || []) {
+		if (ci.room_number) {
+			map[ci.room_number] = ci;
+		}
+	}
+	return map;
+});
 
-	// Floor 4
-	{
-		name: "401",
-		room_number: "401",
-		room_type: "Presidential Suite",
-		floor: "4",
-		status: "Vacant",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "402",
-		room_number: "402",
-		room_type: "Presidential Suite",
-		floor: "4",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Emeka Obi",
-		overdue: true,
-		unpaid: true,
-		subtitle: "Check-out: 15 Apr • 12:00 PM",
-	},
-	{
-		name: "403",
-		room_number: "403",
-		room_type: "Deluxe Twin",
-		floor: "4",
-		status: "Maintenance",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "HVAC repair pending",
-	},
-	{
-		name: "404",
-		room_number: "404",
-		room_type: "Deluxe Twin",
-		floor: "4",
-		status: "Vacant",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Needs housekeeping attention",
-	},
-	{
-		name: "405",
-		room_number: "405",
-		room_type: "Premium Queen",
-		floor: "4",
-		status: "Reserved",
-		housekeeping_status: "Clean",
-		current_guest: "Bamidele Cole",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Arrival expected today 5:00 PM",
-	},
-	{
-		name: "406",
-		room_number: "406",
-		room_type: "Presidential Suite",
-		floor: "4",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Rita James",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 26 Apr • 12:00 PM",
-	},
-	{
-		name: "407",
-		room_number: "407",
-		room_type: "Premium Queen",
-		floor: "4",
-		status: "Vacant",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "408",
-		room_number: "408",
-		room_type: "Deluxe Twin",
-		floor: "4",
-		status: "Occupied",
-		housekeeping_status: "In Progress",
-		current_guest: "Segun Ade",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 23 Apr • 12:00 PM",
-	},
+function roomSubtitle(room) {
+	if (room.overdue) return "Overdue check-out";
+	if (room.status === "Maintenance") return "Under maintenance";
+	if (room.housekeeping_status === "Dirty") return "Needs housekeeping attention";
+	if (room.status === "Reserved") return "Arrival expected";
+	if (room.checkIn?.expected_check_out_datetime) {
+		const date = new Date(room.checkIn.expected_check_out_datetime);
+		return `Check-out: ${date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} • ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+	}
+	return "Ready for walk-in or reservation";
+}
 
-	// Floor 5
-	{
-		name: "501",
-		room_number: "501",
-		room_type: "Standard King",
-		floor: "5",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Halima Musa",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 24 Apr • 12:00 PM",
-	},
-	{
-		name: "502",
-		room_number: "502",
-		room_type: "Standard King",
-		floor: "5",
-		status: "Vacant",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "503",
-		room_number: "503",
-		room_type: "Executive Suite",
-		floor: "5",
-		status: "Occupied",
-		housekeeping_status: "In Progress",
-		current_guest: "Biodun Fashola",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Check-out: 22 Apr • 12:00 PM",
-	},
-	{
-		name: "504",
-		room_number: "504",
-		room_type: "Executive Suite",
-		floor: "5",
-		status: "Vacant",
-		housekeeping_status: "Inspected",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Ready for walk-in or reservation",
-	},
-	{
-		name: "505",
-		room_number: "505",
-		room_type: "Standard King",
-		floor: "5",
-		status: "Occupied",
-		housekeeping_status: "Clean",
-		current_guest: "Chioma Okafor",
-		overdue: true,
-		unpaid: false,
-		subtitle: "Check-out: 19 Apr • 12:00 PM",
-	},
-	{
-		name: "506",
-		room_number: "506",
-		room_type: "Executive Suite",
-		floor: "5",
-		status: "Reserved",
-		housekeeping_status: "Clean",
-		current_guest: "Samuel Dada",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Arrival expected today 1:00 PM",
-	},
-	{
-		name: "507",
-		room_number: "507",
-		room_type: "Standard King",
-		floor: "5",
-		status: "Vacant",
-		housekeeping_status: "Dirty",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Needs housekeeping attention",
-	},
-	{
-		name: "508",
-		room_number: "508",
-		room_type: "Executive Suite",
-		floor: "5",
-		status: "Maintenance",
-		housekeeping_status: "Clean",
-		current_guest: "",
-		overdue: false,
-		unpaid: false,
-		subtitle: "Electrical work in progress",
-	},
-];
+const roomRows = computed(() => {
+	return (roomList.data || []).map((room) => {
+		const key = room.room_number || room.name;
+		const checkIn = checkInMap.value[key] || null;
+		const overdue =
+			room.status === "Occupied" &&
+			!!checkIn?.expected_check_out_datetime &&
+			new Date(checkIn.expected_check_out_datetime) < new Date();
+		const unpaid = Number(checkIn?.total_outstanding_amount || 0) > 0;
 
-const floors = computed(() => [...new Set(rooms.map((r) => r.floor))].sort());
-const roomTypes = computed(() => [...new Set(rooms.map((r) => r.room_type))].sort());
+		return {
+			...room,
+			checkIn,
+			overdue,
+			unpaid,
+			subtitle: roomSubtitle({ ...room, checkIn, overdue }),
+		};
+	});
+});
+
+const floors = computed(() => [...new Set(roomRows.value.map((r) => r.floor).filter(Boolean))].sort());
+const roomTypes = computed(() => [...new Set(roomRows.value.map((r) => r.room_type).filter(Boolean))].sort());
 
 const stats = computed(() => ({
-	vacant: rooms.filter((r) => r.status === "Vacant").length,
-	occupied: rooms.filter((r) => r.status === "Occupied").length,
-	reserved: rooms.filter((r) => r.status === "Reserved").length,
-	dirty: rooms.filter((r) => r.housekeeping_status === "Dirty").length,
-	maintenance: rooms.filter((r) => r.status === "Maintenance").length,
-	overdue: rooms.filter((r) => r.overdue).length,
-	unpaid: rooms.filter((r) => r.unpaid).length,
-	vip: 1,
+	vacant: roomRows.value.filter((r) => r.status === "Vacant").length,
+	occupied: roomRows.value.filter((r) => r.status === "Occupied").length,
+	reserved: roomRows.value.filter((r) => r.status === "Reserved").length,
+	dirty: roomRows.value.filter((r) => r.housekeeping_status === "Dirty").length,
+	maintenance: roomRows.value.filter((r) => r.status === "Maintenance").length,
+	overdue: roomRows.value.filter((r) => r.overdue).length,
+	unpaid: roomRows.value.filter((r) => r.unpaid).length,
+	vip: roomRows.value.filter((r) => r.status === "Reserved").length,
 }));
 
 // const statCards = computed(() => [
@@ -857,7 +443,7 @@ const statCards = computed(() => [
 ]);
 
 const filteredRooms = computed(() => {
-	let list = rooms;
+	let list = roomRows.value;
 	if (search.value) {
 		const q = search.value.toLowerCase();
 		list = list.filter(
@@ -937,6 +523,7 @@ function statusLine(room) {
 }
 
 function refreshRooms() {
-	// dummy — no-op with dummy data
+	roomList.reload();
+	checkInList.reload();
 }
 </script>
