@@ -198,15 +198,7 @@
       </div>
     </div>
 
-    <!-- Detail Modal -->
-    <Teleport to="body">
-      <div v-if="selectedCheckIn" class="fixed inset-0 z-50 flex items-center justify-center"
-        style="background:rgba(0,0,0,0.55);" @click.self="selectedCheckIn = null">
-        <div class="bg-white rounded-2xl shadow-2xl w-full overflow-y-auto mx-4" style="max-width:1000px;max-height:90vh;">
-          <CheckInDetail v-if="selectedCheckIn" :check-in="selectedCheckIn" @close="selectedCheckIn = null" />
-        </div>
-      </div>
-    </Teleport>
+   
 
   </div>
 </template>
@@ -215,7 +207,8 @@
 import { ref, computed, watch } from 'vue'
 import { UserCheck } from 'lucide-vue-next'
 import { createResource } from 'frappe-ui'
-import CheckInDetail from '@/components/checkin/CheckInDetail.vue'
+import { useRouter } from 'vue-router'
+const router = useRouter()
 
 const search = ref('')
 const filterStatus = ref('')
@@ -223,7 +216,7 @@ const filterDateRange = ref('month')
 const filterPayment = ref('')
 const page = ref(1)
 const pageSize = 25
-const selectedCheckIn = ref(null)
+
 
 const checkInResource = createResource({
   url: 'frappe.client.get_list',
@@ -316,10 +309,9 @@ function clearFilters() {
 }
 
 function openDetail(item) {
-  if (!item) return
-  selectedCheckIn.value = { ...item }
+  if (!item?.name) return
+  router.push('/check-ins/' + item.name)
 }
-
 function refreshData() {
   checkInResource.reload()
 }

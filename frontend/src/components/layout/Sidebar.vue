@@ -81,6 +81,7 @@ const navGroups = [
       { label: 'Check-outs', to: '/check-outs' },
       { label: 'Reservations', to: '/reservations' },
       { label: 'Payments', to: '/payments' },
+      { label: 'Guest List', to: '/guests' },
       { label: 'Night Audit', to: '/night-audit' },
     ],
   },
@@ -122,6 +123,10 @@ const navGroups = [
     icon: ShoppingCart,
     children: [
       { label: 'POS Dashboard', to: '/pos' },
+      { label: 'Manager Dashboard', to: '/pos/manager-dashboard' },   
+      { label: 'POS Invoice List', to: '/pos/invoices' },
+      { label: 'Shift Difference Log', to: '/pos/shift-difference-log' }, 
+      { label: 'Staff Roaster', to: '/pos/staff-roaster' },    
     ],
   },
   {
@@ -135,9 +140,12 @@ const navGroups = [
     label: 'Complimentary Mgmt',
     icon: Gift,
     children: [
-      { label: 'Complimentary Dashboard', to: '/complimentary' },
+       { label: 'Dashboard',             to: '/complimentary' },
+        { label: 'Complimentary List',    to: '/complimentary/list' },
+        { label: 'New Complimentary',     to: '/complimentary/new' },
     ],
   },
+  
   {
     label: 'Asset Management',
     icon: Settings,

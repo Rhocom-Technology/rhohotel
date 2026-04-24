@@ -35,10 +35,13 @@ const pageMeta = {
   // Front Desk
   'RoomView':             { title: 'Front Desk Command Center', subtitle: 'Real-time room operations, overdue checkout watch, guest occupancy visibility' },
   'CheckIns':             { title: 'Check-in List', subtitle: 'Front desk • all guest check-in history and active stays' },
+  'CheckInDetail': { title: 'Check-in Detail', subtitle: 'Front desk • guest stay details, billing, and departure actions' },
   'CheckOuts':            { title: 'Check-out List', subtitle: 'Front desk • checked-out guest records' },
+  'CheckOutOverdue': { title: 'Check-out Overdue', subtitle: 'Front desk • overdue departure monitoring' },
   'Reservations':         { title: 'Reservations', subtitle: 'Reservation section • list view' },
   'NewReservation':       { title: 'New Reservation', subtitle: 'Individual and corporate reservations with guest selection, stay dates, room choice, rate auto-fill, discount control, and grand total' },
   'SavedReservation':     { title: 'Reservation', subtitle: 'Saved reservation record with payment, adjustment, room change, cancellation, and check-in actions' },
+  'GuestList':            { title: 'Guest List', subtitle: 'Guest section • list view' },
   'Payments':             { title: 'Payments', subtitle: 'Front desk billing • payment list' },
   'NightAudit':           { title: 'Night Audit', subtitle: 'End of day audit and reconciliation' },
 
@@ -61,12 +64,31 @@ const pageMeta = {
   'TechnicianView':           { title: 'Technician View', subtitle: 'Operations • technician profile, source type, skills, assignments, and performance summary' },
   'NewTechnician':            { title: 'New Technician', subtitle: 'Create technician • in-house employee or outsourced service provider setup' },
 
+  // POS
+  'PointOfSales':         { title: 'Point of Sales', subtitle: 'POS dashboard and transaction management' },
+  'POSShiftClose': { title: 'POS / Shift Closing', subtitle: 'Point of sale • end-of-shift reconciliation and terminal closing' },
+  'POSInvoiceList': { title: 'POS Invoice List', subtitle: 'Point of sale • invoice history and billing records' },
+  'POSManagerDashboard': { title: 'POS Manager Dashboard', subtitle: 'Point of sale • multi-terminal oversight and performance analytics' },
+'POSShiftDifferenceLog': { title: 'Shift Difference Log', subtitle: 'Point of sale • difference history, reviews and resolutions' },
+'StaffRoasterPage': { title: 'View Staff Roaster', subtitle: 'Point of sale • cashier and outlet staff scheduling overview' },
+
+  // Kitchen
+  'KitchenTerminal': { title: 'Kitchen Terminal Dashboard', subtitle: 'Point of sale • kitchen display and order preparation control' },
+
+  // Complimentary
+  'Complimentary': { title: 'Complimentary', subtitle: 'Complimentary service tracking and management' },
+  'ComplimentaryList': { title: 'Complimentary List', subtitle: 'Complimentary service tracking and management' },
+  'NewComplimentary': { title: 'New Complimentary', subtitle: 'Complimentary service tracking and management' },
+  'SavedComplimentary': { title: 'Saved Complimentary', subtitle: 'Complimentary service tracking and management' },
+
+
+  'CheckOut': { title: 'Check-out', subtitle: 'Front desk • check-out and final billing workflow' },
+  'SavedRoom': { title: 'Saved Room', subtitle: 'Operations • room configuration and current status display' },
+
   // Others
   'Billing':              { title: 'Billing', subtitle: 'Invoice and billing management' },
   'Reports':              { title: 'Reports', subtitle: 'Hotel performance and occupancy overview' },
-  'PointOfSales':         { title: 'Point of Sales', subtitle: 'POS dashboard and transaction management' },
   'KitchenTerminal':      { title: 'Kitchen Terminal', subtitle: 'Kitchen order management and tracking' },
-  'Complimentary':        { title: 'Complimentary Management', subtitle: 'Complimentary service tracking and management' },
   'AssetManagement':      { title: 'Asset Management', subtitle: 'Hotel asset tracking and management' },
 }
 

@@ -19,7 +19,13 @@
 
     <!-- Stats Row -->
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
-      <div v-for="stat in statCards" :key="stat.label" class="bg-white rounded-xl border border-gray-200 px-4 py-4">
+      <div
+        v-for="stat in statCards"
+        :key="stat.label"
+        class="bg-white rounded-xl border border-gray-200 px-4 py-4"
+        :class="stat.to ? 'cursor-pointer hover:border-red-200 transition-colors' : ''"
+        @click="stat.to ? $router.push(stat.to) : null"
+      >
         <p class="text-xs text-gray-400 mb-1">{{ stat.label }}</p>
         <p class="text-3xl font-bold text-gray-900">{{ stat.value }}</p>
         <p class="text-xs mt-1 font-medium" :style="{ color: stat.hexColor }">{{ stat.subtitle }}</p>
@@ -109,6 +115,7 @@
           :key="room.name"
           class="rounded-xl p-4 border cursor-pointer hover:shadow-md transition-shadow"
           :style="roomCardStyle(room)"
+           @click="selectedRoom = room"
         >
           <!-- Header -->
           <div class="flex items-start justify-between mb-2">
@@ -140,6 +147,7 @@
           <p class="text-xs mt-0.5 truncate" style="color:#9ca3af;">{{ room.subtitle }}</p>
         </div>
       </div>
+      <RoomControlModal v-if="selectedRoom" :room="selectedRoom" @close="selectedRoom = null" />
     </div>
 
   </div>
@@ -148,6 +156,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Search } from 'lucide-vue-next'
+import RoomControlModal from '@/components/roomview/RoomControlModal.vue'
+const selectedRoom = ref(null)
 
 const search = ref('')
 const filterFloor = ref('')
@@ -235,13 +245,22 @@ const stats = computed(() => ({
   vip: 1,
 }))
 
+// const statCards = computed(() => [
+//   { label: 'Vacant Rooms', value: stats.value.vacant, subtitle: 'Ready for sale', hexColor: '#22c55e' },
+//   { label: 'Occupied', value: stats.value.occupied, subtitle: 'Live stays', hexColor: '#3b82f6' },
+//   { label: 'Reserved Today', value: stats.value.reserved, subtitle: 'Incoming arrivals', hexColor: '#8b5cf6' },
+//   { label: 'Dirty Rooms', value: stats.value.dirty, subtitle: 'Housekeeping queue', hexColor: '#f97316' },
+//   { label: 'Maintenance', value: stats.value.maintenance, subtitle: 'Out of order', hexColor: '#6b7280' },
+//   { label: 'Overdue Check-outs', value: stats.value.overdue, subtitle: 'Immediate desk action', hexColor: '#ef4444' },
+// ])
+
 const statCards = computed(() => [
-  { label: 'Vacant Rooms', value: stats.value.vacant, subtitle: 'Ready for sale', hexColor: '#22c55e' },
-  { label: 'Occupied', value: stats.value.occupied, subtitle: 'Live stays', hexColor: '#3b82f6' },
-  { label: 'Reserved Today', value: stats.value.reserved, subtitle: 'Incoming arrivals', hexColor: '#8b5cf6' },
-  { label: 'Dirty Rooms', value: stats.value.dirty, subtitle: 'Housekeeping queue', hexColor: '#f97316' },
-  { label: 'Maintenance', value: stats.value.maintenance, subtitle: 'Out of order', hexColor: '#6b7280' },
-  { label: 'Overdue Check-outs', value: stats.value.overdue, subtitle: 'Immediate desk action', hexColor: '#ef4444' },
+  { label: 'Vacant Rooms',        value: stats.value.vacant,      subtitle: 'Ready for sale',          hexColor: '#22c55e' },
+  { label: 'Occupied',            value: stats.value.occupied,    subtitle: 'Live stays',              hexColor: '#3b82f6' },
+  { label: 'Reserved Today',      value: stats.value.reserved,    subtitle: 'Incoming arrivals',       hexColor: '#8b5cf6' },
+  { label: 'Dirty Rooms',         value: stats.value.dirty,       subtitle: 'Housekeeping queue',      hexColor: '#f97316' },
+  { label: 'Maintenance',         value: stats.value.maintenance, subtitle: 'Out of order',            hexColor: '#6b7280' },
+  { label: 'Overdue Check-outs',  value: stats.value.overdue,     subtitle: 'Immediate desk action',   hexColor: '#ef4444', to: '/check-outs/overdue' },
 ])
 
 const filteredRooms = computed(() => {

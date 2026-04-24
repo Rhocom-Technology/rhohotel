@@ -10,11 +10,15 @@ const router = createRouter({
     // Front Desk
     { path: '/room-view', name: 'RoomView', component: () => import('@/pages/frontdesk/RoomView.vue') },
     { path: '/check-ins', name: 'CheckIns', component: () => import('@/pages/frontdesk/CheckIns.vue') },
+    { path: '/check-ins/:id', name: 'CheckInDetail', component: () => import('@/pages/frontdesk/CheckInDetail.vue') },
     { path: '/check-outs', name: 'CheckOuts', component: () => import('@/pages/frontdesk/CheckOuts.vue') },
+    { path: '/check-outs/:id', name: 'CheckOut', component: () => import('@/pages/frontdesk/CheckoutDetail.vue') },
+    { path: '/check-outs/overdue', name: 'CheckOutOverdue', component: () => import('@/pages/frontdesk/CheckOutOverdue.vue') },
     { path: '/reservations', name: 'Reservations', component: () => import('@/pages/frontdesk/Reservations.vue') },
     { path: '/reservations/new', name: 'NewReservation', component: () => import('@/pages/frontdesk/NewReservation.vue') },
     { path: '/reservations/:id', name: 'SavedReservation', component: () => import('@/pages/frontdesk/SavedReservation.vue') },
     { path: '/payments', name: 'Payments', component: () => import('@/pages/frontdesk/Payments.vue') },
+    { path: '/guests', name: 'GuestList', component: () => import('@/pages/frontdesk/GuestList.vue') },
     { path: '/night-audit', name: 'NightAudit', component: () => import('@/pages/frontdesk/NightAudit.vue') },
 
     // Housekeeping
@@ -36,12 +40,31 @@ const router = createRouter({
     { path: '/maintenance/technicians/:id', name: 'TechnicianView', component: () => import('@/pages/maintenance/TechnicianView.vue') },
     { path: '/maintenance/new-technician', name: 'NewTechnician', component: () => import('@/pages/maintenance/NewTechnician.vue') },
 
+    // POS
+    { path: '/pos', name: 'PointOfSales', component: () => import('@/pages/pos/PointOfSales.vue') },
+    { path: '/pos/shift-close', name: 'POSShiftClose', component: () => import('@/pages/pos/POSShiftClose.vue') },
+    { path: '/pos/invoices', name: 'POSInvoiceList', component: () => import('@/pages/pos/POSInvoiceList.vue') },
+    { path: '/pos/manager-dashboard', name: 'POSManagerDashboard', component: () => import('@/pages/pos/POSManagerDashboard.vue') },
+    { path: '/pos/shift-difference-log', name: 'POSShiftDifferenceLog', component: () => import('@/pages/pos/ShiftDifferenceLog.vue') },
+    { path: '/pos/staff-roaster', name: 'StaffRoasterPage', component: () => import('@/pages/pos/StaffRoasterPage.vue') },
+
+    // Kitchen
+    { path: '/kitchen', name: 'KitchenTerminal', component: () => import('@/pages/kitchen/KitchenTerminal.vue') },
+
+
+    // Complimentary
+    { path: '/complimentary', name: 'Complimentary', component: () => import('@/pages/complimentary/Complimentary.vue') },
+    { path: '/complimentary/list', name: 'ComplimentaryList', component: () => import('@/pages/complimentary/ComplimentaryList.vue') },
+    { path: '/complimentary/new', name: 'NewComplimentary', component: () => import('@/pages/complimentary/NewComplimentary.vue') },
+    { path: '/complimentary/:id', name: 'SavedComplimentary', component: () => import('@/pages/complimentary/SavedComplimentary.vue') },
+
+
+
+    { path: '/rooms/:id', name: 'SavedRoom', component: () => import('@/pages/frontdesk/SavedRoom.vue') },
+
     // Others
     { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
     { path: '/reports', name: 'Reports', component: () => import('@/pages/reports/Reports.vue') },
-    { path: '/pos', name: 'PointOfSales', component: () => import('@/pages/pos/PointOfSales.vue') },
-    { path: '/kitchen', name: 'KitchenTerminal', component: () => import('@/pages/kitchen/KitchenTerminal.vue') },
-    { path: '/complimentary', name: 'Complimentary', component: () => import('@/pages/complimentary/Complimentary.vue') },
     { path: '/assets-mgmt', name: 'AssetManagement', component: () => import('@/pages/assets/AssetManagement.vue') },
   ],
 })
