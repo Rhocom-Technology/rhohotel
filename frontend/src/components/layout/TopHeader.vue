@@ -45,6 +45,9 @@ const pageMeta = {
   'GuestList':            { title: 'Guest List', subtitle: 'Guest section • list view' },
   'Payments':             { title: 'Payments', subtitle: 'Front desk billing • payment list' },
   'NightAudit':           { title: 'Night Audit', subtitle: 'End of day audit and reconciliation' },
+  'GuestProfile': { title: 'Guest Profile Intelligence', subtitle: '360-degree guest record with stay history, spend, loyalty, risk, messages, preferences, and current stay snapshot' },
+'EditGuest':    { title: 'Edit Existing Guest',        subtitle: 'Guest profile • update guest identity, contact details, preferences, and supporting documents' },
+'NewGuest':     { title: 'New Guest',                  subtitle: 'Guest profile • create a new guest identity, contact details, preferences, and supporting documents' },
 
   // Housekeeping
   'Housekeeping':             { title: 'Housekeeping', subtitle: 'Housekeeping section • task list view' },
@@ -86,11 +89,17 @@ const pageMeta = {
   'CheckOut': { title: 'Check-out', subtitle: 'Front desk • check-out and final billing workflow' },
   'SavedRoom': { title: 'Saved Room', subtitle: 'Operations • room configuration and current status display' },
 
+    // Asset Management
+  'AssetManagement': { title: 'Asset Management Dashboard', subtitle: 'Operations • asset inventory, maintenance, lifecycle, and utilization monitoring' },
+  'AssetList':       { title: 'Asset List',                  subtitle: 'Operations • central asset register for rooms, facilities, and equipment' },
+
+  // Billing
+  'Billing':          { title: 'Billing Dashboard',    subtitle: 'Billing • individual and corporate account monitoring with invoice and payment controls' },
+  'CorporateBillList':{ title: 'Corporate Bills List',  subtitle: 'Corporate billing • company bills, statements, outstanding balances, and payment follow-up' },
+
+
   // Others
-  'Billing':              { title: 'Billing', subtitle: 'Invoice and billing management' },
   'Reports':              { title: 'Reports', subtitle: 'Hotel performance and occupancy overview' },
-  'KitchenTerminal':      { title: 'Kitchen Terminal', subtitle: 'Kitchen order management and tracking' },
-  'AssetManagement':      { title: 'Asset Management', subtitle: 'Hotel asset tracking and management' },
 }
 
 const pageTitle = computed(() => pageMeta[route.name]?.title || 'Dashboard')

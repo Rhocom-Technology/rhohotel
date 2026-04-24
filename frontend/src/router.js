@@ -23,6 +23,10 @@ const router = createRouter({
     { path: '/guests', name: 'GuestList', component: () => import('@/pages/frontdesk/GuestList.vue') },
     { path: '/night-audit', name: 'NightAudit', component: () => import('@/pages/frontdesk/NightAudit.vue') },
 
+    { path: '/guests/new', name: 'NewGuest', component: () => import('@/pages/frontdesk/NewGuest.vue') },
+    { path: '/guests/:id', name: 'GuestProfile', component: () => import('@/pages/frontdesk/GuestProfile.vue') },
+    { path: '/guests/:id/edit', name: 'EditGuest', component: () => import('@/pages/frontdesk/EditGuest.vue') },
+
     // Housekeeping
     { path: '/housekeeping', name: 'Housekeeping', component: () => import('@/pages/housekeeping/Housekeeping.vue') },
     { path: '/housekeeping/dashboard', name: 'HousekeepingDashboard', component: () => import('@/pages/housekeeping/HousekeepingDashboard.vue') },
@@ -64,10 +68,15 @@ const router = createRouter({
 
     { path: '/rooms/:id', name: 'SavedRoom', component: () => import('@/pages/frontdesk/SavedRoom.vue') },
 
-    // Others
-    { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
-    { path: '/reports', name: 'Reports', component: () => import('@/pages/reports/Reports.vue') },
+    // Asset Management
     { path: '/assets-mgmt', name: 'AssetManagement', component: () => import('@/pages/assets/AssetManagement.vue') },
+    { path: '/assets-mgmt/list', name: 'AssetList', component: () => import('@/pages/assets/AssetList.vue') },
+
+    // Billing
+    { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
+    { path: '/billing/corporate', name: 'CorporateBillList', component: () => import('@/pages/billing/CorporateBillList.vue') },
+    // Others
+    { path: '/reports', name: 'Reports', component: () => import('@/pages/reports/Reports.vue') },
   ],
 })
 

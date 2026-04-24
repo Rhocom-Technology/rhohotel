@@ -108,7 +108,8 @@ const navGroups = [
     label: 'Billing',
     icon: CreditCard,
     children: [
-      { label: 'Invoices', to: '/billing' },
+      { label: 'Billing Dashboard',   to: '/billing' },
+  { label: 'Corporate Billing',   to: '/billing/corporate' },
     ],
   },
   {
@@ -150,7 +151,8 @@ const navGroups = [
     label: 'Asset Management',
     icon: Settings,
     children: [
-      { label: 'Asset Dashboard', to: '/assets-mgmt' },
+     { label: 'Dashboard',  to: '/assets-mgmt' },
+  { label: 'Asset List', to: '/assets-mgmt/list' },
     ],
   },
 ]

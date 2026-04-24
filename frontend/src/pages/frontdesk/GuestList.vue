@@ -90,7 +90,7 @@
           class="px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Reset
         </button>
-        <button class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <button @click="$router.push('/guests/new')" class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
           New Guest
         </button>
       </div>
@@ -153,7 +153,7 @@
             </td>
             <!-- Actions -->
             <td class="px-4 py-4">
-              <button class="px-4 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors">
+              <button @click="$router.push('/guests/' + guest.id)" class="px-4 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors">
                 Open
               </button>
             </td>

@@ -300,3 +300,9 @@ override_doctype_class = {
 
 
 doc_events = {"Sales Invoice": {"validate": "rhohotel.overrides.sales_invoice.validate_sales_invoice"}}
+
+
+website_route_rules = [
+    {"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
+    {"from_route": "/front-desk", "to_route": "front-desk"},
+]
