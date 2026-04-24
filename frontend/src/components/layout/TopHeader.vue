@@ -36,6 +36,7 @@ const pageMeta = {
   'RoomView':             { title: 'Front Desk Command Center', subtitle: 'Real-time room operations, overdue checkout watch, guest occupancy visibility' },
   'CheckIns':             { title: 'Check-in List', subtitle: 'Front desk • all guest check-in history and active stays' },
   'CheckInDetail': { title: 'Check-in Detail', subtitle: 'Front desk • guest stay details, billing, and departure actions' },
+  'NewCheckIn': { title: 'New Check-In', subtitle: 'Professional front desk check-in flow' },
   'CheckOuts':            { title: 'Check-out List', subtitle: 'Front desk • checked-out guest records' },
   'CheckOutOverdue': { title: 'Check-out Overdue', subtitle: 'Front desk • overdue departure monitoring' },
   'Reservations':         { title: 'Reservations', subtitle: 'Reservation section • list view' },

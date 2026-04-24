@@ -1,4 +1,6 @@
 /* eslint-disable no-unused-vars */
+frappe.provide("erpnext.PointOfSale");
+
 erpnext.PointOfSale.Payment = class {
 	constructor({ events, settings, wrapper }) {
 		this.wrapper = wrapper;
@@ -380,7 +382,7 @@ erpnext.PointOfSale.Payment = class {
 				df: {
 					label: __("Remark"),
 					fieldtype: "Data",
-					onchange: function () {},
+					onchange: function () { },
 				},
 				parent: this.$totals_section.find(`.remarks`),
 				render_input: true,

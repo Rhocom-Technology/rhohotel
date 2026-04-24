@@ -33,7 +33,8 @@
 
     <!-- Action Buttons -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center gap-2 flex-wrap">
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+      <button @click="showRoomTransfer = true"
+        class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Room Transfer
       </button>
       <div class="relative">
@@ -45,22 +46,24 @@
           class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-32">
           <button @click="showCreateMenu = false"
             class="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50">Discount</button>
-          <button @click="showCreateMenu = false"
+          <button @click="showRefund = true; showCreateMenu = false"
             class="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50">Refund</button>
         </div>
       </div>
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+      <button @click="showBillTransfer = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Bill Transfer
       </button>
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+      <button @click="showStayAdjustment = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Adjust Stay
       </button>
       <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
         Receive Payment
       </button>
-      <button class="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors">
-        Check Out
-      </button>
+      <button 
+      class="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+      @click="$router.push('/check-outs/' + checkIn.name)">
+      Check Out
+    </button>
       <button @click="$router.back()"
         class="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">
         Cancel
@@ -227,12 +230,29 @@
       <p class="text-sm text-gray-400">No transfer history available</p>
     </div>
 
+    <!-- Modals -->
+    <RoomTransferModal v-if="showRoomTransfer" @close="showRoomTransfer = false" />
+    <StayAdjustmentModal v-if="showStayAdjustment" @close="showStayAdjustment = false" />
+    <RefundRequestModal v-if="showRefund" @close="showRefund = false" />
+    <BillTransferModal v-if="showBillTransfer" @close="showBillTransfer = false" />
+
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import RoomTransferModal from '@/components/checkin/RoomTransferModal.vue'
+import StayAdjustmentModal from '@/components/checkin/StayAdjustmentModal.vue'
+import RefundRequestModal from '@/components/checkin/RefundRequestModal.vue'
+import BillTransferModal from '@/components/checkin/BillTransferModal.vue'
+
+const showRoomTransfer = ref(false)
+const showStayAdjustment = ref(false)
+const showRefund = ref(false)
+const showBillTransfer = ref(false)
+
 
 const route = useRoute()
 const activeTab = ref('Details')
