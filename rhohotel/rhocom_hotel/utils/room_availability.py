@@ -5,6 +5,23 @@ All room availability checks across the application (reservations, check-ins,
 corporate check-ins, front-desk reservations, online bookings) must use the
 functions in this module instead of duplicating overlap-query logic inline.
 
+This module is the *single source of truth* for overlap detection.  It covers
+three distinct booking surfaces:
+
+  1. Legacy Hotel Room Reservation
+       – Single-room reservation created per room by the front-desk flow.
+       – Queried directly: `tabHotel Room Reservation`.
+
+  2. Hotel Room Check In
+       – Active stay record created when a guest physically checks in.
+       – Queried directly: `tabHotel Room Check In`.
+
+  3. Canonical Hotel Reservation (new)
+       – One parent per booking, rooms stored in child table Hotel Reservation Room.
+       – Queried via a JOIN: `tabHotel Reservation Room` → `tabHotel Reservation`.
+
+A room must be free in *all three* surfaces before it is considered available.
+
 Public API
 ----------
 check_reservation_conflict(room_number, check_in_dt, check_out_dt, exclude_reservation=None)
@@ -13,10 +30,16 @@ check_reservation_conflict(room_number, check_in_dt, check_out_dt, exclude_reser
 check_checkin_conflict(room_number, check_in_dt, check_out_dt, exclude_checkin=None)
     Returns the first conflicting Hotel Room Check In dict, or None.
 
-assert_room_available(room_number, check_in_dt, check_out_dt, *, exclude_reservation=None, exclude_checkin=None)
-    Raises frappe.ValidationError (via frappe.throw) if a conflict is found.
+check_canonical_reservation_conflict(room_number, check_in_dt, check_out_dt, exclude_canonical=None)
+    Returns the first conflicting canonical Hotel Reservation (via its room allocation
+    child rows) dict, or None.
 
-get_available_rooms(check_in_dt, check_out_dt, room_type=None, require_clean=False)
+assert_room_available(room_number, check_in_dt, check_out_dt, *, exclude_reservation=None,
+                      exclude_checkin=None, exclude_canonical=None)
+    Raises frappe.ValidationError (via frappe.throw) if a conflict is found in any surface.
+
+get_available_rooms(check_in_dt, check_out_dt, room_type=None, require_clean=False,
+                    require_vacant=False)
     Returns a list of available room dicts for the given period, with pricing attached.
 """
 
@@ -140,7 +163,73 @@ def check_checkin_conflict(room_number, check_in_dt, check_out_dt, exclude_check
 
 
 # ---------------------------------------------------------------------------
-# Assertion helper (throws on conflict)
+# Canonical Hotel Reservation conflict detection
+# ---------------------------------------------------------------------------
+
+
+def check_canonical_reservation_conflict(
+    room_number, check_in_dt, check_out_dt, exclude_canonical=None
+):
+    """
+    Check for a conflicting canonical Hotel Reservation for the given room and period.
+
+    Unlike the legacy Hotel Room Reservation (which stores one room per parent
+    document), the canonical Hotel Reservation stores rooms in a child table
+    (Hotel Reservation Room).  This function queries that child table joined
+    against the parent to detect overlapping allocations.
+
+    Overlap formula applied to the *parent* Hotel Reservation:
+        parent.from_date < check_out_dt AND parent.to_date > check_in_dt
+
+    Statuses excluded from conflict (reservation is no longer active):
+        Cancelled, Checked Out, No Show, Expired
+
+    Args:
+        room_number       : Hotel Room name to check.
+        check_in_dt       : Period start – datetime or date/str (normalized to 12:00).
+        check_out_dt      : Period end   – datetime or date/str (normalized to 12:00).
+        exclude_canonical : Name of the canonical Hotel Reservation to exclude
+                            (pass self.name when validating the document being saved
+                            so it does not self-conflict on re-save).
+
+    Returns:
+        dict with keys (name, from_date, to_date, primary_guest_name), or None.
+    """
+    check_in_dt = _normalize_dt(check_in_dt)
+    check_out_dt = _normalize_dt(check_out_dt)
+
+    check_in_str = check_in_dt.strftime("%Y-%m-%d %H:%M:%S")
+    check_out_str = check_out_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Build optional exclusion clause
+    exclude_clause = ""
+    params: tuple = (room_number, check_out_str, check_in_str)
+    if exclude_canonical:
+        exclude_clause = "AND hr.name != %s"
+        params = (room_number, check_out_str, check_in_str, exclude_canonical)
+
+    results = frappe.db.sql(
+        f"""
+        SELECT hr.name, hr.from_date, hr.to_date, hr.primary_guest_name
+        FROM `tabHotel Reservation Room` rr
+        INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
+        WHERE rr.room_number = %s
+          AND hr.docstatus != 2
+          AND hr.reservation_status NOT IN
+              ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND hr.from_date < %s
+          AND hr.to_date   > %s
+          {exclude_clause}
+        LIMIT 1
+        """,
+        params,
+        as_dict=True,
+    )
+    return results[0] if results else None
+
+
+# ---------------------------------------------------------------------------
+# Assertion helper (throws on conflict – checks all three booking surfaces)
 # ---------------------------------------------------------------------------
 
 
@@ -151,23 +240,32 @@ def assert_room_available(
     *,
     exclude_reservation=None,
     exclude_checkin=None,
+    exclude_canonical=None,
 ):
     """
-    Assert that *room_number* has no conflicting reservations or check-ins
+    Assert that *room_number* has no conflicting booking in any active surface
     for the period [check_in_dt, check_out_dt).
 
     Raises frappe.ValidationError (via frappe.throw) on the first conflict found.
+
+    Three surfaces are checked in order:
+      1. Legacy Hotel Room Reservation  – via check_reservation_conflict()
+      2. Hotel Room Check In            – via check_checkin_conflict()
+      3. Canonical Hotel Reservation    – via check_canonical_reservation_conflict()
 
     Args:
         room_number        : Hotel Room name.
         check_in_dt        : Period start – datetime or date/str.
         check_out_dt       : Period end   – datetime or date/str.
-        exclude_reservation: Reservation name to ignore (e.g. the one being saved).
-        exclude_checkin    : Check-in name to ignore (e.g. the stay being extended).
+        exclude_reservation: Legacy Hotel Room Reservation name to ignore.
+        exclude_checkin    : Hotel Room Check In name to ignore.
+        exclude_canonical  : Canonical Hotel Reservation name to ignore
+                             (pass self.name when validating the reservation being saved).
     """
     check_in_dt = _normalize_dt(check_in_dt)
     check_out_dt = _normalize_dt(check_out_dt)
 
+    # --- Surface 1: legacy Hotel Room Reservation ---
     res_conflict = check_reservation_conflict(
         room_number, check_in_dt, check_out_dt, exclude_reservation
     )
@@ -181,6 +279,7 @@ def assert_room_available(
             )
         )
 
+    # --- Surface 2: Hotel Room Check In ---
     ci_conflict = check_checkin_conflict(
         room_number, check_in_dt, check_out_dt, exclude_checkin
     )
@@ -191,6 +290,22 @@ def assert_room_available(
                 ci_conflict.check_in_datetime,
                 ci_conflict.expected_check_out_datetime,
                 ci_conflict.name,
+            )
+        )
+
+    # --- Surface 3: canonical Hotel Reservation (room allocation child table) ---
+    canonical_conflict = check_canonical_reservation_conflict(
+        room_number, check_in_dt, check_out_dt, exclude_canonical
+    )
+    if canonical_conflict:
+        frappe.throw(
+            _(
+                "{0} is already allocated in reservation {3} from {1} to {2}."
+            ).format(
+                room_number,
+                canonical_conflict.from_date,
+                canonical_conflict.to_date,
+                canonical_conflict.name,
             )
         )
 
@@ -210,8 +325,9 @@ def get_available_rooms(
     Excludes rooms that are:
     - Not in service / flagged for maintenance
     - Under an active Temporary Booking hold
-    - Overlapping an active Hotel Room Reservation
+    - Overlapping an active Hotel Room Reservation (legacy)
     - Overlapping an active Hotel Room Check In
+    - Allocated in an active canonical Hotel Reservation (via Hotel Reservation Room child table)
 
     Args:
         check_in_dt   : Check-in  datetime / date / str.
@@ -307,10 +423,30 @@ def get_available_rooms(
         as_dict=True,
     )
 
+    # Rooms allocated in a canonical Hotel Reservation for an overlapping period.
+    # Hotel Reservation stores rooms in the Hotel Reservation Room child table, so
+    # we JOIN child → parent to apply status and date filters on the parent.
+    canonical_rows = frappe.db.sql(
+        f"""
+        SELECT DISTINCT rr.room_number
+        FROM `tabHotel Reservation Room` rr
+        INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
+        WHERE rr.room_number IN ({placeholders})
+          AND hr.docstatus != 2
+          AND hr.reservation_status NOT IN
+              ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND hr.from_date < %s
+          AND hr.to_date   > %s
+        """,
+        tuple(room_numbers) + (check_out_str, check_in_str),
+        as_dict=True,
+    )
+
     unavailable = set(
         [r.room_number for r in held_rows]
         + [r.room_number for r in booked_rows]
         + [r.room_number for r in checkin_rows]
+        + [r.room_number for r in canonical_rows]   # canonical reservation allocations
     )
 
     available = [r for r in all_rooms if r.name not in unavailable]

@@ -1,54 +1,196 @@
 {
- "actions": [],
- "allow_rename": 1,
- "creation": "2025-11-30 13:04:18.836290",
- "doctype": "DocType",
- "editable_grid": 1,
- "engine": "InnoDB",
- "field_order": [
-  "room_number",
-  "rate",
-  "discount"
- ],
- "fields": [
-  {
-   "fieldname": "room_number",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Room Number",
-   "options": "Hotel Room",
-   "reqd": 1
-  },
-  {
-   "fieldname": "rate",
-   "fieldtype": "Currency",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Rate",
-   "read_only": 1
-  },
-  {
-   "fieldname": "discount",
-   "fieldtype": "Currency",
-   "in_list_view": 1,
-   "in_preview": 1,
-   "in_standard_filter": 1,
-   "label": "Discount"
-  }
- ],
- "grid_page_length": 50,
- "index_web_pages_for_search": 1,
- "istable": 1,
- "links": [],
- "modified": "2025-11-30 13:10:59.681057",
- "modified_by": "Administrator",
- "module": "Rhocom Hotel",
- "name": "Hotel Reservation Room",
- "owner": "Administrator",
- "permissions": [],
- "row_format": "Dynamic",
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": []
+  "actions": [],
+  "allow_rename": 1,
+  "creation": "2025-11-30 13:04:18.836290",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "istable": 1,
+  "field_order": [
+    "room_number",
+    "room_type",
+    "rate_type",
+    "season_type",
+    "column_break_room",
+    "rate_per_night",
+    "number_of_nights",
+    "discount",
+    "room_total",
+    "occupant_section",
+    "occupant_name",
+    "occupant_gender",
+    "column_break_occupant",
+    "occupant_id_type",
+    "occupant_id_number",
+    "occupant_phone",
+    "occupant_email",
+    "links_section",
+    "check_in_reference",
+    "checkout_reference"
+  ],
+  "fields": [
+    {
+      "fieldname": "room_number",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Room Number",
+      "options": "Hotel Room",
+      "reqd": 1,
+      "description": "The specific hotel room allocated for this row. Room availability for the parent reservation's from_date to to_date is validated by the centralized room availability utility (room_availability.py) when the parent is saved."
+    },
+    {
+      "fetch_from": "room_number.room_type",
+      "fieldname": "room_type",
+      "fieldtype": "Link",
+      "options": "Hotel Room Type",
+      "in_list_view": 1,
+      "label": "Room Type",
+      "read_only": 1,
+      "description": "Auto-fetched from the selected Room Number. Used for tariff lookups and reporting."
+    },
+    {
+      "fieldname": "rate_type",
+      "fieldtype": "Data",
+      "label": "Rate Type",
+      "read_only": 1,
+      "description": "Rate category applied (e.g. Standard, Weekend, Corporate). Populated from the Hotel Room Tariff lookup when the room is selected."
+    },
+    {
+      "fieldname": "season_type",
+      "fieldtype": "Data",
+      "label": "Season Type",
+      "read_only": 1,
+      "description": "Active season at the time of the check-in date (e.g. Peak, Off-Peak, Shoulder). Populated from Hotel Season records."
+    },
+    {
+      "fieldname": "column_break_room",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "rate_per_night",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Rate per Night",
+      "read_only": 1,
+      "description": "Nightly tariff for this room, resolved from the Hotel Room Tariff table for the given room_type, rate_type, and check-in date."
+    },
+    {
+      "fieldname": "number_of_nights",
+      "fieldtype": "Int",
+      "label": "Nights",
+      "read_only": 1,
+      "description": "Copied from the parent Hotel Reservation (to_date - from_date). Used to compute room_total."
+    },
+    {
+      "fieldname": "discount",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Room-Level Discount",
+      "description": "Optional per-room discount amount (fixed currency value). Applied before the reservation-level discount. Useful for negotiated corporate room rates."
+    },
+    {
+      "fieldname": "room_total",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "in_preview": 1,
+      "label": "Room Total",
+      "read_only": 1,
+      "description": "Computed as: (rate_per_night × number_of_nights) - discount. This value feeds into the parent reservation's subtotal."
+    },
+    {
+      "collapsible": 1,
+      "fieldname": "occupant_section",
+      "fieldtype": "Section Break",
+      "label": "Occupant Details",
+      "description": "Details of the guest physically occupying this room. For multi-room reservations, each room can have a different occupant. If left blank, the parent reservation's primary guest is assumed to be the occupant."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "occupant_name",
+      "fieldtype": "Data",
+      "label": "Occupant Name",
+      "description": "Full name of the person staying in this specific room."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "occupant_gender",
+      "fieldtype": "Select",
+      "options": "\nMale\nFemale\nOther",
+      "label": "Gender"
+    },
+    {
+      "fieldname": "column_break_occupant",
+      "fieldtype": "Column Break"
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "occupant_id_type",
+      "fieldtype": "Select",
+      "options": "\nPassport\nNational ID\nDriver's License\nOther",
+      "label": "ID Type",
+      "description": "Type of government-issued identification presented by this occupant."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "occupant_id_number",
+      "fieldtype": "Data",
+      "label": "ID Number",
+      "description": "Document number from the occupant's ID for compliance and audit purposes."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "occupant_phone",
+      "fieldtype": "Data",
+      "label": "Phone",
+      "description": "Direct contact number for the occupant in this room."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "occupant_email",
+      "fieldtype": "Data",
+      "options": "Email",
+      "label": "Email",
+      "description": "Email address for the occupant in this room."
+    },
+    {
+      "collapsible": 1,
+      "collapsible_depends_on": "eval:doc.check_in_reference || doc.checkout_reference",
+      "fieldname": "links_section",
+      "fieldtype": "Section Break",
+      "label": "Operational References",
+      "description": "System-generated links created when the guest checks in or checks out. These are read-only and are used by front-desk and housekeeping workflows to navigate directly to the relevant operational documents."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "check_in_reference",
+      "fieldtype": "Link",
+      "options": "Hotel Room Check In",
+      "label": "Check-In Reference",
+      "read_only": 1,
+      "description": "Link to the Hotel Room Check In document created when this specific room is checked in. Populated automatically by the check-in workflow."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "checkout_reference",
+      "fieldtype": "Link",
+      "options": "Hotel Room Check Out",
+      "label": "Check-Out Reference",
+      "read_only": 1,
+      "description": "Link to the Hotel Room Check Out document created when this specific room is checked out. Populated automatically by the checkout workflow."
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-04-23 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Hotel Reservation Room",
+  "owner": "Administrator",
+  "permissions": [],
+  "row_format": "Dynamic",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
 }

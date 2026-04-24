@@ -138,9 +138,10 @@ class TestRoomAvailability(unittest.TestCase):
 			return rooms
 
 		sql_calls = [
-			[DotDict(room_number="R-102")],  # held rooms
-			[],  # booked rooms
-			[],  # checked-in rooms
+			[DotDict(room_number="R-102")],  # held rooms (Temporary Booking)
+			[],  # booked rooms (legacy Hotel Room Reservation)
+			[],  # checked-in rooms (Hotel Room Check In)
+			[],  # canonical rooms (Hotel Reservation Room child table)
 		]
 
 		with (
