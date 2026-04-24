@@ -1,7 +1,7 @@
 <template>
 	<div class="space-y-4">
 		<!-- AI Briefing Banner -->
-		<div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
+		<!-- <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
 			<div class="flex items-center gap-2 mb-1.5">
 				<span class="text-xs text-gray-400">AI front desk briefing</span>
 				<span
@@ -21,10 +21,10 @@
 				Recommended action order: clear the longest overdue rooms first, isolate unpaid
 				departures, then release cleaned rooms back to sale.
 			</p>
-		</div>
+		</div> -->
 
 		<!-- Stats Row -->
-		<div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px">
+		<!-- <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px">
 			<div
 				v-for="stat in statCards"
 				:key="stat.label"
@@ -38,7 +38,7 @@
 					{{ stat.subtitle }}
 				</p>
 			</div>
-		</div>
+		</div> -->
 
 		<!-- Page Tabs -->
 
