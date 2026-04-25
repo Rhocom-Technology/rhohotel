@@ -100,6 +100,7 @@ const pageMeta = {
 
   // Others
   'Reports':              { title: 'Reports', subtitle: 'Hotel performance and occupancy overview' },
+  'CorporateAccountStatement':              { title: 'Corporate Account Statement', subtitle: 'Hotel performance and occupancy overview' },
 }
 
 const pageTitle = computed(() => pageMeta[route.name]?.title || 'Dashboard')

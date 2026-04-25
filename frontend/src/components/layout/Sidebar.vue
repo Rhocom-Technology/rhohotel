@@ -86,6 +86,13 @@ const navGroups = [
     ],
   },
   {
+    label: 'Rooms',
+    icon: LayoutGrid,
+    children: [
+      { label: 'Room List', to: '/rooms' },
+    ],
+  },
+  {
     label: 'Housekeeping',
     icon: Sparkles,
     children: [
@@ -116,7 +123,8 @@ const navGroups = [
     label: 'Reports',
     icon: BarChart2,
     children: [
-      { label: 'Overview', to: '/reports' },
+      { label: 'Overview',                    to: '/reports' },
+      { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement' },
     ],
   },
   {

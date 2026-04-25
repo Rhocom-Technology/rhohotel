@@ -65,10 +65,6 @@ const router = createRouter({
     { path: '/complimentary/new', name: 'NewComplimentary', component: () => import('@/pages/complimentary/NewComplimentary.vue') },
     { path: '/complimentary/:id', name: 'SavedComplimentary', component: () => import('@/pages/complimentary/SavedComplimentary.vue') },
 
-
-
-    { path: '/rooms/:id', name: 'SavedRoom', component: () => import('@/pages/frontdesk/SavedRoom.vue') },
-
     // Asset Management
     { path: '/assets-mgmt', name: 'AssetManagement', component: () => import('@/pages/assets/AssetManagement.vue') },
     { path: '/assets-mgmt/list', name: 'AssetList', component: () => import('@/pages/assets/AssetList.vue') },
@@ -76,8 +72,15 @@ const router = createRouter({
     // Billing
     { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
     { path: '/billing/corporate', name: 'CorporateBillList', component: () => import('@/pages/billing/CorporateBillList.vue') },
+
+    // Rooms
+    { path: '/rooms', name: 'RoomList', component: () => import('@/pages/rooms/RoomList.vue') },
+    { path: '/rooms/new', name: 'NewRoom', component: () => import('@/pages/rooms/NewRoom.vue') },
+    { path: '/rooms/:id', name: 'SavedRoom', component: () => import('@/pages/frontdesk/SavedRoom.vue') },
+
     // Others
     { path: '/reports', name: 'Reports', component: () => import('@/pages/reports/Reports.vue') },
+    { path: '/reports/corporate-account-statement', name: 'CorporateAccountStatement', component: () => import('@/pages/reports/CorporateAccountStatement.vue') },
   ],
 })
 
