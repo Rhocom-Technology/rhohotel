@@ -26,28 +26,28 @@
           <p class="text-xs text-gray-400">Gross POS Sales</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦3.86M</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ dashResource.loading ? '…' : Number(dashStats.gross_sales).toLocaleString() }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Open Draft Orders</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Check</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">7</p>
+        <p class="text-3xl font-bold text-gray-900">{{ dashResource.loading ? '…' : dashStats.open_drafts }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Open Tables</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Live</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">14</p>
+        <p class="text-3xl font-bold text-gray-900">—</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Shift Differences</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Review</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦41,300</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ dashResource.loading ? '…' : Number(dashStats.shift_differences).toLocaleString() }}</p>
       </div>
     </div>
 
@@ -163,8 +163,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
 import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import ClosePOSTerminalModal from '@/components/pos/ClosePOSTerminalModal.vue'
@@ -179,15 +180,37 @@ const showClosePOS = ref(false)
 const showGenerateSummary = ref(false)
 const showReviewDifference = ref(false)
 
-const terminals = [
-  { name: 'Restaurant POS 01', outlet: 'Main Restaurant', cashier: 'Adaeze', bills: 48, sales: '₦1.82M', status: 'Online' },
-  { name: 'Bar POS 02', outlet: 'Bar Lounge', cashier: 'Ifeoma', bills: 31, sales: '₦1.06M', status: 'Online' },
-  { name: 'Mini-Mart POS 03', outlet: 'Retail Corner', cashier: 'Boma', bills: 19, sales: '₦980K', status: 'Closing' },
-]
+// ── API: Dashboard Stats ───────────────────────────────────────────
+const dashResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_dashboard_stats',
+  auto: true,
+})
 
-const outlets = [
-  { name: 'Main Restaurant', amount: '₦1.82M', pct: 100 },
-  { name: 'Bar Lounge', amount: '₦1.06M', pct: 58 },
-  { name: 'Retail Corner', amount: '₦980K', pct: 54 },
-]
+const dashStats = computed(() => {
+  const d = dashResource.data || {}
+  return {
+    gross_sales: Number(d.gross_sales || 0),
+    open_drafts: Number(d.open_drafts || 0),
+    shift_differences: Number(d.shift_differences || 0),
+  }
+})
+
+const terminals = computed(() =>
+  (dashResource.data?.terminals || []).map(t => ({
+    name: t.terminal_name || t.name || '—',
+    outlet: t.terminal_name || '—',
+    cashier: t.cashier || '—',
+    bills: t.bills || 0,
+    sales: `₦${Number(t.sales || 0).toLocaleString()}`,
+    status: 'Online',
+  }))
+)
+
+const outlets = computed(() =>
+  (dashResource.data?.outlet_revenue || []).map(o => ({
+    name: o.outlet,
+    amount: `₦${Number(o.amount).toLocaleString()}`,
+    pct: o.pct || 0,
+  }))
+)
 </script>

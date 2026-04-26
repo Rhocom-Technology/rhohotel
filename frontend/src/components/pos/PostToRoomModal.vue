@@ -40,7 +40,7 @@
                   class="w-full pl-9 pr-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white focus:ring-2 focus:ring-blue-500" />
               </div>
               <button @click="roomSearch='';roomPage=1" class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Reset</button>
-              <button class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Search Rooms</button>
+              <button @click="roomsResource.reload()" class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Search Rooms</button>
             </div>
           </div>
 
@@ -71,8 +71,8 @@
                         <p class="text-xs text-gray-400 mt-0.5">{{ r.type }}</p>
                       </td>
                       <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ r.guest }}</td>
-                      <td class="px-4 py-4 text-xs font-medium text-gray-700">₦{{ r.balance.toLocaleString() }}</td>
-                      <td class="px-4 py-4 text-xs font-semibold" :class="r.paymentType === 'Direct Guest' ? 'text-blue-600' : 'text-gray-600'">{{ r.paymentType }}</td>
+              <td class="px-6 py-4 text-xs font-medium text-gray-700">₦{{ (r.balance || 0).toLocaleString() }}</td>
+                      <td class="px-4 py-4 text-xs font-semibold" :class="r.payment_type === 'Direct Guest' ? 'text-blue-600' : 'text-gray-600'">{{ r.payment_type }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -99,11 +99,11 @@
               <div class="p-6 space-y-3 text-xs">
                 <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Selected Room</span><span class="font-bold text-gray-900">{{ selectedPostRoom.room }}</span></div>
                 <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Guest Name</span><span class="font-bold text-gray-900">{{ selectedPostRoom.guest }}</span></div>
-                <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Current Folio Balance</span><span class="font-bold text-gray-900">₦{{ selectedPostRoom.balance.toLocaleString() }}</span></div>
+                <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Current Folio Balance</span><span class="font-bold text-gray-900">₦{{ (selectedPostRoom.balance || 0).toLocaleString() }}</span></div>
                 <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">POS Bill Amount</span><span class="font-bold text-gray-900">₦{{ grandTotal.toLocaleString() }}</span></div>
                 <div class="flex justify-between py-1.5">
                   <span class="text-gray-400">Projected New Balance</span>
-                  <span class="font-bold text-blue-600">₦{{ (selectedPostRoom.balance + grandTotal).toLocaleString() }}</span>
+                  <span class="font-bold text-blue-600">₦{{ ((selectedPostRoom.balance || 0) + grandTotal).toLocaleString() }}</span>
                 </div>
               </div>
               <div class="mx-6 mb-5 bg-white rounded-xl border border-gray-200 p-4">
@@ -113,7 +113,7 @@
               </div>
               <div class="px-6 pb-6">
                 <p class="text-xs text-gray-500 mb-1.5">Narration / Remark</p>
-                <textarea rows="3" placeholder="Optional posting remark for folio audit trail..."
+                <textarea v-model="postingNarration" rows="3" placeholder="Optional posting remark for folio audit trail..."
                   class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none bg-white focus:ring-2 focus:ring-blue-500"></textarea>
               </div>
             </div>
@@ -121,9 +121,12 @@
         </div>
 
         <div class="flex justify-end gap-3 px-8 py-5 border-t border-gray-100 bg-gray-50">
+          <p v-if="postError" class="flex-1 text-xs text-red-500 flex items-center">{{ postError }}</p>
           <button @click="$emit('update:modelValue', false)" class="btn-hover px-6 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
-          <button @click="confirm" :disabled="!selectedPostRoom"
-            class="btn-hover px-6 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Post</button>
+          <button @click="confirm" :disabled="!selectedPostRoom || posting"
+            class="btn-hover px-6 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
+            {{ posting ? 'Posting…' : 'Post' }}
+          </button>
         </div>
       </div>
     </div>
@@ -132,10 +135,14 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
 const props = defineProps({
   modelValue: Boolean,
   grandTotal: { type: Number, default: 0 },
+  cartItems: { type: Array, default: () => [] },
+  serviceCharge: { type: Number, default: 0 },
+  kitchenNote: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirmed', 'room-selected'])
@@ -143,31 +150,34 @@ const emit = defineEmits(['update:modelValue', 'confirmed', 'room-selected'])
 const roomSearch = ref('')
 const roomPage = ref(1)
 const perPage = 10
-
-const occupiedRooms = [
-  { room: '305', type: 'Premium Queen', guest: 'Sarah Johnson', balance: 12500, paymentType: 'Direct Guest' },
-  { room: '402', type: 'Executive Deluxe', guest: 'Uche Bassey', balance: 0, paymentType: 'Corporate' },
-  { room: '118', type: 'Standard Room', guest: 'Daniel Ayo', balance: 8750, paymentType: 'Direct Guest' },
-  { room: '511', type: 'Executive Suite', guest: 'Ngozi Cole', balance: 21200, paymentType: 'Corporate' },
-  { room: '214', type: 'Deluxe King', guest: 'Chinedu Okafor', balance: 5000, paymentType: 'Direct Guest' },
-  { room: '401', type: 'Premium Twin', guest: 'Fatima Ahmed', balance: 9800, paymentType: 'Direct Guest' },
-  { room: '102', type: 'Standard Room', guest: 'Tunde Balogun', balance: 3200, paymentType: 'Direct Guest' },
-  { room: '207', type: 'Deluxe Queen', guest: 'Amina Suleiman', balance: 15600, paymentType: 'Corporate' },
-  { room: '310', type: 'Executive King', guest: 'David Mensah', balance: 7400, paymentType: 'Direct Guest' },
-  { room: '415', type: 'Suite', guest: 'Chidinma Eze', balance: 42000, paymentType: 'Corporate' },
-  { room: '501', type: 'Penthouse', guest: 'Oluwaseun Adebayo', balance: 88000, paymentType: 'Corporate' },
-  { room: '309', type: 'Standard Twin', guest: 'Halima Usman', balance: 4100, paymentType: 'Direct Guest' },
-]
-
 const selectedPostRoom = ref(null)
+const postError = ref('')
+const posting = ref(false)
+const postingNarration = ref('')
+
+// ── API: Occupied Rooms ───────────────────────────────────────────
+const roomsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
+  auto: true,
+})
+
+let searchTimer = null
+watch(roomSearch, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    roomsResource.params = { search: roomSearch.value || null }
+    roomsResource.reload()
+  }, 300)
+})
 
 const filteredRooms = computed(() => {
-  if (!roomSearch.value) return occupiedRooms
+  const data = roomsResource.data || []
+  if (!roomSearch.value) return data
   const q = roomSearch.value.toLowerCase()
-  return occupiedRooms.filter(r =>
-    r.room.includes(q) ||
-    r.guest.toLowerCase().includes(q) ||
-    r.type.toLowerCase().includes(q)
+  return data.filter(r =>
+    (r.room || '').includes(q) ||
+    (r.guest || '').toLowerCase().includes(q) ||
+    (r.type || '').toLowerCase().includes(q)
   )
 })
 
@@ -178,12 +188,43 @@ const pagedRooms = computed(() => filteredRooms.value.slice(roomPageStart.value,
 
 function selectRoom(r) {
   selectedPostRoom.value = r
-  emit('room-selected', { id: r.room, name: r.guest, room: r.room, type: r.paymentType })
+  postError.value = ''
+  emit('room-selected', { id: r.check_in, name: r.guest, room: r.room, type: r.payment_type || 'Direct Guest' })
 }
 
+// ── API: Post to Room ───────────────────────────────────────────────
+const postResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.post_bill_to_room',
+  onSuccess() {
+    posting.value = false
+    emit('confirmed')
+    emit('update:modelValue', false)
+    // reset state
+    selectedPostRoom.value = null
+    postingNarration.value = ''
+    roomSearch.value = ''
+  },
+  onError(err) {
+    posting.value = false
+    postError.value = err.message || 'Failed to post bill to room'
+  },
+})
+
 function confirm() {
-  emit('confirmed', selectedPostRoom.value)
-  emit('update:modelValue', false)
+  if (!selectedPostRoom.value) return
+  postError.value = ''
+  posting.value = true
+  postResource.submit({
+    items: JSON.stringify(props.cartItems.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    }))),
+    check_in: selectedPostRoom.value.check_in,
+    service_charge: props.serviceCharge,
+    narration: postingNarration.value || null,
+    kitchen_note: props.kitchenNote || null,
+  })
 }
 
 watch(filteredRooms, () => { roomPage.value = 1 })

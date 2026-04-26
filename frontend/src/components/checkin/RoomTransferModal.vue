@@ -5,121 +5,80 @@
       @click.self="$emit('close')">
       <div class="bg-white rounded-2xl w-full shadow-2xl overflow-y-auto" style="max-width:780px;max-height:92vh;">
 
-        <!-- Header -->
         <div class="px-8 pt-8 pb-5 flex items-start justify-between border-b border-gray-100">
           <div>
             <h2 class="text-2xl font-bold text-gray-900">Room Transfer</h2>
-            <p class="text-xs text-gray-400 mt-1">Move guest from current room to a new room while preserving stay continuity, billing integrity, and housekeeping flow</p>
+            <p class="text-xs text-gray-400 mt-1">Move guest to a different room while preserving billing and stay continuity</p>
           </div>
-          <button @click="$emit('close')"
-            class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm flex-shrink-0">✕</button>
+          <button @click="$emit('close')" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm flex-shrink-0">✕</button>
         </div>
 
-        <div class="px-8 py-6 space-y-6">
-
-          <!-- Current Guest Stay -->
-          <div class="bg-blue-50 rounded-xl border border-blue-100 px-5 py-4">
-            <p class="text-sm font-bold text-blue-700 mb-1">Current Guest Stay</p>
-            <p class="text-xs text-blue-600 mb-3">OGUMBA WAYNE • Checked In • Room 8408 • Executive Room • Check-out 24 Feb 2026 • Balance ₦41,000</p>
-            <div class="flex items-center gap-2">
-              <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Current</span>
-              <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Balance Open</span>
-            </div>
+        <div class="px-8 py-6 space-y-5">
+          <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
+            <p class="text-xs font-bold text-red-600 mb-1">Transfer Failed</p>
+            <p class="text-xs text-red-500">{{ error }}</p>
           </div>
 
-          <!-- Two column layout -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="bg-blue-50 rounded-xl border border-blue-100 px-5 py-4">
+            <p class="text-sm font-bold text-blue-700 mb-1">Current Stay</p>
+            <p class="text-xs text-blue-600">{{ checkIn.guest }} • Room {{ checkIn.room_number }} • {{ checkIn.room_type }}</p>
+          </div>
 
-            <!-- Transfer Setup -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
-              <h3 class="text-sm font-bold text-gray-900 mb-4">Transfer Setup</h3>
+              <h3 class="text-sm font-bold text-gray-900 mb-4">Transfer Notes</h3>
               <div class="space-y-4">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                  <div>
-                    <p class="text-xs text-gray-500 mb-1.5">Transfer Date and Time</p>
-                    <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">22 Feb 2026 • 14:30</div>
-                  </div>
-                  <div>
-                    <p class="text-xs text-gray-500 mb-1.5">Posting Date and Time</p>
-                    <input type="text" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
                 <div>
                   <p class="text-xs text-gray-500 mb-1.5">Reason for Transfer</p>
-                  <input type="text" v-model="transferReason"
-                    placeholder="Guest request / maintenance / upgrade / service recovery"
+                  <input type="text" v-model="note" placeholder="Guest request / upgrade / maintenance"
                     class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500 mb-1.5">Transfer Notes</p>
-                  <textarea v-model="transferNotes" rows="3"
-                    placeholder="Add explanation, guest approval note, bell desk coordination, or housekeeping instruction"
-                    class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                <div v-if="selectedRoom" class="bg-green-50 rounded-lg border border-green-200 px-4 py-3">
+                  <p class="text-xs font-bold text-green-700">Selected: Room {{ selectedRoom.name }}</p>
+                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(selectedRoom.rate_per_night) }} / night</p>
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500 mb-1.5">Billing Handling</p>
-                  <input type="text" placeholder="Keep existing folios linked to same stay"
-                    class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-gray-50" readonly />
+                <div v-else class="bg-gray-50 rounded-lg border border-gray-200 px-4 py-3">
+                  <p class="text-xs text-gray-400">Select a room from the list →</p>
                 </div>
-                <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs text-gray-600">Notify housekeeping to inspect vacated room after transfer</span>
-                  <div class="relative">
-                    <input type="checkbox" v-model="notifyHK" class="sr-only" />
-                    <div class="w-10 h-5 rounded-full transition-colors" :class="notifyHK ? 'bg-blue-600' : 'bg-gray-200'">
-                      <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform" :class="notifyHK ? 'translate-x-5' : ''"></div>
-                    </div>
-                  </div>
-                </label>
               </div>
             </div>
 
-            <!-- Select New Room -->
             <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
-              <h3 class="text-sm font-bold text-gray-900 mb-4">Select New Room</h3>
-              <div class="mb-4">
-                <p class="text-xs text-gray-500 mb-1.5">Search Available Room</p>
-                <input type="text" v-model="roomSearch" placeholder="Search by room number, type, floor, or status"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-bold text-gray-900">Available Rooms</h3>
+                <button @click="loadRooms" class="text-xs text-blue-500 hover:text-blue-700">Refresh</button>
               </div>
-              <div class="space-y-3">
-                <div v-for="r in availableRooms" :key="r.number"
+              <div v-if="loadingRooms" class="py-6 text-center">
+                <div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <p class="text-xs text-gray-400">Loading…</p>
+              </div>
+              <div v-else-if="availableRooms.length === 0" class="py-6 text-center">
+                <p class="text-xs text-gray-400">No vacant rooms available.</p>
+              </div>
+              <div v-else class="space-y-2 max-h-64 overflow-y-auto">
+                <div v-for="r in availableRooms" :key="r.name"
                   class="rounded-xl border px-4 py-3 flex items-center justify-between"
-                  :class="selectedRoom === r.number ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'">
+                  :class="selectedRoom?.name === r.name ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'">
                   <div>
-                    <p class="text-sm font-bold text-gray-900">Room {{ r.number }}</p>
-                    <p class="text-xs text-gray-500 mt-0.5">{{ r.desc }}</p>
+                    <p class="text-sm font-bold text-gray-900">{{ r.name }}</p>
+                    <p class="text-xs text-gray-500 mt-0.5">{{ r.room_type }} • {{ r.floor || '' }}</p>
+                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(r.rate_per_night) }} / night</p>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <span class="px-2.5 py-0.5 text-xs font-medium rounded-full"
-                      :class="r.tagClass">{{ r.tag }}</span>
-                    <button v-if="r.tag !== 'Cleaning'"
-                      class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                      @click="selectedRoom = r.number">Select</button>
-                  </div>
+                  <button
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+                    :class="selectedRoom?.name === r.name ? 'text-blue-700 bg-blue-100 border border-blue-200' : 'text-white bg-blue-600 hover:bg-blue-700'"
+                    @click="selectedRoom = r">{{ selectedRoom?.name === r.name ? '✓ Selected' : 'Select' }}</button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Transfer Impact Summary -->
-          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-            <h3 class="text-sm font-bold text-gray-900 mb-3">Transfer Impact Summary</h3>
-            <div class="bg-gray-50 rounded-lg px-4 py-3">
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;" class="mb-2">
-                <div class="text-xs text-gray-700"><span class="text-gray-400">From Room: </span>8408</div>
-                <div class="text-xs text-gray-700"><span class="text-gray-400">To Room: </span>{{ selectedRoom || '—' }}</div>
-                <div class="text-xs text-gray-700"><span class="text-gray-400">Rate Impact: </span>No change</div>
-                <div class="text-xs text-gray-700"><span class="text-gray-400">Housekeeping: </span>Notify after move</div>
-              </div>
-              <p class="text-xs text-gray-500">Stay continuity preserved • Existing bills remain attached • Checkout page remains linked after transfer</p>
-            </div>
-          </div>
-
-          <!-- Footer -->
           <div class="flex items-center justify-end gap-2 pt-2">
-            <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              @click="$emit('close')">Cancel</button>
-            <button class="px-5 py-2.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors">Confirm Room Transfer</button>
+            <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50" @click="$emit('close')">Cancel</button>
+            <button :disabled="submitting || !selectedRoom" @click="submit"
+              class="px-5 py-2.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              {{ submitting ? 'Transferring…' : 'Confirm Room Transfer' }}
+            </button>
           </div>
         </div>
       </div>
@@ -128,18 +87,45 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-defineEmits(['close'])
-
-const transferReason = ref('')
-const transferNotes = ref('')
-const notifyHK = ref(true)
-const roomSearch = ref('')
-const selectedRoom = ref('8505')
-
-const availableRooms = [
-  { number: '8505', desc: 'Deluxe Room • 2nd Floor • Vacant and clean',              tag: 'Suggested', tagClass: 'bg-blue-100 text-blue-600' },
-  { number: '8510', desc: 'Executive Room • 2nd Floor • Vacant but dirty',           tag: 'Cleaning',  tagClass: 'bg-yellow-100 text-yellow-600' },
-  { number: '8602', desc: 'Suite • 3rd Floor • Vacant and clean • Upgrade available',tag: 'Upgrade',   tagClass: 'bg-purple-100 text-purple-600' },
-]
+import { ref, onMounted } from 'vue'
+const props = defineProps({ checkIn: { type: Object, required: true } })
+const emit = defineEmits(['close', 'done'])
+const availableRooms = ref([])
+const selectedRoom = ref(null)
+const note = ref('')
+const loadingRooms = ref(true)
+const submitting = ref(false)
+const error = ref('')
+function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
+async function apiPost(m, p) {
+  const r = await fetch(`/api/method/${m}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' }, body: new URLSearchParams(p) })
+  return r.json()
+}
+function parseErr(data) {
+  try { return JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { return 'Request failed.' }
+}
+async function loadRooms() {
+  loadingRooms.value = true
+  error.value = ''
+  try {
+    const data = await apiPost('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
+      check_in_dt: props.checkIn.check_in_datetime || '',
+      check_out_dt: props.checkIn.expected_check_out_datetime || '',
+    })
+    if (data.exc) { error.value = parseErr(data); return }
+    availableRooms.value = (data.message || []).filter(r => r.name !== props.checkIn.room_number)
+  } catch { error.value = 'Failed to load rooms.' } finally { loadingRooms.value = false }
+}
+onMounted(loadRooms)
+async function submit() {
+  if (!selectedRoom.value) return
+  submitting.value = true; error.value = ''
+  try {
+    const data = await apiPost('rhohotel.rhocom_hotel.doctype.hotel_room_check_in.hotel_room_check_in.transfer_room', {
+      check_in_name: props.checkIn.name, new_room_number: selectedRoom.value.name, note: note.value
+    })
+    if (data.exc) { error.value = parseErr(data); return }
+    emit('done', data.message); emit('close')
+  } catch { error.value = 'Network error.' } finally { submitting.value = false }
+}
 </script>

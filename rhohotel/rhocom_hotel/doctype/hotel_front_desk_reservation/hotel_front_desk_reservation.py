@@ -198,9 +198,8 @@ class HotelFrontDeskReservation(frappe.model.document.Document):
 				frappe.throw(_("Room {0} appears multiple times").format(room.room_number))
 			seen_rooms.add(room.room_number)
 
-			# Check availability
-			if not self.is_room_available(room.room_number):
-				frappe.throw(_("Room {0} not available").format(room.room_number))
+			# Check availability (all 3 booking surfaces via centralized utility)
+			self._assert_room_available(room.room_number)
 
 			# Set defaults from primary guest
 			room.guest_name = room.guest_name or self.primary_guest_name or ""
@@ -235,16 +234,48 @@ class HotelFrontDeskReservation(frappe.model.document.Document):
 					)
 					room.season_type = season_type or ""
 
-	def is_room_available(self, room_number):
-		"""Check room availability using the centralized utility."""
-		from rhohotel.rhocom_hotel.utils.room_availability import (
-			check_reservation_conflict,
-			check_checkin_conflict,
+	def _assert_room_available(self, room_number):
+		"""Validate room availability against all 3 booking surfaces.
+
+		Excludes:
+		- The Hotel Room Reservation already created for this room by this FDR (resave/on_submit)
+		- Active check-ins for this room from this FDR (shouldn't exist on pre-submit validate)
+		"""
+		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+
+		# Find the HRR linked to this FDR for this room (exists after on_submit)
+		hrr = frappe.db.get_value(
+			"Hotel Room Reservation",
+			{
+				"front_desk_reservation": self.name,
+				"room_number": room_number,
+				"docstatus": ["!=", 2],
+			},
+			"name",
 		)
-		if check_reservation_conflict(room_number, self.from_date, self.to_date):
-			return False
-		if check_checkin_conflict(room_number, self.from_date, self.to_date):
-			return False
+
+		# Find an active check-in for this room from this FDR (should not exist pre-submit)
+		ci = frappe.db.get_value(
+			"Hotel Room Check In",
+			{
+				"front_desk_reservation": self.name,
+				"room_number": room_number,
+				"status": ["in", ["Draft", "Checked In"]],
+			},
+			"name",
+		)
+
+		assert_room_available(
+			room_number,
+			self.from_date,
+			self.to_date,
+			exclude_reservation=hrr or None,
+			exclude_checkin=ci or None,
+		)
+
+	def is_room_available(self, room_number):
+		"""Legacy wrapper — delegates to _assert_room_available (all 3 surfaces)."""
+		self._assert_room_available(room_number)
 		return True
 
 	def calculate_pricing(self):
@@ -2058,6 +2089,91 @@ def edit_guest_details(reservation_name, room_idx, guest_name, guest_email, gues
 
 
 @frappe.whitelist()
+def change_room_in_reservation(reservation_name, old_room_number, new_room_number, reason=""):
+	"""Change a room allocation in a submitted reservation to another available room."""
+	reservation = frappe.get_doc("Hotel Front Desk Reservation", reservation_name)
+
+	if reservation.docstatus != 1:
+		frappe.throw(_("Reservation must be submitted before changing rooms"))
+
+	if old_room_number == new_room_number:
+		frappe.throw(_("New room must be different from the current room"))
+
+	# Find the row in the child table
+	room_row = next((r for r in reservation.rooms if r.room_number == old_room_number), None)
+	if not room_row:
+		frappe.throw(_("Room {0} is not part of this reservation").format(old_room_number))
+
+	# Block change if guest is already checked in
+	checkin = frappe.db.get_value(
+		"Hotel Room Check In",
+		{
+			"front_desk_reservation": reservation_name,
+			"room_number": old_room_number,
+			"status": ["in", ["Draft", "Checked In"]],
+		},
+		"name",
+	)
+	if checkin:
+		frappe.throw(
+			_("Cannot change room {0} — the guest is already checked in").format(old_room_number)
+		)
+
+	# Validate new room availability across all booking surfaces
+	from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+
+	assert_room_available(new_room_number, reservation.from_date, reservation.to_date)
+
+	# Get new room details and tariff
+	new_room_doc = frappe.get_doc("Hotel Room", new_room_number)
+	new_rate = get_room_rate(new_room_doc.room_type, check_in_date=str(reservation.from_date))
+	if not new_rate:
+		frappe.throw(_("No active tariff found for room type {0}").format(new_room_doc.room_type))
+
+	new_total = new_rate * reservation.number_of_nights
+
+	# Update child row
+	frappe.db.set_value(
+		"Front Desk Reservation Room",
+		room_row.name,
+		{
+			"room_number": new_room_number,
+			"room_type": new_room_doc.room_type,
+			"rate_per_night": new_rate,
+			"room_total": new_total,
+		},
+		update_modified=False,
+	)
+
+	# Update linked Hotel Room Reservation if it exists
+	hrr = frappe.db.get_value(
+		"Hotel Room Reservation",
+		{"front_desk_reservation": reservation_name, "room_number": old_room_number, "docstatus": 1},
+		"name",
+	)
+	if hrr:
+		frappe.db.set_value(
+			"Hotel Room Reservation", hrr, {"room_number": new_room_number}, update_modified=False
+		)
+
+	# Recalculate totals on the parent document
+	reservation.reload()
+	reservation.calculate_pricing()
+	reservation.flags.ignore_permissions = True
+	reservation.flags.ignore_validate_update_after_submit = True
+	reservation.save()
+	frappe.db.commit()
+
+	return {
+		"success": True,
+		"message": _("Room changed from {0} to {1}").format(old_room_number, new_room_number),
+		"old_room": old_room_number,
+		"new_room": new_room_number,
+		"new_rate": new_rate,
+	}
+
+
+@frappe.whitelist()
 def get_default_check_out_time():
 	"""Get default checkout time"""
 	try:
@@ -2185,6 +2301,30 @@ def adjust_front_desk_reservation(reservation_name, new_checkout_date, new_check
 			frappe.throw(_("No change"))
 
 		is_extension = new_checkout_dt > current_checkout_dt
+
+		# For extensions, verify each room is available for the added period across all 3 booking surfaces.
+		# We check only the *new* portion (current_checkout_dt → new_checkout_dt) to avoid
+		# false conflicts with the reservation's own HRR/check-ins that cover the original period.
+		if is_extension:
+			from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+			checkin_name_by_room = {ci.room_number: ci.name for ci in checkins}
+			for room in reservation.rooms:
+				hrr = frappe.db.get_value(
+					"Hotel Room Reservation",
+					{
+						"front_desk_reservation": reservation_name,
+						"room_number": room.room_number,
+						"docstatus": ["!=", 2],
+					},
+					"name",
+				)
+				assert_room_available(
+					room.room_number,
+					current_checkout_dt,
+					new_checkout_dt,
+					exclude_reservation=hrr or None,
+					exclude_checkin=checkin_name_by_room.get(room.room_number) or None,
+				)
 
 		# Calculate
 		old_checkout = getdate(reservation.to_date)

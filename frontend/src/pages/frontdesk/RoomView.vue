@@ -161,7 +161,7 @@
 					<div class="flex items-start justify-between mb-2">
 						<div>
 							<p class="text-sm font-bold" :style="{ color: roomTextColor(room) }">
-								Room {{ room.room_number }}
+								{{ room.room_number }}
 							</p>
 							<p class="text-xs mt-0.5" style="color: #6b7280">
 								{{ room.room_type }} • Floor {{ room.floor }}
@@ -291,107 +291,35 @@ const filterOverdue = ref(false);
 const filterVIP = ref(false);
 const filterDirty = ref(false);
 
-const tabs = [
-	{ label: "Room View", to: "/room-view" },
-	{ label: "Check-ins", to: "/check-ins" },
-	{ label: "Check-outs", to: "/check-outs" },
-	{ label: "Reservations", to: "/reservations" },
-	{ label: "Housekeeping", to: "/housekeeping" },
-	{ label: "Payments", to: "/payments" },
-	{ label: "Stay Report", to: "/stay-report" },
-	{ label: "Night Audit", to: "/night-audit" },
-];
-
-const roomList = createResource({
-	url: "frappe.client.get_list",
-	params: {
-		doctype: "Hotel Room",
-		fields: [
-			"name",
-			"room_number",
-			"room_type",
-			"floor",
-			"status",
-			"housekeeping_status",
-			"current_guest",
-		],
-		order_by: "room_number asc",
-		limit_page_length: 500,
-	},
+const roomViewResource = createResource({
+	url: "rhohotel.rhocom_hotel.api.front_desk.get_room_view_data",
+	params: { filters: {} },
 	auto: true,
 });
 
-const checkInList = createResource({
-	url: "frappe.client.get_list",
-	params: {
-		doctype: "Hotel Room Check In",
-		fields: [
-			"name",
-			"room_number",
-			"expected_check_out_datetime",
-			"total_outstanding_amount",
-		],
-		filters: [["status", "=", "Checked In"]],
-		limit_page_length: 500,
-	},
-	auto: true,
+const roomViewPayload = computed(() => {
+	const data = roomViewResource.data || {};
+	return data.message || data;
 });
 
-const checkInMap = computed(() => {
-	const map = {};
-	for (const ci of checkInList.data || []) {
-		if (ci.room_number) {
-			map[ci.room_number] = ci;
-		}
-	}
-	return map;
-});
-
-function roomSubtitle(room) {
-	if (room.overdue) return "Overdue check-out";
-	if (room.status === "Maintenance") return "Under maintenance";
-	if (room.housekeeping_status === "Dirty") return "Needs housekeeping attention";
-	if (room.status === "Reserved") return "Arrival expected";
-	if (room.checkIn?.expected_check_out_datetime) {
-		const date = new Date(room.checkIn.expected_check_out_datetime);
-		return `Check-out: ${date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} • ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
-	}
-	return "Ready for walk-in or reservation";
-}
-
-const roomRows = computed(() => {
-	return (roomList.data || []).map((room) => {
-		const key = room.room_number || room.name;
-		const checkIn = checkInMap.value[key] || null;
-		const overdue =
-			room.status === "Occupied" &&
-			!!checkIn?.expected_check_out_datetime &&
-			new Date(checkIn.expected_check_out_datetime) < new Date();
-		const unpaid = Number(checkIn?.total_outstanding_amount || 0) > 0;
-
-		return {
-			...room,
-			checkIn,
-			overdue,
-			unpaid,
-			subtitle: roomSubtitle({ ...room, checkIn, overdue }),
-		};
-	});
-});
+const roomRows = computed(() => roomViewPayload.value.rooms || []);
 
 const floors = computed(() => [...new Set(roomRows.value.map((r) => r.floor).filter(Boolean))].sort());
 const roomTypes = computed(() => [...new Set(roomRows.value.map((r) => r.room_type).filter(Boolean))].sort());
 
-const stats = computed(() => ({
-	vacant: roomRows.value.filter((r) => r.status === "Vacant").length,
-	occupied: roomRows.value.filter((r) => r.status === "Occupied").length,
-	reserved: roomRows.value.filter((r) => r.status === "Reserved").length,
-	dirty: roomRows.value.filter((r) => r.housekeeping_status === "Dirty").length,
-	maintenance: roomRows.value.filter((r) => r.status === "Maintenance").length,
-	overdue: roomRows.value.filter((r) => r.overdue).length,
-	unpaid: roomRows.value.filter((r) => r.unpaid).length,
-	vip: roomRows.value.filter((r) => r.status === "Reserved").length,
-}));
+const stats = computed(() => {
+	const fallback = {
+		vacant: 0,
+		occupied: 0,
+		reserved: 0,
+		dirty: 0,
+		maintenance: 0,
+		overdue: 0,
+		unpaid: 0,
+		vip: 0,
+	};
+	return { ...fallback, ...(roomViewPayload.value.stats || {}) };
+});
 
 // const statCards = computed(() => [
 //   { label: 'Vacant Rooms', value: stats.value.vacant, subtitle: 'Ready for sale', hexColor: '#22c55e' },
@@ -448,12 +376,19 @@ const filteredRooms = computed(() => {
 		const q = search.value.toLowerCase();
 		list = list.filter(
 			(r) =>
-				r.room_number?.toLowerCase().includes(q) ||
-				r.current_guest?.toLowerCase().includes(q) ||
-				r.room_type?.toLowerCase().includes(q),
+				String(r.room_number || "")
+					.toLowerCase()
+					.includes(q) ||
+				String(r.current_guest || "")
+					.toLowerCase()
+					.includes(q) ||
+				String(r.room_type || "")
+					.toLowerCase()
+					.includes(q),
 		);
 	}
-	if (filterFloor.value) list = list.filter((r) => r.floor === filterFloor.value);
+	if (filterFloor.value)
+		list = list.filter((r) => String(r.floor || "") === String(filterFloor.value));
 	if (filterType.value) list = list.filter((r) => r.room_type === filterType.value);
 	if (filterStatus.value) list = list.filter((r) => r.status === filterStatus.value);
 	if (filterHK.value) list = list.filter((r) => r.housekeeping_status === filterHK.value);
@@ -523,7 +458,6 @@ function statusLine(room) {
 }
 
 function refreshRooms() {
-	roomList.reload();
-	checkInList.reload();
+	roomViewResource.reload();
 }
 </script>

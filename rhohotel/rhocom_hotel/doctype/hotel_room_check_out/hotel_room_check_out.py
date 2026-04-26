@@ -74,12 +74,11 @@ class HotelRoomCheckOut(Document):
 
     def on_submit(self):
         """Update related records on checkout"""
-        self.status = "Completed"
+        self.db_set("status", "Completed")
         self.update_check_in()
         self.update_room()
-        self.update_reservation()  
+        self.update_reservation()
         self.create_housekeeping_task()
-        self.submit()
         frappe.publish_realtime('rhohotel_front_desk_update')
 
     def update_check_in(self):

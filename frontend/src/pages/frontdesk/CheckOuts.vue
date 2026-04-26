@@ -145,6 +145,7 @@
               v-for="item in paginatedList"
               :key="item.name"
               class="hover:bg-gray-50 transition-colors cursor-pointer"
+              @click="$router.push('/check-outs/' + item.name)"
             >
               <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ item.name }}</td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ item.guest }}</td>
@@ -156,7 +157,8 @@
                 {{ (item.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Settled' }}
               </td>
               <td class="px-4 py-4">
-                <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <button @click.stop="$router.push('/check-outs/' + item.name)"
+                  class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                   {{ (item.total_outstanding_amount || 0) > 0 ? 'Review' : 'View' }}
                 </button>
               </td>
@@ -190,6 +192,8 @@
 import { ref, computed, watch } from 'vue'
 import { LogOut } from 'lucide-vue-next'
 import { createResource } from 'frappe-ui'
+import { useRouter } from 'vue-router'
+const router = useRouter()
 
 const search = ref('')
 const filterDateRange = ref('month')

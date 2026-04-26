@@ -60,8 +60,12 @@
           </button>
         </div>
 
+        <!-- Menu loading / error -->
+        <div v-if="menuResource.loading" class="py-12 text-center text-xs text-gray-400">Loading menu items…</div>
+        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div>
+
         <!-- Menu grid -->
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div v-else style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
           <div v-for="item in filteredMenuItems" :key="item.id"
             @click="addToCart(item)"
             class="menu-card bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer relative select-none"
@@ -235,12 +239,28 @@
         <div class="flex gap-2">
           <button class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Edit Selection</button>
           <button class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
-          <button @click="onChargeNow" class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-            Charge Now
+          <button @click="onChargeNow"
+            :disabled="charging || cart.length === 0"
+            class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            {{ charging ? 'Processing…' : 'Charge Now' }}
           </button>
         </div>
       </div>
     </div>
+
+    <!-- Toast notifications -->
+    <Teleport to="body">
+      <div v-if="chargeSuccess"
+        class="fixed bottom-6 right-6 z-50 px-5 py-3 bg-green-600 text-white text-xs font-semibold rounded-xl shadow-xl flex items-center gap-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        {{ chargeSuccess }}
+      </div>
+      <div v-else-if="chargeError"
+        class="fixed bottom-6 right-6 z-50 px-5 py-3 bg-red-600 text-white text-xs font-semibold rounded-xl shadow-xl flex items-center gap-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        {{ chargeError }}
+      </div>
+    </Teleport>
 
     <!-- Modals -->
     <DraftOrdersModal v-model="showDraftOrders" />
@@ -248,6 +268,9 @@
     <PostToRoomModal
       v-model="showPostToRoom"
       :grand-total="grandTotal"
+      :cart-items="cart"
+      :service-charge="serviceCharge"
+      :kitchen-note="kitchenNote"
       @room-selected="onRoomSelected"
       @confirmed="onPostConfirmed"
     />
@@ -263,6 +286,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
 import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import PostToRoomModal from '@/components/pos/PostToRoomModal.vue'
@@ -279,38 +303,75 @@ const showSplitBill = ref(false)
 // ── POS state ──────────────────────────────────────────────────────
 const menuSearch = ref('')
 const activeCategory = ref('All Items')
-const settlementMethod = ref('Post to Room')
+const settlementMethod = ref('Cash')
 const settlementMethods = ['Post to Room', 'Cash', 'POS', 'Split']
-const kitchenNote = ref('No pepper on meal. Deliver to room within 20 mins...')
+const kitchenNote = ref('')
 const billToSearch = ref('')
 const billToFocused = ref(false)
-const roomNumber = ref('305')
+const roomNumber = ref('')
 const roomFocused = ref(false)
-const selectedBillTo = ref({ id: 1, name: 'Sarah Johnson', room: '305', type: 'Direct Guest' })
+const selectedBillTo = ref(null)
+const chargeError = ref('')
+const chargeSuccess = ref('')
+const charging = ref(false)
 
-const categories = ['All Items', 'Food', 'Drinks', 'Bar', 'Mini-Mart', 'Laundry']
+// ── API: Menu Items ────────────────────────────────────────────────
+const menuResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
+  auto: true,
+})
 
-const menuItems = [
-  { id: 1, name: 'Grilled Chicken Meal', price: 18500, stock: 42, category: 'Food', image: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c3?w=400&q=80' },
-  { id: 2, name: 'Club Sandwich', price: 12000, stock: 28, category: 'Food', image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=80' },
-  { id: 3, name: 'Fresh Orange Juice', price: 6500, stock: 19, category: 'Drinks', image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=400&q=80' },
-  { id: 4, name: 'Heineken Beer', price: 5000, stock: 12, category: 'Bar', image: 'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80' },
-  { id: 5, name: 'Sparkling Water', price: 3000, stock: 53, category: 'Drinks', image: 'https://images.unsplash.com/photo-1564419320461-6870880221ad?w=400&q=80' },
-  { id: 6, name: 'Express Laundry Shirt', price: 4500, stock: 16, category: 'Laundry', image: null },
-  { id: 7, name: 'Caesar Salad', price: 9500, stock: 24, category: 'Food', image: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=400&q=80' },
-  { id: 8, name: 'Chocolate Cake', price: 7000, stock: 9, category: 'Food', image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80' },
-  { id: 9, name: 'Cappuccino', price: 5500, stock: 31, category: 'Drinks', image: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&q=80' },
-  { id: 10, name: 'Bottled Water', price: 1500, stock: 66, category: 'Mini-Mart', image: 'https://images.unsplash.com/photo-1616118132534-381055b65ef0?w=400&q=80' },
-  { id: 11, name: 'Red Wine Glass', price: 8500, stock: 14, category: 'Bar', image: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400&q=80' },
-  { id: 12, name: 'Burger Combo', price: 14000, stock: 23, category: 'Food', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80' },
-  { id: 13, name: 'Egg & Toast', price: 4500, stock: 0, category: 'Food', image: null },
-  { id: 14, name: 'Malt Drink', price: 1500, stock: 0, category: 'Drinks', image: null },
-  { id: 15, name: 'Yoghurt Cup', price: 2500, stock: 0, category: 'Mini-Mart', image: null },
-]
+const categoriesResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
+  auto: true,
+})
+
+// ── API: Occupied Rooms (for room-number dropdown) ─────────────────
+const occupiedRoomsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
+  auto: true,
+})
+
+// ── API: Bill-To search ────────────────────────────────────────────
+const billToResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
+  params: { query: '' },
+  auto: true,
+})
+
+let billToTimer = null
+watch(billToSearch, (q) => {
+  clearTimeout(billToTimer)
+  billToTimer = setTimeout(() => {
+    billToResource.params = { query: q }
+    billToResource.reload()
+  }, 300)
+})
+
+// ── Computed: categories ───────────────────────────────────────────
+const categories = computed(() => {
+  const list = categoriesResource.data || []
+  return ['All Items', ...list]
+})
+
+// ── Computed: menu items ───────────────────────────────────────────
+const allMenuItems = computed(() =>
+  (menuResource.data || []).map(it => ({
+    id: it.item_code,
+    item_code: it.item_code,
+    name: it.name,
+    category: it.category,
+    price: Number(it.price) || 0,
+    stock: Number(it.stock),
+    image: it.image || null,
+  }))
+)
 
 const filteredMenuItems = computed(() => {
-  let items = menuItems
-  if (activeCategory.value !== 'All Items') items = items.filter(i => i.category === activeCategory.value)
+  let items = allMenuItems.value
+  if (activeCategory.value !== 'All Items') {
+    items = items.filter(i => i.category === activeCategory.value)
+  }
   if (menuSearch.value) {
     const q = menuSearch.value.toLowerCase()
     items = items.filter(i => i.name.toLowerCase().includes(q))
@@ -318,12 +379,31 @@ const filteredMenuItems = computed(() => {
   return items
 })
 
+// ── Computed: bill-to results ──────────────────────────────────────
+const billToResults = computed(() =>
+  (billToResource.data || []).map(r => ({
+    id: r.id,
+    name: r.name,
+    room: r.room || null,
+    type: r.type,
+  }))
+)
+
+// ── Computed: room suggestions ─────────────────────────────────────
+const occupiedRooms = computed(() => occupiedRoomsResource.data || [])
+
+const filteredRoomSuggestions = computed(() => {
+  const rooms = occupiedRooms.value
+  if (!roomNumber.value) return rooms.slice(0, 5)
+  const q = roomNumber.value.toLowerCase()
+  return rooms.filter(r =>
+    (r.room || '').includes(q) ||
+    (r.guest || '').toLowerCase().includes(q)
+  )
+})
+
 // ── Cart ───────────────────────────────────────────────────────────
-const cart = ref([
-  { id: 1, name: 'Grilled Chicken Meal', price: 18500, qty: 1 },
-  { id: 3, name: 'Fresh Orange Juice', price: 6500, qty: 2 },
-  { id: 5, name: 'Sparkling Water', price: 3000, qty: 1 },
-])
+const cart = ref([])
 
 function addToCart(item) {
   if (item.stock === 0) return
@@ -341,42 +421,7 @@ const subTotal = computed(() => cart.value.reduce((s, i) => s + i.price * i.qty,
 const serviceCharge = computed(() => Math.round(subTotal.value * 0.07))
 const grandTotal = computed(() => subTotal.value + serviceCharge.value)
 
-// ── Guests ─────────────────────────────────────────────────────────
-const guests = [
-  { id: 1, name: 'Sarah Johnson', room: '305', type: 'Direct Guest' },
-  { id: 2, name: 'Uche Bassey', room: '402', type: 'Corporate' },
-  { id: 3, name: 'Daniel Ayo', room: '118', type: 'Direct Guest' },
-  { id: 4, name: 'Ngozi Cole', room: '511', type: 'Corporate' },
-  { id: 5, name: 'Chinedu Okafor', room: '214', type: 'Direct Guest' },
-  { id: 6, name: 'Fatima Ahmed', room: '401', type: 'Direct Guest' },
-  { id: 7, name: 'Table 01', room: null, type: 'Table' },
-  { id: 8, name: 'Table 02', room: null, type: 'Table' },
-  { id: 9, name: 'Bar 04', room: null, type: 'Bar' },
-]
-
-const occupiedRooms = [
-  { room: '305', type: 'Premium Queen', guest: 'Sarah Johnson', balance: 12500, paymentType: 'Direct Guest' },
-  { room: '402', type: 'Executive Deluxe', guest: 'Uche Bassey', balance: 0, paymentType: 'Corporate' },
-  { room: '118', type: 'Standard Room', guest: 'Daniel Ayo', balance: 8750, paymentType: 'Direct Guest' },
-  { room: '511', type: 'Executive Suite', guest: 'Ngozi Cole', balance: 21200, paymentType: 'Corporate' },
-  { room: '214', type: 'Deluxe King', guest: 'Chinedu Okafor', balance: 5000, paymentType: 'Direct Guest' },
-  { room: '401', type: 'Premium Twin', guest: 'Fatima Ahmed', balance: 9800, paymentType: 'Direct Guest' },
-]
-
-const billToResults = computed(() => {
-  const q = billToSearch.value.toLowerCase()
-  if (!q) return guests.slice(0, 5)
-  return guests.filter(g => g.name.toLowerCase().includes(q) || (g.room && g.room.includes(q)))
-})
-
-const filteredRoomSuggestions = computed(() => {
-  if (!roomNumber.value) return occupiedRooms.slice(0, 5)
-  return occupiedRooms.filter(r =>
-    r.room.includes(roomNumber.value) ||
-    r.guest.toLowerCase().includes(roomNumber.value.toLowerCase())
-  )
-})
-
+// ── Bill-To interaction ────────────────────────────────────────────
 function delayBlur(field) {
   setTimeout(() => {
     if (field === 'billToFocused') billToFocused.value = false
@@ -388,7 +433,9 @@ function selectBillTo(guest) {
   selectedBillTo.value = guest
   billToSearch.value = ''
   billToFocused.value = false
-  if (settlementMethod.value === 'Post to Room' && guest.room) roomNumber.value = guest.room
+  if (settlementMethod.value === 'Post to Room' && guest.room) {
+    roomNumber.value = guest.room
+  }
 }
 
 function clearBillTo() {
@@ -400,29 +447,79 @@ function clearBillTo() {
 function selectRoomFromNumber(r) {
   roomNumber.value = r.room
   roomFocused.value = false
-  selectedBillTo.value = { id: r.room, name: r.guest, room: r.room, type: r.paymentType }
+  selectedBillTo.value = { id: r.check_in, name: r.guest, room: r.room, type: r.payment_type || 'Direct Guest' }
+}
+
+// ── API: Create POS Invoice (Cash / POS terminal) ──────────────────
+const chargeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
+  onSuccess(data) {
+    chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
+    clearCart()
+    charging.value = false
+    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    chargeError.value = err.message || 'Failed to create invoice'
+    charging.value = false
+    setTimeout(() => { chargeError.value = '' }, 6000)
+  },
+})
+
+function clearCart() {
+  cart.value = []
+  selectedBillTo.value = null
+  roomNumber.value = ''
+  kitchenNote.value = ''
 }
 
 // ── Settlement ─────────────────────────────────────────────────────
 function setSettlementMethod(method) {
   settlementMethod.value = method
   if (method === 'Split') { showSplitBill.value = true; return }
-  if (method === 'Post to Room') { showPostToRoom.value = true; return }
+  if (method === 'Post to Room') return
   roomNumber.value = ''
 }
 
 function onChargeNow() {
-  if (settlementMethod.value === 'Post to Room') showPostToRoom.value = true
-  else if (settlementMethod.value === 'Split') showSplitBill.value = true
+  if (cart.value.length === 0) return
+  chargeError.value = ''
+
+  if (settlementMethod.value === 'Post to Room') {
+    showPostToRoom.value = true
+    return
+  }
+  if (settlementMethod.value === 'Split') {
+    showSplitBill.value = true
+    return
+  }
+
+  const mopMap = { Cash: 'Cash', POS: 'Bank Transfer' }
+  charging.value = true
+  chargeResource.submit({
+    items: JSON.stringify(cart.value.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    }))),
+    mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
+    customer: selectedBillTo.value?.name || null,
+    service_charge: serviceCharge.value,
+    kitchen_note: kitchenNote.value || null,
+  })
 }
 
-function onRoomSelected(guest) {
-  selectedBillTo.value = guest
-  roomNumber.value = guest.room || ''
+function onRoomSelected(room) {
+  if (room) {
+    selectedBillTo.value = { id: room.check_in, name: room.guest, room: room.room, type: 'Direct Guest' }
+    roomNumber.value = room.room
+  }
 }
 
 function onPostConfirmed() {
-  // handle post confirmed
+  chargeSuccess.value = 'Bill posted to room folio successfully'
+  clearCart()
+  setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
 
 watch(settlementMethod, (val) => {

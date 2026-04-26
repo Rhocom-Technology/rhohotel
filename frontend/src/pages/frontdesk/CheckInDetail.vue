@@ -1,6 +1,16 @@
 <template>
   <div class="space-y-5">
 
+    <!-- Loading / Error States -->
+    <div v-if="loading" class="flex items-center justify-center py-20">
+      <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+    <div v-else-if="loadError" class="bg-red-50 border border-red-200 rounded-xl px-6 py-10 text-center">
+      <p class="text-sm font-semibold text-red-500 mb-2">{{ loadError }}</p>
+      <button @click="$router.back()" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">← Back</button>
+    </div>
+
+    <template v-if="!loading && !loadError">
     <!-- Guest Header -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
       <div class="flex items-start justify-between mb-2">
@@ -37,14 +47,14 @@
         class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Room Transfer
       </button>
-      <div class="relative">
+      <div class="relative create-menu-container">
         <button @click="showCreateMenu = !showCreateMenu"
           class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1">
           Create ▾
         </button>
         <div v-if="showCreateMenu"
           class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-32">
-          <button @click="showCreateMenu = false"
+          <button @click="showDiscount = true; showCreateMenu = false"
             class="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50">Discount</button>
           <button @click="showRefund = true; showCreateMenu = false"
             class="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50">Refund</button>
@@ -56,7 +66,7 @@
       <button @click="showStayAdjustment = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Adjust Stay
       </button>
-      <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+      <button @click="showPayment = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
         Receive Payment
       </button>
       <button 
@@ -231,74 +241,103 @@
     </div>
 
     <!-- Modals -->
-    <RoomTransferModal v-if="showRoomTransfer" @close="showRoomTransfer = false" />
-    <StayAdjustmentModal v-if="showStayAdjustment" @close="showStayAdjustment = false" />
-    <RefundRequestModal v-if="showRefund" @close="showRefund = false" />
-    <BillTransferModal v-if="showBillTransfer" @close="showBillTransfer = false" />
+    <RoomTransferModal v-if="showRoomTransfer" :checkIn="checkIn" @close="showRoomTransfer = false" @done="onActionDone" />
+    <StayAdjustmentModal v-if="showStayAdjustment" :checkIn="checkIn" @close="showStayAdjustment = false" @done="onActionDone" />
+    <RefundRequestModal v-if="showRefund" :checkIn="checkIn" @close="showRefund = false" @done="onActionDone" />
+    <BillTransferModal v-if="showBillTransfer" :checkIn="checkIn" @close="showBillTransfer = false" @done="onActionDone" />
+    <ReceivePaymentModal v-if="showPayment" :checkIn="checkIn" @close="showPayment = false" @done="onActionDone" />
+    <DiscountModal v-if="showDiscount" :checkIn="checkIn" @close="showDiscount = false" @done="onActionDone" />
 
-
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import RoomTransferModal from '@/components/checkin/RoomTransferModal.vue'
 import StayAdjustmentModal from '@/components/checkin/StayAdjustmentModal.vue'
 import RefundRequestModal from '@/components/checkin/RefundRequestModal.vue'
 import BillTransferModal from '@/components/checkin/BillTransferModal.vue'
+import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
+import DiscountModal from '@/components/checkin/DiscountModal.vue'
 
 const showRoomTransfer = ref(false)
 const showStayAdjustment = ref(false)
 const showRefund = ref(false)
 const showBillTransfer = ref(false)
+const showPayment = ref(false)
+const showDiscount = ref(false)
 
 
 const route = useRoute()
 const activeTab = ref('Details')
 const showCreateMenu = ref(false)
 const invoices = ref([])
-const loading = ref(false)
+const loading = ref(true)
+const loadError = ref('')
 
-// checkIn data — fetched from API using route param, falls back to dummy for UI dev
 const checkIn = ref({
   name: route.params.id,
-  guest: 'Sarah Johnson',
-  status: 'Checked In',
-  room_number: '305',
-  room_type: 'Executive Suite',
-  reservation_source: 'Walk-in',
-  check_in_datetime: '2026-04-18T13:10:00',
-  expected_check_out_datetime: '2026-04-21T12:00:00',
-  number_of_nights: 3,
-  id_type: 'National ID',
-  contact_number: '+234 801 234 5678',
-  rate_amount: 120000,
-  discount_type: '—',
-  total_charges: 360000,
-  total_outstanding_amount: 0,
-  reservation: 'RES-2026-00421',
 })
 
 onMounted(async () => {
   if (!route.params.id) return
+  await loadCheckIn()
+})
+
+async function loadCheckIn(silent = false) {
+  if (!silent) loading.value = true
+  loadError.value = ''
   try {
-    loading.value = true
-    const res = await fetch(
-      `/api/method/frappe.client.get?doctype=Hotel%20Room%20Check%20In&name=${encodeURIComponent(route.params.id)}`,
-      { credentials: 'include' }
-    )
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_checkin_detail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
+      body: new URLSearchParams({ name: route.params.id }),
+    })
     const data = await res.json()
-    if (data?.message) {
-      checkIn.value = { ...checkIn.value, ...data.message }
+    if (data.exc) {
+      loadError.value = 'Could not load check-in details.'
+      return
+    }
+    if (data.message) {
+      checkIn.value = data.message
       invoices.value = data.message.invoices || []
     }
   } catch (e) {
+    loadError.value = 'Network error — please refresh.'
     console.error('Failed to load check-in detail', e)
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+  }
+}
+
+// Close the "Create" menu when clicking outside
+const closeCreateMenu = (e) => {
+  if (showCreateMenu.value && !e.target.closest('.create-menu-container')) {
+    showCreateMenu.value = false
+  }
+}
+
+watch(showCreateMenu, (val) => {
+  if (val) {
+    setTimeout(() => window.addEventListener('click', closeCreateMenu), 0)
+  } else {
+    window.removeEventListener('click', closeCreateMenu)
   }
 })
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeCreateMenu)
+})
+
+watch(() => route.params.id, (newId) => {
+  if (newId) loadCheckIn()
+})
+
+async function onActionDone() {
+  await loadCheckIn(true)
+}
 
 const invoiceTotal = computed(() =>
   invoices.value.reduce((sum, inv) => sum + (inv.amount || 0), 0)

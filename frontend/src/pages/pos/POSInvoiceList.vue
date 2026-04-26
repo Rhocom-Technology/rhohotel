@@ -26,28 +26,28 @@
           <p class="text-xs text-gray-400">Invoices Today</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">98</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : invoiceStats.todayCount }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Invoice Value</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Live</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦3.86M</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ statsResource.loading ? '…' : Number(invoiceStats.todayValue).toLocaleString() }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Room-Posted Invoices</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Track</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">24</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : invoiceStats.roomPosted }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Voided / Cancelled</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Review</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">6</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : invoiceStats.voided }}</p>
       </div>
     </div>
 
@@ -170,8 +170,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
-// ── Filters ────────────────────────────────────────────────────────
 const search = ref('')
 const filterOutlet = ref('')
 const filterMethod = ref('')
@@ -185,56 +185,69 @@ function resetFilters() {
   filterMethod.value = ''
   filterStatus.value = ''
   currentPage.value = 1
+  invoicesResource.params = {}
+  invoicesResource.reload()
 }
 
-// ── Dummy Data ─────────────────────────────────────────────────────
-const invoices = [
-  { id: 1,  no: 'POS-2026-00184', datetime: '15 Apr • 10:46 AM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Room 305 • Sarah Johnson',        method: 'Post to Room', amount: 40365,  status: 'Posted' },
-  { id: 2,  no: 'POS-2026-00183', datetime: '15 Apr • 10:38 AM', outlet: 'Bar Lounge',    cashier: 'Ifeoma', customer: 'Walk In',                          method: 'POS',          amount: 18000,  status: 'Paid' },
-  { id: 3,  no: 'POS-2026-00182', datetime: '15 Apr • 10:20 AM', outlet: 'Restaurant',    cashier: 'Boma',   customer: 'Table 02 • Guest 2',               method: 'Split',        amount: 62800,  status: 'Paid' },
-  { id: 4,  no: 'POS-2026-00181', datetime: '15 Apr • 10:12 AM', outlet: 'Retail Corner', cashier: 'Boma',   customer: 'Walk In',                          method: 'Cash',         amount: 9500,   status: 'Paid' },
-  { id: 5,  no: 'POS-2026-00180', datetime: '15 Apr • 10:03 AM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Draft Conversion • Room 511',       method: 'Post to Room', amount: 27500,  status: 'Pending' },
-  { id: 6,  no: 'POS-2026-00179', datetime: '15 Apr • 09:56 AM', outlet: 'Bar Lounge',    cashier: 'Ifeoma', customer: 'Walk In',                          method: 'POS',          amount: 15500,  status: 'Void' },
-  { id: 7,  no: 'POS-2026-00178', datetime: '15 Apr • 09:44 AM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Room 214 • Chinedu Okafor',         method: 'Post to Room', amount: 33000,  status: 'Posted' },
-  { id: 8,  no: 'POS-2026-00177', datetime: '15 Apr • 09:31 AM', outlet: 'Bar Lounge',    cashier: 'Boma',   customer: 'Table 04 • Guest 3',               method: 'Cash',         amount: 22500,  status: 'Paid' },
-  { id: 9,  no: 'POS-2026-00176', datetime: '15 Apr • 09:18 AM', outlet: 'Restaurant',    cashier: 'Ifeoma', customer: 'Walk In',                          method: 'POS',          amount: 14000,  status: 'Paid' },
-  { id: 10, no: 'POS-2026-00175', datetime: '15 Apr • 09:05 AM', outlet: 'Retail Corner', cashier: 'Boma',   customer: 'Walk In',                          method: 'Cash',         amount: 7500,   status: 'Paid' },
-  { id: 11, no: 'POS-2026-00174', datetime: '15 Apr • 08:58 AM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Room 402 • Uche Bassey',            method: 'Post to Room', amount: 48500,  status: 'Posted' },
-  { id: 12, no: 'POS-2026-00173', datetime: '15 Apr • 08:45 AM', outlet: 'Bar Lounge',    cashier: 'Ifeoma', customer: 'Table 06 • Guest 5',               method: 'Split',        amount: 72500,  status: 'Paid' },
-  { id: 13, no: 'POS-2026-00172', datetime: '15 Apr • 08:30 AM', outlet: 'Restaurant',    cashier: 'Boma',   customer: 'Walk In',                          method: 'Cash',         amount: 11000,  status: 'Paid' },
-  { id: 14, no: 'POS-2026-00171', datetime: '15 Apr • 08:17 AM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Room 118 • Daniel Ayo',             method: 'Post to Room', amount: 19500,  status: 'Pending' },
-  { id: 15, no: 'POS-2026-00170', datetime: '15 Apr • 08:04 AM', outlet: 'Bar Lounge',    cashier: 'Boma',   customer: 'Walk In',                          method: 'POS',          amount: 8500,   status: 'Void' },
-  { id: 16, no: 'POS-2026-00169', datetime: '14 Apr • 11:52 PM', outlet: 'Restaurant',    cashier: 'Ngozi',  customer: 'Table 01 • Guest 4',               method: 'Cash',         amount: 55000,  status: 'Paid' },
-  { id: 17, no: 'POS-2026-00168', datetime: '14 Apr • 11:35 PM', outlet: 'Bar Lounge',    cashier: 'Ngozi',  customer: 'Walk In',                          method: 'POS',          amount: 31000,  status: 'Paid' },
-  { id: 18, no: 'POS-2026-00167', datetime: '14 Apr • 11:18 PM', outlet: 'Restaurant',    cashier: 'Ngozi',  customer: 'Room 511 • Ngozi Cole',             method: 'Post to Room', amount: 22000,  status: 'Posted' },
-  { id: 19, no: 'POS-2026-00166', datetime: '14 Apr • 10:55 PM', outlet: 'Retail Corner', cashier: 'Adaeze', customer: 'Walk In',                          method: 'Cash',         amount: 5500,   status: 'Paid' },
-  { id: 20, no: 'POS-2026-00165', datetime: '14 Apr • 10:40 PM', outlet: 'Restaurant',    cashier: 'Boma',   customer: 'Table 08 • Guest 2',               method: 'Split',        amount: 44000,  status: 'Paid' },
-  { id: 21, no: 'POS-2026-00164', datetime: '14 Apr • 10:22 PM', outlet: 'Bar Lounge',    cashier: 'Ifeoma', customer: 'Walk In',                          method: 'POS',          amount: 17500,  status: 'Paid' },
-  { id: 22, no: 'POS-2026-00163', datetime: '14 Apr • 10:05 PM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Room 305 • Sarah Johnson',          method: 'Post to Room', amount: 29000,  status: 'Posted' },
-  { id: 23, no: 'POS-2026-00162', datetime: '14 Apr • 09:48 PM', outlet: 'Restaurant',    cashier: 'Ngozi',  customer: 'Walk In',                          method: 'Cash',         amount: 13500,  status: 'Paid' },
-  { id: 24, no: 'POS-2026-00161', datetime: '14 Apr • 09:30 PM', outlet: 'Bar Lounge',    cashier: 'Boma',   customer: 'Table 04 • Guest 3',               method: 'Transfer',     amount: 38500,  status: 'Paid' },
-  { id: 25, no: 'POS-2026-00160', datetime: '14 Apr • 09:12 PM', outlet: 'Restaurant',    cashier: 'Ifeoma', customer: 'Walk In',                          method: 'POS',          amount: 21000,  status: 'Void' },
-  { id: 26, no: 'POS-2026-00159', datetime: '14 Apr • 08:55 PM', outlet: 'Room Service',  cashier: 'Adaeze', customer: 'Room 401 • Fatima Ahmed',           method: 'Post to Room', amount: 16500,  status: 'Posted' },
-  { id: 27, no: 'POS-2026-00158', datetime: '14 Apr • 08:38 PM', outlet: 'Restaurant',    cashier: 'Boma',   customer: 'Table 02 • Guest 6',               method: 'Cash',         amount: 47000,  status: 'Paid' },
-  { id: 28, no: 'POS-2026-00157', datetime: '14 Apr • 08:20 PM', outlet: 'Bar Lounge',    cashier: 'Ngozi',  customer: 'Walk In',                          method: 'POS',          amount: 9000,   status: 'Paid' },
-  { id: 29, no: 'POS-2026-00156', datetime: '14 Apr • 08:05 PM', outlet: 'Restaurant',    cashier: 'Adaeze', customer: 'Room 214 • Chinedu Okafor',         method: 'Post to Room', amount: 34500,  status: 'Posted' },
-  { id: 30, no: 'POS-2026-00155', datetime: '14 Apr • 07:48 PM', outlet: 'Retail Corner', cashier: 'Ifeoma', customer: 'Walk In',                          method: 'Cash',         amount: 6800,   status: 'Paid' },
-]
+// ── API: Invoice List ───────────────────────────────────────────────
+const invoicesResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_invoices',
+  auto: true,
+})
 
-// ── Computed ───────────────────────────────────────────────────────
+const statsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_invoice_stats',
+  auto: true,
+})
+
+const invoiceStats = computed(() => {
+  const s = statsResource.data || {}
+  return {
+    todayCount: Number(s.today_count || 0),
+    todayValue: Number(s.today_value || 0),
+    roomPosted: Number(s.room_posted || 0),
+    voided: Number(s.voided || 0),
+  }
+})
+
+let filterTimer = null
+function applyFilters() {
+  clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    invoicesResource.params = {
+      search: search.value || null,
+      status: filterStatus.value || null,
+    }
+    invoicesResource.reload()
+    currentPage.value = 1
+  }, 300)
+}
+
+// ── Computed: invoices ──────────────────────────────────────────────
+const allInvoices = computed(() =>
+  (invoicesResource.data || []).map(inv => ({
+    id: inv.invoice_no,
+    no: inv.invoice_no,
+    datetime: inv.posting_date || '—',
+    outlet: inv.terminal || '—',
+    cashier: inv.cashier || '—',
+    customer: inv.customer || 'Walk In',
+    method: '—',
+    amount: Number(inv.grand_total) || 0,
+    status: inv.status || '—',
+  }))
+)
+
 const filtered = computed(() => {
-  let data = invoices
+  let data = allInvoices.value
   if (search.value) {
     const q = search.value.toLowerCase()
     data = data.filter(i =>
       i.no.toLowerCase().includes(q) ||
       i.cashier.toLowerCase().includes(q) ||
-      i.customer.toLowerCase().includes(q) ||
-      i.outlet.toLowerCase().includes(q)
+      i.customer.toLowerCase().includes(q)
     )
   }
-  if (filterOutlet.value) data = data.filter(i => i.outlet === filterOutlet.value)
-  if (filterMethod.value) data = data.filter(i => i.method === filterMethod.value)
   if (filterStatus.value) data = data.filter(i => i.status === filterStatus.value)
   return data
 })
@@ -258,10 +271,10 @@ watch(filtered, () => { currentPage.value = 1 })
 // ── Helpers ────────────────────────────────────────────────────────
 function statusClass(status) {
   return {
-    'Posted':  'bg-blue-50 text-blue-600',
+    'Draft':   'bg-gray-100 text-gray-500',
     'Paid':    'bg-green-50 text-green-600',
-    'Pending': 'bg-yellow-50 text-yellow-600',
     'Void':    'bg-red-50 text-red-500',
-  }[status] || 'bg-gray-100 text-gray-500'
+  }[status] || 'bg-blue-50 text-blue-600'
 }
 </script>
+

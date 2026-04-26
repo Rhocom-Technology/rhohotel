@@ -27,28 +27,28 @@
           <p class="text-xs text-gray-400">Scheduled POS Staff</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Week</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">12</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : (statsResource.data?.scheduled ?? filteredStaff.length) }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Morning Coverage</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Good</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">100%</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : (statsResource.data?.morning_coverage ?? '—') }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Evening Coverage</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Watch</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">83%</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : (statsResource.data?.evening_coverage ?? '—') }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Staff Off / Leave</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Info</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">2</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statsResource.loading ? '…' : (statsResource.data?.on_leave ?? '—') }}</p>
       </div>
     </div>
 
@@ -223,8 +223,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { createResource } from 'frappe-ui'
 
 const route = useRoute()
 const viewMode = ref(route.query.view === 'list' ? 'list' : 'calendar')
@@ -233,22 +234,63 @@ const filterOutlet = ref('')
 const filterShift = ref('')
 const filterRole = ref('')
 const currentPage = ref(1)
-const pageSize = 5
+const pageSize = 20
 
-const staffList = [
-  { name: 'Adaeze Okafor',    role: 'Cashier',    outlet: 'Main Restaurant', shift: 'Morning',     start: '07:00 AM', end: '03:00 PM', offDay: 'Sunday',    status: 'Scheduled' },
-  { name: 'Ifeoma Nnaji',     role: 'Cashier',    outlet: 'Bar Lounge',      shift: 'Morning',     start: '07:00 AM', end: '03:00 PM', offDay: 'Wednesday', status: 'Scheduled' },
-  { name: 'Boma Eze',         role: 'Cashier',    outlet: 'Retail Corner',   shift: 'Evening',     start: '03:00 PM', end: '11:00 PM', offDay: 'Tuesday',   status: 'Review' },
-  { name: 'Ngozi Umeh',       role: 'Supervisor', outlet: 'Main Restaurant', shift: 'Split Shift', start: '10:00 AM', end: '08:00 PM', offDay: 'Friday',    status: 'Scheduled' },
-  { name: 'Daniel Bassey',    role: 'Cashier',    outlet: 'Bar Lounge',      shift: 'Evening',     start: '03:00 PM', end: '11:00 PM', offDay: 'Monday',    status: 'Leave' },
-  { name: 'Chukwuemeka Eze',  role: 'Cashier',    outlet: 'Main Restaurant', shift: 'Morning',     start: '07:00 AM', end: '03:00 PM', offDay: 'Thursday',  status: 'Scheduled' },
-  { name: 'Fatima Abubakar',  role: 'Supervisor', outlet: 'Bar Lounge',      shift: 'Morning',     start: '07:00 AM', end: '03:00 PM', offDay: 'Saturday',  status: 'Scheduled' },
-  { name: 'Seun Adeyemi',     role: 'Cashier',    outlet: 'Retail Corner',   shift: 'Morning',     start: '07:00 AM', end: '03:00 PM', offDay: 'Sunday',    status: 'Scheduled' },
-]
+// ── API: Staff Roster ──────────────────────────────────────────────────────
+const rosterResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_staff_roster',
+  auto: true,
+})
 
-const totalPages = computed(() => Math.ceil(staffList.length / pageSize))
-const paginatedStaff = computed(() => staffList.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize))
+const statsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_staff_roster_stats',
+  auto: true,
+})
 
+let filterTimer = null
+watch([searchText, filterOutlet, filterShift, filterRole], () => {
+  clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    rosterResource.params = {
+      search: searchText.value || null,
+      outlet: filterOutlet.value || null,
+      shift: filterShift.value || null,
+      role: filterRole.value || null,
+    }
+    rosterResource.reload()
+  }, 300)
+})
+
+// ── Computed: staff list ───────────────────────────────────────────────────
+const allStaff = computed(() =>
+  (rosterResource.data || []).map(s => ({
+    name: s.employee_name || s.employee,
+    role: s.role || s.designation || '—',
+    outlet: s.outlet || s.department || '—',
+    shift: s.shift || '—',
+    start: s.start_date || '—',
+    end: s.end_date || '—',
+    offDay: '—',
+    status: 'Scheduled',
+  }))
+)
+
+const filteredStaff = computed(() => {
+  let data = allStaff.value
+  if (searchText.value) {
+    const q = searchText.value.toLowerCase()
+    data = data.filter(s => s.name.toLowerCase().includes(q) || s.outlet.toLowerCase().includes(q))
+  }
+  return data
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredStaff.value.length / pageSize)))
+const paginatedStaff = computed(() =>
+  filteredStaff.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize)
+)
+
+// ── Calendar slots (kept as static placeholder — roster calendar requires
+//    a dedicated shift-type-to-time-block mapping not available from HRMS yet)
 const timeSlots = ['06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '00:00']
 
 const calDays = [
@@ -258,10 +300,8 @@ const calDays = [
   ]},
   { date: '16', label: 'Tue 16', outlet: 'Bar Lounge', slots: [
     { id: 3, title: 'Morning Shift', name: 'Ifeoma Nnaji', role: 'Cashier', time: '07:00 AM – 03:00 PM', outlet: 'Bar Lounge', color: 'ev-purple', top: 50, height: 130 },
-    { id: 4, title: '', name: 'Off Day', role: '', time: '', outlet: '', color: 'ev-offday', top: 330, height: 50 },
   ]},
   { date: '17', label: 'Wed 17', outlet: 'Retail Corner', slots: [
-    { id: 5, title: '', name: 'Relief Slot', role: '', time: '', outlet: '', color: 'ev-gray', top: 50, height: 80 },
     { id: 6, title: 'Evening Shift', name: 'Boma Eze', role: 'Cashier', time: '03:00 PM – 11:00 PM', outlet: 'Retail Corner', color: 'ev-yellow', top: 220, height: 130 },
   ]},
   { date: '18', label: 'Thu 18', outlet: 'Restaurant', slots: [
@@ -269,14 +309,11 @@ const calDays = [
   ]},
   { date: '19', label: 'Fri 19', outlet: 'Bar Lounge', slots: [
     { id: 8, title: 'Morning Shift', name: 'Adaeze Okafor', role: 'Cashier', time: '07:00 AM – 03:00 PM', outlet: 'Bar Lounge Cover', color: 'ev-blue', top: 50, height: 130 },
-    { id: 9, title: 'Evening Shift', name: 'Daniel Bassey', role: 'Cashier', time: '03:00 PM – 11:00 PM', outlet: 'Bar Lounge', color: 'ev-blue-light', top: 220, height: 130 },
   ]},
   { date: '20', label: 'Sat 20', outlet: 'Restaurant', slots: [
     { id: 10, title: 'Morning Shift', name: 'Adaeze Okafor', role: 'Cashier', time: '07:00 AM – 03:00 PM', outlet: 'Weekend Rush', color: 'ev-blue', top: 50, height: 130 },
-    { id: 11, title: 'Evening Shift', name: 'Ifeoma Nnaji', role: 'Cashier', time: '03:00 PM – 11:00 PM', outlet: 'Weekend Cover', color: 'ev-purple', top: 220, height: 130 },
   ]},
   { date: '21', label: 'Sun 21', outlet: 'Mixed', slots: [
-    { id: 12, title: '', name: 'Off / Leave', role: '', time: '', outlet: '', color: 'ev-offday', top: 50, height: 60 },
     { id: 13, title: 'Skeleton Team', name: '2 Cashiers', role: '', time: '10:00 AM – 06:00 PM', outlet: 'Restaurant / Bar', color: 'ev-green', top: 150, height: 120 },
   ]},
 ]

@@ -16,7 +16,10 @@
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print Report</button>
         <button @click="showDraftOrders = true" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Open Drafts</button>
         <!-- <button @click="router.push('/pos')" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Open Drafts</button> -->
-        <button @click="confirmClose" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Close Shift Now</button>
+        <button @click="confirmClose" :disabled="closing"
+          class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+          {{ closing ? 'Closing…' : 'Close Shift Now' }}
+        </button>
       </div>
     </div>
 
@@ -27,28 +30,28 @@
           <p class="text-xs text-gray-400">Gross Sales</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦842,500</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ shiftResource.loading ? '…' : Number(shiftStats.gross_sales).toLocaleString() }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Net Collections</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Cleared</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦801,200</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ shiftResource.loading ? '…' : Number(shiftStats.net_collections).toLocaleString() }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Open Bills / Drafts</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Check</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">3</p>
+        <p class="text-3xl font-bold text-gray-900">{{ shiftResource.loading ? '…' : shiftStats.open_drafts }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Difference</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Review</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦41,300</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ shiftResource.loading ? '…' : Number(shiftStats.difference).toLocaleString() }}</p>
       </div>
     </div>
 
@@ -63,15 +66,15 @@
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Shift Date</p>
-            <div class="px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-700 bg-gray-50">15 Apr 2026</div>
+            <div class="px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-700 bg-gray-50">{{ shiftStats.shift_date || '—' }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Shift</p>
-            <div class="px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-700 bg-gray-50">Morning</div>
+            <div class="px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-700 bg-gray-50">{{ shiftStats.pos_profile || '—' }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Opened By</p>
-            <div class="px-3 py-2.5 border border-blue-200 bg-blue-50 rounded-lg text-xs font-medium text-blue-700">Adaeze</div>
+            <div class="px-3 py-2.5 border border-blue-200 bg-blue-50 rounded-lg text-xs font-medium text-blue-700">{{ shiftStats.cashier || '—' }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Closing Time</p>
@@ -190,7 +193,10 @@
         <p class="text-xs text-gray-500 mb-5">This will close the Morning shift for Adaeze. This action cannot be undone.</p>
         <div class="flex gap-2">
           <button @click="showConfirm = false" class="flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-          <button @click="router.push('/pos')" class="flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Confirm Close</button>
+          <button @click="doCloseShift" :disabled="closing"
+            class="flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {{ closing ? 'Closing…' : 'Confirm Close' }}
+          </button>
         </div>
       </div>
     </div>
@@ -201,12 +207,15 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
-const showDraftOrders = ref(false)
 
 const router = useRouter()
+const showDraftOrders = ref(false)
 const closingNote = ref('')
 const showConfirm = ref(false)
+const closing = ref(false)
+const closeError = ref('')
 const now = ref(new Date())
 
 let timer
@@ -217,14 +226,72 @@ const currentTime = computed(() =>
   now.value.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
 )
 
+// ── API: Shift Stats ─────────────────────────────────────────────────
+const shiftResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_shift_stats',
+  auto: true,
+})
+
+const shiftStats = computed(() => {
+  const d = shiftResource.data || {}
+  return {
+    gross_sales: Number(d.gross_sales || 0),
+    net_collections: Number(d.net_collections || 0),
+    open_drafts: Number(d.open_drafts || 0),
+    difference: Number(d.difference || 0),
+    cashier: d.cashier || '—',
+    pos_profile: d.pos_profile || '—',
+    shift_date: d.shift_date || '—',
+    pos_opening_entry: d.pos_opening_entry || null,
+    has_open_shift: d.has_open_shift || false,
+  }
+})
+
+// Tender rows - loaded from API, editable by cashier
+const tenderRows = computed(() => {
+  return (shiftResource.data?.tender_breakdown || []).map(t => ({
+    type: t.payment_type,
+    system: Number(t.system_amount || 0),
+    counted: String(Number(t.system_amount || 0).toFixed(2)),
+    diff: '₦0.00',
+    editable: t.editable !== false,
+  }))
+})
+
+// ── API: Close Shift ───────────────────────────────────────────────
+const closeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.close_pos_shift',
+  onSuccess() {
+    closing.value = false
+    showConfirm.value = false
+    router.push('/pos')
+  },
+  onError(err) {
+    closing.value = false
+    closeError.value = err.message || 'Failed to close shift'
+    setTimeout(() => { closeError.value = '' }, 6000)
+  },
+})
+
 function confirmClose() {
   showConfirm.value = true
 }
 
-const tenderRows = ref([
-  { type: 'Cash', system: 186500, counted: '₦186,500', diff: '₦0.00', editable: true },
-  { type: 'POS Terminal', system: 402700, counted: '₦402,700', diff: '₦0.00', editable: true },
-  { type: 'Transfer', system: 97000, counted: '₦97,000', diff: '₦0.00', editable: true },
-  { type: 'Post to Room', system: 115000, counted: '', diff: '₦0.00', editable: false },
-])
+function doCloseShift() {
+  if (!shiftStats.value.pos_opening_entry) {
+    // No open shift found — just redirect
+    router.push('/pos')
+    return
+  }
+  closing.value = true
+  closeResource.submit({
+    pos_opening_entry: shiftStats.value.pos_opening_entry,
+    tender_rows: JSON.stringify(tenderRows.value.map(r => ({
+      payment_type: r.type,
+      system_amount: r.system,
+      counted: parseFloat(r.counted) || 0,
+    }))),
+    closing_note: closingNote.value || null,
+  })
+}
 </script>

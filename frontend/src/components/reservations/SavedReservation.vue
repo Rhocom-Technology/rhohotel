@@ -25,6 +25,13 @@
           <button @click="emit('openPayments')" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
           <button @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
           <button @click="showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
+          <button v-if="!reservation.sales_invoice && reservation.docstatus === 1"
+            :disabled="actionLoading" @click="emit('createInvoice')"
+            class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40">Create Invoice</button>
+          <button v-if="reservation.sales_invoice"
+            class="px-4 py-2 text-xs font-medium text-purple-600 border border-purple-200 bg-purple-50 rounded-lg cursor-default" disabled>
+            Invoice: {{ reservation.sales_invoice }}
+          </button>
           <button :disabled="actionLoading" @click="emit('checkIn')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
           <button :disabled="actionLoading" @click="emit('cancelReservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
@@ -86,7 +93,7 @@
       <div v-if="showAdjustModal" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
         <div class="min-h-screen flex items-start justify-center py-8 px-4">
           <div class="bg-white rounded-2xl shadow-2xl w-full" style="max-width:900px;">
-            <StayAdjustment :reservation="reservation" @close="showAdjustModal = false" />
+            <StayAdjustment :reservation="reservation" @close="showAdjustModal = false" @done="handleModalDone" />
           </div>
         </div>
       </div>
@@ -96,7 +103,7 @@
       <div v-if="showChangeRoomModal" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
         <div class="min-h-screen flex items-start justify-center py-8 px-4">
           <div class="bg-white rounded-2xl shadow-2xl w-full" style="max-width:900px;">
-            <ChangeRoom :reservation="reservation" @close="showChangeRoomModal = false" />
+            <ChangeRoom :reservation="reservation" @close="showChangeRoomModal = false" @done="handleModalDone" />
           </div>
         </div>
       </div>
@@ -116,10 +123,16 @@ const props = defineProps({
   actionLoading: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['refresh', 'openPayments', 'checkIn', 'cancelReservation'])
+const emit = defineEmits(['refresh', 'openPayments', 'checkIn', 'cancelReservation', 'createInvoice'])
 
 const showAdjustModal = ref(false)
 const showChangeRoomModal = ref(false)
+
+function handleModalDone() {
+  showAdjustModal.value = false
+  showChangeRoomModal.value = false
+  emit('refresh')
+}
 
 const rooms = computed(() => props.reservation?.rooms || [])
 

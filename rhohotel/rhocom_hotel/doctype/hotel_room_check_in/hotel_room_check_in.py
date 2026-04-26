@@ -67,7 +67,7 @@ class HotelRoomCheckIn(Document):
 		tariff = frappe.get_all(
 			"Hotel Room Tariff",
 			filters={"room_type": self.room_type, "rate_type": self.rate_type, "is_active": 1},
-			fields=["amount"],
+			fields=["rate_amount"],
 			limit=1,
 		)
 
@@ -75,12 +75,12 @@ class HotelRoomCheckIn(Document):
 			tariff = frappe.get_all(
 				"Hotel Room Tariff",
 				filters={"room_type": self.room_type, "is_active": 1},
-				fields=["amount"],
+				fields=["rate_amount"],
 				limit=1,
 			)
 
 		if tariff:
-			self.rate_amount = tariff[0].amount
+			self.rate_amount = tariff[0].rate_amount
 
 	def validate_reservation(self):
 		if not self.reservation:
@@ -123,18 +123,20 @@ class HotelRoomCheckIn(Document):
 		if room.status != "Vacant":
 			frappe.throw(_("Room {0} is not vacant").format(self.room_number))
 
-		# Skip for front desk override
-		if self.front_desk_reservation:
+		# Allow explicit skip (used by internal flows that already validated)
+		if self.flags.get("skip_availability_check"):
 			return
 
 		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
+		# self.reservation holds the linked Hotel Room Reservation (set by front desk flow too)
+		# Excluding it prevents self-conflict while still catching overlaps with other bookings.
 		assert_room_available(
 			self.room_number,
 			self.check_in_datetime,
 			self.expected_check_out_datetime,
-			exclude_reservation=self.reservation or "",
-			exclude_checkin=self.name if not self.is_new() else "",
+			exclude_reservation=self.reservation or None,
+			exclude_checkin=self.name if not self.is_new() else None,
 		)
 
 	def validate_dates(self):
@@ -248,6 +250,9 @@ class HotelRoomCheckIn(Document):
 				si.additional_discount_percentage = self.discount
 			else:
 				si.discount_amount = self.discount
+
+		# Never auto-allocate advances — payment must be received explicitly
+		si.allocate_advances_automatically = 0
 
 		si.insert(ignore_permissions=True)
 		si.submit()
@@ -844,7 +849,7 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 def transfer_room(check_in_name, new_room_number, note=None):
 	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in_name)
 
-	# ensure new room is vacant
+	# ensure new room exists
 	if not frappe.db.exists("Hotel Room", new_room_number):
 		frappe.throw(_("New room {0} does not exist.").format(new_room_number))
 
@@ -856,13 +861,14 @@ def transfer_room(check_in_name, new_room_number, note=None):
 	if check_in_doc.status != "Checked In":
 		frappe.throw(_("Only active check-ins can be transferred."))
 
-	# Ensure target room exists and is vacant
-	if not frappe.db.exists("Hotel Room", new_room_number):
-		frappe.throw(_("Room {0} does not exist.").format(new_room_number))
-
-	new_room_doc = frappe.get_doc("Hotel Room", new_room_number)
-	if new_room_doc.status != "Vacant":
-		frappe.throw(_("Room {0} is not vacant. Please select another room.").format(new_room_number))
+	# Validate via all 3 booking surfaces (exclude the current check-in which occupies
+	# the source room — the target room must be conflict-free for the remaining stay)
+	from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+	assert_room_available(
+		new_room_number,
+		check_in_doc.check_in_datetime,
+		check_in_doc.expected_check_out_datetime,
+	)
 
 	# Free the old room
 	old_room_doc = frappe.get_doc("Hotel Room", check_in_doc.room_number)

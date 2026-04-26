@@ -151,6 +151,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -162,31 +163,51 @@ const draftFilterPoint = ref('')
 const draftFilterCashier = ref('')
 const draftPage = ref(1)
 const perPage = 10
+const selectedDraft = ref(null)
 
-const draftStats = [
-  { label: 'Total Draft Orders', value: '24' },
-  { label: 'Room Charge Drafts', value: '9' },
-  { label: 'Table / Bar Drafts', value: '11' },
-  { label: 'Oldest Draft Pending', value: '2h 18m' },
-]
+// ── API: Draft Orders ──────────────────────────────────────────────────────
+const draftsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_draft_pos_invoices',
+  auto: true,
+})
 
-const draftOrders = [
-  { id: 1, invoice: 'INV-DRAFT-000421', point: 'Restaurant', cashier: 'Adaeze', items: 4, amount: 40365, age: '18 min', ageMinutes: 18, savedAt: '10:14 AM', detailPoint: 'Room 305', draftItems: [{ name: 'Grilled Chicken Meal', qty: 1 }, { name: 'Fresh Orange Juice', qty: 2 }], note: 'No pepper on meal. Deliver to room within 20 mins.' },
-  { id: 2, invoice: 'INV-DRAFT-000418', point: 'Table 02', cashier: 'Adaeze', items: 6, amount: 62800, age: '34 min', ageMinutes: 34, savedAt: '9:58 AM', detailPoint: 'Table 02', draftItems: [{ name: 'Club Sandwich', qty: 2 }, { name: 'Heineken Beer', qty: 4 }], note: 'Extra napkins needed.' },
-  { id: 3, invoice: 'INV-DRAFT-000416', point: 'Bar 04', cashier: 'Adaeze', items: 3, amount: 18000, age: '1h 05m', ageMinutes: 65, savedAt: '9:27 AM', detailPoint: 'Bar 04', draftItems: [{ name: 'Red Wine Glass', qty: 2 }, { name: 'Sparkling Water', qty: 1 }], note: '' },
-  { id: 4, invoice: 'INV-DRAFT-000413', point: 'Restaurant', cashier: 'Adaeze', items: 2, amount: 14500, age: '1h 22m', ageMinutes: 82, savedAt: '9:10 AM', detailPoint: 'Restaurant', draftItems: [{ name: 'Caesar Salad', qty: 1 }, { name: 'Cappuccino', qty: 1 }], note: '' },
-  { id: 5, invoice: 'INV-DRAFT-000409', point: 'Restaurant', cashier: 'Adaeze', items: 5, amount: 27500, age: '1h 48m', ageMinutes: 108, savedAt: '8:44 AM', detailPoint: 'Restaurant', draftItems: [{ name: 'Burger Combo', qty: 1 }, { name: 'Bottled Water', qty: 2 }], note: 'Allergic to peanuts.' },
-  { id: 6, invoice: 'INV-DRAFT-000405', point: 'Bar', cashier: 'Boma', items: 2, amount: 11000, age: '2h 01m', ageMinutes: 121, savedAt: '8:31 AM', detailPoint: 'Bar 01', draftItems: [{ name: 'Heineken Beer', qty: 2 }], note: '' },
-  { id: 7, invoice: 'INV-DRAFT-000402', point: 'Restaurant', cashier: 'Ifeoma', items: 3, amount: 22000, age: '2h 18m', ageMinutes: 138, savedAt: '8:14 AM', detailPoint: 'Room 402', draftItems: [{ name: 'Club Sandwich', qty: 1 }, { name: 'Fresh Orange Juice', qty: 2 }], note: 'No salt please.' },
-  { id: 8, invoice: 'INV-DRAFT-000399', point: 'Restaurant', cashier: 'Adaeze', items: 1, amount: 9500, age: '2h 35m', ageMinutes: 155, savedAt: '7:57 AM', detailPoint: 'Table 05', draftItems: [{ name: 'Caesar Salad', qty: 1 }], note: '' },
-  { id: 9, invoice: 'INV-DRAFT-000396', point: 'Bar', cashier: 'Boma', items: 4, amount: 31000, age: '2h 52m', ageMinutes: 172, savedAt: '7:40 AM', detailPoint: 'Bar 03', draftItems: [{ name: 'Red Wine Glass', qty: 2 }, { name: 'Burger Combo', qty: 2 }], note: '' },
-  { id: 10, invoice: 'INV-DRAFT-000391', point: 'Room Service', cashier: 'Ifeoma', items: 3, amount: 18500, age: '3h 10m', ageMinutes: 190, savedAt: '7:22 AM', detailPoint: 'Room 214', draftItems: [{ name: 'Grilled Chicken Meal', qty: 1 }, { name: 'Bottled Water', qty: 2 }], note: 'Extra napkins.' },
-  { id: 11, invoice: 'INV-DRAFT-000388', point: 'Restaurant', cashier: 'Adaeze', items: 2, amount: 12000, age: '3h 28m', ageMinutes: 208, savedAt: '7:04 AM', detailPoint: 'Table 08', draftItems: [{ name: 'Club Sandwich', qty: 1 }, { name: 'Cappuccino', qty: 1 }], note: '' },
-  { id: 12, invoice: 'INV-DRAFT-000385', point: 'Bar', cashier: 'Boma', items: 6, amount: 45000, age: '3h 45m', ageMinutes: 225, savedAt: '6:47 AM', detailPoint: 'Bar 02', draftItems: [{ name: 'Red Wine Glass', qty: 4 }, { name: 'Heineken Beer', qty: 2 }], note: '' },
-]
+const statsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_draft_pos_stats',
+  auto: true,
+})
+
+let searchTimer = null
+watch([draftSearch, draftFilterPoint, draftFilterCashier], () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    draftsResource.params = {
+      search: draftSearch.value || null,
+      cashier: draftFilterCashier.value || null,
+    }
+    draftsResource.reload()
+  }, 300)
+})
+
+// ── Computed ───────────────────────────────────────────────────────────────
+const allDrafts = computed(() => {
+  return (draftsResource.data || []).map(d => ({
+    id: d.invoice,
+    invoice: d.invoice,
+    point: d.customer || '—',
+    cashier: d.cashier,
+    items: d.item_count || 0,
+    amount: Number(d.amount) || 0,
+    age: d.age || '0m',
+    ageMinutes: d.age_minutes || 0,
+    savedAt: d.posting_date || '',
+    detailPoint: d.customer || '—',
+    draftItems: d.items || [],
+    note: d.note || '',
+  }))
+})
 
 const filteredDrafts = computed(() => {
-  let data = draftOrders
+  let data = allDrafts.value
   if (draftSearch.value) {
     const q = draftSearch.value.toLowerCase()
     data = data.filter(d =>
@@ -200,12 +221,24 @@ const filteredDrafts = computed(() => {
   return data
 })
 
+const draftStats = computed(() => {
+  const s = statsResource.data || {}
+  const total = Number(s.total_drafts || 0)
+  const oldest = Number(s.oldest_minutes || 0)
+  const h = Math.floor(oldest / 60)
+  const m = oldest % 60
+  return [
+    { label: 'Total Draft Orders', value: String(total) },
+    { label: 'Total Value', value: `₦${Number(s.total_value || 0).toLocaleString()}` },
+    { label: 'Open Drafts', value: String(total) },
+    { label: 'Oldest Pending', value: h ? `${h}h ${m}m` : `${m}m` },
+  ]
+})
+
 const draftTotalPages = computed(() => Math.max(1, Math.ceil(filteredDrafts.value.length / perPage)))
 const draftPageStart = computed(() => (draftPage.value - 1) * perPage)
 const draftPageEnd = computed(() => Math.min(draftPageStart.value + perPage, filteredDrafts.value.length))
 const pagedDrafts = computed(() => filteredDrafts.value.slice(draftPageStart.value, draftPageEnd.value))
-
-const selectedDraft = ref(draftOrders[0])
 
 watch(filteredDrafts, () => { draftPage.value = 1 })
 </script>

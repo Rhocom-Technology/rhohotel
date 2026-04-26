@@ -1,191 +1,326 @@
 <template>
   <div class="space-y-5">
 
-    <!-- Guest Header -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-      <div class="flex items-start justify-between">
-        <div class="flex items-start gap-4">
-          <div class="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500 flex-shrink-0">GW</div>
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900 mb-1">OGUMBA WAYNE</h1>
-            <p class="text-xs text-gray-500 mb-1">+2347034600835 • ogumba@example.com • Nigeria</p>
-            <p class="text-xs text-gray-400">Last Stay: 21 Feb 2026 • Guest Since: Jan 2025</p>
-            <div class="flex items-center gap-2 mt-2">
-              <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">VIP</span>
-              <span class="px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-600 rounded-full">Gold Tier</span>
-              <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Corporate Guest</span>
-              <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Checked In</span>
-            </div>
-          </div>
-        </div>
-        <div class="bg-gray-50 rounded-xl border border-gray-200 px-5 py-4 text-xs" style="min-width:220px;">
-          <p class="font-bold text-gray-900 mb-2">Current Stay Snapshot</p>
-          <p class="text-gray-600 mb-0.5">Room: 8408 • Executive Room</p>
-          <p class="text-gray-600 mb-0.5">Check-in: 21 Feb 2026</p>
-          <p class="text-gray-600 mb-0.5">Check-out: 24 Feb 2026</p>
-          <p class="font-bold text-red-500 mt-1">Balance: ₦41,000</p>
-        </div>
-      </div>
+    <!-- Loading -->
+    <div v-if="loading" class="bg-white rounded-xl border border-gray-200 px-6 py-16 text-center">
+      <p class="text-xs text-gray-400">Loading guest profile…</p>
     </div>
 
-    <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <p class="text-xs text-gray-400 mb-2">Total Stays</p>
-        <p class="text-3xl font-bold text-gray-900">12</p>
-        <p class="text-xs font-medium text-green-600 mt-1">Frequent returning guest</p>
-      </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <p class="text-xs text-gray-400 mb-2">Lifetime Spend</p>
-        <p class="text-3xl font-bold text-gray-900">₦2.45M</p>
-        <p class="text-xs font-medium text-blue-600 mt-1">High value account</p>
-      </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <p class="text-xs text-gray-400 mb-2">Loyalty Points</p>
-        <p class="text-3xl font-bold text-gray-900">18,200</p>
-        <p class="text-xs font-medium text-yellow-600 mt-1">Gold tier active</p>
-      </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <p class="text-xs text-gray-400 mb-2">Guest Score</p>
-        <p class="text-3xl font-bold text-gray-900">82 / 100</p>
-        <p class="text-xs font-medium text-green-600 mt-1">Low risk • high service value</p>
-      </div>
+    <!-- Error -->
+    <div v-else-if="error" class="bg-white rounded-xl border border-gray-200 px-6 py-16 text-center">
+      <p class="text-xs text-red-500 mb-3">{{ error }}</p>
+      <button @click="$router.push('/guests')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Back to Guest List</button>
     </div>
 
-    <!-- Tabs -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6">
-      <div class="flex items-center gap-1 border-b border-gray-100 overflow-x-auto">
-        <button v-for="tab in tabs" :key="tab"
-          @click="activeTab = tab"
-          class="px-4 py-3.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px"
-          :class="activeTab === tab ? 'text-gray-900 border-gray-900 bg-gray-900 text-white rounded-lg mb-1' : 'text-gray-500 border-transparent hover:text-gray-700'">
-          {{ tab }}
-        </button>
+    <template v-else-if="guest">
+
+      <!-- Guest Header -->
+      <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+        <div class="flex items-start justify-between">
+          <div class="flex items-start gap-4">
+            <div class="w-14 h-14 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+              :style="avatarStyle(guest.hotel_guest_name)">
+              {{ initials(guest.hotel_guest_name) }}
+            </div>
+            <div>
+              <h1 class="text-2xl font-bold text-gray-900 mb-1">{{ guest.hotel_guest_name }}</h1>
+              <p class="text-xs text-gray-500 mb-1">
+                {{ guest.phone_number || '—' }} • {{ guest.email || '—' }} • {{ guest.nationality || '—' }}
+              </p>
+              <p class="text-xs text-gray-400">
+                Guest Type: {{ guest.guest_type }}
+                <span v-if="guest.active_checkin"> • Last Stay: {{ formatDate(guest.active_checkin.check_in_datetime) }}</span>
+              </p>
+              <div class="flex items-center gap-2 mt-2 flex-wrap">
+                <span class="px-2.5 py-0.5 text-xs font-medium rounded-full" :class="loyaltyClass(guest.loyalty_tier)">
+                  {{ guest.loyalty_tier || 'Base' }}
+                </span>
+                <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">
+                  {{ guest.guest_type }}
+                </span>
+                <span v-if="guest.current_status === 'In-House'"
+                  class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">
+                  Checked In
+                </span>
+              </div>
+            </div>
+          </div>
+          <!-- Current Stay Snapshot -->
+          <div v-if="guest.active_checkin" class="bg-gray-50 rounded-xl border border-gray-200 px-5 py-4 text-xs" style="min-width:220px;">
+            <p class="font-bold text-gray-900 mb-2">Current Stay Snapshot</p>
+            <p class="text-gray-600 mb-0.5">Room: {{ guest.active_checkin.room_number }}</p>
+            <p class="text-gray-600 mb-0.5">Check-in: {{ formatDate(guest.active_checkin.check_in_datetime) }}</p>
+            <p class="text-gray-600 mb-0.5">Check-out: {{ formatDate(guest.active_checkin.expected_check_out_datetime) }}</p>
+            <p v-if="guest.active_checkin.total_outstanding_amount > 0" class="font-bold text-red-500 mt-1">
+              Balance: {{ formatCurrency(guest.active_checkin.total_outstanding_amount) }}
+            </p>
+          </div>
+          <div v-else class="flex items-center">
+            <button @click="$router.push('/guests')"
+              class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              ← Guest List
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Profile Tab -->
-    <div v-if="activeTab === 'Profile'" style="display:grid;grid-template-columns:1fr 300px;gap:12px;">
-
-      <!-- Left -->
-      <div class="space-y-5">
-        <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-bold text-gray-900">Editable Guest Information</h3>
-            <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-              @click="$router.push('/guests/' + guestId + '/edit')">Edit Guest</button>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Full Name</p>
-              <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">OGUMBA WAYNE</div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Phone</p>
-              <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">+2347034600835</div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Email</p>
-              <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">ogumba@example.com</div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Nationality</p>
-              <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">Nigeria</div>
-            </div>
-            <div style="grid-column:span 2;">
-              <p class="text-xs text-gray-500 mb-1.5">ID Type / Number</p>
-              <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">Passport • A0192391</div>
-            </div>
-          </div>
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <p class="text-xs text-gray-400 mb-2">Total Stays</p>
+          <p class="text-3xl font-bold text-gray-900">{{ guest.total_stays }}</p>
+          <p class="text-xs font-medium text-green-600 mt-1">{{ guest.total_stays > 5 ? 'Frequent returning guest' : 'Registered guest' }}</p>
         </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-3">Guest Preferences</h3>
-          <div class="flex items-center gap-2 flex-wrap px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">High Floor</span>
-            <span class="px-3 py-1 text-xs font-medium bg-green-100 text-green-600 rounded-full">Quiet Wing</span>
-            <span class="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Late Checkout</span>
-          </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <p class="text-xs text-gray-400 mb-2">Lifetime Spend</p>
+          <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(guest.lifetime_spend) }}</p>
+          <p class="text-xs font-medium text-blue-600 mt-1">Completed stays</p>
         </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <p class="text-xs text-gray-400 mb-2">Loyalty Tier</p>
+          <p class="text-3xl font-bold text-gray-900">{{ guest.loyalty_tier || 'Base' }}</p>
+          <p class="text-xs font-medium text-yellow-600 mt-1">Loyalty level</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <p class="text-xs text-gray-400 mb-2">Current Status</p>
+          <p class="text-3xl font-bold text-gray-900">{{ guest.current_status }}</p>
+          <p class="text-xs font-medium mt-1" :class="guest.current_status === 'In-House' ? 'text-green-600' : 'text-gray-400'">
+            {{ guest.current_status === 'In-House' ? 'Currently in hotel' : 'Not checked in' }}
+          </p>
+        </div>
+      </div>
 
-        <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Stay and Spend Timeline</h3>
-          <div class="space-y-4">
-            <div v-for="t in timeline" :key="t.date" class="flex items-start gap-3">
-              <div class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5" :style="{ background: t.color }"></div>
+      <!-- Tabs -->
+      <div class="bg-white rounded-xl border border-gray-200 px-6">
+        <div class="flex items-center gap-1 border-b border-gray-100 overflow-x-auto">
+          <button v-for="tab in tabs" :key="tab"
+            @click="activeTab = tab"
+            class="px-4 py-3.5 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px"
+            :class="activeTab === tab ? 'text-white border-gray-900 bg-gray-900 rounded-lg mb-1' : 'text-gray-500 border-transparent hover:text-gray-700'">
+            {{ tab }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Profile Tab -->
+      <div v-if="activeTab === 'Profile'" style="display:grid;grid-template-columns:1fr 300px;gap:12px;">
+
+        <!-- Left -->
+        <div class="space-y-5">
+          <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-gray-900">Guest Information</h3>
+              <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                @click="$router.push({ name: 'EditGuest', params: { id: guestId } })">Edit Guest</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
-                <p class="text-xs font-bold text-gray-900">{{ t.date }}</p>
-                <p class="text-xs text-gray-500 mt-0.5">{{ t.desc }}</p>
+                <p class="text-xs text-gray-500 mb-1.5">Full Name</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.hotel_guest_name }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Guest Type</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.guest_type }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Phone</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.phone_number || '—' }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Email</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.email || '—' }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Nationality</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.nationality || '—' }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Gender</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.gender || '—' }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Date of Birth</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.date_of_birth || '—' }}</div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Address</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ guest.address || '—' }}</div>
+              </div>
+              <div style="grid-column:span 2;">
+                <p class="text-xs text-gray-500 mb-1.5">ID Type / Number</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">
+                  {{ guest.id_type || '—' }} {{ guest.id_number ? '• ' + guest.id_number : '' }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="guest.preference" class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+            <h3 class="text-sm font-bold text-gray-900 mb-3">Guest Preferences</h3>
+            <div class="flex items-center gap-2 flex-wrap px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">{{ guest.preference }}</span>
+            </div>
+          </div>
+
+          <div v-if="guest.notes" class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+            <h3 class="text-sm font-bold text-gray-900 mb-3">Notes</h3>
+            <p class="text-xs text-gray-700">{{ guest.notes }}</p>
+          </div>
+
+          <div v-if="guest.timeline && guest.timeline.length" class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+            <h3 class="text-sm font-bold text-gray-900 mb-4">Stay Timeline</h3>
+            <div class="space-y-4">
+              <div v-for="t in guest.timeline" :key="t.date" class="flex items-start gap-3">
+                <div class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5" :style="{ background: t.color }"></div>
+                <div>
+                  <p class="text-xs font-bold text-gray-900">{{ t.date }}</p>
+                  <p class="text-xs text-gray-500 mt-0.5">{{ t.desc }}</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Right: Guest Intelligence -->
-      <div class="space-y-3">
-        <h3 class="text-sm font-bold text-gray-900">Guest Intelligence</h3>
+        <!-- Right: Guest Intelligence -->
+        <div class="space-y-3">
+          <h3 class="text-sm font-bold text-gray-900">Guest Intelligence</h3>
 
-        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p class="text-xs font-bold text-gray-900 mb-2">Current Stay Snapshot</p>
-          <p class="text-xs text-gray-600">Room: 8408 • Executive Room</p>
-          <p class="text-xs text-gray-600">Check-in: 21 Feb 2026</p>
-          <p class="text-xs text-gray-600">Check-out: 24 Feb 2026</p>
-          <p class="text-xs font-bold text-red-500 mt-1">Outstanding: ₦41,000</p>
-        </div>
+          <div v-if="guest.active_checkin" class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+            <p class="text-xs font-bold text-gray-900 mb-2">Current Stay Snapshot</p>
+            <p class="text-xs text-gray-600">Room: {{ guest.active_checkin.room_number }}</p>
+            <p class="text-xs text-gray-600">Check-in: {{ formatDate(guest.active_checkin.check_in_datetime) }}</p>
+            <p class="text-xs text-gray-600">Check-out: {{ formatDate(guest.active_checkin.expected_check_out_datetime) }}</p>
+            <p v-if="guest.active_checkin.total_outstanding_amount > 0" class="text-xs font-bold text-red-500 mt-1">
+              Outstanding: {{ formatCurrency(guest.active_checkin.total_outstanding_amount) }}
+            </p>
+          </div>
 
-        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p class="text-xs font-bold text-gray-900 mb-2">Stay History</p>
-          <p class="text-xs text-gray-600">12 completed stays</p>
-          <p class="text-xs text-gray-600">Most booked room type: Executive Room</p>
-          <p class="text-xs text-gray-600">Preferred channel: Walk-in / Corporate</p>
-          <p class="text-xs text-gray-600">Average stay length: 3.2 nights</p>
-        </div>
+          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+            <p class="text-xs font-bold text-gray-900 mb-2">Stay History</p>
+            <p class="text-xs text-gray-600">{{ guest.total_stays }} completed stays</p>
+            <p class="text-xs text-gray-600">Guest type: {{ guest.guest_type }}</p>
+          </div>
 
-        <div class="bg-blue-50 rounded-xl border border-blue-100 px-5 py-4">
-          <p class="text-xs font-bold text-blue-700 mb-2">Spend Mix and Composition</p>
-          <p class="text-xs text-blue-600">Rooms: ₦1.8M (72%)</p>
-          <p class="text-xs text-blue-600">Restaurant: ₦400K (16%)</p>
-          <p class="text-xs text-blue-600">Bar: ₦150K (6%)</p>
-          <p class="text-xs text-blue-600">Other: ₦100K (6%)</p>
-          <div class="mt-2 h-2 bg-blue-200 rounded-full"><div class="h-2 bg-blue-600 rounded-full w-3/4"></div></div>
-        </div>
+          <div class="bg-purple-50 rounded-xl border border-purple-100 px-5 py-4">
+            <p class="text-xs font-bold text-purple-700 mb-2">Loyalty</p>
+            <p class="text-xs text-purple-600">Tier: {{ guest.loyalty_tier || 'Base' }}</p>
+          </div>
 
-        <div class="bg-purple-50 rounded-xl border border-purple-100 px-5 py-4">
-          <p class="text-xs font-bold text-purple-700 mb-2">Loyalty</p>
-          <p class="text-xs text-purple-600">Tier: Gold • Points: 18,200</p>
-          <p class="text-xs text-purple-600">Redeemed this year: 2,400 pts</p>
-        </div>
-
-        <div class="bg-red-50 rounded-xl border border-red-100 px-5 py-4">
-          <p class="text-xs font-bold text-red-600 mb-2">Messages and Risk</p>
-          <p class="text-xs text-red-500">Last message: Welcome back sent on 21 Feb 2026</p>
-          <p class="text-xs text-red-500">Risk: Low payment risk • Medium complaint sensitivity</p>
+          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+            <p class="text-xs font-bold text-gray-900 mb-3">Quick Actions</p>
+            <div class="space-y-2">
+              <button @click="$router.push({ name: 'EditGuest', params: { id: guestId } })"
+                class="w-full px-3 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors text-left">
+                Edit Guest Profile
+              </button>
+              <button @click="$router.push('/guests')"
+                class="w-full px-3 py-2 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                Back to Guest List
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Other tabs placeholder -->
-    <div v-if="activeTab !== 'Profile'" class="bg-white rounded-xl border border-gray-200 px-6 py-16 text-center">
-      <p class="text-sm text-gray-400">{{ activeTab }} content coming soon</p>
-    </div>
+      <!-- Stay History Tab -->
+      <div v-else-if="activeTab === 'Stay History'" class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-4">All Stays</h3>
+        <div v-if="!guest.timeline || !guest.timeline.length" class="text-center py-8">
+          <p class="text-xs text-gray-400">No stay history found for this guest.</p>
+        </div>
+        <div v-else class="space-y-3">
+          <div v-for="t in guest.timeline" :key="t.date" class="flex items-start gap-3 border-b border-gray-50 pb-3">
+            <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" :style="{ background: t.color }"></div>
+            <div>
+              <p class="text-xs font-bold text-gray-900">{{ t.date }}</p>
+              <p class="text-xs text-gray-500 mt-0.5">{{ t.desc }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      <!-- Other tabs placeholder -->
+      <div v-else class="bg-white rounded-xl border border-gray-200 px-6 py-16 text-center">
+        <p class="text-sm text-gray-400">{{ activeTab }} section coming soon</p>
+      </div>
+
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const guestId = route.params.id
-const activeTab = ref('Profile')
-const tabs = ['Profile', 'Stay History', 'Spend', 'Loyalty', 'Messages', 'Risk', 'Intelligence']
 
-const timeline = [
-  { date: 'Jan 2025', desc: 'First stay • ₦200,000 • Executive Room', color: '#3b82f6' },
-  { date: 'Mar 2025', desc: 'Returned stay • ₦350,000 • Added dining spend', color: '#22c55e' },
-  { date: 'Jul 2025', desc: 'Service complaint logged • Resolved same day', color: '#f59e0b' },
-  { date: 'Feb 2026', desc: 'Current stay • ₦300,000 room charges • Balance open', color: '#8b5cf6' },
+const loading = ref(true)
+const error = ref(null)
+const guest = ref(null)
+
+const activeTab = ref('Profile')
+const tabs = ['Profile', 'Stay History', 'Spend', 'Loyalty', 'Messages']
+
+async function fetchGuest() {
+  loading.value = true
+  error.value = null
+  try {
+    const body = new URLSearchParams({ name: guestId })
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.guest.get_guest', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Frappe-CSRF-Token': window.csrf_token || '',
+      },
+      body,
+    })
+    const data = await res.json()
+    if (!res.ok || data.exc) {
+      throw new Error(data._server_messages || data.exc || 'Guest not found.')
+    }
+    guest.value = data.message
+  } catch (e) {
+    error.value = e.message || 'Failed to load guest profile.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchGuest)
+
+function formatDate(dt) {
+  if (!dt) return '—'
+  const d = new Date(dt)
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function formatCurrency(amount) {
+  if (!amount) return '₦0.00'
+  return '₦' + Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })
+}
+
+const palette = [
+  { bg: '#dbeafe', color: '#1d4ed8' }, { bg: '#dcfce7', color: '#15803d' },
+  { bg: '#fce7f3', color: '#be185d' }, { bg: '#fef9c3', color: '#a16207' },
+  { bg: '#ede9fe', color: '#6d28d9' }, { bg: '#ffedd5', color: '#c2410c' },
+  { bg: '#cffafe', color: '#0e7490' }, { bg: '#f1f5f9', color: '#475569' },
 ]
+function initials(name) {
+  if (!name) return '?'
+  return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+}
+function avatarStyle(name) {
+  if (!name) return { backgroundColor: '#f1f5f9', color: '#475569' }
+  const p = palette[name.charCodeAt(0) % palette.length]
+  return { backgroundColor: p.bg, color: p.color }
+}
+function loyaltyClass(loyalty) {
+  return {
+    Base: 'bg-gray-100 text-gray-600', Silver: 'bg-slate-100 text-slate-600',
+    Gold: 'bg-yellow-100 text-yellow-700', Platinum: 'bg-purple-100 text-purple-600',
+    VIP: 'bg-orange-100 text-orange-600', Corporate: 'bg-blue-100 text-blue-600',
+  }[loyalty] || 'bg-gray-100 text-gray-500'
+}
 </script>

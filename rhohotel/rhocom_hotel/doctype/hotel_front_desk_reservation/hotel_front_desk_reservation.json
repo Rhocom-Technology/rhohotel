@@ -39,6 +39,7 @@
     "sales_invoice",
     "payment_entry",
     "status_section",
+    "status",
     "column_break_stgm",
     "column_break_status",
     "amended_from",
@@ -49,6 +50,15 @@
     "reservation_type"
   ],
   "fields": [
+    {
+      "default": "Pending",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Pending\nConfirmed\nChecked In\nChecked Out\nCancelled",
+      "read_only": 1
+    },
     {
       "default": "Corporate",
       "fieldname": "reservation_type",
@@ -88,8 +98,8 @@
       "fieldname": "corporate_guest",
       "fieldtype": "Link",
       "label": "Corporate Guest",
-      "options": "Hotel Guest",
-      "reqd": 1
+      "mandatory_depends_on": "eval:doc.reservation_type === 'Corporate'",
+      "options": "Hotel Guest"
     },
     {
       "description": "Auto-fetched from Corporate Guest",

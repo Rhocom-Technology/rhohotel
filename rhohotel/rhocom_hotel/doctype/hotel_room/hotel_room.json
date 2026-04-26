@@ -12,22 +12,31 @@
     "field_order": [
         "room_number",
         "room_type",
+        "bed_type",
         "operational_status",
         "status",
+        "classification",
         "housekeeping_status",
         "maintenance_flag",
+        "require_inspection",
         "floor",
         "capacity",
         "extra_bed_capacity",
+        "base_rate",
+        "rate_plan",
         "room_property_section",
         "phone",
         "data_extension",
         "power_code",
+        "keycard_enabled",
         "current_key_card",
         "last_keycard_user",
         "last_keycard_time",
         "room_amenities_section",
         "amenities",
+        "room_description_section",
+        "description",
+        "operational_notes",
         "room_inventory_section",
         "room_inventory",
         "current_check_in",
@@ -180,10 +189,62 @@
             "fieldname": "room_inventory_section",
             "fieldtype": "Section Break",
             "label": "Room Inventory"
+        },
+        {
+            "fieldname": "bed_type",
+            "fieldtype": "Select",
+            "label": "Bed Type",
+            "options": "1 King Bed\n1 Queen Bed\n2 Twin Beds\n1 Double Bed"
+        },
+        {
+            "default": "Sellable Room",
+            "fieldname": "classification",
+            "fieldtype": "Select",
+            "label": "Room Classification",
+            "options": "Sellable Room\nComplimentary Room\nStaff Room\nStorage"
+        },
+        {
+            "fieldname": "require_inspection",
+            "fieldtype": "Check",
+            "label": "Require Inspection Before Release"
+        },
+        {
+            "fieldname": "base_rate",
+            "fieldtype": "Currency",
+            "label": "Base Rate"
+        },
+        {
+            "default": "Standard BAR",
+            "fieldname": "rate_plan",
+            "fieldtype": "Select",
+            "label": "Rate Plan",
+            "options": "Standard BAR\nCorporate Rate\nPromotional"
+        },
+        {
+            "default": "1",
+            "fieldname": "keycard_enabled",
+            "fieldtype": "Check",
+            "label": "Keycard Enabled"
+        },
+        {
+            "bold": 1,
+            "fieldname": "room_description_section",
+            "fieldtype": "Section Break",
+            "label": "Room Description"
+        },
+        {
+            "fieldname": "description",
+            "fieldtype": "Long Text",
+            "label": "Room Description"
+        },
+        {
+            "fieldname": "operational_notes",
+            "fieldtype": "Long Text",
+            "label": "Operational Notes"
         }
     ],
     "links": [],
-    "modified": "2025-11-23 13:23:03.321950",
+    "modified": "2026-04-26 12:00:00.000000",
     "modified_by": "Administrator",
     "module": "Rhocom Hotel",
     "name": "Hotel Room",

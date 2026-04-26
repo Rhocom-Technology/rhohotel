@@ -1,6 +1,16 @@
 <template>
   <div class="space-y-5">
 
+    <!-- Loading / Error States -->
+    <div v-if="loading" class="flex items-center justify-center py-20">
+      <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+    <div v-else-if="loadError" class="bg-red-50 border border-red-200 rounded-xl px-6 py-10 text-center">
+      <p class="text-sm font-semibold text-red-500 mb-2">{{ loadError }}</p>
+      <button @click="loadRooms" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Retry</button>
+    </div>
+
+    <template v-if="!loading && !loadError">
     <div>
       <p class="text-xs text-gray-400">Front desk • room inventory and occupancy view</p>
     </div>
@@ -9,10 +19,12 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Room Inventory Overview</h3>
-        <p class="text-xs text-gray-400 mt-0.5">124 rooms • 41 occupied • 58 vacant clean • 12 vacant dirty • 7 out of service</p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          {{ rooms.length }} rooms • {{ occupiedCount }} occupied • {{ vacantCount }} vacant • {{ unavailableCount }} out of service
+        </p>
       </div>
       <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
+        <button @click="loadRooms" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
         <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export List</button>
         <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           @click="$router.push('/rooms/new')">Add New Room</button>
@@ -26,28 +38,28 @@
           <p class="text-xs text-gray-400">Total Rooms</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Inventory</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">124</p>
+        <p class="text-3xl font-bold text-gray-900">{{ rooms.length }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Occupied</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Active</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">41</p>
+        <p class="text-3xl font-bold text-gray-900">{{ occupiedCount }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Vacant</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-500 rounded-full">Open</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">70</p>
+        <p class="text-3xl font-bold text-gray-900">{{ vacantCount }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Out of Service</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Alert</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">7</p>
+        <p class="text-3xl font-bold text-gray-900">{{ unavailableCount }}</p>
       </div>
     </div>
 
@@ -64,12 +76,7 @@
           <p class="text-xs text-gray-500 mb-1.5">Room Type</p>
           <select v-model="filterType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Types</option>
-            <option>Standard Room</option>
-            <option>Deluxe Room</option>
-            <option>Executive Suite</option>
-            <option>Standard Twin</option>
-            <option>Junior Suite</option>
-            <option>Presidential Suite</option>
+            <option v-for="rt in roomTypeOptions" :key="rt" :value="rt">{{ rt }}</option>
           </select>
         </div>
         <div style="min-width:140px;">
@@ -85,7 +92,7 @@
           <p class="text-xs text-gray-500 mb-1.5">Floor</p>
           <select v-model="filterFloor" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Floors</option>
-            <option v-for="f in 6" :key="f" :value="String(f)">Floor {{ f }}</option>
+            <option v-for="f in floorOptions" :key="f" :value="f">{{ f }}</option>
           </select>
         </div>
         <button @click="search='';filterType='';filterOccupancy='';filterFloor='';currentPage=1"
@@ -117,7 +124,7 @@
             <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ r.no }}</td>
             <td class="px-4 py-4 text-xs text-gray-600">{{ r.type }}</td>
             <td class="px-4 py-4 text-xs text-gray-600">{{ r.floor }}</td>
-            <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ r.rate }}</td>
+            <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ formatCurrency(r.rate) }}</td>
             <td class="px-4 py-4 text-xs font-semibold" :class="occupancyClass(r.occupancy)">{{ r.occupancy }}</td>
             <td class="px-4 py-4 text-xs text-gray-600">{{ r.guest || '—' }}</td>
             <td class="px-4 py-4">
@@ -143,44 +150,67 @@
       </div>
     </div>
 
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const search = ref('')
 const filterType = ref('')
 const filterOccupancy = ref('')
 const filterFloor = ref('')
 const currentPage = ref(1)
+const loading = ref(true)
+const loadError = ref('')
 const perPage = 25
 
-const rooms = [
-  { no: '101', type: 'Standard Room',     floor: '1', rate: '₦42,000',  occupancy: 'Occupied',     guest: 'Sarah Johnson' },
-  { no: '102', type: 'Standard Room',     floor: '1', rate: '₦42,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '103', type: 'Standard Room',     floor: '1', rate: '₦42,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '104', type: 'Deluxe Room',       floor: '1', rate: '₦68,000',  occupancy: 'Occupied',     guest: 'Emeka Adeyemi' },
-  { no: '105', type: 'Deluxe Room',       floor: '1', rate: '₦68,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '106', type: 'Standard Room',     floor: '1', rate: '₦42,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '201', type: 'Executive Suite',   floor: '2', rate: '₦120,000', occupancy: 'Occupied',     guest: 'Daniel Ayo' },
-  { no: '202', type: 'Executive Suite',   floor: '2', rate: '₦120,000', occupancy: 'Vacant',       guest: '' },
-  { no: '214', type: 'Deluxe Room',       floor: '2', rate: '₦68,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '215', type: 'Deluxe Room',       floor: '2', rate: '₦68,000',  occupancy: 'Occupied',     guest: 'Fatima Ahmed' },
-  { no: '305', type: 'Executive Suite',   floor: '3', rate: '₦120,000', occupancy: 'Occupied',     guest: 'Michael Duke' },
-  { no: '306', type: 'Executive Suite',   floor: '3', rate: '₦120,000', occupancy: 'Vacant',       guest: '' },
-  { no: '402', type: 'Standard Twin',     floor: '4', rate: '₦48,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '403', type: 'Standard Twin',     floor: '4', rate: '₦48,000',  occupancy: 'Occupied',     guest: 'Ngozi Cole' },
-  { no: '404', type: 'Standard Twin',     floor: '4', rate: '₦48,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '501', type: 'Junior Suite',      floor: '5', rate: '₦95,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '502', type: 'Junior Suite',      floor: '5', rate: '₦95,000',  occupancy: 'Occupied',     guest: 'Grace Kelvin' },
-  { no: '511', type: 'Junior Suite',      floor: '5', rate: '₦95,000',  occupancy: 'Vacant',       guest: '' },
-  { no: '601', type: 'Presidential Suite',floor: '6', rate: '₦250,000', occupancy: 'Vacant',       guest: '' },
-  { no: '603', type: 'Presidential Suite',floor: '6', rate: '₦250,000', occupancy: 'Unavailable',  guest: '' },
-]
+const rooms = ref([])
+const roomTypeOptions = ref([])
+const floorOptions = ref([])
+
+onMounted(loadRooms)
+
+async function loadRooms() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.room.get_room_inventory', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Frappe-CSRF-Token': window.csrf_token || ''
+      }
+    })
+    const data = await res.json()
+    if (data.exc) {
+      loadError.value = 'Failed to load room inventory.'
+    } else {
+      const msg = data.message || {}
+      rooms.value = msg.rooms || []
+      roomTypeOptions.value = msg.room_types || []
+      floorOptions.value = msg.floors || []
+    }
+  } catch (e) {
+    loadError.value = 'Network error — please check connection.'
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+const occupiedCount = computed(() => rooms.value.filter(r => r.occupancy === 'Occupied').length)
+const vacantCount = computed(() => rooms.value.filter(r => r.occupancy === 'Vacant').length)
+const unavailableCount = computed(() => rooms.value.filter(r => r.occupancy === 'Unavailable').length)
+
+function formatCurrency(val) {
+  if (!val) return '₦0.00'
+  return `₦${Number(val).toLocaleString('en-NG', { minimumFractionDigits: 0 })}`
+}
 
 const filtered = computed(() => {
-  let list = rooms
+  let list = rooms.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(r => r.no.includes(q) || r.type.toLowerCase().includes(q))

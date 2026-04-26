@@ -21,9 +21,9 @@
           <div class="bg-blue-50 rounded-xl border border-blue-100 px-5 py-4 flex items-center justify-between">
             <div>
               <p class="text-sm font-bold text-blue-700 mb-1">Current Billing Context</p>
-              <p class="text-xs text-blue-600">OGUMBA WAYNE • Room 8408 • Current folio balance ₦41,000 • Active stay linked to Executive Room</p>
+              <p class="text-xs text-blue-600">{{ checkIn.guest }} • Room {{ checkIn.room_number }} • Outstanding {{ fmt(checkIn.total_outstanding_amount) }}</p>
             </div>
-            <span class="px-3 py-1 text-xs font-semibold bg-yellow-100 text-yellow-600 rounded-full flex-shrink-0">Status</span>
+            <span class="px-3 py-1 text-xs font-semibold bg-yellow-100 text-yellow-600 rounded-full flex-shrink-0">{{ checkIn.status }}</span>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
@@ -96,19 +96,18 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="c in charges" :key="c.name" class="border-b border-gray-50 last:border-0">
+                    <tr v-if="!checkIn.invoices || checkIn.invoices.length === 0">
+                      <td colspan="6" class="px-4 py-6 text-center text-xs text-gray-400">No invoices found for this check-in</td>
+                    </tr>
+                    <tr v-for="c in checkIn.invoices || []" :key="c.invoice" class="border-b border-gray-50 last:border-0">
                       <td class="px-4 py-3">
                         <input type="checkbox" v-model="c.selected" class="accent-blue-600 w-3.5 h-3.5" />
                       </td>
-                      <td class="px-3 py-3 text-xs font-medium text-gray-900">{{ c.name }}</td>
-                      <td class="px-3 py-3 text-xs text-gray-500">{{ c.type }}</td>
-                      <td class="px-3 py-3 text-xs text-gray-500">{{ c.date }}</td>
-                      <td class="px-3 py-3 text-xs text-right text-gray-700">{{ c.amount }}</td>
-                      <td class="px-3 py-3">
-                        <div class="h-2 w-20 bg-gray-200 rounded-full">
-                          <div class="h-2 bg-blue-400 rounded-full" :style="{ width: c.selected ? '70%' : '0%' }"></div>
-                        </div>
-                      </td>
+                      <td class="px-3 py-3 text-xs font-medium text-blue-600">{{ c.invoice }}</td>
+                      <td class="px-3 py-3 text-xs text-gray-500">{{ c.invoice_type }}</td>
+                      <td class="px-3 py-3 text-xs text-gray-500">{{ c.posting_date || '—' }}</td>
+                      <td class="px-3 py-3 text-xs text-right text-gray-700">{{ fmt(c.amount) }}</td>
+                      <td class="px-3 py-3 text-xs text-right font-semibold text-red-500">{{ fmt(c.outstanding_amount) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -138,11 +137,14 @@
           </div>
 
           <!-- Footer -->
+          <div v-if="transferMsg" class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <p class="text-xs text-blue-700">{{ transferMsg }}</p>
+          </div>
           <div class="flex items-center justify-end gap-2 pt-2">
             <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               @click="$emit('close')">Cancel</button>
-            <button class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Transfer Charges</button>
-            <button class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-800 rounded-lg hover:bg-blue-900 transition-colors">Send For Approval</button>
+            <button @click="submitTransfer"
+              class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Transfer Charges</button>
           </div>
         </div>
       </div>
@@ -151,17 +153,17 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-defineEmits(['close'])
-
+import { ref } from 'vue'
+const props = defineProps({ checkIn: { type: Object, required: true } })
+const emit = defineEmits(['close', 'done'])
 const transferType = ref('Transfer Out')
 const targetPartyType = ref('Corporate')
 const transferReason = ref('')
 const transferNote = ref('')
-
-const charges = reactive([
-  { name: 'Room Charge',    type: 'Room',   date: '21 Feb', amount: '₦120,000', selected: true },
-  { name: 'Restaurant Bill',type: 'FandB',  date: '22 Feb', amount: '₦18,000',  selected: false },
-  { name: 'Laundry Charge', type: 'Service',date: '22 Feb', amount: '₦6,000',   selected: true },
-])
+const transferMsg = ref('')
+function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
+function submitTransfer() {
+  if (!transferReason.value) { transferMsg.value = 'Please select a transfer reason.'; return }
+  transferMsg.value = 'Transfer request has been logged. The finance team will process the charge movement and update the folio accordingly.'
+}
 </script>

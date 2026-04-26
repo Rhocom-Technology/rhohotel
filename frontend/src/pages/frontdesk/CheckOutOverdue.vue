@@ -7,7 +7,7 @@
 
     <!-- Control Bar -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-end gap-2">
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
+      <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
       <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export Overdue</button>
       <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Start Check-out</button>
     </div>
@@ -19,28 +19,28 @@
           <p class="text-xs text-gray-600">Overdue Departures</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Urgent</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">8</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statCards.overdueDepartures }}</p>
       </div>
       <div class="rounded-xl px-5 py-4" style="background:#e8d5d5;">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-600">Balance Due</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Watch</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">3</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statCards.balanceDue }}</p>
       </div>
       <div class="rounded-xl px-5 py-4" style="background:#e0d5e8;">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-600">Extension Requests</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Review</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">2</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statCards.extensionRequests }}</p>
       </div>
       <div class="rounded-xl px-5 py-4" style="background:#d5e0c8;">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-600">Awaiting Inspection</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Open</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">3</p>
+        <p class="text-3xl font-bold text-gray-900">{{ statCards.awaitingInspection }}</p>
       </div>
     </div>
 
@@ -68,7 +68,6 @@
             <option value="">All Payments</option>
             <option>Settled</option>
             <option>Balance Due</option>
-            <option>Corporate Bill</option>
           </select>
         </div>
         <div style="min-width:150px;">
@@ -89,7 +88,7 @@
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 class="text-sm font-bold text-gray-900">Overdue Check-out Records</h3>
-        <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} overdue departures</p>
+        <p class="text-xs text-gray-400">Showing {{ filtered.length ? pageStart + 1 : 0 }}–{{ pageEnd }} of {{ filtered.length }} overdue departures</p>
       </div>
       <table class="w-full">
         <thead>
@@ -134,7 +133,7 @@
             :class="currentPage===p ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-white border border-gray-200'">
             {{ p }}
           </button>
-          <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white ml-1 transition-colors">Next</button>
+          <button @click="currentPage = Math.min(currentPage + 1, totalPages)" class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white ml-1 transition-colors">Next</button>
         </div>
       </div>
     </div>
@@ -143,7 +142,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
 const search = ref('')
 const overdueOnly = ref(true)
@@ -152,28 +152,58 @@ const filterRoom = ref('')
 const currentPage = ref(1)
 const perPage = 25
 
-const records = [
-  { folio: 'FOL-2026-00511', guest: 'Michael Duke',   room: '603', expectedCheckout: '18 Apr 2026 • 12:00 PM', payment: 'Balance Due',    overdueBy: '4 hrs' },
-  { folio: 'FOL-2026-00512', guest: 'Grace Kelvin',   room: '219', expectedCheckout: '18 Apr 2026 • 11:00 AM', payment: 'Settled',         overdueBy: '5 hrs' },
-  { folio: 'FOL-2026-00513', guest: 'Uche Bassey',    room: '402', expectedCheckout: '18 Apr 2026 • 10:30 AM', payment: 'Corporate Bill',  overdueBy: '5.5 hrs' },
-  { folio: 'FOL-2026-00514', guest: 'Ngozi Cole',     room: '511', expectedCheckout: '18 Apr 2026 • 10:00 AM', payment: 'Balance Due',    overdueBy: '6 hrs' },
-  { folio: 'FOL-2026-00515', guest: 'Blessing Owen',  room: '214', expectedCheckout: '18 Apr 2026 • 09:30 AM', payment: 'Settled',         overdueBy: '6.5 hrs' },
-  { folio: 'FOL-2026-00516', guest: 'Daniel Ayo',     room: '118', expectedCheckout: '18 Apr 2026 • 09:00 AM', payment: 'Settled',         overdueBy: '7 hrs' },
-  { folio: 'FOL-2026-00517', guest: 'Tunde Fashola',  room: '304', expectedCheckout: '18 Apr 2026 • 08:30 AM', payment: 'Balance Due',    overdueBy: '7.5 hrs' },
-  { folio: 'FOL-2026-00518', guest: 'Emeka Obi',      room: '402', expectedCheckout: '18 Apr 2026 • 08:00 AM', payment: 'Settled',         overdueBy: '8 hrs' },
-]
+const roomViewResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.front_desk.get_room_view_data',
+  params: {
+    filters: {
+      only_overdue: true,
+    },
+  },
+  auto: true,
+})
+
+const roomViewPayload = computed(() => {
+  const data = roomViewResource.data || {}
+  return data.message || data
+})
+
+const records = computed(() => {
+  const rows = roomViewPayload.value.rooms || []
+  return rows.map((row) => {
+    const expectedCheckoutDate = row.expected_check_out_datetime ? new Date(row.expected_check_out_datetime) : null
+    return {
+      folio: row.check_in || row.name,
+      guest: row.current_guest || '—',
+      room: row.room_number || row.name,
+      roomStatus: row.status || '—',
+      expectedCheckout: formatExpectedCheckout(expectedCheckoutDate),
+      expectedCheckoutDate,
+      payment: Number(row.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Settled',
+      overdueBy: formatOverdueBy(expectedCheckoutDate),
+    }
+  })
+})
+
+const statCards = computed(() => ({
+  overdueDepartures: records.value.length,
+  balanceDue: records.value.filter((r) => r.payment === 'Balance Due').length,
+  extensionRequests: 0,
+  awaitingInspection: records.value.filter((r) => r.roomStatus === 'Occupied').length,
+}))
 
 const filtered = computed(() => {
-  let list = records
+  let list = records.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
-      r.guest.toLowerCase().includes(q) ||
-      r.folio.toLowerCase().includes(q) ||
-      r.room.toLowerCase().includes(q)
+      String(r.guest || '').toLowerCase().includes(q) ||
+      String(r.folio || '').toLowerCase().includes(q) ||
+      String(r.room || '').toLowerCase().includes(q)
     )
   }
+  if (overdueOnly.value) list = list.filter((r) => r.overdueBy !== '—')
   if (filterPayment.value) list = list.filter(r => r.payment === filterPayment.value)
+  if (filterRoom.value) list = list.filter((r) => r.roomStatus === filterRoom.value)
   return list
 })
 
@@ -181,4 +211,32 @@ const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 
 const pageStart = computed(() => (currentPage.value - 1) * perPage)
 const pageEnd = computed(() => Math.min(pageStart.value + perPage, filtered.value.length))
 const paged = computed(() => filtered.value.slice(pageStart.value, pageEnd.value))
+
+function formatExpectedCheckout(date) {
+  if (!date || Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
+function formatOverdueBy(date) {
+  if (!date || Number.isNaN(date.getTime())) return '—'
+  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
+  if (minutes < 60) return `${minutes} min`
+  const hours = (minutes / 60).toFixed(1)
+  return `${hours} hrs`
+}
+
+watch([search, overdueOnly, filterPayment, filterRoom], () => {
+  currentPage.value = 1
+})
+
+function refreshData() {
+  roomViewResource.reload()
+}
 </script>

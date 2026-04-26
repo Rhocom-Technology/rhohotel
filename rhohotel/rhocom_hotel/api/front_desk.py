@@ -1,6 +1,195 @@
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, add_to_date
+from frappe.utils import now_datetime, add_to_date, flt, cstr
+
+
+def _safe_json(filters):
+	import json
+
+	if not filters:
+		return {}
+	if isinstance(filters, dict):
+		return filters
+	try:
+		return json.loads(filters)
+	except Exception:
+		return {}
+
+
+def _normalize_room_status(value):
+	status = cstr(value).strip().lower()
+	mapping = {
+		"vacant": "Vacant",
+		"occupied": "Occupied",
+		"reserved": "Reserved",
+		"maintenance": "Maintenance",
+	}
+	return mapping.get(status, cstr(value).strip() or "Unknown")
+
+
+def _normalize_housekeeping_status(value):
+	status = cstr(value).strip().lower()
+	mapping = {
+		"clean": "Clean",
+		"dirty": "Dirty",
+		"in progress": "In Progress",
+		"inspected": "Inspected",
+	}
+	return mapping.get(status, cstr(value).strip() or "Unknown")
+
+
+def _as_bool(value):
+	if isinstance(value, bool):
+		return value
+	if value is None:
+		return False
+	return cstr(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _compute_room_subtitle(room):
+	if room.get("overdue"):
+		return "Overdue check-out"
+	if room.get("status") == "Maintenance":
+		return "Under maintenance"
+	if room.get("housekeeping_status") == "Dirty":
+		return "Needs housekeeping attention"
+	if room.get("status") == "Reserved":
+		return "Arrival expected"
+	if room.get("expected_check_out_datetime"):
+		checkout = room.get("expected_check_out_datetime")
+		return f"Check-out: {checkout.strftime('%d %b')} • {checkout.strftime('%I:%M %p')}"
+	return "Ready for walk-in or reservation"
+
+
+def _matches_room_view_filters(room, filters):
+	query = cstr(filters.get("search")).strip().lower()
+	if query:
+		if not (
+			query in cstr(room.get("room_number")).lower()
+			or query in cstr(room.get("current_guest")).lower()
+			or query in cstr(room.get("room_type")).lower()
+		):
+			return False
+
+	if filters.get("floor") and cstr(room.get("floor")) != cstr(filters.get("floor")):
+		return False
+	if filters.get("room_type") and cstr(room.get("room_type")) != cstr(filters.get("room_type")):
+		return False
+	if filters.get("status") and cstr(room.get("status")) != cstr(filters.get("status")):
+		return False
+	if filters.get("housekeeping_status") and cstr(room.get("housekeeping_status")) != cstr(
+		filters.get("housekeeping_status")
+	):
+		return False
+	if _as_bool(filters.get("only_overdue")) and not room.get("overdue"):
+		return False
+	if _as_bool(filters.get("vip_only")) and room.get("status") != "Reserved":
+		return False
+	if _as_bool(filters.get("dirty_only")) and room.get("housekeeping_status") != "Dirty":
+		return False
+
+	return True
+
+
+@frappe.whitelist()
+def get_room_view_data(filters=None):
+	"""Return RoomView payload with normalized room rows and stats.
+
+	Optional filters keys:
+	- search
+	- floor
+	- room_type
+	- status
+	- housekeeping_status
+	- only_overdue
+	- vip_only
+	- dirty_only
+	"""
+	filters = _safe_json(filters)
+
+	rooms = frappe.get_all(
+		"Hotel Room",
+		fields=[
+			"name",
+			"room_number",
+			"room_type",
+			"floor",
+			"status",
+			"housekeeping_status",
+			"current_guest",
+		],
+		order_by="room_number asc",
+		limit_page_length=1000,
+	)
+
+	active_checkins = frappe.get_all(
+		"Hotel Room Check In",
+		filters={"status": "Checked In"},
+		fields=[
+			"name",
+			"room_number",
+			"guest",
+			"reservation_source",
+			"expected_check_out_datetime",
+			"total_outstanding_amount",
+		],
+		limit_page_length=1000,
+	)
+
+	checkin_map = {}
+	for checkin in active_checkins:
+		key = cstr(checkin.get("room_number")).strip()
+		if key:
+			checkin_map[key] = checkin
+
+	now = now_datetime()
+	room_rows = []
+	for room in rooms:
+		room_key = cstr(room.get("room_number") or room.get("name")).strip()
+		checkin = checkin_map.get(room_key) or {}
+		status = _normalize_room_status(room.get("status"))
+		housekeeping_status = _normalize_housekeeping_status(room.get("housekeeping_status"))
+		expected_checkout = checkin.get("expected_check_out_datetime")
+		overdue = bool(status == "Occupied" and expected_checkout and expected_checkout < now)
+		unpaid = flt(checkin.get("total_outstanding_amount")) > 0
+
+		row = {
+			"name": room.get("name"),
+			"room_number": room.get("room_number") or room.get("name"),
+			"room_type": room.get("room_type"),
+			"floor": room.get("floor"),
+			"status": status,
+			"housekeeping_status": housekeeping_status,
+			"current_guest": room.get("current_guest") or checkin.get("guest"),
+			"check_in": checkin.get("name"),
+			"reservation_source": checkin.get("reservation_source"),
+			"expected_check_out_datetime": expected_checkout,
+			"total_outstanding_amount": flt(checkin.get("total_outstanding_amount")),
+			"overdue": overdue,
+			"unpaid": unpaid,
+		}
+		row["subtitle"] = _compute_room_subtitle(row)
+		room_rows.append(row)
+
+	stats = {
+		"vacant": len([r for r in room_rows if r.get("status") == "Vacant"]),
+		"occupied": len([r for r in room_rows if r.get("status") == "Occupied"]),
+		"reserved": len([r for r in room_rows if r.get("status") == "Reserved"]),
+		"dirty": len([r for r in room_rows if r.get("housekeeping_status") == "Dirty"]),
+		"maintenance": len([r for r in room_rows if r.get("status") == "Maintenance"]),
+		"overdue": len([r for r in room_rows if r.get("overdue")]),
+		"unpaid": len([r for r in room_rows if r.get("unpaid")]),
+		"vip": len([r for r in room_rows if r.get("status") == "Reserved"]),
+	}
+
+	filtered = [row for row in room_rows if _matches_room_view_filters(row, filters)]
+
+	return {
+		"rooms": filtered,
+		"stats": stats,
+		"total_rooms": len(room_rows),
+		"filtered_rooms": len(filtered),
+	}
 
 
 @frappe.whitelist()

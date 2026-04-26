@@ -242,7 +242,6 @@ const reservationResource = createResource({
       'number_of_nights',
       'total_rooms',
       'total_amount',
-      'status',
       'docstatus',
     ],
     order_by: 'creation desc',
@@ -327,19 +326,15 @@ function openReservation(item) {
 }
 
 function mapReservationStatus(item) {
-  const rawStatus = item.status || ''
-  if (rawStatus) {
-    if (rawStatus.toLowerCase() === 'checked in') return 'Checked In'
-    if (rawStatus.toLowerCase() === 'checked out') return 'Checked Out'
-    if (rawStatus.toLowerCase() === 'cancelled') return 'Cancelled'
-    if (rawStatus.toLowerCase() === 'pending') return 'Pending'
-    if (rawStatus.toLowerCase() === 'confirmed') return 'Confirmed'
-    return rawStatus
-  }
   if (Number(item.docstatus) === 2) return 'Cancelled'
+  if (Number(item.docstatus) === 0) return 'Pending'
+  // docstatus === 1 (submitted)
   if (isToday(item.from_date)) return 'Due Today'
-  if (Number(item.docstatus) === 1) return 'Confirmed'
-  return 'Pending'
+  const arrivalDate = item.from_date ? new Date(item.from_date) : null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (arrivalDate && arrivalDate < today) return 'Checked In'
+  return 'Confirmed'
 }
 
 function isToday(dateValue) {

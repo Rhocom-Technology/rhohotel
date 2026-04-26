@@ -8,6 +8,7 @@
     @open-payments="router.push('/payments')"
     @check-in="checkInAllRooms"
     @cancel-reservation="cancelReservation"
+    @create-invoice="createInvoice"
   />
 </template>
 
@@ -86,6 +87,22 @@ async function cancelReservation() {
     router.push('/reservations')
   } catch (error) {
     errorMessage.value = String(error?.message || 'Could not cancel reservation.')
+    actionLoading.value = false
+  }
+}
+
+async function createInvoice() {
+  if (!reservation.value?.name) return
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callApi('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.create_sales_invoice_for_reservation', {
+      reservation_name: reservation.value.name,
+    })
+    reload()
+  } catch (error) {
+    errorMessage.value = String(error?.message || 'Could not create invoice.')
+  } finally {
     actionLoading.value = false
   }
 }

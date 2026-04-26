@@ -34,7 +34,10 @@
     </div>
 
     <!-- Body -->
-    <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
+      <div v-if="reservation.docstatus !== 1" class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-700">
+        ⚠️ This reservation must be submitted before adjusting the stay.
+      </div>
+      <div v-else style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
 
       <!-- Left: Adjustment Details -->
       <div>
@@ -74,6 +77,7 @@
           <div>
             <p class="text-xs text-gray-500 mb-1.5">New Check-out Date</p>
             <input v-model="newCheckoutDate" type="date"
+              :min="minCheckoutDate"
               class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
@@ -156,9 +160,12 @@
 
     <!-- Footer Actions -->
     <div class="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+      <div v-if="errorMsg" class="flex-1 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{{ errorMsg }}</div>
       <button @click="$emit('close')" class="px-5 py-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-      <button class="px-5 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Save Draft</button>
-      <button class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Apply</button>
+      <button :disabled="submitting || !newCheckoutDate || additionalNights === 0" @click="apply"
+        class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">
+        {{ submitting ? 'Applying…' : 'Apply Stay Adjustment' }}
+      </button>
     </div>
 
   </div>
@@ -168,20 +175,60 @@
 import { ref, computed } from 'vue'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
-defineEmits(['close'])
+const emit = defineEmits(['close', 'done'])
 
 const adjustmentType = ref('Extend Stay')
 const adjustmentReason = ref('Guest Request')
 const newCheckoutDate = ref('')
 const adjustmentNotes = ref('')
+const submitting = ref(false)
+const errorMsg = ref('')
+
+// Earliest valid checkout: one day after check-in
+const minCheckoutDate = computed(() => {
+  if (!props.reservation.from_date) return ''
+  const d = new Date(props.reservation.from_date)
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().slice(0, 10)
+})
+
+// Correct rate per night: subtotal / number_of_nights
+const ratePerNight = computed(() => {
+  const nights = Number(props.reservation.number_of_nights) || 1
+  return Number(props.reservation.subtotal || 0) / nights
+})
 
 const additionalNights = computed(() => {
   if (!newCheckoutDate.value || !props.reservation.to_date) return 0
   const current = new Date(props.reservation.to_date)
   const newDate = new Date(newCheckoutDate.value)
   const diff = Math.round((newDate - current) / (1000 * 60 * 60 * 24))
-  return diff > 0 ? diff : 0
+  return diff
 })
+
+function parseErr(data) {
+  try { return JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { return 'Adjustment failed.' }
+}
+
+async function apply() {
+  if (!newCheckoutDate.value || additionalNights.value === 0) return
+  submitting.value = true; errorMsg.value = ''
+  try {
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.adjust_front_desk_reservation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
+      body: new URLSearchParams({
+        reservation_name: props.reservation.name,
+        new_checkout_date: newCheckoutDate.value,
+        new_checkout_time: '12:00:00',
+        new_discount: 0,
+      })
+    })
+    const data = await res.json()
+    if (data.exc) { errorMsg.value = parseErr(data); return }
+    emit('done'); emit('close')
+  } catch { errorMsg.value = 'Network error. Please try again.' } finally { submitting.value = false }
+}
 
 function formatDate(dt) {
   if (!dt) return '—'
