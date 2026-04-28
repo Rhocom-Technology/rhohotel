@@ -11,6 +11,7 @@
     ],
     "python.testing.pytestEnabled": false,
     "chat.tools.terminal.autoApprove": {
-        "bench": true
+        "bench": true,
+        "npm run build": true
     }
 }

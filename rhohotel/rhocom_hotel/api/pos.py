@@ -462,7 +462,7 @@ def get_pos_dashboard_stats():
     open_drafts = frappe.db.count("POS Invoice", {"docstatus": 0})
 
     shift_differences = frappe.db.sql("""
-        SELECT COALESCE(SUM(difference_amount), 0)
+        SELECT COALESCE(SUM(grand_total), 0)
         FROM `tabPOS Closing Entry`
         WHERE posting_date = %s AND docstatus = 1
     """, today)[0][0] or 0

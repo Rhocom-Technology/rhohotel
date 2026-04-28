@@ -1,5 +1,6 @@
 <template>
   <div class="space-y-4">
+    <div>PointOfSales Component Loaded</div>
 
     <!-- Top bar info -->
     <div>
@@ -20,11 +21,11 @@
         <button class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Hold Sale
         </button>
-        <button @click="showDraftOrders = true"
+        <button
           class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Draft Orders
         </button>
-        <button @click="showOpenTables = true"
+        <button
           class="btn-hover px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
           Open Tables
         </button>
@@ -49,7 +50,7 @@
         </div>
 
         <!-- Category tabs -->
-        <div class="flex items-center gap-2 flex-wrap mb-4">
+        <!-- <div class="flex items-center gap-2 flex-wrap mb-4">
           <button v-for="cat in categories" :key="cat"
             @click="activeCategory = cat"
             class="px-4 py-2 text-xs font-medium rounded-lg transition-all duration-200"
@@ -58,14 +59,14 @@
               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'">
             {{ cat }}
           </button>
-        </div>
+        </div> -->
 
         <!-- Menu loading / error -->
-        <div v-if="menuResource.loading" class="py-12 text-center text-xs text-gray-400">Loading menu items…</div>
-        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div>
+        <!-- <div v-if="menuResource.loading" class="py-12 text-center text-xs text-gray-400">Loading menu items…</div>
+        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div> -->
 
         <!-- Menu grid -->
-        <div v-else style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <!-- <div v-else style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
           <div v-for="item in filteredMenuItems" :key="item.id"
             @click="addToCart(item)"
             class="menu-card bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer relative select-none"
@@ -86,7 +87,7 @@
               <p class="text-xs font-bold text-blue-600 mt-0.5">₦{{ item.price.toLocaleString() }}</p>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
 
       <!-- Right: Current Sale -->
@@ -107,7 +108,7 @@
                   class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" />
                 <div v-if="billToFocused || billToSearch"
                   class="dropdown-panel absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
-                  <div v-if="billToResults.length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">No results</div>
+                  <!-- <div v-if="billToResults.length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">No results</div>
                   <div v-for="r in billToResults" :key="r.id"
                     @mousedown="selectBillTo(r)"
                     class="px-4 py-3 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-3 transition-colors">
@@ -117,7 +118,7 @@
                       <p class="font-semibold text-gray-900">{{ r.name }}</p>
                       <p class="text-gray-400 mt-0.5">{{ r.room ? `Room ${r.room}` : r.type }}</p>
                     </div>
-                  </div>
+                  </div> -->
                 </div>
               </div>
               <div v-if="settlementMethod === 'Post to Room'" class="relative w-32">
@@ -128,12 +129,12 @@
                   class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" />
                 <div v-if="roomFocused || roomNumber"
                   class="dropdown-panel absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
-                  <div v-for="r in filteredRoomSuggestions" :key="r.room"
+                  <!-- <div v-for="r in filteredRoomSuggestions" :key="r.room"
                     @mousedown="selectRoomFromNumber(r)"
                     class="px-3 py-2.5 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors">
                     <span class="font-bold text-gray-900">Room {{ r.room }}</span>
                     <span class="text-gray-400 ml-2">{{ r.guest }}</span>
-                  </div>
+                  </div> -->
                 </div>
               </div>
             </div>
@@ -263,7 +264,7 @@
     </Teleport>
 
     <!-- Modals -->
-    <DraftOrdersModal v-model="showDraftOrders" />
+    <!-- <DraftOrdersModal v-model="showDraftOrders" />
     <OpenTablesModal v-model="showOpenTables" />
     <PostToRoomModal
       v-model="showPostToRoom"
@@ -279,7 +280,7 @@
       :grand-total="grandTotal"
       :cart-items="cart"
       :service-charge="serviceCharge"
-    />
+    /> -->
   </div>
 </template>
 
@@ -292,13 +293,15 @@ import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import PostToRoomModal from '@/components/pos/PostToRoomModal.vue'
 import SplitBillModal from '@/components/pos/SplitBillModal.vue'
 
+console.log('PointOfSales component loaded')
+
 const router = useRouter()
 
 // ── Modals ─────────────────────────────────────────────────────────
-const showDraftOrders = ref(false)
-const showOpenTables = ref(false)
-const showPostToRoom = ref(false)
-const showSplitBill = ref(false)
+// const showDraftOrders = ref(false)
+// const showOpenTables = ref(false)
+// const showPostToRoom = ref(false)
+// const showSplitBill = ref(false)
 
 // ── POS state ──────────────────────────────────────────────────────
 const menuSearch = ref('')
@@ -316,91 +319,92 @@ const chargeSuccess = ref('')
 const charging = ref(false)
 
 // ── API: Menu Items ────────────────────────────────────────────────
-const menuResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
-  auto: true,
-})
+// const menuResource = createResource({
+//   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
+//   initialData: null,
+//   auto: false,
+// })
 
-const categoriesResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
-  auto: true,
-})
+// const categoriesResource = createResource({
+//   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
+//   auto: false,
+// })
 
 // ── API: Occupied Rooms (for room-number dropdown) ─────────────────
-const occupiedRoomsResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
-  auto: true,
-})
+// const occupiedRoomsResource = createResource({
+//   url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
+//   auto: false,
+// })
 
 // ── API: Bill-To search ────────────────────────────────────────────
-const billToResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
-  params: { query: '' },
-  auto: true,
-})
+// const billToResource = createResource({
+//   url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
+//   params: { query: '' },
+//   auto: false,
+// })
 
-let billToTimer = null
-watch(billToSearch, (q) => {
-  clearTimeout(billToTimer)
-  billToTimer = setTimeout(() => {
-    billToResource.params = { query: q }
-    billToResource.reload()
-  }, 300)
-})
+// let billToTimer = null
+// watch(billToSearch, (q) => {
+//   clearTimeout(billToTimer)
+//   billToTimer = setTimeout(() => {
+//     billToResource.params = { query: q }
+//     billToResource.reload()
+//   }, 300)
+// })
 
 // ── Computed: categories ───────────────────────────────────────────
-const categories = computed(() => {
-  const list = categoriesResource.data || []
-  return ['All Items', ...list]
-})
+// const categories = computed(() => {
+//   const list = categoriesResource.data || []
+//   return ['All Items', ...list]
+// })
 
 // ── Computed: menu items ───────────────────────────────────────────
-const allMenuItems = computed(() =>
-  (menuResource.data || []).map(it => ({
-    id: it.item_code,
-    item_code: it.item_code,
-    name: it.name,
-    category: it.category,
-    price: Number(it.price) || 0,
-    stock: Number(it.stock),
-    image: it.image || null,
-  }))
-)
+// const allMenuItems = computed(() =>
+//   (menuResource.data || []).map(it => ({
+//     id: it.item_code,
+//     item_code: it.item_code,
+//     name: it.name,
+//     category: it.category,
+//     price: Number(it.price) || 0,
+//     stock: Number(it.stock),
+//     image: it.image || null,
+//   }))
+// )
 
-const filteredMenuItems = computed(() => {
-  let items = allMenuItems.value
-  if (activeCategory.value !== 'All Items') {
-    items = items.filter(i => i.category === activeCategory.value)
-  }
-  if (menuSearch.value) {
-    const q = menuSearch.value.toLowerCase()
-    items = items.filter(i => i.name.toLowerCase().includes(q))
-  }
-  return items
-})
+// const filteredMenuItems = computed(() => {
+//   let items = allMenuItems.value
+//   if (activeCategory.value !== 'All Items') {
+//     items = items.filter(i => i.category === activeCategory.value)
+//   }
+//   if (menuSearch.value) {
+//     const q = menuSearch.value.toLowerCase()
+//     items = items.filter(i => i.name.toLowerCase().includes(q))
+//   }
+//   return items
+// })
 
 // ── Computed: bill-to results ──────────────────────────────────────
-const billToResults = computed(() =>
-  (billToResource.data || []).map(r => ({
-    id: r.id,
-    name: r.name,
-    room: r.room || null,
-    type: r.type,
-  }))
-)
+// const billToResults = computed(() =>
+//   (billToResource.data || []).map(r => ({
+//     id: r.id,
+//     name: r.name,
+//     room: r.room || null,
+//     type: r.type,
+//   }))
+// )
 
 // ── Computed: room suggestions ─────────────────────────────────────
-const occupiedRooms = computed(() => occupiedRoomsResource.data || [])
+// const occupiedRooms = computed(() => occupiedRoomsResource.data || [])
 
-const filteredRoomSuggestions = computed(() => {
-  const rooms = occupiedRooms.value
-  if (!roomNumber.value) return rooms.slice(0, 5)
-  const q = roomNumber.value.toLowerCase()
-  return rooms.filter(r =>
-    (r.room || '').includes(q) ||
-    (r.guest || '').toLowerCase().includes(q)
-  )
-})
+// const filteredRoomSuggestions = computed(() => {
+//   const rooms = occupiedRooms.value
+//   if (!roomNumber.value) return rooms.slice(0, 5)
+//   const q = roomNumber.value.toLowerCase()
+//   return rooms.filter(r =>
+//     (r.room || '').includes(q) ||
+//     (r.guest || '').toLowerCase().includes(q)
+//   )
+// })
 
 // ── Cart ───────────────────────────────────────────────────────────
 const cart = ref([])
@@ -451,20 +455,20 @@ function selectRoomFromNumber(r) {
 }
 
 // ── API: Create POS Invoice (Cash / POS terminal) ──────────────────
-const chargeResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
-  onSuccess(data) {
-    chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
-    clearCart()
-    charging.value = false
-    setTimeout(() => { chargeSuccess.value = '' }, 4000)
-  },
-  onError(err) {
-    chargeError.value = err.message || 'Failed to create invoice'
-    charging.value = false
-    setTimeout(() => { chargeError.value = '' }, 6000)
-  },
-})
+// const chargeResource = createResource({
+//   url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
+//   onSuccess(data) {
+//     chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
+//     clearCart()
+//     charging.value = false
+//     setTimeout(() => { chargeSuccess.value = '' }, 4000)
+//   },
+//   onError(err) {
+//     chargeError.value = err.message || 'Failed to create invoice'
+//     charging.value = false
+//     setTimeout(() => { chargeError.value = '' }, 6000)
+//   },
+// })
 
 function clearCart() {
   cart.value = []
@@ -476,7 +480,7 @@ function clearCart() {
 // ── Settlement ─────────────────────────────────────────────────────
 function setSettlementMethod(method) {
   settlementMethod.value = method
-  if (method === 'Split') { showSplitBill.value = true; return }
+  // if (method === 'Split') { showSplitBill.value = true; return }
   if (method === 'Post to Room') return
   roomNumber.value = ''
 }
@@ -496,17 +500,17 @@ function onChargeNow() {
 
   const mopMap = { Cash: 'Cash', POS: 'Bank Transfer' }
   charging.value = true
-  chargeResource.submit({
-    items: JSON.stringify(cart.value.map(i => ({
-      item_code: i.item_code || i.id,
-      qty: i.qty,
-      price: i.price,
-    }))),
-    mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
-    customer: selectedBillTo.value?.name || null,
-    service_charge: serviceCharge.value,
-    kitchen_note: kitchenNote.value || null,
-  })
+  // chargeResource.submit({
+  //   items: JSON.stringify(cart.value.map(i => ({
+  //     item_code: i.item_code || i.id,
+  //     qty: i.qty,
+  //     price: i.price,
+  //   }))),
+  //   mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
+  //   customer: selectedBillTo.value?.name || null,
+  //   service_charge: serviceCharge.value,
+  //   kitchen_note: kitchenNote.value || null,
+  // })
 }
 
 function onRoomSelected(room) {
