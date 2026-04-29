@@ -46,21 +46,21 @@
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Total Charges</p>
-        <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(data.total_invoice || data.total_charges) }}</p>
+        <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(computedTotalCharges) }}</p>
         <p class="text-xs text-blue-500 font-medium mt-1">Room, F&amp;B, incidentals</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Amount Paid</p>
-        <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(data.total_paid) }}</p>
+        <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(computedTotalPaid) }}</p>
         <p class="text-xs text-green-600 font-medium mt-1">Payments received</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Outstanding</p>
-        <p class="text-2xl font-bold" :class="data.total_outstanding > 0 ? 'text-red-500' : 'text-green-500'">
-          {{ formatCurrency(data.total_outstanding) }}
+        <p class="text-2xl font-bold" :class="computedOutstanding > 0 ? 'text-red-500' : 'text-green-500'">
+          {{ formatCurrency(computedOutstanding) }}
         </p>
-        <p class="text-xs font-medium mt-1" :class="data.total_outstanding > 0 ? 'text-red-400' : 'text-green-500'">
-          {{ data.total_outstanding > 0 ? 'Must settle before departure' : 'Fully paid' }}
+        <p class="text-xs font-medium mt-1" :class="computedOutstanding > 0 ? 'text-red-400' : 'text-green-500'">
+          {{ computedOutstanding > 0 ? 'Must settle before departure' : 'Fully paid' }}
         </p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
@@ -101,8 +101,8 @@
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Payment Status</p>
               <div class="px-3 py-2.5 text-xs font-semibold rounded-lg border"
-                :class="data.total_outstanding > 0 ? 'text-red-500 bg-red-50 border-red-200' : 'text-green-600 bg-green-50 border-green-200'">
-                {{ data.total_outstanding > 0 ? 'Outstanding balance remains' : 'Fully settled' }}
+                :class="computedOutstanding > 0 ? 'text-red-500 bg-red-50 border-red-200' : 'text-green-600 bg-green-50 border-green-200'">
+                {{ computedOutstanding > 0 ? 'Outstanding balance remains' : 'Fully settled' }}
               </div>
             </div>
           </div>
@@ -139,8 +139,8 @@
               <tfoot v-if="data.invoices && data.invoices.length > 0">
                 <tr class="border-t border-gray-200 bg-gray-50">
                   <td colspan="3" class="px-5 py-3 text-xs font-bold text-gray-900">Total</td>
-                  <td class="px-5 py-3 text-xs font-bold text-right text-gray-900">{{ formatCurrency(data.total_invoice) }}</td>
-                  <td class="px-5 py-3 text-xs font-bold text-right text-red-500">{{ formatCurrency(data.total_outstanding) }}</td>
+                  <td class="px-5 py-3 text-xs font-bold text-right text-gray-900">{{ formatCurrency(computedTotalCharges) }}</td>
+                  <td class="px-5 py-3 text-xs font-bold text-right text-red-500">{{ formatCurrency(computedOutstanding) }}</td>
                 </tr>
               </tfoot>
             </table>
@@ -162,10 +162,10 @@
           <h3 class="text-sm font-bold text-gray-900">Checkout Control Panel</h3>
 
           <!-- Balance Alert -->
-          <div v-if="data.total_outstanding > 0" class="bg-red-50 rounded-xl border border-red-200 px-4 py-4">
+          <div v-if="computedOutstanding > 0" class="bg-red-50 rounded-xl border border-red-200 px-4 py-4">
             <p class="text-xs font-bold text-red-600 mb-1">Outstanding Balance Alert</p>
             <p class="text-xs text-red-500 leading-relaxed">
-              Guest owes {{ formatCurrency(data.total_outstanding) }}.
+              Guest owes {{ formatCurrency(computedOutstanding) }}.
               Receive payment or arrange bill transfer before completing checkout.
             </p>
           </div>
@@ -250,7 +250,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -265,6 +265,22 @@ const data = ref({
   total_outstanding: 0,
   total_invoice: 0,
   total_charges: 0,
+})
+
+// Computed values that correctly derive from invoice and payment data
+const computedTotalCharges = computed(() => {
+  const fromInvoices = (data.value.invoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
+  return fromInvoices || data.value.total_invoice || data.value.total_charges || 0
+})
+
+const computedTotalPaid = computed(() => {
+  const fromPayments = (data.value.payments || []).reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0)
+  return fromPayments || data.value.total_paid || 0
+})
+
+const computedOutstanding = computed(() => {
+  const fromInvoices = (data.value.invoices || []).reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
+  return fromInvoices || data.value.total_outstanding || 0
 })
 
 const remarks = ref('')

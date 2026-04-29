@@ -65,7 +65,9 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-4">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Current Check-in Date</p>
-            <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ formatDate(reservation.from_date) }}</div>
+            <input v-if="adjustmentType === 'Change Dates'" v-model="newCheckinDate" type="date"
+              class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div v-else class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ formatDate(reservation.from_date) }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Current Check-out Date</p>
@@ -118,7 +120,7 @@
           <div class="space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-xs text-gray-500">Current Rate / Night</span>
-              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(reservation.subtotal) }}</span>
+              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(ratePerNight) }}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-gray-500">Extra Nights</span>
@@ -126,7 +128,7 @@
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-gray-500">Additional Room Charges</span>
-              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency((reservation.subtotal || 0) * additionalNights) }}</span>
+              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(ratePerNight * additionalNights) }}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-gray-500">Taxes & Fees</span>
@@ -134,7 +136,7 @@
             </div>
             <div class="flex items-center justify-between pt-2 border-t border-gray-100">
               <span class="text-xs font-bold text-gray-900">New Balance Impact</span>
-              <span class="text-xs font-bold text-gray-900">{{ formatCurrency((reservation.subtotal || 0) * additionalNights) }}</span>
+              <span class="text-xs font-bold text-gray-900">{{ formatCurrency(ratePerNight * additionalNights) }}</span>
             </div>
           </div>
           <div class="mt-2">
@@ -180,6 +182,7 @@ const emit = defineEmits(['close', 'done'])
 const adjustmentType = ref('Extend Stay')
 const adjustmentReason = ref('Guest Request')
 const newCheckoutDate = ref('')
+const newCheckinDate = ref('')
 const adjustmentNotes = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -214,15 +217,19 @@ async function apply() {
   if (!newCheckoutDate.value || additionalNights.value === 0) return
   submitting.value = true; errorMsg.value = ''
   try {
+    const params = {
+      reservation_name: props.reservation.name,
+      new_checkout_date: newCheckoutDate.value,
+      new_checkout_time: '12:00:00',
+      new_discount: 0,
+    }
+    if (adjustmentType.value === 'Change Dates' && newCheckinDate.value) {
+      params.new_checkin_date = newCheckinDate.value
+    }
     const res = await fetch('/api/method/rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.adjust_front_desk_reservation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({
-        reservation_name: props.reservation.name,
-        new_checkout_date: newCheckoutDate.value,
-        new_checkout_time: '12:00:00',
-        new_discount: 0,
-      })
+      body: new URLSearchParams(params)
     })
     const data = await res.json()
     if (data.exc) { errorMsg.value = parseErr(data); return }

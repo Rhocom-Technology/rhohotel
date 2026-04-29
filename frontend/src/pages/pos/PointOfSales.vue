@@ -50,7 +50,7 @@
         </div>
 
         <!-- Category tabs -->
-        <!-- <div class="flex items-center gap-2 flex-wrap mb-4">
+        <div class="flex items-center gap-2 flex-wrap mb-4">
           <button v-for="cat in categories" :key="cat"
             @click="activeCategory = cat"
             class="px-4 py-2 text-xs font-medium rounded-lg transition-all duration-200"
@@ -59,14 +59,14 @@
               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'">
             {{ cat }}
           </button>
-        </div> -->
+        </div>
 
         <!-- Menu loading / error -->
-        <!-- <div v-if="menuResource.loading" class="py-12 text-center text-xs text-gray-400">Loading menu items…</div>
-        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div> -->
+        <div v-if="menuResource.loading" class="py-12 text-center text-xs text-gray-400">Loading menu items…</div>
+        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div>
 
         <!-- Menu grid -->
-        <!-- <div v-else style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div v-else style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
           <div v-for="item in filteredMenuItems" :key="item.id"
             @click="addToCart(item)"
             class="menu-card bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer relative select-none"
@@ -87,7 +87,7 @@
               <p class="text-xs font-bold text-blue-600 mt-0.5">₦{{ item.price.toLocaleString() }}</p>
             </div>
           </div>
-        </div> -->
+        </div>
       </div>
 
       <!-- Right: Current Sale -->
@@ -319,16 +319,16 @@ const chargeSuccess = ref('')
 const charging = ref(false)
 
 // ── API: Menu Items ────────────────────────────────────────────────
-// const menuResource = createResource({
-//   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
-//   initialData: null,
-//   auto: false,
-// })
+const menuResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
+  initialData: null,
+  auto: true,
+})
 
-// const categoriesResource = createResource({
-//   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
-//   auto: false,
-// })
+const categoriesResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
+  auto: true,
+})
 
 // ── API: Occupied Rooms (for room-number dropdown) ─────────────────
 // const occupiedRoomsResource = createResource({
@@ -353,35 +353,35 @@ const charging = ref(false)
 // })
 
 // ── Computed: categories ───────────────────────────────────────────
-// const categories = computed(() => {
-//   const list = categoriesResource.data || []
-//   return ['All Items', ...list]
-// })
+const categories = computed(() => {
+  const list = categoriesResource.data || []
+  return ['All Items', ...list]
+})
 
 // ── Computed: menu items ───────────────────────────────────────────
-// const allMenuItems = computed(() =>
-//   (menuResource.data || []).map(it => ({
-//     id: it.item_code,
-//     item_code: it.item_code,
-//     name: it.name,
-//     category: it.category,
-//     price: Number(it.price) || 0,
-//     stock: Number(it.stock),
-//     image: it.image || null,
-//   }))
-// )
+const allMenuItems = computed(() =>
+  (menuResource.data || []).map(it => ({
+    id: it.item_code,
+    item_code: it.item_code,
+    name: it.name,
+    category: it.category,
+    price: Number(it.price) || 0,
+    stock: Number(it.stock),
+    image: it.image || null,
+  }))
+)
 
-// const filteredMenuItems = computed(() => {
-//   let items = allMenuItems.value
-//   if (activeCategory.value !== 'All Items') {
-//     items = items.filter(i => i.category === activeCategory.value)
-//   }
-//   if (menuSearch.value) {
-//     const q = menuSearch.value.toLowerCase()
-//     items = items.filter(i => i.name.toLowerCase().includes(q))
-//   }
-//   return items
-// })
+const filteredMenuItems = computed(() => {
+  let items = allMenuItems.value
+  if (activeCategory.value !== 'All Items') {
+    items = items.filter(i => i.category === activeCategory.value)
+  }
+  if (menuSearch.value) {
+    const q = menuSearch.value.toLowerCase()
+    items = items.filter(i => i.name.toLowerCase().includes(q))
+  }
+  return items
+})
 
 // ── Computed: bill-to results ──────────────────────────────────────
 // const billToResults = computed(() =>

@@ -127,6 +127,12 @@
               <button v-if="isReady"
                 class="px-4 py-2.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                 @click="goNewCheckIn">New Check-in</button>
+              <button v-if="isReady"
+                class="px-4 py-2.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+                @click="goMakeReservation">Make Reservation</button>
+              <button v-if="isReady"
+                class="px-4 py-2.5 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+                @click="blockRoom">Block Room</button>
               <button v-if="!isReady" class="px-4 py-2.5 text-xs font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
                 @click="goCheckout">Check-out</button>
               <button v-if="!isReady" class="px-4 py-2.5 text-xs font-bold text-white bg-teal-500 rounded-lg hover:bg-teal-600 transition-colors"
@@ -234,6 +240,24 @@ function goCheckin() {
   emit('close')
   router.push('/check-ins/' + (props.room.check_in || props.room.name))
 }
+function goMakeReservation() {
+  emit('close')
+  router.push({ path: '/reservations/new', query: { type: 'Individual', room: props.room.room_number || props.room.name, room_type: props.room.room_type || '' } })
+}
+
+async function blockRoom() {
+  try {
+    await fetch('/api/method/rhohotel.rhocom_hotel.api.front_desk.block_room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
+      body: new URLSearchParams({ room: props.room.room_number || props.room.name }),
+    })
+    emit('close')
+  } catch (e) {
+    console.error('Failed to block room', e)
+  }
+}
+
 function goMaintenance() { emit('close'); router.push('/maintenance/new-request') }
 function goHousekeeping() { emit('close'); router.push('/housekeeping/task/new') }
 function goRoomDetails() { emit('close'); router.push('/rooms/' + props.room.room_number) }

@@ -52,6 +52,7 @@ def get_pos_menu_items(search=None, category=None):
 
 
 @frappe.whitelist()
+@frappe.whitelist()
 def get_pos_item_categories():
     """Return distinct item groups that have active sales items."""
     groups = frappe.db.sql("""
@@ -110,6 +111,7 @@ def search_pos_bill_to(query=""):
 # Occupied Rooms (for Post to Room)
 # ─────────────────────────────────────────────────────────────────────────────
 
+@frappe.whitelist()
 @frappe.whitelist()
 def get_occupied_rooms_for_pos(search=None):
     """Return rooms with active check-ins for the Post to Room feature."""

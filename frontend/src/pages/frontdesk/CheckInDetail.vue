@@ -174,6 +174,7 @@
             <thead>
               <tr class="border-b border-gray-100 bg-gray-50">
                 <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Invoice</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Type</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Posting Date</th>
                 <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Grand Total</th>
                 <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Balance</th>
@@ -181,14 +182,15 @@
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="4" class="py-6 text-center">
+                <td colspan="5" class="py-6 text-center">
                   <div class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                 </td>
               </tr>
               <tr v-for="inv in invoices" :key="inv.invoice"
                 class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3 text-xs text-gray-700">{{ inv.invoice || '—' }}</td>
-                <td class="px-3 py-3 text-xs text-gray-500">—</td>
+                <td class="px-3 py-3 text-xs text-gray-500">{{ inv.invoice_type || 'Room Charge' }}</td>
+                <td class="px-3 py-3 text-xs text-gray-500">{{ inv.posting_date ? formatDateTime(inv.posting_date).split(',')[0] : formatDateTime(checkIn.check_in_datetime).split(',')[0] }}</td>
                 <td class="px-4 py-3 text-xs text-right text-gray-700">{{ formatCurrency(inv.amount) }}</td>
                 <td class="px-4 py-3 text-xs text-right font-semibold"
                   :class="(inv.outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-gray-400'">
@@ -196,12 +198,12 @@
                 </td>
               </tr>
               <tr v-if="!loading && invoices.length === 0">
-                <td colspan="4" class="py-8 text-center text-xs text-gray-400">No invoices found</td>
+                <td colspan="5" class="py-8 text-center text-xs text-gray-400">No invoices found</td>
               </tr>
             </tbody>
             <tfoot v-if="invoices.length > 0">
               <tr class="border-t border-gray-200">
-                <td colspan="2" class="px-4 py-3 text-xs font-bold text-gray-900">Invoice Total</td>
+                <td colspan="3" class="px-4 py-3 text-xs font-bold text-gray-900">Invoice Total</td>
                 <td class="px-4 py-3 text-xs font-bold text-right text-gray-900">{{ formatCurrency(invoiceTotal) }}</td>
                 <td class="px-4 py-3 text-xs font-bold text-right text-red-500">{{ formatCurrency(outstandingTotal) }}</td>
               </tr>
@@ -214,19 +216,26 @@
           <div class="space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-gray-700">Total Bill</span>
-              <span class="text-xs font-bold text-gray-900">{{ formatCurrency(checkIn.total_charges) }}</span>
+              <span class="text-xs font-bold text-gray-900">{{ formatCurrency(invoiceTotal || checkIn.total_charges) }}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-gray-700">Total Payment</span>
               <span class="text-xs font-bold text-green-600">
-                {{ formatCurrency((checkIn.total_charges || 0) - (checkIn.total_outstanding_amount || 0)) }}
+                {{ formatCurrency((invoiceTotal || checkIn.total_charges || 0) - (outstandingTotal || checkIn.total_outstanding_amount || 0)) }}
               </span>
             </div>
             <div class="flex items-center justify-between pt-2 border-t border-gray-200">
               <span class="text-xs font-bold text-gray-900">Outstanding</span>
               <span class="text-xs font-bold"
-                :class="(checkIn.total_outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-green-500'">
-                {{ formatCurrency(checkIn.total_outstanding_amount) }}
+                :class="(outstandingTotal || checkIn.total_outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-green-500'">
+                {{ formatCurrency(outstandingTotal || checkIn.total_outstanding_amount) }}
+              </span>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-xs text-gray-500">Payment Status</span>
+              <span class="text-xs font-semibold"
+                :class="(outstandingTotal || checkIn.total_outstanding_amount || 0) > 0 ? 'text-orange-500' : 'text-green-600'">
+                {{ (outstandingTotal || checkIn.total_outstanding_amount || 0) > 0 ? 'Payment Pending' : 'Fully Paid' }}
               </span>
             </div>
           </div>
@@ -236,8 +245,34 @@
 
     <!-- Transfer History Tab -->
     <div v-if="activeTab === 'Transfer History'"
-      class="bg-white rounded-xl border border-gray-200 px-6 py-16 text-center">
-      <p class="text-sm text-gray-400">No transfer history available</p>
+      class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100">
+        <h3 class="text-sm font-bold text-gray-900">Transfer History</h3>
+      </div>
+      <div v-if="!checkIn.transfer_history || checkIn.transfer_history.length === 0" class="px-6 py-16 text-center">
+        <p class="text-sm text-gray-400">No transfer history available</p>
+      </div>
+      <table v-else class="w-full">
+        <thead>
+          <tr class="border-b border-gray-100 bg-gray-50">
+            <th class="text-left text-xs font-medium text-gray-500 px-5 py-3">Date</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">From Room</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">To Room</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Reason</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Transferred By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(transfer, idx) in checkIn.transfer_history" :key="idx"
+            class="border-b border-gray-50 last:border-0">
+            <td class="px-5 py-3 text-xs text-gray-700">{{ formatDateTime(transfer.date || transfer.creation) }}</td>
+            <td class="px-4 py-3 text-xs text-gray-700">{{ transfer.from_room || '—' }}</td>
+            <td class="px-4 py-3 text-xs text-gray-700">{{ transfer.to_room || '—' }}</td>
+            <td class="px-4 py-3 text-xs text-gray-500">{{ transfer.reason || transfer.note || '—' }}</td>
+            <td class="px-4 py-3 text-xs text-gray-500">{{ transfer.transferred_by || transfer.owner || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Modals -->

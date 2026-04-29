@@ -56,6 +56,9 @@
             <option v-for="g in individualGuests" :key="g.name" :value="g.name">{{ g.hotel_guest_name || g.name }}</option>
           </select>
         </div>
+        <div class="flex items-end">
+          <button @click="goToNewGuest" type="button" class="w-full px-3 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">+ New Guest</button>
+        </div>
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Guest/Contact Name</p>
           <input v-model="form.primary_guest_name" type="text" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
@@ -151,9 +154,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { createResource } from 'frappe-ui'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({ type: { type: String, required: true } })
 const emit = defineEmits(['close', 'saved'])
+const router = useRouter()
 
 const reservationType = ref(props.type === 'Corporate' ? 'Corporate' : 'Individual')
 const form = ref({
@@ -306,6 +311,10 @@ function addRoom() {
 
 function removeRoom(roomName) {
   selectedRooms.value = selectedRooms.value.filter((r) => r.name !== roomName)
+}
+
+function goToNewGuest() {
+  router.push('/guests/new')
 }
 
 function validateForm() {

@@ -122,7 +122,8 @@
       <table v-else class="w-full">
         <thead>
           <tr class="border-b border-gray-100">
-            <th class="text-left text-xs font-medium text-gray-500 px-6 py-3">Guest</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-6 py-3">Guest ID</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Guest</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Contact</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Stay History</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Loyalty</th>
@@ -132,8 +133,12 @@
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-for="guest in paginated" :key="guest.name" class="hover:bg-gray-50 transition-colors">
-            <!-- Guest -->
+            <!-- Guest ID -->
             <td class="px-6 py-4">
+              <p class="text-xs font-medium text-gray-600">{{ guest.name }}</p>
+            </td>
+            <!-- Guest -->
+            <td class="px-4 py-4">
               <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                   :style="avatarStyle(guest.hotel_guest_name)">

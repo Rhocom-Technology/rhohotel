@@ -9,6 +9,7 @@
     @check-in="checkInAllRooms"
     @cancel-reservation="cancelReservation"
     @create-invoice="createInvoice"
+    @submit-reservation="submitReservation"
   />
 </template>
 
@@ -102,6 +103,20 @@ async function createInvoice() {
     reload()
   } catch (error) {
     errorMessage.value = String(error?.message || 'Could not create invoice.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function submitReservation() {
+  if (!reservation.value?.name) return
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callApi('frappe.client.submit', { doc: { doctype: 'Hotel Front Desk Reservation', name: reservation.value.name } })
+    reload()
+  } catch (error) {
+    errorMessage.value = String(error?.message || 'Could not submit reservation.')
   } finally {
     actionLoading.value = false
   }

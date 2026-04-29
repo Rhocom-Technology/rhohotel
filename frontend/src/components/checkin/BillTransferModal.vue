@@ -50,8 +50,21 @@
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 mb-1.5">Target Party</p>
-                  <input type="text" placeholder="Select corporate account or individual guest"
-                    class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <div class="relative">
+                    <input type="text" v-model="targetSearch" @input="searchTargets" @focus="showTargetDropdown = true" @blur="hideTargetDropdown"
+                      :placeholder="targetPartyType === 'Corporate' ? 'Search corporate account...' : 'Search guest by name, room...'"
+                      class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      :class="selectedTarget ? 'border-green-300 bg-green-50' : ''" />
+                    <div v-if="showTargetDropdown && targetResults.length > 0"
+                      class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                      <button v-for="t in targetResults" :key="t.name" @mousedown.prevent="selectTarget(t)"
+                        class="block w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                        <span class="font-semibold text-gray-900">{{ t.hotel_guest_name || t.name }}</span>
+                        <span class="text-gray-400 ml-2">{{ t.room_number ? 'Room ' + t.room_number : '' }}</span>
+                      </button>
+                    </div>
+                    <p v-if="selectedTarget" class="mt-1 text-xs text-green-600 font-medium">✓ {{ selectedTarget.hotel_guest_name || selectedTarget.name }} selected</p>
+                  </div>
                 </div>
                 <div>
                   <p class="text-xs text-gray-500 mb-1.5">Transfer Reason <span class="text-red-400">*</span></p>
@@ -161,9 +174,51 @@ const targetPartyType = ref('Corporate')
 const transferReason = ref('')
 const transferNote = ref('')
 const transferMsg = ref('')
+const targetSearch = ref('')
+const targetResults = ref([])
+const selectedTarget = ref(null)
+const showTargetDropdown = ref(false)
+let searchTimeout = null
+
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
+
+function searchTargets() {
+  selectedTarget.value = null
+  clearTimeout(searchTimeout)
+  if (targetSearch.value.length < 2) {
+    targetResults.value = []
+    return
+  }
+  searchTimeout = setTimeout(async () => {
+    try {
+      const guestType = targetPartyType.value === 'Corporate' ? 'Corporate' : 'Individual'
+      const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.search_guests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
+        body: new URLSearchParams({ query: targetSearch.value, guest_type: guestType }),
+      })
+      const data = await res.json()
+      targetResults.value = (data.message || []).filter(g => g.name !== props.checkIn.guest)
+    } catch {
+      targetResults.value = []
+    }
+  }, 300)
+}
+
+function selectTarget(t) {
+  selectedTarget.value = t
+  targetSearch.value = t.hotel_guest_name || t.name
+  showTargetDropdown.value = false
+  targetResults.value = []
+}
+
+function hideTargetDropdown() {
+  setTimeout(() => { showTargetDropdown.value = false }, 150)
+}
+
 function submitTransfer() {
   if (!transferReason.value) { transferMsg.value = 'Please select a transfer reason.'; return }
+  if (!selectedTarget.value) { transferMsg.value = 'Please select a target party.'; return }
   transferMsg.value = 'Transfer request has been logged. The finance team will process the charge movement and update the folio accordingly.'
 }
 </script>

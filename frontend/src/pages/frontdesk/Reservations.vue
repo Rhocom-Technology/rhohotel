@@ -57,7 +57,7 @@
             <option value="Checked In">Checked In</option>
             <option value="Checked Out">Checked Out</option>
             <option value="Cancelled">Cancelled</option>
-            <option value="Pending">Pending</option>
+            <option value="Draft">Draft</option>
           </select>
         </div>
         <div style="flex:1;min-width:120px;">
@@ -130,7 +130,7 @@
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.number_of_nights }} Night{{ item.number_of_nights !== 1 ? 's' : '' }}</p>
               </td>
               <td class="px-4 py-4">
-                <p class="text-xs text-gray-700">{{ item.total_rooms }} {{ item.total_rooms > 1 ? 'Rooms' : 'Room' }}</p>
+                <p class="text-xs text-gray-700">{{ item.room_numbers || (item.total_rooms + (item.total_rooms > 1 ? ' Rooms' : ' Room')) }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.room_type || 'Various' }}</p>
               </td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-900">
@@ -243,6 +243,7 @@ const reservationResource = createResource({
       'total_rooms',
       'total_amount',
       'docstatus',
+      'room_numbers',
     ],
     order_by: 'creation desc',
     limit_page_length: 500,
@@ -300,7 +301,7 @@ function statusClass(status) {
     'Checked In': 'bg-green-50 text-green-600',
     'Checked Out': 'bg-gray-100 text-gray-500',
     'Cancelled': 'bg-red-50 text-red-500',
-    'Pending': 'bg-yellow-50 text-yellow-600',
+    'Draft': 'bg-yellow-50 text-yellow-600',
     'Due Today': 'bg-orange-50 text-orange-600',
     'Partly Paid': 'bg-yellow-50 text-yellow-600',
   }[status] || 'bg-gray-100 text-gray-500'
@@ -327,7 +328,7 @@ function openReservation(item) {
 
 function mapReservationStatus(item) {
   if (Number(item.docstatus) === 2) return 'Cancelled'
-  if (Number(item.docstatus) === 0) return 'Pending'
+  if (Number(item.docstatus) === 0) return 'Draft'
   // docstatus === 1 (submitted)
   if (isToday(item.from_date)) return 'Due Today'
   const arrivalDate = item.from_date ? new Date(item.from_date) : null

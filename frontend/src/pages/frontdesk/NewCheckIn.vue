@@ -77,12 +77,12 @@
                 <div v-if="guestSearching" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 px-4 py-3">
                   <p class="text-xs text-gray-400">Searching...</p>
                 </div>
-                <div v-if="!guestSearching && showGuestDropdown && guestResults.length === 0 && guestQuery.length >= 2"
+                <div v-if="!guestSearching && showGuestDropdown && guestResults.length === 0 && guestQuery.length >= 1"
                   class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 px-4 py-3">
                   <p class="text-xs text-gray-400">No guests found. Create a new one.</p>
                 </div>
               </div>
-              <button @click="$router.push('/guests/new')"
+              <button @click="$router.push({ path: '/guests/new', query: { return_to: 'checkin' } })"
                 class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0">
                 New Guest
               </button>
@@ -287,6 +287,10 @@
               <span class="text-xs text-gray-500">Nightly Rate</span>
               <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(form.rate_amount) }}</span>
             </div>
+            <div v-if="form.discount_type !== 'None' && form.discount > 0" class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">Discount ({{ form.discount_type === 'Percentage' ? form.discount + '%' : 'Fixed' }})</span>
+              <span class="text-xs font-semibold text-red-500">- {{ formatCurrency(discountDisplayAmount) }}</span>
+            </div>
             <div class="flex items-center justify-between pt-2 border-t border-gray-100">
               <span class="text-xs font-bold text-gray-900">Est. Total</span>
               <span class="text-xs font-bold text-blue-600">{{ formatCurrency(estimatedTotal) }}</span>
@@ -333,7 +337,7 @@ function onGuestInput() {
   form.guest = ''
   selectedGuest.value = {}
   clearTimeout(guestDebounce)
-  if (guestQuery.value.length < 2) {
+  if (guestQuery.value.length < 1) {
     guestResults.value = []
     showGuestDropdown.value = false
     return
@@ -494,6 +498,18 @@ const estimatedTotal = computed(() => {
     total = total - form.discount
   }
   return Math.max(0, total)
+})
+
+const discountDisplayAmount = computed(() => {
+  const nights = parseInt(form.number_of_nights) || 0
+  const rate = parseFloat(form.rate_amount) || 0
+  const subtotal = nights * rate
+  if (form.discount_type === 'Percentage' && form.discount > 0) {
+    return subtotal * (form.discount / 100)
+  } else if (form.discount_type === 'Amount' && form.discount > 0) {
+    return form.discount
+  }
+  return 0
 })
 
 function formatCurrency(amount) {
