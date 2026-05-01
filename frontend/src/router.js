@@ -31,7 +31,7 @@ const router = createRouter({
     // Housekeeping
     { path: '/housekeeping', name: 'Housekeeping', component: () => import('@/pages/housekeeping/Housekeeping.vue') },
     { path: '/housekeeping/dashboard', name: 'HousekeepingDashboard', component: () => import('@/pages/housekeeping/HousekeepingDashboard.vue') },
-    { path: '/housekeeping/task/new', name: 'NewHousekeepingTask', component: () => import('@/pages/housekeeping/HousekeepingTask.vue') },
+    { path: '/housekeeping/task/new', name: 'NewHousekeepingTask', component: () => import('@/pages/housekeeping/NewHousekeepingTask.vue') },
     { path: '/housekeeping/task/:id', name: 'HousekeepingTask', component: () => import('@/pages/housekeeping/HousekeepingTask.vue') },
     { path: '/housekeeping/report', name: 'HousekeepingReport', component: () => import('@/pages/housekeeping/HousekeepingReport.vue') },
 

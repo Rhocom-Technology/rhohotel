@@ -1,81 +1,108 @@
 <template>
   <div class="space-y-4">
 
-    <!-- Header Card -->
+    <!-- Header -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h2 class="text-sm font-bold text-gray-900">Request Register Control</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Track open, assigned, escalated, and resolved requests with quick access to view, route, and convert requests into maintenance tasks.</p>
+        <p class="text-xs text-gray-400 mt-0.5">Track open, approved, and resolved requests with quick access to view, approve, and convert into maintenance tasks.</p>
       </div>
       <div class="flex items-center gap-3">
-        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Export Requests</button>
-        <button @click="router.push('/maintenance/new-request')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">New Request</button>
+        <button @click="router.push('/maintenance/new-request')"
+          class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">
+          New Request
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats skeleton -->
+    <div v-if="statsLoading" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+      <div v-for="n in 4" :key="n" class="bg-white rounded-xl border border-gray-200 px-5 py-4 animate-pulse">
+        <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
+        <div class="h-8 bg-gray-200 rounded w-1/3"></div>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div v-else-if="stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Open Requests</p>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-400">Pending Requests</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Active</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">29</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.pending }}</p>
+        <p class="text-xs text-gray-400 mt-1">Awaiting action</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Urgent Requests</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Urgent</span>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-400">Urgent / Critical</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">High</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">8</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.urgent_pending }}</p>
+        <p class="text-xs text-gray-400 mt-1">High or Critical priority</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Assigned to Team</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">In Queue</span>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-400">Approved & Pending</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Approved</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">14</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.approved_pending }}</p>
+        <p class="text-xs text-gray-400 mt-1">Ready for task creation</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-400">Resolved This Week</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Closed</span>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Done</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">18</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.resolved_this_week }}</p>
+        <p class="text-xs text-gray-400 mt-1">Completed since Monday</p>
       </div>
     </div>
 
-    <!-- Filters & Search -->
+    <!-- Filters -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
       <h3 class="text-sm font-bold text-gray-900 mb-3">Filters & Search</h3>
       <div class="flex items-center gap-3 flex-wrap">
-        <div class="relative" style="flex:1;min-width:180px;">
-          <input v-model="search" type="text" placeholder="Search request ID, room, asset, requester..."
+        <div style="flex:1;min-width:180px;">
+          <input v-model="search" @input="debouncedFetch" type="text"
+            placeholder="Search request ID, room, asset..."
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <select v-model="filterType" class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
-          <option value="">All Types</option>
-          <option value="Corrective">Corrective</option>
-          <option value="Inspection">Inspection</option>
-          <option value="Preventive">Preventive</option>
+        <select v-model="filterIssueType" @change="fetchRequests(1)"
+          class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
+          <option value="">All Issue Types</option>
+          <option value="Plumbing">Plumbing</option>
+          <option value="Electrical">Electrical</option>
+          <option value="HVAC">HVAC</option>
+          <option value="Furniture">Furniture</option>
+          <option value="Appliance">Appliance</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Structural">Structural</option>
+          <option value="Other">Other</option>
         </select>
-        <select v-model="filterPriority" class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
+        <select v-model="filterPriority" @change="fetchRequests(1)"
+          class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
           <option value="">All Priorities</option>
-          <option value="Urgent">Urgent</option>
+          <option value="Critical">Critical</option>
           <option value="High">High</option>
           <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
         </select>
-        <select v-model="filterStatus" class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
+        <select v-model="filterStatus" @change="fetchRequests(1)"
+          class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
           <option value="">All Statuses</option>
-          <option value="Open">Open</option>
-          <option value="Assigned">Assigned</option>
-          <option value="Review">Review</option>
-          <option value="Converted">Converted</option>
-          <option value="Escalated">Escalated</option>
-          <option value="Closed">Closed</option>
+          <option value="Pending">Pending</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancelled">Cancelled</option>
         </select>
-        <button @click="clearFilters" class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Reset</button>
-        <button @click="filterPriority = 'Urgent'" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Show Urgent Requests</button>
+        <button @click="clearFilters"
+          class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+          Reset
+        </button>
+        <button @click="filterPriority = 'Critical'; fetchRequests(1)"
+          class="px-4 py-2 text-xs font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600">
+          Critical Only
+        </button>
       </div>
     </div>
 
@@ -83,60 +110,96 @@
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div class="px-6 py-4 flex items-center justify-between border-b border-gray-100">
         <h3 class="text-sm font-bold text-gray-900">Maintenance Request Records</h3>
-        <p class="text-xs text-gray-400">Showing 1–{{ paginatedList.length }} of {{ filteredList.length }} requests</p>
+        <p class="text-xs text-gray-400" v-if="!listLoading">
+          Showing {{ total === 0 ? 0 : ((page - 1) * pageSize) + 1 }}–{{ Math.min(page * pageSize, total) }} of {{ total }}
+        </p>
       </div>
-      <div class="overflow-x-auto">
+
+      <div v-if="listLoading" class="flex items-center justify-center py-16 gap-3">
+        <svg class="animate-spin w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        <p class="text-sm text-gray-400">Loading requests...</p>
+      </div>
+
+      <div v-else class="overflow-x-auto">
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left text-xs font-semibold text-gray-400 px-6 py-3">Request ID</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Issue / Target</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Requester</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Department</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Type</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Room / Asset</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Issue Type</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Reported By</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Reported At</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Priority</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Submitted</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Approved</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Status</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            <tr v-for="item in paginatedList" :key="item.id"
+            <tr v-for="req in requests" :key="req.name"
               class="hover:bg-gray-50 transition-colors cursor-pointer"
-              @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: item.id } })">
-              <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ item.id }}</td>
+              @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: req.name } })">
+              <td class="px-6 py-4 text-xs font-bold text-gray-900 font-mono">{{ req.name }}</td>
               <td class="px-4 py-4">
-                <p class="text-xs font-semibold text-gray-900">{{ item.issue }}</p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ item.target }}</p>
+                <p class="text-xs font-semibold text-gray-900">{{ req.room_number || req.room || '—' }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ req.asset_name || req.asset || '—' }}</p>
               </td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ item.requester }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ item.department }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ item.type }}</td>
+              <td class="px-4 py-4 text-xs text-gray-600">{{ req.issue_type }}</td>
+              <td class="px-4 py-4 text-xs text-gray-600">{{ req.reported_by_name || req.reported_by || '—' }}</td>
+              <td class="px-4 py-4 text-xs text-gray-500">{{ formatDate(req.reported_at) }}</td>
               <td class="px-4 py-4">
-                <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="priorityClass(item.priority)">{{ item.priority }}</span>
-              </td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ item.submitted }}</td>
-              <td class="px-4 py-4">
-                <span class="px-2.5 py-1 text-xs font-semibold rounded-lg border" :class="statusClass(item.status)">{{ item.status }}</span>
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="priorityClass(req.priority)">
+                  {{ req.priority }}
+                </span>
               </td>
               <td class="px-4 py-4">
-                <button @click.stop="router.push({ name: 'SavedMaintenanceRequest', params: { id: item.id } })"
-                  class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">View</button>
+                <span class="text-xs font-semibold" :class="req.approved ? 'text-green-600' : 'text-gray-400'">
+                  {{ req.approved ? '✓ Yes' : '—' }}
+                </span>
               </td>
+              <td class="px-4 py-4">
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-lg border" :class="statusClass(req.status)">
+                  {{ req.status }}
+                </span>
+              </td>
+              <td class="px-4 py-4">
+                <button @click.stop="router.push({ name: 'SavedMaintenanceRequest', params: { id: req.name } })"
+                  class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  View
+                </button>
+              </td>
+            </tr>
+            <tr v-if="requests.length === 0">
+              <td colspan="9" class="text-center py-12 text-xs text-gray-400">No maintenance requests found</td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <!-- Pagination -->
       <div class="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
-        <p class="text-xs text-gray-400">Rows per page: {{ pageSize }}</p>
+        <div class="flex items-center gap-3">
+          <p class="text-xs text-gray-400">Rows per page:</p>
+          <select v-model="pageSize" @change="fetchRequests(1)"
+            class="text-xs border border-gray-200 rounded-lg px-2 py-1">
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+          </select>
+        </div>
         <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1">
-            <button v-for="p in 3" :key="p" @click="page = p"
-              class="w-6 h-6 text-xs rounded flex items-center justify-center"
-              :class="page === p ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'">{{ p }}</button>
-          </div>
-          <button @click="page = Math.min(page + 1, totalPages)" :disabled="page === totalPages"
-            class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40">Next</button>
+          <button @click="fetchRequests(page - 1)" :disabled="page === 1"
+            class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40">
+            Previous
+          </button>
+          <span class="text-xs text-gray-600">Page {{ page }} of {{ totalPages }}</span>
+          <button @click="fetchRequests(page + 1)" :disabled="page >= totalPages"
+            class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40">
+            Next
+          </button>
         </div>
       </div>
     </div>
@@ -145,65 +208,100 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 
 const router = useRouter()
+
+const statsLoading = ref(true)
+const listLoading = ref(true)
+const stats = ref(null)
+const requests = ref([])
 const search = ref('')
-const filterType = ref('')
+const filterIssueType = ref('')
 const filterPriority = ref('')
 const filterStatus = ref('')
 const page = ref(1)
-const pageSize = 25
+const pageSize = ref(25)
+const total = ref(0)
+const totalPages = ref(1)
 
-const requests = [
-  { id: 'REQ-000184', issue: 'AC not cooling - Room 305', target: 'Room target • guest impacted', requester: 'Mary Bello', department: 'Housekeeping', type: 'Corrective', priority: 'Urgent', submitted: '18 Apr 2026', status: 'Open' },
-  { id: 'REQ-000183', issue: 'Laundry dryer vibration issue', target: 'Asset target • AST-003761', requester: 'John Ude', department: 'Laundry', type: 'Corrective', priority: 'High', submitted: '18 Apr 2026', status: 'Assigned' },
-  { id: 'REQ-000182', issue: 'Generator battery warning alert', target: 'Power House location', requester: 'Segun Ade', department: 'Engineering', type: 'Inspection', priority: 'Urgent', submitted: '17 Apr 2026', status: 'Review' },
-  { id: 'REQ-000181', issue: 'Smart TV no signal - Room 214', target: 'Room target • guest waiting', requester: 'Rita James', department: 'Front Desk', type: 'Corrective', priority: 'High', submitted: '17 Apr 2026', status: 'Converted' },
-  { id: 'REQ-000180', issue: 'Water leak behind boiler room', target: 'Location target • possible plumbing issue', requester: 'Tunde Obi', department: 'Security', type: 'Corrective', priority: 'Urgent', submitted: '16 Apr 2026', status: 'Escalated' },
-  { id: 'REQ-000179', issue: 'Minibar not cooling - Room 112', target: 'Asset target • guest complaint resolved', requester: 'Blessing Eze', department: 'Housekeeping', type: 'Corrective', priority: 'Medium', submitted: '15 Apr 2026', status: 'Closed' },
-]
+const statsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_request_dashboard', auto: false })
+const listResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_request_list', auto: false })
 
-const filteredList = computed(() => {
-  let list = requests
-  if (search.value) {
-    const q = search.value.toLowerCase()
-    list = list.filter(r => r.id.toLowerCase().includes(q) || r.issue.toLowerCase().includes(q) || r.requester.toLowerCase().includes(q))
+async function fetchStats() {
+  statsLoading.value = true
+  try {
+    stats.value = await statsResource.fetch()
+  } catch (e) {
+    console.error('[MRList] stats error:', e)
+  } finally {
+    statsLoading.value = false
   }
-  if (filterType.value) list = list.filter(r => r.type === filterType.value)
-  if (filterPriority.value) list = list.filter(r => r.priority === filterPriority.value)
-  if (filterStatus.value) list = list.filter(r => r.status === filterStatus.value)
-  return list
-})
+}
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredList.value.length / pageSize)))
-const paginatedList = computed(() => filteredList.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+async function fetchRequests(newPage = 1) {
+  page.value = newPage
+  listLoading.value = true
+  try {
+    const res = await listResource.fetch({
+      search: search.value || null,
+      filter_priority: filterPriority.value || null,
+      filter_status: filterStatus.value || null,
+      filter_issue_type: filterIssueType.value || null,
+      page: page.value,
+      page_size: pageSize.value
+    })
+    requests.value = res?.requests || []
+    total.value = res?.total || 0
+    totalPages.value = res?.total_pages || 1
+  } catch (e) {
+    console.error('[MRList] list error:', e)
+    requests.value = []
+  } finally {
+    listLoading.value = false
+  }
+}
+
+let searchTimer = null
+function debouncedFetch() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => fetchRequests(1), 350)
+}
 
 function clearFilters() {
   search.value = ''
-  filterType.value = ''
+  filterIssueType.value = ''
   filterPriority.value = ''
   filterStatus.value = ''
-  page.value = 1
+  fetchRequests(1)
+}
+
+function formatDate(dt) {
+  if (!dt) return '—'
+  return new Date(dt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function priorityClass(p) {
   return {
-    'Urgent': 'bg-red-100 text-red-500',
-    'High': 'bg-yellow-100 text-yellow-600',
-    'Medium': 'bg-blue-50 text-blue-500',
+    'Critical': 'bg-red-100 text-red-600',
+    'High':     'bg-orange-100 text-orange-500',
+    'Medium':   'bg-yellow-100 text-yellow-600',
+    'Low':      'bg-blue-50 text-blue-500',
   }[p] || 'bg-gray-100 text-gray-500'
 }
 
 function statusClass(s) {
   return {
-    'Open': 'bg-blue-50 text-blue-600 border-blue-200',
-    'Assigned': 'bg-yellow-50 text-yellow-600 border-yellow-200',
-    'Review': 'bg-gray-50 text-gray-600 border-gray-200',
-    'Converted': 'bg-purple-50 text-purple-600 border-purple-200',
-    'Escalated': 'bg-orange-50 text-orange-600 border-orange-200',
-    'Closed': 'bg-green-50 text-green-600 border-green-200',
+    'Pending':   'bg-blue-50 text-blue-600 border-blue-200',
+    'Completed': 'bg-green-50 text-green-600 border-green-200',
+    'Cancelled': 'bg-red-50 text-red-500 border-red-200',
   }[s] || 'bg-gray-50 text-gray-500 border-gray-200'
 }
+
+onMounted(() => {
+  fetchStats()
+  fetchRequests(1)
+})
 </script>

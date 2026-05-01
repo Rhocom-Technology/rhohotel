@@ -1,16 +1,48 @@
 <template>
   <div style="background:#f1f5f9;min-height:100%;" class="p-6 space-y-4">
 
+    <!-- Toast -->
+    <transition-group name="toast" tag="div" class="fixed top-4 right-4 z-50 space-y-2" style="min-width:280px;max-width:360px;">
+      <div v-for="t in toasts" :key="t.id"
+        class="flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium border"
+        :class="{
+          'bg-white border-green-200 text-green-800': t.type === 'success',
+          'bg-white border-red-200 text-red-800':     t.type === 'error',
+          'bg-white border-yellow-200 text-yellow-800': t.type === 'warning',
+        }">
+        <span class="text-base leading-none mt-0.5">{{ t.type === 'success' ? '✅' : t.type === 'error' ? '❌' : '⚠️' }}</span>
+        <span class="flex-1 leading-snug">{{ t.message }}</span>
+        <button @click="removeToast(t.id)" class="opacity-50 hover:opacity-100 text-xs">✕</button>
+      </div>
+    </transition-group>
+
     <!-- Header -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h2 class="text-sm font-bold text-gray-900">Task Setup Control</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Create corrective or preventive work, assign technicians, and prepare the task for execution and follow-up.</p>
+        <p class="text-xs text-gray-400 mt-0.5">Create corrective or preventive work, assign technicians, and prepare the task for execution.</p>
       </div>
       <div class="flex items-center gap-2">
-        <button @click="router.push('/maintenance/list')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Save Draft</button>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Create Task</button>
+        <button @click="router.push('/maintenance/list')"
+          class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+          Cancel
+        </button>
+        <button @click="createTask(false)" :disabled="creating"
+          class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5">
+          <svg v-if="creating === 'draft'" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          {{ creating === 'draft' ? 'Saving...' : 'Save Draft' }}
+        </button>
+        <button @click="createTask(true)" :disabled="creating"
+          class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-1.5">
+          <svg v-if="creating === 'create'" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          {{ creating === 'create' ? 'Creating...' : 'Create Task' }}
+        </button>
       </div>
     </div>
 
@@ -26,24 +58,31 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Task ID</p>
-              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Auto generated on save</div>
+              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">
+                Auto-generated on save
+              </div>
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Task Type</p>
-              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+              <p class="text-xs text-gray-500 mb-1.5">Task Type <span class="text-red-400">*</span></p>
+              <select v-model="form.task_type"
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
+                :class="attempted && !form.task_type ? 'border-red-300 bg-red-50' : 'border-gray-200'">
                 <option value="">Select task type</option>
-                <option>Corrective Maintenance</option>
-                <option>Preventive Maintenance</option>
-                <option>Inspection</option>
+                <option value="Corrective">Corrective</option>
+                <option value="Preventive">Preventive</option>
+                <option value="Routine">Routine</option>
+                <option value="Inspection">Inspection</option>
               </select>
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Priority</p>
-              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+              <p class="text-xs text-gray-500 mb-1.5">Priority <span class="text-red-400">*</span></p>
+              <select v-model="form.priority"
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
+                :class="attempted && !form.priority ? 'border-red-300 bg-red-50' : 'border-gray-200'">
                 <option value="">Select priority</option>
-                <option>Urgent</option>
-                <option>Due</option>
-                <option>Normal</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
               </select>
             </div>
           </div>
@@ -54,162 +93,247 @@
           <h3 class="text-sm font-bold text-gray-900 mb-4">Asset Details</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-4">
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Asset Tag</p>
-              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-                <option value="">Select asset</option>
-                <option>AST-003761</option>
-                <option>AST-003762</option>
+              <p class="text-xs text-gray-500 mb-1.5">Asset <span class="text-red-400">*</span></p>
+              <select v-model="form.asset" @change="onAssetSelect"
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
+                :class="attempted && !form.asset ? 'border-red-300 bg-red-50' : 'border-gray-200'">
+                <option value="">— select asset —</option>
+                <option v-for="a in assets" :key="a.name" :value="a.name">
+                  {{ a.asset_name || a.name }}
+                </option>
               </select>
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Asset Name</p>
-              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Auto-fill from asset</div>
+              <p class="text.xs text-gray-500 mb-1.5">Asset Name</p>
+              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700">
+                {{ selectedAsset?.asset_name || '—' }}
+              </div>
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Location</p>
-              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Auto-fill location</div>
+              <input v-model="form.location" type="text" placeholder="Auto-fill or enter manually"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
           </div>
           <div>
-            <p class="text-xs text-gray-500 mb-1.5">Issue Reported</p>
-            <textarea rows="3" placeholder="Describe fault, maintenance need, symptoms, or inspection reason..."
-              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none"></textarea>
+            <p class="text-xs text-gray-500 mb-1.5">Issue / Task Description</p>
+            <textarea v-model="form.task_description" rows="3"
+              placeholder="Describe fault, maintenance need, symptoms, or inspection reason..."
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
           </div>
         </div>
 
-        <!-- Assignment Section -->
+        <!-- Assignment -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Assignment Section</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Assigned Technician</p>
-              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+              <p class="text-xs text-gray-500 mb-1.5">Assigned Technician <span class="text-red-400">*</span></p>
+              <select v-model="form.assigned_technician"
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
+                :class="attempted && !form.assigned_technician ? 'border-red-300 bg-red-50' : 'border-gray-200'">
                 <option value="">Select technician</option>
-                <option>Engr. Paul</option>
-                <option>Engr. Musa</option>
-                <option>Tech Team A</option>
-                <option>Tech Team B</option>
+                <option v-for="t in technicians" :key="t.name" :value="t.name">
+                  {{ t.technician_name }}
+                  {{ t.availability !== 'Available' ? `(${t.availability})` : '' }}
+                </option>
               </select>
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Supervisor</p>
-              <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+              <select v-model="form.supervisor"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600">
                 <option value="">Select supervisor</option>
-                <option>Maintenance Supervisor</option>
+                <option v-for="s in supervisors" :key="s.name" :value="s.name">
+                  {{ s.employee_name }}{{ s.designation ? ` · ${s.designation}` : '' }}
+                </option>
               </select>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Planned Start</p>
-              <input type="text" placeholder="Select date and time" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+              <input v-model="form.start_time" type="datetime-local"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Expected Duration</p>
-              <input type="text" placeholder="Enter expected duration" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+              <input v-model="form.expected_duration" type="text" placeholder="e.g. 3 hours"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
           </div>
         </div>
 
-        <!-- Parts / Material Planning -->
+        <!-- Parts Planning -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Parts / Material Planning</h3>
-          <table class="w-full mb-3">
-            <thead>
-              <tr class="border-b border-gray-100">
-                <th class="text-left text-xs font-medium text-gray-500 pb-2">Part / Material</th>
-                <th class="text-left text-xs font-medium text-gray-500 pb-2">Qty</th>
-                <th class="text-left text-xs font-medium text-gray-500 pb-2">Store Impact</th>
-                <th class="text-left text-xs font-medium text-gray-500 pb-2">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="py-2 pr-3"><input type="text" placeholder="Add material or spare part" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded" /></td>
-                <td class="py-2 pr-3"><input type="number" value="0" class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center" /></td>
-                <td class="py-2 pr-3">
-                  <select class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded text-gray-600">
-                    <option value="">Select action</option>
-                    <option>Reduce stock</option>
-                    <option>No impact</option>
-                  </select>
-                </td>
-                <td class="py-2"><input type="text" placeholder="Optional note" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded" /></td>
-              </tr>
-            </tbody>
-          </table>
-          <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">+ Add Row</button>
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Parts / Material Planning <span class="text-xs font-normal text-gray-400">(optional)</span></h3>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-1/4">Item</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-14">Qty</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-20">UOM</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Warehouse</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Store Impact</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">Cost</th>
+                  <th class="pb-2 w-6"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50">
+                <tr v-for="(part, idx) in partsUsed" :key="idx">
+                  <td class="py-2.5 pr-2">
+                    <select v-model="part.item_code" @change="onPartSelect(part)"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
+                      <option value="">— select item —</option>
+                      <option v-for="item in stockItems" :key="item.name" :value="item.name">
+                        {{ item.item_name || item.name }}
+                      </option>
+                    </select>
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <input v-model.number="part.qty" type="number" min="0.001"
+                      class="w-14 px-2 py-1.5 text-xs border border-gray-200 rounded text-center" />
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <input v-model="part.warehouse" type="text" placeholder="Warehouse"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded" />
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <select v-model="part.store_impact" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
+                      <option value="Reduce Stock">Reduce Stock</option>
+                      <option value="No Impact">No Impact</option>
+                      <option value="Return to Store">Return to Store</option>
+                    </select>
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <input v-model.number="part.cost" type="number" min="0"
+                      class="w-24 px-2 py-1.5 text-xs border border-gray-200 rounded" />
+                  </td>
+                  <td class="py-2.5">
+                    <button @click="partsUsed.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
+                  </td>
+                </tr>
+                <tr v-if="partsUsed.length === 0">
+                  <td colspan="7" class="py-4 text-center text-xs text-gray-400">No parts added.</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="7" class="pt-3">
+                    <button @click="partsUsed.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '', cost: 0, store_impact: 'Reduce Stock' })"
+                      class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Row</button>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
 
-        <!-- Maintenance Checklist Template -->
+        <!-- Checklist -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Maintenance Checklist Template</h3>
-          <div class="flex items-center gap-6">
+          <div class="flex items-center gap-6 flex-wrap">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" class="w-4 h-4 accent-blue-500" />
+              <input type="checkbox" v-model="form.fault_diagnosed" class="w-4 h-4 accent-blue-500" />
               <span class="text-xs text-gray-700">Diagnosis required</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" class="w-4 h-4 accent-blue-500" />
+              <input type="checkbox" v-model="form.parts_replaced" class="w-4 h-4 accent-blue-500" />
               <span class="text-xs text-gray-700">Parts likely needed</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" class="w-4 h-4 accent-blue-500" />
+              <input type="checkbox" v-model="form.test_run_passed" class="w-4 h-4 accent-blue-500" />
               <span class="text-xs text-gray-700">Test run on completion</span>
             </label>
           </div>
         </div>
       </div>
 
-      <!-- Right: Status Setup -->
+      <!-- Right -->
       <div class="space-y-4">
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Status Setup Section</h3>
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Status Setup</h3>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Initial Task Status</p>
-            <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
-              <option>Open</option>
-              <option>In Progress</option>
-              <option>Scheduled</option>
+            <select v-model="form.status"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700">
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Hold">On Hold</option>
             </select>
           </div>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Expected Asset Status After Repair</p>
-            <select class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700">
-              <option>Operational</option>
-              <option>Under Repair</option>
+            <select v-model="form.final_asset_status"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700">
+              <option value="">— select —</option>
+              <option value="Operational">Operational</option>
+              <option value="Out of Service">Out of Service</option>
+              <option value="Under Repair">Under Repair</option>
+              <option value="Decommissioned">Decommissioned</option>
             </select>
           </div>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Inspection Required</p>
             <label class="flex items-center gap-2 cursor-pointer bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
-              <input type="checkbox" checked class="w-4 h-4 accent-green-500" />
+              <input type="checkbox" v-model="form.inspection_required" class="w-4 h-4 accent-green-500" />
               <span class="text-xs text-gray-700">Require supervisor verification on completion</span>
             </label>
           </div>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Preparation Notes</p>
-            <textarea rows="4" placeholder="Add instructions, escalation note, or safety warning for technician..."
-              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none"></textarea>
-          </div>
-          <div class="mb-3">
-            <p class="text-xs text-gray-500 mb-1.5">Attachment / Reference</p>
-            <button class="w-full py-2.5 text-xs font-medium text-blue-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">Upload issue photo</button>
+            <textarea v-model="form.completion_notes" rows="4"
+              placeholder="Instructions, escalation note, or safety warning for technician..."
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
           </div>
         </div>
 
-        <!-- Quick Summary -->
+        <!-- Live preview -->
         <div class="bg-blue-50 rounded-xl border border-blue-100 p-4">
-          <h4 class="text-xs font-bold text-blue-700 mb-2">New Task Preview</h4>
-          <p class="text-xs text-blue-600">Task type: Not selected</p>
-          <p class="text-xs text-blue-600 mt-0.5">Asset: Not selected</p>
-          <p class="text-xs text-blue-600 mt-0.5">Status: Open</p>
+          <h4 class="text-xs font-bold text-blue-700 mb-3">New Task Preview</h4>
+          <div class="space-y-1.5">
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Task Type</span>
+              <span class="text-xs font-medium text-blue-800">{{ form.task_type || '—' }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Priority</span>
+              <span class="text-xs font-semibold"
+                :class="{'text-red-600': form.priority === 'High', 'text-yellow-600': form.priority === 'Medium', 'text-blue-800': form.priority === 'Low' || !form.priority}">
+                {{ form.priority || '—' }}
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Asset</span>
+              <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ selectedAsset?.asset_name || '—' }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Technician</span>
+              <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ technicianLabel || '—' }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Status</span>
+              <span class="text-xs font-medium text-blue-800">{{ form.status }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Parts</span>
+              <span class="text-xs font-medium text-blue-800">{{ partsUsed.filter(p => p.item_code).length }} item(s)</span>
+            </div>
+          </div>
         </div>
 
-        <!-- Related Actions -->
-        <div class="bg-white rounded-xl border border-gray-200 p-4">
-          <p class="text-xs font-semibold text-gray-700 mb-2">Related Actions</p>
-          <button class="w-full py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Reserve Part</button>
+        <!-- Validation errors -->
+        <div v-if="attempted && validationErrors.length" class="bg-red-50 rounded-xl border border-red-200 p-4">
+          <p class="text-xs font-semibold text-red-700 mb-2">Please fix the following:</p>
+          <ul class="space-y-1">
+            <li v-for="e in validationErrors" :key="e" class="text-xs text-red-600 flex gap-1.5">
+              <span class="shrink-0">•</span>{{ e }}
+            </li>
+          </ul>
         </div>
       </div>
     </div>
@@ -217,6 +341,149 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
+
 const router = useRouter()
+const creating = ref(false) // 'draft' | 'create' | false
+const attempted = ref(false)
+const assets = ref([])
+const technicians = ref([])
+const supervisors = ref([])
+const stockItems = ref([])
+const partsUsed = ref([])
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+const toasts = ref([])
+let toastId = 0
+function showToast(message, type = 'error', duration = 5000) {
+  const id = ++toastId
+  toasts.value.push({ id, message, type })
+  setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id) }, duration)
+}
+function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) }
+
+// ─── Form ─────────────────────────────────────────────────────────────────────
+const form = ref({
+  task_type: '',
+  priority: 'Medium',
+  status: 'Open',
+  asset: '',
+  location: '',
+  task_description: '',
+  assigned_technician: '',
+  supervisor: '',
+  start_time: '',
+  end_time: '',
+  expected_duration: '',
+  final_asset_status: '',
+  inspection_required: true,
+  fault_diagnosed: false,
+  parts_replaced: false,
+  test_run_passed: false,
+  completion_notes: '',
+})
+
+// ─── Computed helpers ─────────────────────────────────────────────────────────
+const selectedAsset = computed(() =>
+  assets.value.find(a => a.name === form.value.asset) || null
+)
+
+const technicianLabel = computed(() => {
+  const t = technicians.value.find(x => x.name === form.value.assigned_technician)
+  return t?.technician_name || null
+})
+
+const validationErrors = computed(() => {
+  if (!attempted.value) return []
+  const errors = []
+  if (!form.value.task_type) errors.push('Task type is required')
+  if (!form.value.priority) errors.push('Priority is required')
+  if (!form.value.asset) errors.push('Asset is required')
+  if (!form.value.assigned_technician) errors.push('Assigned technician is required')
+  return errors
+})
+
+// ─── Auto-fill location from asset ───────────────────────────────────────────
+function onAssetSelect() {
+  const asset = selectedAsset.value
+  if (asset?.location && !form.value.location) {
+    form.value.location = asset.location
+  }
+}
+
+// ─── Part item select: auto-fill UOM ─────────────────────────────────────────
+function onPartSelect(part) {
+  const item = stockItems.value.find(i => i.name === part.item_code)
+  if (item) {
+    part.item_name = item.item_name || item.name
+    part.uom = item.stock_uom || ''
+  }
+}
+
+// ─── Resources ────────────────────────────────────────────────────────────────
+const assetsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_assets_for_task', auto: false })
+const techResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_technicians_for_task', auto: false })
+const supResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_supervisors_for_task', auto: false })
+const itemsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
+const createResource_ = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.create_maintenance_task', auto: false })
+
+async function loadDropdowns() {
+  const [aRes, tRes, sRes, iRes] = await Promise.all([
+    assetsResource.fetch(),
+    techResource.fetch(),
+    supResource.fetch(),
+    itemsResource.fetch(),
+  ])
+  assets.value = aRes || []
+  technicians.value = tRes || []
+  supervisors.value = sRes || []
+  stockItems.value = iRes || []
+}
+
+// ─── Create task ──────────────────────────────────────────────────────────────
+async function createTask(navigate = true) {
+  attempted.value = true
+  if (validationErrors.value.length) {
+    validationErrors.value.forEach(e => showToast(e, 'error'))
+    return
+  }
+
+  creating.value = navigate ? 'create' : 'draft'
+  try {
+    const res = await createResource_.fetch({
+      task_data: form.value,
+      parts_used: partsUsed.value.filter(p => p.item_code)
+    })
+    console.log('[NewMaintenanceTask] create:', res)
+    if (res?.success && res?.task_name) {
+      showToast('Task created: ' + res.task_name, 'success')
+      setTimeout(() => {
+        if (navigate) {
+          router.replace({ name: 'MaintenanceTask', params: { id: res.task_name } })
+        } else {
+          router.replace('/maintenance/list')
+        }
+      }, 600)
+    } else {
+      const errMsg = res?.error || JSON.stringify(res)
+      console.error('[NewMaintenanceTask] failed:', errMsg)
+      showToast('Failed to create: ' + errMsg)
+    }
+  } catch (e) {
+    console.error('[NewMaintenanceTask] exception:', e)
+    showToast('Error: ' + (e?.message || String(e)))
+  } finally {
+    creating.value = false
+  }
+}
+
+onMounted(loadDropdowns)
 </script>
+
+<style scoped>
+.toast-enter-active, .toast-leave-active { transition: all 0.25s ease; }
+.toast-enter-from { opacity: 0; transform: translateX(20px); }
+.toast-leave-to   { opacity: 0; transform: translateX(20px); }
+</style>

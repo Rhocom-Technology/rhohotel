@@ -1,13 +1,21 @@
 <template>
   <div class="space-y-4">
 
-    <!-- Top Header Card -->
+    <!-- Header -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
       <div class="flex items-start justify-between mb-4">
         <div>
           <h2 class="text-base font-bold text-gray-900">Maintenance Control Center</h2>
           <p class="text-xs text-gray-400 mt-0.5">Monitor corrective and preventive tasks, assign technicians, review due work, and access maintenance history quickly.</p>
         </div>
+        <button @click="loadDashboard"
+          class="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5">
+          <svg :class="loading ? 'animate-spin' : ''" class="w-3 h-3" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          Refresh
+        </button>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
         <router-link to="/maintenance/list">
@@ -20,203 +28,278 @@
             Technicians
           </button>
         </router-link>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          Service History
-        </button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          Preventive Plan
-        </button>
         <router-link to="/maintenance/request">
           <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
-            Maintenance Request List
+            Request List
           </button>
         </router-link>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors">
-          Create Maintenance Task
-        </button>
+        <router-link to="/maintenance/new-request">
+          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            New Request
+          </button>
+        </router-link>
+        <router-link to="/maintenance/new-task">
+          <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors">
+            Create Maintenance Task
+          </button>
+        </router-link>
       </div>
     </div>
 
-    <!-- Stats Row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <!-- Stats skeleton -->
+    <div v-if="loading" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+      <div v-for="n in 4" :key="n" class="bg-white rounded-xl border border-gray-200 px-5 py-4 animate-pulse">
+        <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
+        <div class="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
+        <div class="h-2 bg-gray-100 rounded w-2/3"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div v-else-if="data" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-400">Open Tasks</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Active</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">38</p>
+        <p class="text-3xl font-bold text-gray-900">{{ data.stats.open }}</p>
+        <p class="text-xs text-gray-400 mt-1">{{ data.stats.in_progress }} in progress</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-400">Urgent Repairs</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Urgent</span>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">High</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">12</p>
+        <p class="text-3xl font-bold text-gray-900">{{ data.stats.urgent_open }}</p>
+        <p class="text-xs text-gray-400 mt-1">High priority, not done</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Due Preventive Work</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Due</span>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-400">Closed This Week</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Done</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">17</p>
+        <p class="text-3xl font-bold text-gray-900">{{ data.stats.done_this_week }}</p>
+        <p class="text-xs text-gray-400 mt-1">{{ data.stats.done }} all time</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Avg Resolution Time</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Stable</span>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-400">Avg Resolution</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Week</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">18 hrs</p>
+        <p class="text-3xl font-bold text-gray-900">{{ data.stats.avg_resolution_hrs }}<span class="text-base font-medium text-gray-400 ml-1">hrs</span></p>
+        <p class="text-xs text-gray-400 mt-1">{{ data.stats.hold }} on hold</p>
       </div>
     </div>
 
     <!-- Analytics Row -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+    <div v-if="data" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
 
-      <!-- Task Status Analytics -->
+      <!-- Task Status Chart -->
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
         <h3 class="text-sm font-bold text-gray-900">Task Status Analytics</h3>
-        <p class="text-xs text-gray-400 mt-0.5 mb-5">Current distribution of maintenance tasks by workflow status.</p>
+        <p class="text-xs text-gray-400 mt-0.5 mb-5">Current distribution by workflow status.</p>
         <div class="flex items-end justify-around gap-2">
           <div v-for="bar in taskBars" :key="bar.label" class="flex flex-col items-center gap-1.5">
             <span class="text-xs font-semibold text-gray-600">{{ bar.value }}</span>
-            <div class="w-10 rounded-t-md" :style="{ height: bar.height + 'px', backgroundColor: bar.color }"></div>
+            <div class="w-10 rounded-t-md transition-all duration-500"
+              :style="{ height: barHeight(bar.value) + 'px', backgroundColor: bar.color }"></div>
             <span class="text-xs text-gray-400">{{ bar.label }}</span>
           </div>
         </div>
       </div>
 
-      <!-- Maintenance Type Mix -->
+      <!-- Type Mix -->
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
         <h3 class="text-sm font-bold text-gray-900">Maintenance Type Mix</h3>
-        <p class="text-xs text-gray-400 mt-0.5 mb-5">Corrective versus preventive work concentration this month.</p>
+        <p class="text-xs text-gray-400 mt-0.5 mb-5">Corrective vs preventive work concentration.</p>
         <div class="flex items-center gap-5">
           <div class="relative w-24 h-24 flex-shrink-0">
             <svg viewBox="0 0 36 36" class="w-24 h-24 -rotate-90">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3.5" />
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="#3b82f6" stroke-width="3.5"
-                stroke-dasharray="61 39" stroke-linecap="round" />
+                :stroke-dasharray="`${data.corrective_pct} ${100 - data.corrective_pct}`"
+                stroke-linecap="round" />
             </svg>
             <div class="absolute inset-0 flex items-center justify-center">
-              <span class="text-sm font-bold text-gray-900">61%</span>
+              <span class="text-sm font-bold text-gray-900">{{ data.corrective_pct }}%</span>
             </div>
           </div>
           <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <div class="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-              <span class="text-xs text-gray-600">Corrective tasks</span>
+            <div v-for="(pct, type) in data.type_mix" :key="type" class="flex items-center gap-2">
+              <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: typeColor(type) }"></div>
+              <span class="text-xs text-gray-600">{{ pct }}% {{ type }}</span>
             </div>
-            <div class="flex items-center gap-2">
-              <div class="w-2.5 h-2.5 rounded-full bg-gray-200"></div>
-              <span class="text-xs text-gray-600">39% preventive</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <div class="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
-              <span class="text-xs text-gray-600">8 repeat issues</span>
-            </div>
+            <div v-if="Object.keys(data.type_mix).length === 0" class="text-xs text-gray-400 italic">No data yet</div>
           </div>
         </div>
       </div>
 
-      <!-- Downtime Analytics -->
+      <!-- Top Assets by Open Tasks -->
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
-        <h3 class="text-sm font-bold text-gray-900">Downtime Analytics</h3>
-        <p class="text-xs text-gray-400 mt-0.5 mb-5">Assets causing the highest operational downtime this week.</p>
+        <h3 class="text-sm font-bold text-gray-900">Top Assets — Open Tasks</h3>
+        <p class="text-xs text-gray-400 mt-0.5 mb-5">Assets with the most unresolved maintenance work.</p>
         <div class="space-y-3">
-          <div v-for="item in downtimeItems" :key="item.label">
+          <div v-for="item in data.top_assets" :key="item.asset">
             <div class="flex items-center justify-between mb-1">
-              <span class="text-xs text-gray-700 font-medium">{{ item.label }}</span>
-              <span class="text-xs text-gray-400">{{ item.hrs }} hrs</span>
+              <span class="text-xs text-gray-700 font-medium truncate max-w-[140px]">{{ item.asset_name }}</span>
+              <span class="text-xs text-gray-400">{{ item.open_tasks }} tasks</span>
             </div>
             <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div class="h-full rounded-full" :style="{ width: item.pct + '%', backgroundColor: item.color }"></div>
+              <div class="h-full rounded-full bg-blue-500 transition-all duration-500"
+                :style="{ width: assetBarPct(item.open_tasks) + '%' }"></div>
             </div>
+          </div>
+          <div v-if="data.top_assets.length === 0" class="text-xs text-gray-400 italic text-center py-4">
+            No open tasks
           </div>
         </div>
       </div>
     </div>
 
     <!-- Bottom Row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div v-if="data" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
 
       <!-- Recent Activity -->
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-100">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 class="text-sm font-bold text-gray-900">Recent Maintenance Activity</h3>
+          <router-link to="/maintenance/list">
+            <span class="text-xs text-blue-600 hover:underline">View all →</span>
+          </router-link>
         </div>
         <div class="divide-y divide-gray-50">
-          <div
-            v-for="item in recentActivity"
-            :key="item.name"
-            class="px-5 py-3.5 flex items-start justify-between hover:bg-gray-50 transition-colors"
-          >
+          <div v-for="task in data.recent_activity" :key="task.name"
+            class="px-5 py-3.5 flex items-start justify-between hover:bg-gray-50 transition-colors cursor-pointer"
+            @click="router.push({ name: 'MaintenanceTask', params: { id: task.name } })">
             <div class="flex-1 min-w-0 pr-3">
-              <p class="text-xs font-semibold text-gray-900 leading-snug">{{ item.title }}</p>
-              <p class="text-xs text-gray-400 mt-0.5">{{ item.subtitle }}</p>
+              <p class="text-xs font-semibold text-gray-900 font-mono leading-snug">{{ task.name }}</p>
+              <p class="text-xs text-gray-500 mt-0.5">
+                {{ task.asset_name || task.asset || '—' }} •
+                {{ task.technician_name }}
+                <span v-if="task.task_type" class="text-gray-400"> • {{ task.task_type }}</span>
+              </p>
             </div>
-            <span class="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full" :class="activityBadge(item.status)">
-              {{ item.status }}
+            <span class="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-full"
+              :class="statusBadge(task.status)">
+              {{ task.status }}
             </span>
+          </div>
+          <div v-if="data.recent_activity.length === 0" class="px-5 py-6 text-center text-xs text-gray-400">
+            No recent activity
           </div>
         </div>
       </div>
 
-      <!-- Maintenance Insights -->
+      <!-- Insights -->
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-100">
           <h3 class="text-sm font-bold text-gray-900">Maintenance Insights</h3>
         </div>
         <div class="p-5 space-y-3">
           <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
-            <h4 class="text-xs font-bold text-gray-900 mb-1">Top Repeat Issue</h4>
-            <p class="text-xs text-gray-500">HVAC-related calls remain the highest repeat maintenance source.</p>
+            <h4 class="text-xs font-bold text-gray-900 mb-1">Open vs In Progress</h4>
+            <p class="text-xs text-gray-500">
+              {{ data.stats.open }} tasks awaiting assignment,
+              {{ data.stats.in_progress }} currently being worked on.
+            </p>
           </div>
           <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
-            <h4 class="text-xs font-bold text-gray-900 mb-1">Technician Load</h4>
-            <p class="text-xs text-gray-500">Engineering Team B currently carries the highest active assignment load.</p>
+            <h4 class="text-xs font-bold text-gray-900 mb-1">Urgent Load</h4>
+            <p class="text-xs text-gray-500">
+              {{ data.stats.urgent_open }} high-priority tasks are still open.
+              <span v-if="data.stats.urgent_open > 5" class="text-red-500 font-medium"> Action required.</span>
+            </p>
           </div>
           <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
-            <h4 class="text-xs font-bold text-gray-900 mb-1">Preventive Compliance</h4>
-            <p class="text-xs text-gray-500">86% of scheduled preventive work has been completed this month.</p>
+            <h4 class="text-xs font-bold text-gray-900 mb-1">Weekly Throughput</h4>
+            <p class="text-xs text-gray-500">
+              {{ data.stats.done_this_week }} tasks completed this week.
+              Average resolution: {{ data.stats.avg_resolution_hrs }} hrs.
+            </p>
           </div>
-          <button class="w-full py-2.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors border border-blue-100">
-            Prioritize urgent repairs before end of shift
-          </button>
+          <router-link to="/maintenance/list?filter_priority=High">
+            <button class="w-full py-2.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors border border-red-100">
+              View urgent repairs →
+            </button>
+          </router-link>
         </div>
       </div>
+
     </div>
 
   </div>
 </template>
 
 <script setup>
-const taskBars = [
-  { label: 'Open', value: 12, height: 60, color: '#f59e0b' },
-  { label: 'Active', value: 15, height: 75, color: '#3b82f6' },
-  { label: 'Done', value: 38, height: 80, color: '#22c55e' },
-  { label: 'Hold', value: 4, height: 20, color: '#9ca3af' },
-]
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 
-const downtimeItems = [
-  { label: 'Laundry Dryer', hrs: 19, pct: 95, color: '#f59e0b' },
-  { label: 'Generator Bank', hrs: 13, pct: 65, color: '#3b82f6' },
-  { label: 'Booster Pump', hrs: 9, pct: 45, color: '#22c55e' },
-]
+const router = useRouter()
+const loading = ref(true)
+const data = ref(null)
 
-const recentActivity = [
-  { name: 'MNT-000219', title: 'MNT-000219 assigned to Engr. Paul for Laundry Dryer', subtitle: 'Corrective repair • Laundry Room • assigned 18 Apr 2026', status: 'Assigned' },
-  { name: 'MNT-000218', title: 'Preventive service due for generator battery bank', subtitle: 'Power House • service window today at 4:00 PM', status: 'Due' },
-  { name: 'MNT-000201', title: 'MNT-000201 completed for Room 305 Smart TV', subtitle: 'Screen firmware updated • closed by technician team', status: 'Closed' },
-  { name: 'MNT-000216', title: 'Escalation raised for repeated AC issue in Room 214', subtitle: 'Repeat incident within 7 days • requires supervisor review', status: 'Urgent' },
-  { name: 'MNT-000215', title: 'Vendor visit scheduled for boiler inspection', subtitle: 'External vendor • expected arrival tomorrow 9:00 AM', status: 'Scheduled' },
-]
+const dashResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_maintenance_dashboard_summary',
+  auto: false
+})
 
-function activityBadge(status) {
-  return {
-    'Assigned': 'bg-blue-50 text-blue-600',
-    'Due': 'bg-yellow-50 text-yellow-600',
-    'Closed': 'bg-green-50 text-green-600',
-    'Urgent': 'bg-red-50 text-red-500',
-    'Scheduled': 'bg-gray-100 text-gray-500',
-  }[status] || 'bg-gray-100 text-gray-500'
+async function loadDashboard() {
+  loading.value = true
+  try {
+    const res = await dashResource.fetch()
+    console.log('[MaintenanceDashboard]', res)
+    data.value = res
+  } catch (e) {
+    console.error('[MaintenanceDashboard] error:', e)
+  } finally {
+    loading.value = false
+  }
 }
+
+// ─── Bar chart helpers ────────────────────────────────────────────────────────
+const taskBars = computed(() => {
+  if (!data.value) return []
+  const s = data.value.stats
+  return [
+    { label: 'Open',     value: s.open,        color: '#f59e0b' },
+    { label: 'Progress', value: s.in_progress,  color: '#3b82f6' },
+    { label: 'Done',     value: s.done,         color: '#22c55e' },
+    { label: 'Hold',     value: s.hold,         color: '#9ca3af' },
+  ]
+})
+
+function barHeight(value) {
+  if (!data.value) return 10
+  const s = data.value.stats
+  const max = Math.max(s.open, s.in_progress, s.done, s.hold, 1)
+  return Math.max(8, Math.round((value / max) * 80))
+}
+
+function assetBarPct(count) {
+  if (!data.value?.top_assets?.length) return 0
+  const max = Math.max(...data.value.top_assets.map(a => a.open_tasks), 1)
+  return Math.round((count / max) * 100)
+}
+
+function typeColor(type) {
+  return {
+    Corrective: '#3b82f6',
+    Preventive: '#22c55e',
+    Routine:    '#f59e0b',
+    Inspection: '#a855f7',
+  }[type] || '#9ca3af'
+}
+
+function statusBadge(s) {
+  return {
+    'Open':        'bg-yellow-50 text-yellow-600',
+    'In Progress': 'bg-blue-50 text-blue-600',
+    'Done':        'bg-green-50 text-green-600',
+    'Hold':        'bg-gray-100 text-gray-500',
+    'Cancelled':   'bg-red-50 text-red-500',
+  }[s] || 'bg-gray-100 text-gray-500'
+}
+
+onMounted(loadDashboard)
 </script>

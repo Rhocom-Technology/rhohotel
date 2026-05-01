@@ -14,7 +14,7 @@
         "status",
         "amended_from",
         "column_break_main",
-        "assigned_to",
+        "assigned_technician",
         "supervisor",
         "timing_section",
         "start_time",
@@ -104,13 +104,13 @@
             "fieldtype": "Column Break"
         },
         {
-            "fieldname": "assigned_to",
+            "fieldname": "assigned_technician",
             "fieldtype": "Link",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
             "label": "Assigned Technician",
-            "options": "Employee",
-            "reqd": 1
+            "options": "Maintenance Technician",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
         },
         {
             "fieldname": "supervisor",
