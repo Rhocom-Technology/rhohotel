@@ -460,20 +460,20 @@ function selectRoomFromNumber(r) {
 }
 
 // ── API: Create POS Invoice (Cash / POS terminal) ──────────────────
-// const chargeResource = createResource({
-//   url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
-//   onSuccess(data) {
-//     chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
-//     clearCart()
-//     charging.value = false
-//     setTimeout(() => { chargeSuccess.value = '' }, 4000)
-//   },
-//   onError(err) {
-//     chargeError.value = err.message || 'Failed to create invoice'
-//     charging.value = false
-//     setTimeout(() => { chargeError.value = '' }, 6000)
-//   },
-// })
+const chargeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
+  onSuccess(data) {
+    chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
+    clearCart()
+    charging.value = false
+    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    chargeError.value = err?.message || 'Failed to create invoice'
+    charging.value = false
+    setTimeout(() => { chargeError.value = '' }, 6000)
+  },
+})
 
 const holdSaleResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
@@ -526,7 +526,7 @@ function setSettlementMethod(method) {
 }
 
 function onChargeNow() {
-  if (cart.value.length === 0) return
+  if (cart.value.length === 0 || charging.value) return
   chargeError.value = ''
 
   if (settlementMethod.value === 'Post to Room') {
@@ -540,17 +540,17 @@ function onChargeNow() {
 
   const mopMap = { Cash: 'Cash', POS: 'Bank Transfer' }
   charging.value = true
-  // chargeResource.submit({
-  //   items: JSON.stringify(cart.value.map(i => ({
-  //     item_code: i.item_code || i.id,
-  //     qty: i.qty,
-  //     price: i.price,
-  //   }))),
-  //   mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
-  //   customer: selectedBillTo.value?.name || null,
-  //   service_charge: serviceCharge.value,
-  //   kitchen_note: kitchenNote.value || null,
-  // })
+  chargeResource.submit({
+    items: JSON.stringify(cart.value.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    }))),
+    mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
+    customer: selectedBillTo.value?.name || null,
+    service_charge: serviceCharge.value,
+    kitchen_note: kitchenNote.value || null,
+  })
 }
 
 function onRoomSelected(room) {
