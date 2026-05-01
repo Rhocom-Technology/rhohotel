@@ -369,6 +369,67 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
     }
 
 
+@frappe.whitelist()
+def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=None, pos_profile=None):
+    """Create a draft POS Invoice for suspended/held sales."""
+    import json
+
+    items = json.loads(items) if isinstance(items, str) else items
+    if not items:
+        frappe.throw(_("No items in cart"))
+
+    company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
+    if not customer:
+        customer = frappe.db.get_single_value("POS Settings", "customer") or "Guest"
+
+    if not pos_profile:
+        pos_profile = _get_user_pos_profile()
+    if not pos_profile:
+        frappe.throw(_("No POS Profile is mapped to your user."))
+
+    pi = frappe.new_doc("POS Invoice")
+    pi.customer = customer
+    pi.company = company
+    pi.posting_date = nowdate()
+    pi.pos_profile = pos_profile
+    if kitchen_note:
+        pi.remarks = kitchen_note
+
+    for it in items:
+        pi.append("items", {
+            "item_code": it.get("item_code") or it.get("id"),
+            "qty": flt(it.get("qty", 1)),
+            "rate": flt(it.get("price", 0)),
+        })
+
+    svc = flt(service_charge)
+    if svc > 0:
+        svc_item = frappe.db.get_value("Item", {"item_name": ["like", "%service charge%"]}, "name")
+        if svc_item:
+            pi.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
+
+    # Keep one payment row to satisfy POS validations while still saving as draft.
+    pi.append("payments", {
+        "mode_of_payment": "Cash",
+        "amount": flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + svc,
+    })
+
+    try:
+        pi.flags.ignore_permissions = True
+        pi.set_missing_values()
+        pi.insert()
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POS draft invoice creation failed")
+        frappe.throw(_("Failed to save draft order. Please check POS profile and opening entry."))
+
+    return {
+        "pos_invoice": pi.name,
+        "grand_total": flt(pi.grand_total),
+        "status": "Draft",
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Draft POS Invoices
 # ─────────────────────────────────────────────────────────────────────────────

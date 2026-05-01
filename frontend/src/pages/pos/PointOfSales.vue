@@ -18,10 +18,7 @@
           class="btn-hover px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
           Close POS
         </button>
-        <button class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
-          Hold Sale
-        </button>
-        <button
+        <button @click="showDraftOrders = true"
           class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Draft Orders
         </button>
@@ -29,7 +26,7 @@
           class="btn-hover px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
           Open Tables
         </button>
-        <button class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <button @click="clearCart" class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
           New Sale
         </button>
       </div>
@@ -240,6 +237,11 @@
         <div class="flex gap-2">
           <button class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Edit Selection</button>
           <button class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
+          <button @click="onHoldSale"
+            :disabled="holding || cart.length === 0"
+            class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+            {{ holding ? 'Holding…' : 'Hold Sale' }}
+          </button>
           <button @click="onChargeNow"
             :disabled="charging || cart.length === 0"
             class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -264,7 +266,8 @@
     </Teleport>
 
     <!-- Modals -->
-    <!-- <DraftOrdersModal v-model="showDraftOrders" />
+    <DraftOrdersModal :key="draftOrdersKey" v-model="showDraftOrders" />
+    <!--
     <OpenTablesModal v-model="showOpenTables" />
     <PostToRoomModal
       v-model="showPostToRoom"
@@ -280,7 +283,8 @@
       :grand-total="grandTotal"
       :cart-items="cart"
       :service-charge="serviceCharge"
-    /> -->
+    />
+    -->
   </div>
 </template>
 
@@ -298,10 +302,10 @@ console.log('PointOfSales component loaded')
 const router = useRouter()
 
 // ── Modals ─────────────────────────────────────────────────────────
-// const showDraftOrders = ref(false)
-// const showOpenTables = ref(false)
-// const showPostToRoom = ref(false)
-// const showSplitBill = ref(false)
+const showDraftOrders = ref(false)
+const showPostToRoom = ref(false)
+const showSplitBill = ref(false)
+const draftOrdersKey = ref(0)
 
 // ── POS state ──────────────────────────────────────────────────────
 const menuSearch = ref('')
@@ -317,6 +321,7 @@ const selectedBillTo = ref(null)
 const chargeError = ref('')
 const chargeSuccess = ref('')
 const charging = ref(false)
+const holding = ref(false)
 
 // ── API: Menu Items ────────────────────────────────────────────────
 const menuResource = createResource({
@@ -470,11 +475,46 @@ function selectRoomFromNumber(r) {
 //   },
 // })
 
+const holdSaleResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
+  onSuccess(data) {
+    chargeSuccess.value = `Sale held as draft ${data.pos_invoice}`
+    holding.value = false
+    clearCart()
+    showDraftOrders.value = true
+    draftOrdersKey.value += 1
+    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    chargeError.value = err?.message || 'Failed to hold sale'
+    holding.value = false
+    setTimeout(() => { chargeError.value = '' }, 6000)
+  },
+})
+
 function clearCart() {
   cart.value = []
   selectedBillTo.value = null
   roomNumber.value = ''
   kitchenNote.value = ''
+  billToSearch.value = ''
+}
+
+function onHoldSale() {
+  if (cart.value.length === 0 || holding.value) return
+  chargeError.value = ''
+  holding.value = true
+
+  holdSaleResource.submit({
+    items: JSON.stringify(cart.value.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    }))),
+    customer: selectedBillTo.value?.name || null,
+    service_charge: serviceCharge.value,
+    kitchen_note: kitchenNote.value || null,
+  })
 }
 
 // ── Settlement ─────────────────────────────────────────────────────
