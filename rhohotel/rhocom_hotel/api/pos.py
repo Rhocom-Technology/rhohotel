@@ -1,6 +1,53 @@
 import frappe
 from frappe import _
 from frappe.utils import flt, cstr, now_datetime, nowdate, add_days, getdate
+from frappe.utils.nestedset import get_descendants_of
+
+
+def _get_user_pos_profile(user=None):
+    """Return the active POS Profile mapped to the current user.
+
+    No fallback is applied: users without mapping get no POS profile.
+    """
+    user = user or frappe.session.user
+
+    if not user or user == "Guest":
+        return None
+
+    mapped_profile = frappe.db.sql(
+        """
+        SELECT p.name
+        FROM `tabPOS Profile` p
+        INNER JOIN `tabPOS Profile User` pu ON pu.parent = p.name
+        WHERE p.disabled = 0
+          AND pu.parenttype = 'POS Profile'
+          AND pu.user = %s
+        ORDER BY p.modified DESC
+        LIMIT 1
+        """,
+        (user,),
+    )
+
+    if mapped_profile:
+        return mapped_profile[0][0]
+
+    return None
+
+
+def _get_allowed_item_groups_for_profile(pos_profile):
+    """Return configured POS profile item groups + descendants."""
+    if not pos_profile:
+        return []
+
+    profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+    groups = []
+    for row in profile_doc.get("item_groups") or []:
+        if not row.item_group:
+            continue
+        groups.append(row.item_group)
+        groups.extend(get_descendants_of("Item Group", row.item_group))
+
+    return list(set(groups))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -16,6 +63,18 @@ def get_pos_menu_items(search=None, category=None):
     """
     conditions = ["i.disabled = 0", "i.is_sales_item = 1"]
     args = []
+
+    pos_profile = _get_user_pos_profile()
+    if not pos_profile:
+        return []
+
+    allowed_item_groups = _get_allowed_item_groups_for_profile(pos_profile)
+    if not allowed_item_groups:
+        return []
+
+    placeholders = ", ".join(["%s"] * len(allowed_item_groups))
+    conditions.append(f"i.item_group IN ({placeholders})")
+    args.extend(allowed_item_groups)
 
     if search:
         q = f"%{cstr(search).strip()}%"
@@ -55,12 +114,32 @@ def get_pos_menu_items(search=None, category=None):
 @frappe.whitelist()
 def get_pos_item_categories():
     """Return distinct item groups that have active sales items."""
-    groups = frappe.db.sql("""
+    pos_profile = _get_user_pos_profile()
+    if not pos_profile:
+        return []
+
+    allowed_item_groups = _get_allowed_item_groups_for_profile(pos_profile)
+    if not allowed_item_groups:
+        return []
+
+    where_parts = ["disabled = 0", "is_sales_item = 1", "item_group IS NOT NULL"]
+    args = []
+
+    placeholders = ", ".join(["%s"] * len(allowed_item_groups))
+    where_parts.append(f"item_group IN ({placeholders})")
+    args.extend(allowed_item_groups)
+
+    where_clause = " AND ".join(where_parts)
+    groups = frappe.db.sql(
+        f"""
         SELECT DISTINCT item_group AS name
         FROM `tabItem`
-        WHERE disabled = 0 AND is_sales_item = 1 AND item_group IS NOT NULL
+        WHERE {where_clause}
         ORDER BY item_group
-    """, as_dict=1)
+        """,
+        tuple(args),
+        as_dict=1,
+    )
     return [g["name"] for g in groups]
 
 
