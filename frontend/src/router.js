@@ -3,7 +3,7 @@ import { createWebHistory } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 
 const router = createRouter({
-  history: createWebHistory('/front-desk/'),
+  history: createWebHistory('/frontdesk/'),
   routes: [
     { path: '/', redirect: '/room-view' },
     { path: '/login', name: 'Login', component: () => import('@/pages/Login.vue') },

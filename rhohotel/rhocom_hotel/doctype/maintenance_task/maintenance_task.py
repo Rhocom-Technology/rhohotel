@@ -34,17 +34,38 @@ class MaintenanceTask(Document):
     # VALIDATE
     # ------------------------------------------------------------------
 
-    def validate_technician_not_supervisor(self):
-        if (
-            self.assigned_to
-            and self.supervisor
-            and self.assigned_to == self.supervisor
-        ):
-            frappe.throw(
-                "The <b>Assigned Technician</b> and <b>Supervisor</b> "
-                "cannot be the same person."
-            )
+    # def validate_technician_not_supervisor(self):
+    #     if (
+    #         self.assigned_to
+    #         and self.supervisor
+    #         and self.assigned_to == self.supervisor
+    #     ):
+    #         frappe.throw(
+    #             "The <b>Assigned Technician</b> and <b>Supervisor</b> "
+    #             "cannot be the same person."
+    #         )
 
+    def validate_technician_not_supervisor(self):
+        """Ensure the assigned technician's linked employee is not the supervisor."""
+        # Use assigned_technician (the actual field name) — NOT assigned_to
+        if not self.assigned_technician or not self.supervisor:
+            return
+ 
+        # Get the employee linked to the technician (if In-House)
+        emp = frappe.db.get_value(
+            "Maintenance Technician",
+            self.assigned_technician,
+            "employee"
+        )
+ 
+        if emp and emp == self.supervisor:
+            frappe.throw(
+                f"The assigned technician's linked employee ({emp}) "
+                f"cannot also be the supervisor for this task."
+            )
+ 
+
+ 
     def validate_location(self):
         if not self.location:
             frappe.throw("Please enter a <b>Location</b> for this task.")

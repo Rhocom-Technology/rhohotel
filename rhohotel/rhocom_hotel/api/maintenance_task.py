@@ -1,4 +1,5 @@
 import frappe
+import json
 from frappe.utils import nowdate, add_days, get_first_day_of_week
 
 
@@ -152,7 +153,7 @@ def get_maintenance_list(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": max(1, -(-total // page_size)),  # ceiling division
+        "total_pages": max(1, -(-total // page_size)),
     }
 
 
@@ -456,6 +457,7 @@ def get_assets_for_task():
         limit_page_length=500
     )
 
+
 @frappe.whitelist()
 def get_maintenance_dashboard_summary():
     """
@@ -464,7 +466,7 @@ def get_maintenance_dashboard_summary():
     """
     today = nowdate()
     week_start = get_first_day_of_week(today)
- 
+
     # ── Status counts ────────────────────────────────────────────────────────
     open_count      = frappe.db.count("Maintenance Task", {"status": "Open"})
     in_progress     = frappe.db.count("Maintenance Task", {"status": "In Progress"})
@@ -472,13 +474,13 @@ def get_maintenance_dashboard_summary():
     hold_count      = frappe.db.count("Maintenance Task", {"status": "Hold"})
     cancelled_count = frappe.db.count("Maintenance Task", {"status": "Cancelled"})
     urgent_open     = frappe.db.count("Maintenance Task", {"priority": "High", "status": ["not in", ["Done", "Cancelled"]]})
- 
+
     done_this_week = frappe.db.sql("""
         SELECT COUNT(name) as cnt FROM `tabMaintenance Task`
         WHERE status = 'Done'
         AND DATE(end_time) >= %s AND DATE(end_time) <= %s
     """, (week_start, today), as_dict=1)[0].cnt or 0
- 
+
     # ── Task type mix ─────────────────────────────────────────────────────────
     type_counts = frappe.db.sql("""
         SELECT task_type, COUNT(name) as cnt
@@ -489,8 +491,8 @@ def get_maintenance_dashboard_summary():
     total_typed = sum(r.cnt for r in type_counts) or 1
     type_mix = {r.task_type: round((r.cnt / total_typed) * 100, 1) for r in type_counts}
     corrective_pct = type_mix.get("Corrective", 0)
- 
-    # ── Avg resolution time (hrs) — tasks with both start & end time ─────────
+
+    # ── Avg resolution time (hrs) ─────────────────────────────────────────────
     avg_res = frappe.db.sql("""
         SELECT AVG(TIMESTAMPDIFF(HOUR, start_time, end_time)) as avg_hrs
         FROM `tabMaintenance Task`
@@ -499,8 +501,8 @@ def get_maintenance_dashboard_summary():
         AND DATE(end_time) >= %s
     """, (week_start,), as_dict=1)
     avg_resolution_hrs = round(avg_res[0].avg_hrs or 0, 1) if avg_res else 0
- 
-    # ── Top assets by open task count ──────────────────────────────────────
+
+    # ── Top assets by open task count ─────────────────────────────────────────
     top_assets = frappe.db.sql("""
         SELECT asset, COUNT(name) as open_tasks
         FROM `tabMaintenance Task`
@@ -510,18 +512,19 @@ def get_maintenance_dashboard_summary():
         ORDER BY open_tasks DESC
         LIMIT 4
     """, as_dict=1)
- 
+
     for row in top_assets:
         row["asset_name"] = frappe.db.get_value("Asset", row["asset"], "asset_name") or row["asset"]
- 
-    # ── Recent activity (latest 5 tasks) ──────────────────────────────────
+
+    # ── Recent activity (latest 5 tasks) ─────────────────────────────────────
     recent = frappe.get_all(
         "Maintenance Task",
-        fields=["name", "task_type", "status", "priority", "asset", "assigned_technician", "location", "task_description", "modified"],
+        fields=["name", "task_type", "status", "priority", "asset",
+                "assigned_technician", "location", "task_description", "modified"],
         order_by="modified desc",
         limit_page_length=5
     )
- 
+
     tech_cache = {}
     asset_cache = {}
     for task in recent:
@@ -532,7 +535,7 @@ def get_maintenance_dashboard_summary():
             task["technician_name"] = tech_cache[tid]
         else:
             task["technician_name"] = "Unassigned"
- 
+
         if task.get("asset"):
             aid = task["asset"]
             if aid not in asset_cache:
@@ -540,7 +543,7 @@ def get_maintenance_dashboard_summary():
             task["asset_name"] = asset_cache[aid]
         else:
             task["asset_name"] = None
- 
+
     return {
         "stats": {
             "open": open_count,
@@ -557,4 +560,3 @@ def get_maintenance_dashboard_summary():
         "top_assets": top_assets,
         "recent_activity": recent,
     }
- 
