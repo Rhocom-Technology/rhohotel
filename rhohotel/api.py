@@ -1015,12 +1015,12 @@ def complete_payment(payment_session):
 @frappe.whitelist(allow_guest=True)
 def add_cors_headers(response=None):
 	"""Add CORS headers to allow cross-origin requests."""
-	frappe.response.headers.add("Access-Control-Allow-Origin", "*")
-	frappe.response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	frappe.response.headers.add(
-		"Access-Control-Allow-Headers", "Content-Type, Authorization, X-Frappe-CSRF-Token"
-	)
-	frappe.response.headers.add("Access-Control-Allow-Credentials", "true")
+	if response is None:
+		return
+	response.headers["Access-Control-Allow-Origin"] = "*"
+	response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+	response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Frappe-CSRF-Token"
+	response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
 # from datetime import datetime
