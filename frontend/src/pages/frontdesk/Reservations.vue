@@ -122,7 +122,7 @@
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.reservation_type }}</p>
               </td>
               <td class="px-4 py-4">
-                <p class="text-xs font-semibold text-gray-900">{{ item.primary_guest_name }}</p>
+                <p class="text-xs font-semibold text-gray-900">{{ item.guest_name }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.reservation_type === 'Corporate' ? (item.customer || 'Corporate') : 'Individual Guest' }}</p>
               </td>
               <td class="px-4 py-4">
@@ -130,11 +130,10 @@
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.number_of_nights }} Night{{ item.number_of_nights !== 1 ? 's' : '' }}</p>
               </td>
               <td class="px-4 py-4">
-                <p class="text-xs text-gray-700">{{ item.room_numbers || (item.total_rooms + (item.total_rooms > 1 ? ' Rooms' : ' Room')) }}</p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ item.room_type || 'Various' }}</p>
+                <p class="text-xs text-gray-700">{{ item.room_number || '—' }}</p>
               </td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-900">
-                {{ formatCurrency(item.total_amount) }}
+                {{ formatCurrency(item.net_total) }}
               </td>
               <td class="px-4 py-4">
                 <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(item.statusLabel)">
@@ -231,19 +230,20 @@ const showNewReservation = ref(false)
 const reservationResource = createResource({
   url: 'frappe.client.get_list',
   params: {
-    doctype: 'Hotel Front Desk Reservation',
+    doctype: 'Hotel Room Reservation',
     fields: [
       'name',
       'reservation_type',
-      'primary_guest_name',
+      'guest_name',
       'customer',
+      'room_number',
       'from_date',
       'to_date',
       'number_of_nights',
-      'total_rooms',
-      'total_amount',
+      'net_total',
+      'status',
       'docstatus',
-      'room_numbers',
+      'front_desk_reservation',
     ],
     order_by: 'creation desc',
     limit_page_length: 500,
@@ -254,18 +254,17 @@ const reservationResource = createResource({
 const reservations = computed(() => (reservationResource.data || []).map((row) => ({
   ...row,
   reservation_type: row.reservation_type || 'Individual',
-  primary_guest_name: row.primary_guest_name || '—',
-  total_rooms: Number(row.total_rooms || 0),
-  total_amount: Number(row.total_amount || 0),
+  guest_name: row.guest_name || '—',
+  net_total: Number(row.net_total || 0),
   number_of_nights: Number(row.number_of_nights || 0),
   statusLabel: mapReservationStatus(row),
 })))
 
 const stats = computed(() => ({
   total: reservations.value.length,
-  pendingArrivalToday: reservations.value.filter((r) => isToday(r.from_date) && ['Confirmed', 'Pending', 'Due Today'].includes(r.statusLabel)).length,
+  pendingArrivalToday: reservations.value.filter((r) => isToday(r.from_date) && ['Confirmed', 'Due Today'].includes(r.statusLabel)).length,
   checkedIn: reservations.value.filter((r) => r.statusLabel === 'Checked In').length,
-  bookedValue: reservations.value.reduce((sum, r) => sum + Number(r.total_amount || 0), 0),
+  bookedValue: reservations.value.reduce((sum, r) => sum + Number(r.net_total || 0), 0),
 }))
 
 const filteredList = computed(() => {
@@ -274,8 +273,9 @@ const filteredList = computed(() => {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
       r.name.toLowerCase().includes(q) ||
-      r.primary_guest_name.toLowerCase().includes(q) ||
-      String(r.customer || '').toLowerCase().includes(q)
+      r.guest_name.toLowerCase().includes(q) ||
+      String(r.customer || '').toLowerCase().includes(q) ||
+      String(r.room_number || '').toLowerCase().includes(q)
     )
   }
   if (filterStatus.value) list = list.filter(r => r.statusLabel === filterStatus.value)
@@ -323,19 +323,19 @@ function startNewReservation(type) {
 }
 
 function openReservation(item) {
-  router.push({ name: 'SavedReservation', params: { id: item.name } })
+  window.location.href = `/app/hotel-room-reservation/${encodeURIComponent(item.name)}`
 }
 
 function mapReservationStatus(item) {
   if (Number(item.docstatus) === 2) return 'Cancelled'
   if (Number(item.docstatus) === 0) return 'Draft'
-  // docstatus === 1 (submitted)
+  // Use the status field directly from Hotel Room Reservation
+  if (item.status === 'Checked In') return 'Checked In'
+  if (item.status === 'Checked Out') return 'Checked Out'
+  if (item.status === 'Cancelled') return 'Cancelled'
+  // For Confirmed reservations, show 'Due Today' if arriving today
   if (isToday(item.from_date)) return 'Due Today'
-  const arrivalDate = item.from_date ? new Date(item.from_date) : null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  if (arrivalDate && arrivalDate < today) return 'Checked In'
-  return 'Confirmed'
+  return item.status || 'Confirmed'
 }
 
 function isToday(dateValue) {

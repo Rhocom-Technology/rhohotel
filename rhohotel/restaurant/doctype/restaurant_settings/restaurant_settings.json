@@ -8,7 +8,8 @@
   "default_customer",
   "default_waiter",
   "default_cashier",
-  "enable_table_booking"
+  "enable_table_booking",
+  "kitchen_item_groups"
  ],
  "fields": [
   {
@@ -34,6 +35,12 @@
    "fieldtype": "Check",
    "label": "Enable Table Booking",
    "default": "1"
+  },
+  {
+   "fieldname": "kitchen_item_groups",
+   "fieldtype": "Small Text",
+   "label": "Kitchen Item Groups (JSON)",
+   "description": "JSON array of Item Group names whose items should be sent to kitchen. E.g. [\"Food\", \"Hot Meals\"]"
   }
  ],
  "issingle": 1,

@@ -22,21 +22,21 @@
         </div>
 
         <div class="flex items-center gap-2 flex-wrap mt-4">
-          <button v-if="reservation.docstatus === 0" :disabled="actionLoading" @click="emit('submitReservation')"
+          <button v-if="reservation.docstatus === 0" :disabled="actionLoading" @click="emit('submit-reservation')"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">Submit Reservation</button>
-          <button @click="emit('openPayments')" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
+          <button @click="emit('open-payments')" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
           <button @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
           <button @click="showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
           <button v-if="!reservation.sales_invoice && reservation.docstatus === 1"
-            :disabled="actionLoading" @click="emit('createInvoice')"
+            :disabled="actionLoading" @click="emit('create-invoice')"
             class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40">Create Invoice</button>
           <button v-if="reservation.sales_invoice"
             class="px-4 py-2 text-xs font-medium text-purple-600 border border-purple-200 bg-purple-50 rounded-lg cursor-default" disabled>
             Invoice: {{ reservation.sales_invoice }}
           </button>
-          <button v-if="reservation.docstatus === 1" :disabled="actionLoading" @click="emit('checkIn')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
+          <button v-if="reservation.docstatus === 1" :disabled="actionLoading" @click="emit('check-in')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
-          <button :disabled="actionLoading" @click="emit('cancelReservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
+          <button :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ const props = defineProps({
   actionLoading: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['refresh', 'openPayments', 'checkIn', 'cancelReservation', 'createInvoice', 'submitReservation'])
+const emit = defineEmits(['refresh', 'open-payments', 'check-in', 'cancel-reservation', 'create-invoice', 'submit-reservation'])
 
 const showAdjustModal = ref(false)
 const showChangeRoomModal = ref(false)

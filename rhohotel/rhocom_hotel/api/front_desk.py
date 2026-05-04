@@ -477,3 +477,239 @@ def create_payment_receipt(payment_entry):
 	site_url = frappe.utils.get_url()
 	pd_url = f"/api/method/frappe.utils.print_format.download_pdf?doctype=Payment%20Entry&name={payment_entry}&format=Payment%20Receipt"
 	return {"print_url": site_url + pd_url}
+
+
+@frappe.whitelist()
+def get_payment_list(limit=500):
+	"""Return a list of Payment Entries for the front desk payment view."""
+	fields = [
+		"name",
+		"posting_date",
+		"mode_of_payment",
+		"reference_no",
+		"party",
+		"party_name",
+		"paid_amount",
+		"received_amount",
+		"custom_hotel_room_check_in",
+		"docstatus",
+	]
+	if frappe.db.has_column("Payment Entry", "posting_time"):
+		fields.append("posting_time")
+
+	rows = frappe.get_all(
+		"Payment Entry",
+		fields=fields,
+		order_by="posting_date desc, modified desc",
+		limit_page_length=int(limit),
+		ignore_permissions=False,
+	)
+	return rows
+
+
+@frappe.whitelist()
+def get_night_audit_data(audit_date=None):
+	"""Return a full night audit snapshot for the given date (defaults to today).
+
+	Returns:
+	  - audit_date
+	  - occupancy: { total_rooms, occupied, vacant, reserved, maintenance, arrivals, departures, occupancy_pct }
+	  - revenue: { room_revenue, fnb_revenue, other_revenue, total_revenue, by_room_type }
+	  - payments: { total_collected, by_method: [{method, amount, count}] }
+	  - outstanding: { total_outstanding, guest_count, ledger: [{check_in, guest, room, amount}] }
+	  - room_status: [{ room_number, room_type, floor, status, housekeeping_status, guest, check_in }]
+	"""
+	from frappe.utils import getdate, nowdate, flt
+
+	audit_date = getdate(audit_date) if audit_date else getdate(nowdate())
+	audit_date_str = str(audit_date)
+
+	# ── Occupancy ────────────────────────────────────────────────────────────
+	total_rooms = frappe.db.count("Hotel Room")
+
+	occupied = frappe.db.count("Hotel Room", {"status": "Occupied"})
+	vacant = frappe.db.count("Hotel Room", {"status": "Vacant"})
+	reserved = frappe.db.count("Hotel Room", {"status": "Reserved"})
+	maintenance = frappe.db.count("Hotel Room", {"status": "Maintenance"})
+
+	arrivals = frappe.db.count(
+		"Hotel Room Check In",
+		{
+			"check_in_datetime": ["between", [f"{audit_date_str} 00:00:00", f"{audit_date_str} 23:59:59"]],
+			"docstatus": 1,
+		},
+	)
+
+	departures = frappe.db.count(
+		"Hotel Room Check In",
+		{
+			"actual_check_out_datetime": [
+				"between",
+				[f"{audit_date_str} 00:00:00", f"{audit_date_str} 23:59:59"],
+			],
+			"status": "Checked Out",
+		},
+	)
+
+	occupancy_pct = round((occupied / total_rooms * 100), 1) if total_rooms else 0.0
+
+	# ── Revenue ──────────────────────────────────────────────────────────────
+	# Sales Invoices submitted today (room charges posted via Hotel Room Check In)
+	room_invoices = frappe.db.sql(
+		"""
+		SELECT si.name, si.grand_total, si.custom_hotel_room_check_in,
+		       ci.room_number, ci.room_type
+		FROM `tabSales Invoice` si
+		LEFT JOIN `tabHotel Room Check In` ci ON ci.name = si.custom_hotel_room_check_in
+		WHERE si.posting_date = %s AND si.docstatus = 1
+		""",
+		audit_date_str,
+		as_dict=True,
+	)
+
+	room_revenue = flt(sum(r.grand_total or 0 for r in room_invoices if r.custom_hotel_room_check_in))
+
+	# POS Invoices (F&B / restaurant)
+	fnb_revenue = 0.0
+	try:
+		fnb_rows = frappe.db.sql(
+			"SELECT COALESCE(SUM(grand_total), 0) as total FROM `tabPOS Invoice` WHERE posting_date = %s AND docstatus = 1",
+			audit_date_str,
+			as_dict=True,
+		)
+		fnb_revenue = flt((fnb_rows or [{}])[0].get("total") or 0)
+	except Exception:
+		pass
+
+	other_revenue = flt(
+		sum(r.grand_total or 0 for r in room_invoices if not r.custom_hotel_room_check_in)
+	)
+
+	total_revenue = room_revenue + fnb_revenue + other_revenue
+
+	# Revenue by room type
+	by_room_type_map = {}
+	for r in room_invoices:
+		if r.custom_hotel_room_check_in and r.room_type:
+			by_room_type_map[r.room_type] = by_room_type_map.get(r.room_type, 0) + flt(r.grand_total)
+
+	by_room_type = [{"room_type": k, "revenue": v} for k, v in sorted(by_room_type_map.items())]
+
+	# ── Payments ─────────────────────────────────────────────────────────────
+	payment_rows = frappe.db.sql(
+		"""
+		SELECT mode_of_payment, SUM(received_amount) as total, COUNT(*) as cnt
+		FROM `tabPayment Entry`
+		WHERE posting_date = %s AND docstatus = 1 AND payment_type = 'Receive'
+		GROUP BY mode_of_payment
+		ORDER BY total DESC
+		""",
+		audit_date_str,
+		as_dict=True,
+	)
+
+	total_collected = flt(sum(r.total or 0 for r in payment_rows))
+	by_method = [
+		{"method": r.mode_of_payment or "Unknown", "amount": flt(r.total), "count": r.cnt}
+		for r in payment_rows
+	]
+
+	# ── Outstanding Balances ─────────────────────────────────────────────────
+	outstanding_rows = frappe.db.sql(
+		"""
+		SELECT ci.name as check_in, ci.guest, ci.room_number,
+		       ci.total_outstanding_amount
+		FROM `tabHotel Room Check In` ci
+		WHERE ci.status = 'Checked In'
+		  AND ci.docstatus = 1
+		  AND ci.total_outstanding_amount > 0
+		ORDER BY ci.total_outstanding_amount DESC
+		""",
+		as_dict=True,
+	)
+
+	total_outstanding = flt(sum(r.total_outstanding_amount or 0 for r in outstanding_rows))
+
+	# Resolve guest display names
+	ledger = []
+	for r in outstanding_rows:
+		guest_name = r.guest
+		if guest_name:
+			display = frappe.db.get_value("Hotel Guest", guest_name, "hotel_guest_name") or guest_name
+		else:
+			display = "—"
+		ledger.append(
+			{
+				"check_in": r.check_in,
+				"guest": display,
+				"room": r.room_number or "—",
+				"amount": flt(r.total_outstanding_amount),
+			}
+		)
+
+	# ── Room Status Snapshot ─────────────────────────────────────────────────
+	rooms = frappe.get_all(
+		"Hotel Room",
+		fields=["name", "room_number", "room_type", "floor", "status", "housekeeping_status", "current_guest"],
+		order_by="room_number asc",
+		limit_page_length=500,
+	)
+
+	active_checkins = frappe.get_all(
+		"Hotel Room Check In",
+		filters={"status": "Checked In", "docstatus": 1},
+		fields=["name", "room_number", "guest"],
+		limit_page_length=500,
+	)
+	checkin_by_room = {cstr(c.room_number).strip(): c for c in active_checkins}
+
+	room_status = []
+	for rm in rooms:
+		rn = cstr(rm.room_number or rm.name).strip()
+		ci = checkin_by_room.get(rn, {})
+		guest_id = rm.current_guest or (ci.get("guest") if ci else None)
+		guest_display = ""
+		if guest_id:
+			guest_display = frappe.db.get_value("Hotel Guest", guest_id, "hotel_guest_name") or guest_id
+		room_status.append(
+			{
+				"room_number": rm.room_number or rm.name,
+				"room_type": rm.room_type or "—",
+				"floor": rm.floor or "—",
+				"status": _normalize_room_status(rm.status),
+				"housekeeping_status": _normalize_housekeeping_status(rm.housekeeping_status),
+				"guest": guest_display,
+				"check_in": ci.get("name") if ci else None,
+			}
+		)
+
+	return {
+		"audit_date": audit_date_str,
+		"occupancy": {
+			"total_rooms": total_rooms,
+			"occupied": occupied,
+			"vacant": vacant,
+			"reserved": reserved,
+			"maintenance": maintenance,
+			"arrivals": arrivals,
+			"departures": departures,
+			"occupancy_pct": occupancy_pct,
+		},
+		"revenue": {
+			"room_revenue": room_revenue,
+			"fnb_revenue": fnb_revenue,
+			"other_revenue": other_revenue,
+			"total_revenue": total_revenue,
+			"by_room_type": by_room_type,
+		},
+		"payments": {
+			"total_collected": total_collected,
+			"by_method": by_method,
+		},
+		"outstanding": {
+			"total_outstanding": total_outstanding,
+			"guest_count": len(ledger),
+			"ledger": ledger,
+		},
+		"room_status": room_status,
+	}

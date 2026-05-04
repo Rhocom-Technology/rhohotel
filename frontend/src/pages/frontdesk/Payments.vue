@@ -79,7 +79,7 @@
         </div>
         <div class="flex items-center gap-2 pb-0.5">
           <button @click="clearFilters" class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Reset</button>
-          <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
+          <button @click="openReceivePayment" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
         </div>
       </div>
     </div>
@@ -172,7 +172,10 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+
+const router = useRouter()
 
 const search = ref('')
 const filterMethod = ref('')
@@ -182,25 +185,8 @@ const page = ref(1)
 const pageSize = 10
 
 const paymentResource = createResource({
-  url: 'frappe.client.get_list',
-  params: {
-    doctype: 'Payment Entry',
-    fields: [
-      'name',
-      'posting_date',
-      'posting_time',
-      'mode_of_payment',
-      'reference_no',
-      'party',
-      'party_name',
-      'paid_amount',
-      'received_amount',
-      'custom_hotel_room_check_in',
-      'docstatus',
-    ],
-    order_by: 'posting_date desc, modified desc',
-    limit_page_length: 500,
-  },
+  url: 'rhohotel.rhocom_hotel.api.front_desk.get_payment_list',
+  params: { limit: 500 },
   auto: true,
 })
 
@@ -283,6 +269,10 @@ function formatPaymentDate(dateValue, timeValue) {
   const dateLabel = baseDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   if (!timeValue) return dateLabel
   return `${dateLabel} • ${String(timeValue).slice(0, 5)}`
+}
+
+function openReceivePayment() {
+  router.push('/check-ins')
 }
 
 watch([search, filterMethod, filterStatus, filterDate], () => {

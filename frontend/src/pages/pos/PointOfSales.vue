@@ -322,6 +322,9 @@ const chargeError = ref('')
 const chargeSuccess = ref('')
 const charging = ref(false)
 const holding = ref(false)
+const sendingKitchen = ref(false)
+const lastSubmittedItems = ref([])
+const lastSubmittedContext = ref({ tableOrRoom: '', source: 'Restaurant Dining', kitchenNote: '' })
 
 // ── API: Menu Items ────────────────────────────────────────────────
 const menuResource = createResource({
@@ -332,6 +335,11 @@ const menuResource = createResource({
 
 const categoriesResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
+  auto: true,
+})
+
+const kitchenGroupsResource = createResource({
+  url: 'rhohotel.restaurant.api.kitchen.get_kitchen_item_groups',
   auto: true,
 })
 
@@ -387,6 +395,8 @@ const filteredMenuItems = computed(() => {
   }
   return items
 })
+
+const kitchenItemGroups = computed(() => new Set(kitchenGroupsResource.data || []))
 
 // ── Computed: bill-to results ──────────────────────────────────────
 // const billToResults = computed(() =>
@@ -463,9 +473,13 @@ function selectRoomFromNumber(r) {
 const chargeResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
   onSuccess(data) {
+    const submitted = [...lastSubmittedItems.value]
+    const context = { ...lastSubmittedContext.value }
+
     chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
     clearCart()
     charging.value = false
+    triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
@@ -478,11 +492,15 @@ const chargeResource = createResource({
 const holdSaleResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
   onSuccess(data) {
+    const submitted = [...lastSubmittedItems.value]
+    const context = { ...lastSubmittedContext.value }
+
     chargeSuccess.value = `Sale held as draft ${data.pos_invoice}`
     holding.value = false
     clearCart()
     showDraftOrders.value = true
     draftOrdersKey.value += 1
+    triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
@@ -491,6 +509,71 @@ const holdSaleResource = createResource({
     setTimeout(() => { chargeError.value = '' }, 6000)
   },
 })
+
+const sendKitchenResource = createResource({
+  url: 'rhohotel.restaurant.api.kitchen.send_to_kitchen',
+  onSuccess(data) {
+    sendingKitchen.value = false
+    if (data?.skipped) return
+    chargeSuccess.value = `${chargeSuccess.value || ''}${chargeSuccess.value ? ' • ' : ''}Sent ${data.item_count} kitchen item(s)`
+    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    sendingKitchen.value = false
+    chargeError.value = err?.message || 'Failed to send kitchen items'
+    setTimeout(() => { chargeError.value = '' }, 6000)
+  },
+})
+
+function getKitchenSource() {
+  if (settlementMethod.value === 'Post to Room' || selectedBillTo.value?.room) {
+    return 'Room Service'
+  }
+  return 'Restaurant Dining'
+}
+
+function getKitchenItemsFrom(orderItems) {
+  const groups = kitchenItemGroups.value
+  if (!groups.size) return []
+
+  return orderItems
+    .filter(i => groups.has(i.category))
+    .map(i => ({
+      item_code: i.item_code || i.id,
+      item_name: i.name,
+      qty: i.qty,
+    }))
+}
+
+function triggerKitchenSend(posInvoice, submittedItems, context) {
+  const kitchenItems = getKitchenItemsFrom(submittedItems)
+  if (!posInvoice || kitchenItems.length === 0 || sendingKitchen.value) return
+
+  sendingKitchen.value = true
+  sendKitchenResource.submit({
+    pos_invoice: posInvoice,
+    table_or_room: context.tableOrRoom || '',
+    source: context.source || 'Restaurant Dining',
+    kitchen_note: context.kitchenNote || null,
+    items: JSON.stringify(kitchenItems),
+  })
+}
+
+function captureSubmissionSnapshot() {
+  lastSubmittedItems.value = cart.value.map(i => ({
+    id: i.id,
+    item_code: i.item_code || i.id,
+    name: i.name,
+    category: i.category,
+    qty: i.qty,
+    price: i.price,
+  }))
+  lastSubmittedContext.value = {
+    tableOrRoom: selectedBillTo.value?.room || roomNumber.value || '',
+    source: getKitchenSource(),
+    kitchenNote: kitchenNote.value || '',
+  }
+}
 
 function clearCart() {
   cart.value = []
@@ -504,6 +587,7 @@ function onHoldSale() {
   if (cart.value.length === 0 || holding.value) return
   chargeError.value = ''
   holding.value = true
+  captureSubmissionSnapshot()
 
   holdSaleResource.submit({
     items: JSON.stringify(cart.value.map(i => ({
@@ -540,6 +624,7 @@ function onChargeNow() {
 
   const mopMap = { Cash: 'Cash', POS: 'Bank Transfer' }
   charging.value = true
+  captureSubmissionSnapshot()
   chargeResource.submit({
     items: JSON.stringify(cart.value.map(i => ({
       item_code: i.item_code || i.id,

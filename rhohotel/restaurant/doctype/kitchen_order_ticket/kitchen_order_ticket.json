@@ -5,19 +5,54 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "pos_invoice",
   "restaurant_order",
+  "table_or_room",
+  "source",
+  "chef_station",
+  "sent_at",
   "items",
   "status",
   "notes"
  ],
  "fields": [
   {
+   "fieldname": "pos_invoice",
+   "fieldtype": "Link",
+   "label": "POS Invoice",
+   "options": "POS Invoice",
+   "in_list_view": 1
+  },
+  {
    "fieldname": "restaurant_order",
    "fieldtype": "Link",
    "label": "Restaurant Order",
    "options": "Restaurant Order",
-   "reqd": 1,
+   "in_list_view": 0
+  },
+  {
+   "fieldname": "table_or_room",
+   "fieldtype": "Data",
+   "label": "Table / Room",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "\nRestaurant Dining\nRoom Service\nTakeaway\nBar",
+   "default": "Restaurant Dining",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "chef_station",
+   "fieldtype": "Data",
+   "label": "Chef Station"
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent At"
   },
   {
    "fieldname": "items",
@@ -30,7 +65,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Pending\nIn Progress\nServed",
+   "options": "Pending\nIn Progress\nReady\nDelayed\nServed",
    "default": "Pending",
    "in_list_view": 1
   },
