@@ -683,6 +683,85 @@ def get_night_audit_data(audit_date=None):
 			}
 		)
 
+	# ── No-shows ─────────────────────────────────────────────────────────────
+	noshows = 0
+	try:
+		noshows = int(
+			frappe.db.sql(
+				"""
+				SELECT COUNT(*) FROM `tabHotel Room Reservation`
+				WHERE DATE(check_in_date) = %s
+				  AND status NOT IN ('Checked In','Checked Out','Cancelled')
+				""",
+				audit_date_str,
+			)[0][0]
+			or 0
+		)
+	except Exception:
+		pass
+
+	# ── Open POS Orders (draft invoices) ─────────────────────────────────────
+	open_pos_orders = 0
+	try:
+		open_pos_orders = int(frappe.db.count("POS Invoice", {"docstatus": 0}) or 0)
+	except Exception:
+		pass
+
+	# ── Unallocated submitted Payment Entries ────────────────────────────────
+	unallocated_payments = 0
+	try:
+		unallocated_payments = int(
+			frappe.db.sql(
+				"""
+				SELECT COUNT(*) FROM `tabPayment Entry` pe
+				WHERE pe.posting_date = %s
+				  AND pe.docstatus = 1
+				  AND pe.payment_type = 'Receive'
+				  AND NOT EXISTS (
+				      SELECT 1 FROM `tabPayment Entry Reference` per
+				      WHERE per.parent = pe.name
+				  )
+				""",
+				audit_date_str,
+			)[0][0]
+			or 0
+		)
+	except Exception:
+		pass
+
+	# ── Hourly Movement (arrivals / departures bucketed by hour) ─────────────
+	hourly_movement = []
+	try:
+		arr_rows = frappe.db.sql(
+			"""
+			SELECT HOUR(check_in_datetime) AS hr, COUNT(*) AS cnt
+			FROM `tabHotel Room Check In`
+			WHERE DATE(check_in_datetime) = %s AND docstatus = 1
+			GROUP BY HOUR(check_in_datetime)
+			""",
+			audit_date_str,
+			as_dict=True,
+		)
+		dep_rows = frappe.db.sql(
+			"""
+			SELECT HOUR(actual_check_out_datetime) AS hr, COUNT(*) AS cnt
+			FROM `tabHotel Room Check In`
+			WHERE DATE(actual_check_out_datetime) = %s AND status = 'Checked Out'
+			GROUP BY HOUR(actual_check_out_datetime)
+			""",
+			audit_date_str,
+			as_dict=True,
+		)
+		arr_map = {r.hr: int(r.cnt) for r in arr_rows}
+		dep_map = {r.hr: int(r.cnt) for r in dep_rows}
+		all_hours = sorted(set(arr_map.keys()) | set(dep_map.keys()))
+		hourly_movement = [
+			{"hour": h, "arrivals": arr_map.get(h, 0), "departures": dep_map.get(h, 0)}
+			for h in all_hours
+		]
+	except Exception:
+		pass
+
 	return {
 		"audit_date": audit_date_str,
 		"occupancy": {
@@ -693,6 +772,7 @@ def get_night_audit_data(audit_date=None):
 			"maintenance": maintenance,
 			"arrivals": arrivals,
 			"departures": departures,
+			"noshows": noshows,
 			"occupancy_pct": occupancy_pct,
 		},
 		"revenue": {
@@ -712,4 +792,9 @@ def get_night_audit_data(audit_date=None):
 			"ledger": ledger,
 		},
 		"room_status": room_status,
+		"critical": {
+			"open_pos_orders": open_pos_orders,
+			"unallocated_payments": unallocated_payments,
+		},
+		"hourly_movement": hourly_movement,
 	}

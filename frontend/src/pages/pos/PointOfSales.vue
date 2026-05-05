@@ -169,7 +169,14 @@
             </thead>
             <tbody>
               <tr v-for="item in cart" :key="item.id" class="cart-item border-b border-gray-50 last:border-0">
-                <td class="py-2 pr-1"><input type="checkbox" class="w-3.5 h-3.5 accent-blue-600" /></td>
+                <td class="py-2 pr-1">
+                  <input
+                    type="checkbox"
+                    class="w-3.5 h-3.5 accent-blue-600"
+                    :checked="isKitchenSelected(item)"
+                    :disabled="!isKitchenEligible(item)"
+                    @change="onKitchenSelectionChange(item, $event.target.checked)" />
+                </td>
                 <td class="py-2 pr-2"><span class="text-xs font-medium text-gray-900">{{ item.name }}</span></td>
                 <td class="py-2">
                   <div class="flex items-center gap-1">
@@ -223,6 +230,30 @@
               {{ method }}
             </button>
           </div>
+        </div>
+
+        <!-- Kitchen Send Mode -->
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-orange-600 mb-2">Kitchen Send Mode</p>
+          <div class="flex items-center gap-1.5">
+            <button
+              @click="kitchenSendScope = 'all'"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-all"
+              :class="kitchenSendScope === 'all'
+                ? 'bg-orange-500 text-white border-orange-500'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'">
+              Group Items (All)
+            </button>
+            <button
+              @click="kitchenSendScope = 'selected'"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-all"
+              :class="kitchenSendScope === 'selected'
+                ? 'bg-orange-500 text-white border-orange-500'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'">
+              Selected Items ({{ selectedKitchenCount }})
+            </button>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-1">Only items in configured kitchen item groups are sent.</p>
         </div>
 
         <!-- Note -->
@@ -323,8 +354,10 @@ const chargeSuccess = ref('')
 const charging = ref(false)
 const holding = ref(false)
 const sendingKitchen = ref(false)
+const kitchenSendScope = ref('all')
+const selectedKitchenItemMap = ref({})
 const lastSubmittedItems = ref([])
-const lastSubmittedContext = ref({ tableOrRoom: '', source: 'Restaurant Dining', kitchenNote: '' })
+const lastSubmittedContext = ref({ tableOrRoom: '', source: 'Restaurant Dining', kitchenNote: '', sendScope: 'all', selectedItemCodes: [] })
 
 // ── API: Menu Items ────────────────────────────────────────────────
 const menuResource = createResource({
@@ -397,6 +430,9 @@ const filteredMenuItems = computed(() => {
 })
 
 const kitchenItemGroups = computed(() => new Set(kitchenGroupsResource.data || []))
+const selectedKitchenCount = computed(() =>
+  cart.value.filter(i => isKitchenEligible(i) && selectedKitchenItemMap.value[i.id]).length
+)
 
 // ── Computed: bill-to results ──────────────────────────────────────
 // const billToResults = computed(() =>
@@ -532,21 +568,28 @@ function getKitchenSource() {
   return 'Restaurant Dining'
 }
 
-function getKitchenItemsFrom(orderItems) {
+function getKitchenItemsFrom(orderItems, context) {
   const groups = kitchenItemGroups.value
   if (!groups.size) return []
 
-  return orderItems
+  let filtered = orderItems
     .filter(i => groups.has(i.category))
     .map(i => ({
       item_code: i.item_code || i.id,
       item_name: i.name,
       qty: i.qty,
     }))
+
+  if (context?.sendScope === 'selected') {
+    const selectedCodes = new Set(context?.selectedItemCodes || [])
+    filtered = filtered.filter(i => selectedCodes.has(i.item_code))
+  }
+
+  return filtered
 }
 
 function triggerKitchenSend(posInvoice, submittedItems, context) {
-  const kitchenItems = getKitchenItemsFrom(submittedItems)
+  const kitchenItems = getKitchenItemsFrom(submittedItems, context)
   if (!posInvoice || kitchenItems.length === 0 || sendingKitchen.value) return
 
   sendingKitchen.value = true
@@ -572,6 +615,26 @@ function captureSubmissionSnapshot() {
     tableOrRoom: selectedBillTo.value?.room || roomNumber.value || '',
     source: getKitchenSource(),
     kitchenNote: kitchenNote.value || '',
+    sendScope: kitchenSendScope.value,
+    selectedItemCodes: cart.value
+      .filter(i => selectedKitchenItemMap.value[i.id])
+      .map(i => i.item_code || i.id),
+  }
+}
+
+function isKitchenEligible(item) {
+  return kitchenItemGroups.value.has(item.category)
+}
+
+function isKitchenSelected(item) {
+  return !!selectedKitchenItemMap.value[item.id]
+}
+
+function onKitchenSelectionChange(item, checked) {
+  if (!isKitchenEligible(item)) return
+  selectedKitchenItemMap.value = {
+    ...selectedKitchenItemMap.value,
+    [item.id]: !!checked,
   }
 }
 
@@ -655,6 +718,15 @@ watch(settlementMethod, (val) => {
   if (val !== 'Post to Room') roomNumber.value = ''
   else if (selectedBillTo.value?.room) roomNumber.value = selectedBillTo.value.room
 })
+
+watch(cart, (items) => {
+  const validIds = new Set(items.map(i => i.id))
+  const nextMap = {}
+  for (const [id, checked] of Object.entries(selectedKitchenItemMap.value)) {
+    if (validIds.has(id)) nextMap[id] = checked
+  }
+  selectedKitchenItemMap.value = nextMap
+}, { deep: true })
 </script>
 
 <style>

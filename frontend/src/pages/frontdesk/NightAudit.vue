@@ -10,7 +10,7 @@
       <div class="na-navbar-right">
         <span class="na-navbar-date">{{ nowLabel }}</span>
         <button @click="closeDay" class="na-btn-close">Close Day</button>
-        <div class="na-avatar">RP</div>
+        <div class="na-avatar">{{ avatarInitials }}</div>
       </div>
     </header>
 
@@ -21,8 +21,15 @@
       <div class="na-close-banner">
         <div class="na-close-banner-meta">
           <span class="na-meta-ts">{{ nowLabel }}</span>
+          <label class="na-date-label">
+            Audit Date:
+            <input v-model="auditDate" type="date" class="na-date-input" />
+          </label>
         </div>
-        <button @click="closeDay" class="na-btn-close-lg">Close Day</button>
+        <div class="na-close-banner-right">
+          <button @click="loadData" class="na-btn-refresh">Refresh</button>
+          <button @click="closeDay" class="na-btn-close-lg">Close Day</button>
+        </div>
       </div>
 
       <!-- Audit Meta Row -->
@@ -53,7 +60,7 @@
             <div class="na-stat-card na-stat-dark">
               <p class="na-stat-label">Total Revenue Today</p>
               <p class="na-stat-value">{{ fmt(data.revenue.total_revenue) }}</p>
-              <p class="na-stat-badge na-badge-green">+8.4% vs previous day</p>
+              <p class="na-stat-badge na-badge-green">Room + F&amp;B + Other</p>
             </div>
             <div class="na-stat-card">
               <p class="na-stat-label">Room Revenue</p>
@@ -132,11 +139,17 @@
           </section>
 
           <!-- Transaction Validation Critical -->
-          <section class="na-card na-card-critical">
-            <h3 class="na-card-title na-title-red">Transaction Validation (Critical)</h3>
-            <p class="na-card-sub na-sub-red">This section turns red because exceptions exist and require action before close of day.</p>
+          <section class="na-card" :class="criticalItems.length ? 'na-card-critical' : 'na-card-ok'">
+            <h3 class="na-card-title" :class="criticalItems.length ? 'na-title-red' : 'na-title-green'">
+              Transaction Validation {{ criticalItems.length ? '(Critical)' : '(All Clear)' }}
+            </h3>
+            <p class="na-card-sub" :class="criticalItems.length ? 'na-sub-red' : ''">
+              {{ criticalItems.length
+                ? 'Exceptions exist and require action before close of day.'
+                : 'No exceptions found. Safe to proceed with day close.' }}
+            </p>
 
-            <div class="na-critical-list">
+            <div v-if="criticalItems.length" class="na-critical-list">
               <div class="na-critical-item" v-for="c in criticalItems" :key="c.title">
                 <div class="na-critical-left">
                   <span class="na-critical-dot"></span>
@@ -147,6 +160,10 @@
                 </div>
                 <span class="na-critical-count">{{ c.count }}</span>
               </div>
+            </div>
+            <div v-else class="na-all-clear">
+              <span class="na-all-clear-icon">✓</span>
+              <p>All transactions validated</p>
             </div>
           </section>
         </div>
@@ -169,21 +186,19 @@
               </div>
             </div>
 
-            <!-- Distribution Chart (SVG bar chart) -->
+            <!-- Distribution Chart (SVG bar chart - dynamic) -->
             <div class="na-dist-section">
               <h4 class="na-pm-title">Distribution</h4>
               <div class="na-dist-chart">
-                <svg viewBox="0 0 200 100" class="na-dist-svg">
-                  <rect x="10"  y="10" width="35" height="75" fill="#3b82f6" rx="3"/>
-                  <rect x="60"  y="55" width="35" height="30" fill="#22c55e" rx="3"/>
-                  <rect x="110" y="72" width="35" height="13" fill="#f59e0b" rx="3"/>
-                  <rect x="160" y="80" width="35" height="5"  fill="#ef4444" rx="3"/>
+                <svg viewBox="0 0 200 90" class="na-dist-svg">
+                  <rect v-for="b in distSvgBars" :key="b.x"
+                    :x="b.x" :y="b.y" width="35" :height="b.height" :fill="b.color" rx="3"/>
                 </svg>
                 <div class="na-dist-legend">
-                  <div class="na-dist-legend-item"><span class="na-dot na-dot-blue"></span> Occupied</div>
-                  <div class="na-dist-legend-item"><span class="na-dot na-dot-green"></span> Vacant Clean</div>
-                  <div class="na-dist-legend-item"><span class="na-dot na-dot-orange"></span> Vacant Dirty</div>
-                  <div class="na-dist-legend-item"><span class="na-dot na-dot-red"></span> Out of Service</div>
+                  <div class="na-dist-legend-item"><span class="na-dot na-dot-blue"></span> Occupied ({{ roomDistribution.occupied }})</div>
+                  <div class="na-dist-legend-item"><span class="na-dot na-dot-green"></span> Vacant Clean ({{ roomDistribution.vacClean }})</div>
+                  <div class="na-dist-legend-item"><span class="na-dot na-dot-orange"></span> Vacant Dirty ({{ roomDistribution.vacDirty }})</div>
+                  <div class="na-dist-legend-item"><span class="na-dot na-dot-red"></span> Out of Service ({{ roomDistribution.oos }})</div>
                 </div>
               </div>
             </div>
@@ -205,25 +220,26 @@
               </div>
               <div class="na-gm-stat">
                 <p class="na-gm-label">No-shows</p>
-                <p class="na-gm-value">{{ data.occupancy.noshows || 3 }}</p>
+                <p class="na-gm-value">{{ data.occupancy.noshows ?? 0 }}</p>
               </div>
             </div>
 
             <!-- Guest Flow Chart -->
             <div class="na-gf-section">
               <h4 class="na-pm-title">Guest Flow Chart</h4>
-              <div class="na-gf-chart">
-                <div class="na-gf-bars" v-for="(hr, i) in guestFlowHours" :key="hr">
-                  <div class="na-gf-bar na-gf-arr" :style="{ height: gfArrival(i) + 'px' }"></div>
-                  <div class="na-gf-bar na-gf-dep" :style="{ height: gfDeparture(i) + 'px' }"></div>
-                  <div class="na-gf-bar na-gf-nos" :style="{ height: gfNoshows(i) + 'px' }"></div>
-                  <span class="na-gf-label">{{ hr }}</span>
+              <div v-if="guestFlowData.length" class="na-gf-chart">
+                <div class="na-gf-group" v-for="slot in guestFlowData" :key="slot.label">
+                  <div class="na-gf-bars">
+                    <div class="na-gf-bar na-gf-arr" :style="{ height: slot.arrPx + 'px' }" :title="'Arrivals: ' + slot.arrivals"></div>
+                    <div class="na-gf-bar na-gf-dep" :style="{ height: slot.depPx + 'px' }" :title="'Departures: ' + slot.departures"></div>
+                  </div>
+                  <span class="na-gf-label">{{ slot.label }}</span>
                 </div>
               </div>
+              <p v-else class="na-empty-sm">No movement data for this date.</p>
               <div class="na-legend" style="margin-top:8px;">
                 <span class="na-dot na-dot-blue"></span><span class="na-legend-label">Arrivals</span>
                 <span class="na-dot na-dot-green"></span><span class="na-legend-label">Departures</span>
-                <span class="na-dot na-dot-red"></span><span class="na-legend-label">No-show</span>
               </div>
             </div>
           </section>
@@ -322,8 +338,10 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import { useSessionStore } from '@/stores/session'
 
 const router = useRouter()
+const session = useSessionStore()
 
 const today = new Date().toISOString().slice(0, 10)
 const auditDate = ref(today)
@@ -332,21 +350,28 @@ const roomStatusFilter = ref('')
 const roomPage = ref(1)
 const roomPageSize = 30
 
+// ── Session / avatar ─────────────────────────────────────────────────────
+const avatarInitials = computed(() => {
+  const name = session.fullName || session.user || ''
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'NA'
+})
+
 const nowLabel = computed(() => {
   return new Date().toLocaleString('en-GB', {
     day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true
+    hour: '2-digit', minute: '2-digit', hour12: true,
   }).replace(',', '')
 })
 
 const auditMeta = computed(() => [
-  { label: 'Audit Date', value: auditDate.value },
-  { label: 'Shift', value: 'Night Shift' },
-  { label: 'Prepared By', value: 'Night Auditor' },
-  { label: 'Scope', value: 'All Departments' },
-  { label: 'Status', value: 'Audit Open' },
+  { label: 'Audit Date',  value: auditDate.value },
+  { label: 'Shift',       value: 'Night Shift' },
+  { label: 'Prepared By', value: session.fullName || session.user || 'Night Auditor' },
+  { label: 'Scope',       value: 'All Departments' },
+  { label: 'Status',      value: data.value ? 'Audit Open' : 'Loading…' },
 ])
 
+// ── API resource ─────────────────────────────────────────────────────────
 const resource = createResource({
   url: 'rhohotel.rhocom_hotel.api.front_desk.get_night_audit_data',
   params: { audit_date: auditDate.value },
@@ -362,66 +387,130 @@ function loadData() {
 
 watch(auditDate, loadData)
 
-// ── Computed helpers ──────────────────────────────────────────────────────
+// ── Revenue ──────────────────────────────────────────────────────────────
 const roomRevPct = computed(() => {
-  if (!data.value) return 0
+  if (!data.value || !data.value.revenue.total_revenue) return 0
   return Math.round((data.value.revenue.room_revenue / data.value.revenue.total_revenue) * 100)
 })
 
 const revenueBars = computed(() => {
   if (!data.value) return []
-  const max = data.value.revenue.total_revenue
+  const max = data.value.revenue.total_revenue || 1
   return [
     { label: 'Rooms', amount: data.value.revenue.room_revenue, pct: (data.value.revenue.room_revenue / max) * 100, color: '#3b82f6' },
-    { label: 'POS',   amount: data.value.revenue.fnb_revenue,  pct: (data.value.revenue.fnb_revenue / max) * 100,  color: '#22c55e' },
+    { label: 'POS',   amount: data.value.revenue.fnb_revenue,  pct: (data.value.revenue.fnb_revenue  / max) * 100, color: '#22c55e' },
     { label: 'Other', amount: data.value.revenue.other_revenue, pct: (data.value.revenue.other_revenue / max) * 100, color: '#f59e0b' },
   ]
 })
 
+// ── Critical items (real API data) ───────────────────────────────────────
 const criticalItems = computed(() => {
   if (!data.value) return []
-  return [
-    { title: 'Unsettled Invoices', desc: `${data.value.outstanding.guest_count} guest folios remain open with pending settlement.`, count: data.value.outstanding.guest_count },
-    { title: 'POS Orders Not Closed', desc: '5 draft or held POS bills are still open at shift end.', count: 5 },
-    { title: 'Payment Unallocated', desc: '2 transfer payments have not been allocated to invoices.', count: 2 },
-  ]
+  const items = []
+  if (data.value.outstanding.guest_count > 0) {
+    items.push({
+      title: 'Unsettled Invoices',
+      desc: `${data.value.outstanding.guest_count} guest folios remain open with pending settlement.`,
+      count: data.value.outstanding.guest_count,
+    })
+  }
+  const openPos = data.value.critical?.open_pos_orders || 0
+  if (openPos > 0) {
+    items.push({
+      title: 'POS Orders Not Closed',
+      desc: `${openPos} draft or held POS bills are still open at shift end.`,
+      count: openPos,
+    })
+  }
+  const unalloc = data.value.critical?.unallocated_payments || 0
+  if (unalloc > 0) {
+    items.push({
+      title: 'Unallocated Payments',
+      desc: `${unalloc} payment entries have not been allocated to invoices.`,
+      count: unalloc,
+    })
+  }
+  return items
+})
+
+// ── Room distribution (computed from real room_status list) ──────────────
+const roomDistribution = computed(() => {
+  if (!data.value) return { occupied: 0, vacClean: 0, vacDirty: 0, oos: 0 }
+  const rooms = data.value.room_status
+  return {
+    occupied: rooms.filter(r => r.status === 'Occupied').length,
+    vacClean: rooms.filter(r => r.status === 'Vacant' && r.housekeeping_status === 'Clean').length,
+    vacDirty: rooms.filter(r => r.status === 'Vacant' && ['Dirty', 'In Progress'].includes(r.housekeeping_status)).length,
+    oos:      rooms.filter(r => r.status === 'Maintenance').length,
+  }
 })
 
 const roomStatusBars = computed(() => {
   if (!data.value) return []
-  const occ = data.value.occupancy.occupied
-  const total = data.value.occupancy.total_rooms
-  const vacClean = Math.round(data.value.occupancy.vacant * 0.6)
-  const vacDirty = Math.round(data.value.occupancy.vacant * 0.3)
-  const oos = data.value.occupancy.vacant - vacClean - vacDirty
-  const max = occ
+  const d = roomDistribution.value
+  const max = Math.max(d.occupied, 1)
   return [
-    { label: 'Occupied',      count: occ,      pct: 100,                    color: '#3b82f6' },
-    { label: 'Vacant Clean',  count: vacClean, pct: (vacClean / max) * 100, color: '#22c55e' },
-    { label: 'Vacant Dirty',  count: vacDirty, pct: (vacDirty / max) * 100, color: '#f59e0b' },
-    { label: 'Out of Service',count: oos,      pct: (oos / max) * 100,      color: '#ef4444' },
+    { label: 'Occupied',       count: d.occupied,  pct: 100,                       color: '#3b82f6' },
+    { label: 'Vacant Clean',   count: d.vacClean,  pct: (d.vacClean / max) * 100,  color: '#22c55e' },
+    { label: 'Vacant Dirty',   count: d.vacDirty,  pct: (d.vacDirty / max) * 100,  color: '#f59e0b' },
+    { label: 'Out of Service', count: d.oos,       pct: (d.oos / max) * 100,        color: '#ef4444' },
   ]
 })
 
+const distSvgBars = computed(() => {
+  const d = roomDistribution.value
+  const total = (d.occupied + d.vacClean + d.vacDirty + d.oos) || 1
+  const maxH = 75
+  return [
+    { x: 10,  color: '#3b82f6', val: d.occupied  },
+    { x: 60,  color: '#22c55e', val: d.vacClean  },
+    { x: 110, color: '#f59e0b', val: d.vacDirty  },
+    { x: 160, color: '#ef4444', val: d.oos        },
+  ].map(g => {
+    const h = Math.max(3, Math.round((g.val / total) * maxH))
+    return { ...g, height: h, y: 85 - h }
+  })
+})
+
+// ── Guest flow chart (real hourly_movement from API) ─────────────────────
+const guestFlowData = computed(() => {
+  if (!data.value?.hourly_movement?.length) return []
+  const maxVal = Math.max(...data.value.hourly_movement.map(h => Math.max(h.arrivals, h.departures, 1)))
+  const chartH = 60
+  return data.value.hourly_movement.map(h => ({
+    label:      fmtHour(h.hour),
+    arrPx:      Math.max(3, Math.round((h.arrivals   / maxVal) * chartH)),
+    depPx:      Math.max(3, Math.round((h.departures / maxVal) * chartH)),
+    arrivals:   h.arrivals,
+    departures: h.departures,
+  }))
+})
+
+function fmtHour(h) {
+  if (h === 0)  return '12AM'
+  if (h < 12)   return h + 'AM'
+  if (h === 12) return '12PM'
+  return (h - 12) + 'PM'
+}
+
+// ── Payment helpers ──────────────────────────────────────────────────────
 function paymentPct(amount) {
-  if (!data.value) return 0
+  if (!data.value || !data.value.payments.total_collected) return 0
   return Math.round((amount / data.value.payments.total_collected) * 100)
 }
 
 function pmColor(method) {
-  return { Cash: '#f87171', Transfer: '#fb923c', Card: '#60a5fa', 'Corporate Credit': '#4ade80' }[method] || '#9ca3af'
+  return {
+    Cash:               '#f87171',
+    Transfer:           '#fb923c',
+    Card:               '#60a5fa',
+    'Bank Transfer':    '#a78bfa',
+    'Corporate Credit': '#4ade80',
+    POS:                '#34d399',
+  }[method] || '#9ca3af'
 }
 
-// Guest flow fake data
-const guestFlowHours = ['8PM', '9PM', '10PM', '11PM', '12AM']
-const arrData  = [8, 4, 5, 3, 1]
-const depData  = [5, 6, 3, 2, 2]
-const nosData  = [1, 1, 0, 1, 0]
-const gfArrival   = i => arrData[i] * 4
-const gfDeparture = i => depData[i] * 4
-const gfNoshows   = i => nosData[i] * 4
-
-// Room filtering
+// ── Room filtering & pagination ──────────────────────────────────────────
 const filteredRoomsAll = computed(() => {
   if (!data.value) return []
   let list = data.value.room_status
@@ -430,7 +519,8 @@ const filteredRoomsAll = computed(() => {
     list = list.filter(r =>
       r.room_number.toLowerCase().includes(q) ||
       r.room_type.toLowerCase().includes(q) ||
-      (r.guest || '').toLowerCase().includes(q)
+      (r.guest || '').toLowerCase().includes(q) ||
+      String(r.floor).toLowerCase().includes(q)
     )
   }
   if (roomStatusFilter.value) list = list.filter(r => r.status === roomStatusFilter.value)
@@ -443,47 +533,31 @@ const filteredRooms = computed(() =>
 )
 watch([roomSearch, roomStatusFilter], () => { roomPage.value = 1 })
 
-// Helpers
+// ── Generic helpers ──────────────────────────────────────────────────────
 function fmt(amount) {
   return `₦${Number(amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
-
 function roomStatusClass(s) {
   return { Occupied: 'pill-green', Vacant: 'pill-gray', Reserved: 'pill-blue', Maintenance: 'pill-red' }[s] || 'pill-gray'
 }
-
 function hkStatusClass(s) {
   return { Clean: 'pill-green-soft', Dirty: 'pill-yellow', 'In Progress': 'pill-blue-soft', Inspected: 'pill-purple' }[s] || 'pill-gray'
 }
-
 function closeDay() {
-  // Emit or handle close day logic here
-  alert('Closing Day…')
+  if (!confirm('Are you sure you want to close the day? This action cannot be undone.')) return
+  alert('Day close initiated…')
 }
 </script>
 
 <style scoped>
 /* ── Tokens ─────────────────────────────────────────────────────────── */
-:root {
-  --na-bg: #f3f4f6;
-  --na-navbar-bg: #111827;
-  --na-card-bg: #ffffff;
-  --na-border: #e5e7eb;
-  --na-text: #111827;
-  --na-muted: #6b7280;
-  --na-blue: #3b82f6;
-  --na-green: #22c55e;
-  --na-red: #ef4444;
-  --na-orange: #f59e0b;
-}
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 .night-audit-wrapper {
   font-family: 'DM Sans', 'Segoe UI', sans-serif;
   background: #f1f5f9;
   min-height: 100vh;
-  color: var(--na-text);
+  color: #111827;
 }
 
 /* ── Navbar ─────────────────────────────────────────────────────────── */
@@ -496,162 +570,160 @@ function closeDay() {
   position: sticky;
   top: 0;
   z-index: 50;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .na-navbar-title { font-size: 17px; font-weight: 700; color: #f8fafc; letter-spacing: -.3px; }
 .na-navbar-sub   { font-size: 11px; color: #94a3b8; margin-top: 2px; }
-.na-navbar-right { display: flex; align-items: center; gap: 14px; }
+.na-navbar-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .na-navbar-date  { font-size: 11px; color: #94a3b8; }
 .na-btn-close {
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  padding: 7px 16px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s;
+  background: #ef4444; color: #fff; border: none;
+  padding: 7px 16px; border-radius: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
 }
 .na-btn-close:hover { background: #dc2626; }
 .na-avatar {
   width: 32px; height: 32px; border-radius: 50%;
   background: #2563eb; color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
 }
 
 /* ── Body ───────────────────────────────────────────────────────────── */
-.na-body { max-width: 1280px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 18px; }
+.na-body {
+  max-width: 1280px; margin: 0 auto;
+  padding: 24px 24px 48px;
+  display: flex; flex-direction: column; gap: 18px;
+}
 
-/* Close Banner */
+/* ── Close Banner ───────────────────────────────────────────────────── */
 .na-close-banner {
-  background: #fff;
-  border: 1px solid var(--na-border);
-  border-radius: 12px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
   padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
 }
-.na-close-banner-meta { display: flex; align-items: center; gap: 8px; }
-.na-meta-ts { font-size: 11px; color: var(--na-muted); }
+.na-close-banner-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.na-close-banner-right { display: flex; align-items: center; gap: 8px; }
+.na-meta-ts { font-size: 11px; color: #6b7280; }
+.na-date-label { font-size: 11px; color: #6b7280; display: flex; align-items: center; gap: 6px; }
+.na-date-input {
+  padding: 5px 10px; font-size: 11px;
+  border: 1px solid #e5e7eb; border-radius: 7px; outline: none; color: #111827;
+}
+.na-date-input:focus { border-color: #3b82f6; }
+.na-btn-refresh {
+  background: #f1f5f9; color: #374151; border: 1px solid #e5e7eb;
+  padding: 7px 14px; border-radius: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
+}
+.na-btn-refresh:hover { background: #e2e8f0; }
 .na-btn-close-lg {
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  padding: 8px 22px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
+  background: #ef4444; color: #fff; border: none;
+  padding: 8px 22px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
 }
+.na-btn-close-lg:hover { background: #dc2626; }
 
-/* Audit Meta Row */
+/* ── Audit Meta Row ─────────────────────────────────────────────────── */
 .na-meta-row {
-  background: #fff;
-  border: 1px solid var(--na-border);
-  border-radius: 12px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  divide-x: 1px solid var(--na-border);
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+  display: grid; grid-template-columns: repeat(5, 1fr);
 }
-.na-meta-item {
-  padding: 14px 20px;
-  border-right: 1px solid var(--na-border);
-}
+.na-meta-item { padding: 14px 20px; border-right: 1px solid #e5e7eb; }
 .na-meta-item:last-child { border-right: none; }
-.na-meta-label { font-size: 10px; color: var(--na-muted); margin-bottom: 5px; }
-.na-meta-value { font-size: 13px; font-weight: 600; color: var(--na-text); }
+.na-meta-label { font-size: 10px; color: #6b7280; margin-bottom: 5px; }
+.na-meta-value { font-size: 13px; font-weight: 600; color: #111827; }
 
-/* States */
-.na-state-card { background: #fff; border-radius: 12px; border: 1px solid var(--na-border); padding: 48px; text-align: center; }
-.na-state-text { font-size: 13px; color: var(--na-muted); }
+/* ── States ─────────────────────────────────────────────────────────── */
+.na-state-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 48px; text-align: center; }
+.na-state-text { font-size: 13px; color: #6b7280; }
 .na-state-err  { color: #ef4444; }
 .na-btn-retry  { margin-top: 10px; padding: 6px 16px; font-size: 12px; border: 1px solid #bfdbfe; color: #3b82f6; border-radius: 6px; background: #eff6ff; cursor: pointer; }
 
 /* ── Section ─────────────────────────────────────────────────────────── */
-.na-section { }
 .na-section-header { margin-bottom: 12px; }
-.na-section-title  { font-size: 15px; font-weight: 700; color: var(--na-text); }
-.na-section-sub    { font-size: 12px; font-weight: 400; color: var(--na-muted); margin-left: 4px; }
+.na-section-title  { font-size: 15px; font-weight: 700; color: #111827; }
+.na-section-sub    { font-size: 12px; font-weight: 400; color: #6b7280; margin-left: 4px; }
 
 /* ── Stat Grid ──────────────────────────────────────────────────────── */
 .na-stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
 .na-stat-card {
-  background: #fff;
-  border: 1px solid var(--na-border);
-  border-radius: 12px;
-  padding: 16px 18px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px;
 }
-.na-stat-dark { background: #1e293b; }
+.na-stat-dark       { background: #1e293b; }
 .na-stat-green-tint { background: #f0fdf4; }
-.na-stat-label { font-size: 10px; color: var(--na-muted); margin-bottom: 8px; }
+.na-stat-label { font-size: 10px; color: #6b7280; margin-bottom: 8px; }
 .na-stat-dark .na-stat-label { color: #94a3b8; }
 .na-stat-value { font-size: 22px; font-weight: 800; color: #f8fafc; letter-spacing: -.5px; }
-.na-value-dark { color: var(--na-text); }
+.na-value-dark { color: #111827; }
 .na-stat-badge { font-size: 10px; margin-top: 6px; font-weight: 500; }
 .na-badge-green { color: #16a34a; }
 .na-badge-blue  { color: #2563eb; }
 .na-badge-red   { color: #dc2626; }
-.na-badge-gray  { color: var(--na-muted); }
+.na-badge-gray  { color: #6b7280; }
 
 /* ── Two-col layout ─────────────────────────────────────────────────── */
 .na-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
 /* ── Cards ──────────────────────────────────────────────────────────── */
 .na-card {
-  background: #fff;
-  border: 1px solid var(--na-border);
-  border-radius: 14px;
-  padding: 20px 24px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px 24px;
 }
 .na-card-critical { border-color: #fca5a5; background: #fff5f5; }
-.na-card-title { font-size: 14px; font-weight: 700; color: var(--na-text); margin-bottom: 2px; }
-.na-card-sub   { font-size: 11px; color: var(--na-muted); margin-bottom: 14px; }
-.na-title-red  { color: #b91c1c; }
+.na-card-ok       { border-color: #86efac; background: #f0fdf4; }
+.na-card-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+.na-card-sub   { font-size: 11px; color: #6b7280; margin-bottom: 14px; }
+.na-title-red   { color: #b91c1c; }
+.na-title-green { color: #15803d; }
 .na-sub-red    { color: #dc2626; }
 
-/* Legend */
+/* ── All Clear ──────────────────────────────────────────────────────── */
+.na-all-clear {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px; gap: 8px; color: #16a34a;
+}
+.na-all-clear-icon { font-size: 32px; font-weight: 700; }
+.na-all-clear p { font-size: 13px; font-weight: 600; }
+
+/* ── Legend ─────────────────────────────────────────────────────────── */
 .na-legend { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.na-legend-label { font-size: 11px; color: var(--na-muted); margin-right: 6px; }
-.na-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.na-legend-label { font-size: 11px; color: #6b7280; margin-right: 6px; }
+.na-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .na-dot-blue   { background: #3b82f6; }
 .na-dot-green  { background: #22c55e; }
 .na-dot-orange { background: #f59e0b; }
 .na-dot-red    { background: #ef4444; }
 
-/* Revenue bars */
+/* ── Revenue bars ───────────────────────────────────────────────────── */
 .na-bar-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.na-bar-row { display: flex; align-items: center; gap: 10px; }
-.na-bar-label { font-size: 11px; color: var(--na-muted); width: 40px; flex-shrink: 0; }
+.na-bar-row   { display: flex; align-items: center; gap: 10px; }
+.na-bar-label { font-size: 11px; color: #6b7280; width: 40px; flex-shrink: 0; }
 .na-bar-track { flex: 1; height: 10px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
-.na-bar-fill  { height: 100%; border-radius: 99px; transition: width .4s ease; }
-.na-bar-amt   { font-size: 11px; font-weight: 600; color: var(--na-text); width: 70px; text-align: right; flex-shrink: 0; }
+.na-bar-fill  { height: 100%; border-radius: 99px; transition: width .4s ease; min-width: 2px; }
+.na-bar-amt   { font-size: 11px; font-weight: 600; color: #111827; width: 70px; text-align: right; flex-shrink: 0; }
 
-/* Trend SVG */
-.na-trend-label { font-size: 10px; color: var(--na-muted); margin-bottom: 4px; }
+/* ── Trend SVG ──────────────────────────────────────────────────────── */
+.na-trend-label { font-size: 10px; color: #6b7280; margin-bottom: 4px; }
 .na-trend-svg { width: 100%; height: 60px; margin-bottom: 16px; }
 
-/* Payment methods */
-.na-pm-section { border-top: 1px solid var(--na-border); padding-top: 14px; }
-.na-pm-title { font-size: 12px; font-weight: 600; color: var(--na-text); margin-bottom: 10px; }
+/* ── Payment methods ────────────────────────────────────────────────── */
+.na-pm-section { border-top: 1px solid #e5e7eb; padding-top: 14px; }
+.na-pm-title { font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 10px; }
 .na-pm-list { display: flex; flex-direction: column; gap: 8px; }
-.na-pm-row { display: flex; align-items: center; gap: 10px; }
-.na-pm-label { font-size: 11px; color: var(--na-muted); width: 110px; flex-shrink: 0; }
+.na-pm-row  { display: flex; align-items: center; gap: 10px; }
+.na-pm-label { font-size: 11px; color: #6b7280; width: 110px; flex-shrink: 0; }
 .na-pm-track { flex: 1; height: 8px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
-.na-pm-fill  { height: 100%; border-radius: 99px; }
-.na-pm-amt   { font-size: 11px; font-weight: 600; color: var(--na-text); width: 70px; text-align: right; flex-shrink: 0; }
+.na-pm-fill  { height: 100%; border-radius: 99px; min-width: 2px; }
+.na-pm-amt   { font-size: 11px; font-weight: 600; color: #111827; width: 70px; text-align: right; flex-shrink: 0; }
+.na-empty-sm { font-size: 11px; color: #6b7280; padding: 12px 0; }
 
-/* Critical items */
+/* ── Critical items ─────────────────────────────────────────────────── */
 .na-critical-list { display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
 .na-critical-item {
-  background: #fff;
-  border: 1px solid #fca5a5;
-  border-radius: 10px;
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  background: #fff; border: 1px solid #fca5a5; border-radius: 10px;
+  padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
 }
 .na-critical-left { display: flex; align-items: flex-start; gap: 10px; }
 .na-critical-dot  { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; flex-shrink: 0; margin-top: 3px; }
@@ -660,94 +732,152 @@ function closeDay() {
 .na-critical-count {
   background: #fee2e2; color: #b91c1c;
   font-size: 12px; font-weight: 700;
-  padding: 4px 12px; border-radius: 8px;
-  flex-shrink: 0;
+  padding: 4px 12px; border-radius: 8px; flex-shrink: 0;
 }
 
-/* Room status bars */
+/* ── Room status bars ───────────────────────────────────────────────── */
 .na-room-bars { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
 .na-room-bar-row { display: flex; align-items: center; gap: 10px; }
-.na-room-label { font-size: 11px; color: var(--na-muted); width: 90px; flex-shrink: 0; }
+.na-room-label { font-size: 11px; color: #6b7280; width: 90px; flex-shrink: 0; }
 .na-room-track { flex: 1; height: 16px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
-.na-room-fill  { height: 100%; border-radius: 6px; }
-.na-room-count { font-size: 11px; font-weight: 600; color: var(--na-text); width: 30px; text-align: right; flex-shrink: 0; }
+.na-room-fill  { height: 100%; border-radius: 6px; transition: width .4s ease; min-width: 2px; }
+.na-room-count { font-size: 11px; font-weight: 600; color: #111827; width: 30px; text-align: right; flex-shrink: 0; }
 
-/* Distribution chart */
-.na-dist-section { border-top: 1px solid var(--na-border); padding-top: 14px; }
-.na-dist-chart { display: flex; align-items: flex-end; gap: 16px; }
-.na-dist-svg { width: 160px; height: 100px; }
-.na-dist-legend { display: flex; flex-direction: column; gap: 6px; }
-.na-dist-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--na-muted); }
+/* ── Distribution chart ─────────────────────────────────────────────── */
+.na-dist-section { border-top: 1px solid #e5e7eb; padding-top: 14px; }
+.na-dist-chart   { display: flex; align-items: flex-end; gap: 16px; }
+.na-dist-svg     { width: 160px; height: 90px; flex-shrink: 0; }
+.na-dist-legend  { display: flex; flex-direction: column; gap: 6px; }
+.na-dist-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6b7280; }
 
-/* Guest movement */
+/* ── Guest movement ─────────────────────────────────────────────────── */
 .na-gm-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
-.na-gm-stat { background: #f8fafc; border-radius: 10px; padding: 14px; border: 1px solid var(--na-border); }
-.na-gm-label { font-size: 10px; color: var(--na-muted); margin-bottom: 6px; }
-.na-gm-value { font-size: 26px; font-weight: 800; color: var(--na-text); }
+.na-gm-stat  { background: #f8fafc; border-radius: 10px; padding: 14px; border: 1px solid #e5e7eb; }
+.na-gm-label { font-size: 10px; color: #6b7280; margin-bottom: 6px; }
+.na-gm-value { font-size: 26px; font-weight: 800; color: #111827; }
 
-/* Guest flow chart */
-.na-gf-section { border-top: 1px solid var(--na-border); padding-top: 14px; }
-.na-gf-chart { display: flex; align-items: flex-end; gap: 12px; height: 60px; margin-top: 10px; margin-bottom: 4px; }
-.na-gf-bars { display: flex; align-items: flex-end; gap: 2px; flex-direction: column; position: relative; }
+/* ── Guest flow chart ── FIXED ──────────────────────────────────────── */
+.na-gf-section { border-top: 1px solid #e5e7eb; padding-top: 14px; }
+.na-gf-chart {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 10px;
+  height: 80px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  padding-top: 4px;
+}
+/* Each time-slot group */
+.na-gf-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+/* Bars sit side-by-side, growing upward */
+.na-gf-bars {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 3px;
+  height: 65px;
+}
 .na-gf-bar { width: 10px; border-radius: 3px 3px 0 0; }
 .na-gf-arr { background: #3b82f6; }
 .na-gf-dep { background: #22c55e; }
-.na-gf-nos { background: #ef4444; }
-.na-gf-label { font-size: 9px; color: var(--na-muted); margin-top: 4px; text-align: center; }
+.na-gf-label { font-size: 9px; color: #94a3b8; margin-top: 4px; white-space: nowrap; }
 
-/* Tables */
-.na-table-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
-.na-table-wrap { overflow-x: auto; }
+/* ── Tables ─────────────────────────────────────────────────────────── */
+.na-table-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.na-table-wrap   { overflow-x: auto; }
 .na-table { width: 100%; border-collapse: collapse; }
-.na-table thead tr { border-bottom: 1px solid var(--na-border); }
-.na-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--na-muted); padding: 8px 14px; }
+.na-table thead tr { border-bottom: 1px solid #e5e7eb; }
+.na-table th { text-align: left; font-size: 11px; font-weight: 600; color: #6b7280; padding: 8px 14px; white-space: nowrap; }
 .na-table tbody tr { border-bottom: 1px solid #f8fafc; transition: background .1s; cursor: pointer; }
 .na-table tbody tr:hover { background: #f8fafc; }
-.na-table td { padding: 10px 14px; font-size: 12px; color: var(--na-muted); }
+.na-table td { padding: 10px 14px; font-size: 12px; color: #6b7280; }
 .na-th-right { text-align: right; }
-.na-td-mono { font-family: monospace; }
-.na-td-blue { color: #2563eb; }
-.na-td-bold { font-weight: 600; color: var(--na-text); }
+.na-td-mono  { font-family: monospace; }
+.na-td-blue  { color: #2563eb; }
+.na-td-bold  { font-weight: 600; color: #111827; }
 .na-td-right { text-align: right; }
-.na-td-red  { color: #dc2626; font-weight: 700; }
-.na-empty { padding: 32px; text-align: center; font-size: 12px; color: var(--na-muted); }
+.na-td-red   { color: #dc2626; font-weight: 700; }
+.na-empty    { padding: 32px; text-align: center; font-size: 12px; color: #6b7280; }
 
-/* Badges / pills */
-.na-badge-pill { padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+/* ── Badges / pills ─────────────────────────────────────────────────── */
+.na-badge-pill    { padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
 .na-badge-red-pill { background: #fee2e2; color: #dc2626; }
+.na-status-pill   { padding: 2px 9px; border-radius: 99px; font-size: 10px; font-weight: 600; }
+.pill-green       { background: #dcfce7; color: #16a34a; }
+.pill-gray        { background: #f3f4f6; color: #6b7280; }
+.pill-blue        { background: #dbeafe; color: #2563eb; }
+.pill-red         { background: #fee2e2; color: #dc2626; }
+.pill-green-soft  { background: #f0fdf4; color: #16a34a; }
+.pill-yellow      { background: #fef9c3; color: #a16207; }
+.pill-blue-soft   { background: #eff6ff; color: #3b82f6; }
+.pill-purple      { background: #f5f3ff; color: #7c3aed; }
 
-/* Status pills */
-.na-status-pill { padding: 2px 9px; border-radius: 99px; font-size: 10px; font-weight: 600; }
-.pill-green      { background: #dcfce7; color: #16a34a; }
-.pill-gray       { background: #f3f4f6; color: #6b7280; }
-.pill-blue       { background: #dbeafe; color: #2563eb; }
-.pill-red        { background: #fee2e2; color: #dc2626; }
-.pill-green-soft { background: #f0fdf4; color: #16a34a; }
-.pill-yellow     { background: #fef9c3; color: #a16207; }
-.pill-blue-soft  { background: #eff6ff; color: #3b82f6; }
-.pill-purple     { background: #f5f3ff; color: #7c3aed; }
-
-/* Filters */
-.na-filter-row { display: flex; gap: 8px; }
+/* ── Filters ─────────────────────────────────────────────────────────── */
+.na-filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .na-input, .na-select {
   padding: 6px 12px; font-size: 11px;
-  border: 1px solid var(--na-border);
-  border-radius: 8px; outline: none;
-  color: var(--na-text);
-  background: #fff;
+  border: 1px solid #e5e7eb; border-radius: 8px; outline: none;
+  color: #111827; background: #fff;
 }
 .na-input:focus, .na-select:focus { border-color: #3b82f6; }
 
-/* Pagination */
-.na-table-footer { padding: 12px 14px; border-top: 1px solid var(--na-border); display: flex; align-items: center; justify-content: space-between; }
-.na-footer-info { font-size: 11px; color: var(--na-muted); }
-.na-pagination { display: flex; gap: 4px; }
+/* ── Pagination ─────────────────────────────────────────────────────── */
+.na-table-footer { padding: 12px 14px; border-top: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.na-footer-info  { font-size: 11px; color: #6b7280; }
+.na-pagination   { display: flex; gap: 4px; }
 .na-page-btn {
   width: 26px; height: 26px; border-radius: 6px; border: none;
-  background: #f1f5f9; color: var(--na-muted);
+  background: #f1f5f9; color: #6b7280;
   font-size: 11px; cursor: pointer; transition: background .15s;
   display: flex; align-items: center; justify-content: center;
 }
-.na-page-btn-active { background: #2563eb; color: #fff; }
+.na-page-btn-active          { background: #2563eb; color: #fff; }
 .na-page-btn:hover:not(.na-page-btn-active) { background: #e2e8f0; }
+
+/* ── Responsive: tablet (≤1024px) ──────────────────────────────────── */
+@media (max-width: 1024px) {
+  .na-stat-grid { grid-template-columns: repeat(3, 1fr); }
+  .na-meta-row  { grid-template-columns: repeat(3, 1fr); }
+  .na-meta-item:nth-child(3) { border-right: none; }
+  .na-meta-item:nth-child(4) { border-top: 1px solid #e5e7eb; }
+  .na-meta-item:nth-child(5) { border-top: 1px solid #e5e7eb; border-right: none; }
+}
+
+/* ── Responsive: small tablet (≤768px) ─────────────────────────────── */
+@media (max-width: 768px) {
+  .na-body   { padding: 16px 14px 36px; gap: 14px; }
+  .na-navbar { padding: 12px 16px; }
+  .na-navbar-sub { display: none; }
+
+  .na-stat-grid  { grid-template-columns: repeat(2, 1fr); }
+  .na-two-col    { grid-template-columns: 1fr; }
+  .na-meta-row   { grid-template-columns: repeat(2, 1fr); }
+  .na-meta-item  { border-right: 1px solid #e5e7eb; }
+  .na-meta-item:nth-child(2n) { border-right: none; }
+  .na-meta-item:nth-child(n+3) { border-top: 1px solid #e5e7eb; }
+  .na-meta-item:nth-child(3)   { border-right: 1px solid #e5e7eb; }
+  .na-meta-item:nth-child(5)   { border-right: none; }
+
+  .na-gm-stats { grid-template-columns: repeat(3, 1fr); }
+  .na-dist-svg { width: 120px; }
+}
+
+/* ── Responsive: mobile (≤480px) ───────────────────────────────────── */
+@media (max-width: 480px) {
+  .na-navbar-right .na-navbar-date { display: none; }
+  .na-stat-grid   { grid-template-columns: 1fr 1fr; }
+  .na-gm-stats    { grid-template-columns: 1fr; }
+  .na-close-banner { flex-direction: column; align-items: flex-start; }
+  .na-close-banner-right { align-self: flex-end; }
+  .na-stat-value  { font-size: 18px; }
+  .na-pm-label    { width: 80px; }
+  .na-room-label  { width: 70px; }
+}
 </style>

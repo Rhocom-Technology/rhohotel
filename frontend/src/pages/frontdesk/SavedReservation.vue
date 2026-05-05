@@ -1,124 +1,36 @@
 <template>
-  <SavedReservationDetail
-    :reservation="reservation"
-    :loading="reservationResource.loading"
-    :error="errorMessage"
-    :action-loading="actionLoading"
-    @refresh="reload"
-    @open-payments="router.push('/payments')"
-    @check-in="checkInAllRooms"
-    @cancel-reservation="cancelReservation"
-    @create-invoice="createInvoice"
-    @submit-reservation="submitReservation"
-  />
+  <div class="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center">
+    <p v-if="loading" class="text-sm text-gray-500">Opening reservation details...</p>
+    <div v-else>
+      <p class="text-sm font-medium text-red-500">{{ errorMessage || 'Reservation not found.' }}</p>
+      <button
+        @click="router.push('/reservations')"
+        class="mt-4 px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+      >
+        Back to Reservations
+      </button>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createResource } from 'frappe-ui'
-import SavedReservationDetail from '@/components/reservations/SavedReservation.vue'
 
 const route = useRoute()
 const router = useRouter()
 
+const loading = ref(true)
 const errorMessage = ref('')
-const actionLoading = ref(false)
 
-const reservationResource = createResource({
-  url: 'frappe.client.get',
-  params: {
-    doctype: 'Hotel Front Desk Reservation',
-    name: route.params.id,
-  },
-  auto: true,
-  onError(error) {
-    errorMessage.value = error?.messages?.[0] || 'Reservation not found.'
-  },
+onMounted(async () => {
+  const id = String(route.params.id || '').trim()
+  if (!id) {
+    loading.value = false
+    errorMessage.value = 'Missing reservation id.'
+    return
+  }
+
+  window.location.replace(`/app/hotel-room-reservation/${encodeURIComponent(id)}`)
 })
-
-const reservation = computed(() => reservationResource.data || {})
-
-async function callApi(method, args = {}) {
-  const response = await fetch('/api/method/' + method, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(args),
-  })
-  const payload = await response.json()
-  if (!response.ok || payload.exc) {
-    const msg = payload?._server_messages || payload?.message || 'Request failed'
-    throw new Error(typeof msg === 'string' ? msg : 'Request failed')
-  }
-  return payload.message
-}
-
-function reload() {
-  errorMessage.value = ''
-  reservationResource.reload()
-}
-
-async function checkInAllRooms() {
-  if (!reservation.value?.name) return
-  actionLoading.value = true
-  errorMessage.value = ''
-  try {
-    await callApi('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.check_in_all_rooms', {
-      reservation_name: reservation.value.name,
-      check_in_notes: '',
-    })
-    reload()
-  } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not check in rooms.')
-  } finally {
-    actionLoading.value = false
-  }
-}
-
-async function cancelReservation() {
-  if (!reservation.value?.name) return
-  const confirmed = window.confirm(`Cancel reservation ${reservation.value.name}?`)
-  if (!confirmed) return
-
-  actionLoading.value = true
-  errorMessage.value = ''
-  try {
-    await callApi('frappe.client.cancel', { doctype: 'Hotel Front Desk Reservation', name: reservation.value.name })
-    router.push('/reservations')
-  } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not cancel reservation.')
-    actionLoading.value = false
-  }
-}
-
-async function createInvoice() {
-  if (!reservation.value?.name) return
-  actionLoading.value = true
-  errorMessage.value = ''
-  try {
-    await callApi('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.create_sales_invoice_for_reservation', {
-      reservation_name: reservation.value.name,
-    })
-    reload()
-  } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not create invoice.')
-  } finally {
-    actionLoading.value = false
-  }
-}
-
-async function submitReservation() {
-  if (!reservation.value?.name) return
-  actionLoading.value = true
-  errorMessage.value = ''
-  try {
-    await callApi('frappe.client.submit', { doc: { doctype: 'Hotel Front Desk Reservation', name: reservation.value.name } })
-    reload()
-  } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not submit reservation.')
-  } finally {
-    actionLoading.value = false
-  }
-}
 </script>

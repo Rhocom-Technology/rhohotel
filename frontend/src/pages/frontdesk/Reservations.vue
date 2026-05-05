@@ -323,7 +323,7 @@ function startNewReservation(type) {
 }
 
 function openReservation(item) {
-  window.location.href = `/app/hotel-room-reservation/${encodeURIComponent(item.name)}`
+  router.push({ name: 'SavedReservation', params: { id: item.name } })
 }
 
 function mapReservationStatus(item) {
