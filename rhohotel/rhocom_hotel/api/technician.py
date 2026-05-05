@@ -253,10 +253,27 @@ def get_technicians_list():
             }
         )
 
+    # total = len(technicians)
+    # in_house = sum(1 for t in technicians if t["technician_type"] == "In-House")
+    # outsourced = sum(1 for t in technicians if t["technician_type"] == "Outsourced")
+    # available = sum(1 for t in technicians if t["availability"] == "Available")
+
     total = len(technicians)
-    in_house = sum(1 for t in technicians if t["technician_type"] == "In-House")
-    outsourced = sum(1 for t in technicians if t["technician_type"] == "Outsourced")
-    available = sum(1 for t in technicians if t["availability"] == "Available")
+
+    in_house = sum(
+        1 for t in technicians
+        if t.get("technician_type") == "In-House"
+    )
+
+    outsourced = sum(
+        1 for t in technicians
+        if t.get("technician_type") == "Outsourced"
+    )
+
+    available = sum(
+        1 for t in technicians
+        if t.get("availability") == "Available"
+    )
 
     return {
         "technicians": technicians,

@@ -30,12 +30,14 @@ def get_request_dashboard():
     )
 
     # Resolved this week
-    resolved_this_week = frappe.db.sql("""
-        SELECT COUNT(name) as cnt FROM `tabMaintenance Request`
-        WHERE status = 'Completed'
-        AND DATE(completion_date) >= %s
-        AND DATE(completion_date) <= %s
-    """, (week_start, today), as_dict=1)[0].cnt or 0
+    result = frappe.db.sql("""
+    SELECT COUNT(name) as cnt FROM `tabMaintenance Request`
+    WHERE status = 'Completed'
+    AND DATE(completion_date) >= %s
+    AND DATE(completion_date) <= %s
+    """, (week_start, today), as_dict=1)
+
+    resolved_this_week = result[0].cnt if result and len(result) > 0 else 0
 
     return {
         "pending": pending,
@@ -87,10 +89,16 @@ def get_request_list(
             LIMIT %(limit)s OFFSET %(offset)s
         """, {"q": q, "limit": page_size, "offset": (page - 1) * page_size}, as_dict=1)
 
-        total = frappe.db.sql(
-            "SELECT COUNT(name) as cnt FROM `tabMaintenance Request` WHERE (name LIKE %(q)s OR room LIKE %(q)s OR asset LIKE %(q)s)",
-            {"q": q}, as_dict=1
-        )[0].cnt or 0
+        result = frappe.db.sql(
+            """
+            SELECT COUNT(name) as cnt
+            FROM `tabMaintenance Request`
+            WHERE (name LIKE %(q)s OR room LIKE %(q)s OR asset LIKE %(q)s)
+            """,
+            {"q": q},
+            as_dict=1
+        )
+        total = result[0].cnt if result else 0
     else:
         requests = frappe.get_all(
             "Maintenance Request",

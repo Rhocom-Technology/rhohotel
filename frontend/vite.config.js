@@ -9,7 +9,7 @@ export default defineConfig(({ command }) => {
     },
     plugins: [vue()],
     // base: command === 'build' ? '/assets/rhohotel/frontend/' : '/',
-    base: command === 'build' ? '/assets/rhohotel/frontend/' : '/front-desk/',
+    base: command === 'build' ? '/assets/rhohotel/frontend/' : '/frontdesk/',
     server: {
       port: 8080,
       proxy: {

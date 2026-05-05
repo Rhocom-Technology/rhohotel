@@ -96,22 +96,11 @@
             Outsourced technicians are external contractors or vendors. Link them to a supplier record, or fill in details manually.
           </p>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">
-                {{ form.technician_type === 'In-House' ? 'Full Name' : 'Full Name / Company Name' }}
-                <span class="text-red-400">*</span>
-              </p>
-              <input v-model="form.technician_name" type="text"
-                :placeholder="form.technician_type === 'In-House' ? 'Auto-filled from employee, or enter manually' : 'Enter full name or company name'"
-                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                :class="attempted && !form.technician_name.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'" />
-              <p v-if="attempted && !form.technician_name.trim()" class="text-[10px] text-red-500 mt-1">Required</p>
-            </div>
+         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
 
-            <!-- In-House: Employee link -->
+            <!-- In-House: Employee link — FIRST so name auto-fills after selection -->
             <div v-if="form.technician_type === 'In-House'">
-              <p class="text-xs text-gray-500 mb-1.5">Link Employee</p>
+              <p class="text-xs text-gray-500 mb-1.5">Link Employee <span class="text-red-400">*</span></p>
               <select v-model="form.employee" @change="onEmployeeSelect"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600">
                 <option value="">— select employee —</option>
@@ -121,7 +110,7 @@
               </select>
             </div>
 
-            <!-- Outsourced: Vendor/Supplier link -->
+            <!-- Outsourced: Vendor/Supplier link — FIRST -->
             <div v-else>
               <p class="text-xs text-gray-500 mb-1.5">Link Supplier / Vendor</p>
               <select v-model="form.supplier" @change="onSupplierSelect"
@@ -132,6 +121,32 @@
                 </option>
               </select>
             </div>
+
+            <!-- Full Name — SECOND, auto-filled for In-House -->
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">
+                {{ form.technician_type === 'In-House' ? 'Full Name' : 'Full Name / Company Name' }}
+                <span class="text-red-400">*</span>
+              </p>
+              <input v-model="form.technician_name" type="text"
+                :disabled="form.technician_type === 'In-House'"
+                :placeholder="form.technician_type === 'In-House'
+                  ? 'Auto-filled from selected employee'
+                  : 'Enter full name or company name'"
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+                :class="[
+                  form.technician_type === 'In-House'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                    : attempted && !form.technician_name.trim()
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-gray-200'
+                ]" />
+              <p v-if="attempted && !form.technician_name.trim() && form.technician_type !== 'In-House'"
+                class="text-[10px] text-red-500 mt-1">Required</p>
+              <p v-if="form.technician_type === 'In-House' && !form.employee"
+                class="text-[10px] text-gray-400 mt-1">Select an employee to populate this field</p>
+            </div>
+
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
@@ -365,10 +380,16 @@ const form = ref({
 })
 
 // Clear linkage when type switches
+// watch(() => form.value.technician_type, () => {
+//   form.value.employee = ''
+//   form.value.supplier = ''
+//   // Don't clear name/phone/email — user may have typed manually
+// })
+
 watch(() => form.value.technician_type, () => {
   form.value.employee = ''
   form.value.supplier = ''
-  // Don't clear name/phone/email — user may have typed manually
+  form.value.technician_name = ''  // clear so Outsourced can type freely
 })
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -385,13 +406,26 @@ const suppliersResource = createResource({
 const suppliers = computed(() => suppliersResource.data || [])
 
 // ─── Auto-fill from employee ──────────────────────────────────────────────────
+// function onEmployeeSelect() {
+//   if (!form.value.employee) return
+//   const emp = employees.value.find(e => e.name === form.value.employee)
+//   if (!emp) return
+//   if (!form.value.technician_name) form.value.technician_name = emp.employee_name
+//   if (!form.value.phone && emp.cell_number) form.value.phone = emp.cell_number
+//   if (!form.value.email && emp.personal_email) form.value.email = emp.personal_email
+// }
+
 function onEmployeeSelect() {
-  if (!form.value.employee) return
+  if (!form.value.employee) {
+    form.value.technician_name = ''
+    return
+  }
   const emp = employees.value.find(e => e.name === form.value.employee)
   if (!emp) return
-  if (!form.value.technician_name) form.value.technician_name = emp.employee_name
-  if (!form.value.phone && emp.cell_number) form.value.phone = emp.cell_number
-  if (!form.value.email && emp.personal_email) form.value.email = emp.personal_email
+  // Always overwrite — field is disabled for In-House
+  form.value.technician_name = emp.employee_name
+  if (emp.cell_number) form.value.phone = emp.cell_number
+  if (emp.personal_email) form.value.email = emp.personal_email
 }
 
 // ─── Auto-fill from supplier ──────────────────────────────────────────────────
@@ -421,7 +455,11 @@ const linkedLabel = computed(() => {
 const validationErrors = computed(() => {
   if (!attempted.value) return []
   const errors = []
-  if (!form.value.technician_name.trim()) errors.push('Technician name is required')
+  if (form.value.technician_type === 'In-House' && !form.value.employee) {
+    errors.push('Please select an employee')
+  } else if (form.value.technician_type === 'Outsourced' && !form.value.technician_name.trim()) {
+    errors.push('Technician name is required')
+  }
   if (!form.value.technician_type) errors.push('Technician type is required')
   return errors
 })

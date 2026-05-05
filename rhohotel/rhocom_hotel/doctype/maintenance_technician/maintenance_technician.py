@@ -9,7 +9,6 @@ class MaintenanceTechnician(Document):
         self._validate_contact()
 
     def before_save(self):
-        # Auto-fill name from linked employee/supplier if still blank
         if self.technician_type == "In-House" and self.employee:
             if not self.technician_name:
                 self.technician_name = frappe.db.get_value(
@@ -23,7 +22,6 @@ class MaintenanceTechnician(Document):
                 ) or self.technician_name
 
     def on_update(self):
-        # Keep availability in sync if linked employee is terminated
         if self.technician_type == "In-House" and self.employee:
             emp_status = frappe.db.get_value("Employee", self.employee, "status")
             if emp_status and emp_status != "Active" and self.availability == "Available":
@@ -34,13 +32,7 @@ class MaintenanceTechnician(Document):
                     title="Employee Status Warning"
                 )
 
-    # ─── Private helpers ────────────────────────────────────────────────────────
-
     def _validate_linkage(self):
-        """
-        In-House technicians must not have a supplier link.
-        Outsourced technicians must not have an employee link.
-        """
         if self.technician_type == "In-House":
             if self.supplier:
                 frappe.throw(
@@ -49,7 +41,6 @@ class MaintenanceTechnician(Document):
                     title="Invalid Linkage"
                 )
             if self.employee:
-                # Verify the employee exists and is active
                 emp = frappe.db.get_value(
                     "Employee", self.employee, ["employee_name", "status"], as_dict=1
                 )
@@ -64,6 +55,17 @@ class MaintenanceTechnician(Document):
                         "Linking an inactive employee is allowed but may cause issues.",
                         indicator="yellow",
                         title="Inactive Employee"
+                    )
+                existing = frappe.db.get_value(
+                    "Maintenance Technician",
+                    {"employee": self.employee, "name": ["!=", self.name or ""]},
+                    "name"
+                )
+                if existing:
+                    frappe.throw(
+                        f"Employee '{self.employee}' is already linked to technician {existing}. "
+                        "Each employee can only be linked to one technician record.",
+                        title="Duplicate Employee Link"
                     )
 
         elif self.technician_type == "Outsourced":
@@ -81,9 +83,30 @@ class MaintenanceTechnician(Document):
                     )
 
     def _validate_contact(self):
-        """Basic email format check"""
         if self.email and "@" not in self.email:
             frappe.throw(
                 f"'{self.email}' does not look like a valid email address.",
                 title="Invalid Email"
             )
+        if self.phone:
+            existing_phone = frappe.db.get_value(
+                "Maintenance Technician",
+                {"phone": self.phone, "name": ["!=", self.name or ""]},
+                "name"
+            )
+            if existing_phone:
+                frappe.throw(
+                    f"Phone number '{self.phone}' is already used by technician {existing_phone}.",
+                    title="Duplicate Phone Number"
+                )
+        if self.email:
+            existing_email = frappe.db.get_value(
+                "Maintenance Technician",
+                {"email": self.email, "name": ["!=", self.name or ""]},
+                "name"
+            )
+            if existing_email:
+                frappe.throw(
+                    f"Email '{self.email}' is already used by technician {existing_email}.",
+                    title="Duplicate Email"
+                )

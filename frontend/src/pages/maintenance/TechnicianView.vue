@@ -200,10 +200,19 @@
 
             <!-- Type toggle -->
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-4">
-              <div>
+              <!-- <div>
                 <p class="text-xs text-gray-500 mb-1.5">Full Name <span class="text-red-400">*</span></p>
                 <input v-model="editForm.technician_name" type="text"
                   class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              </div> -->
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Full Name <span class="text-red-400">*</span></p>
+                <input v-model="editForm.technician_name" type="text"
+                  :disabled="editForm.technician_type === 'In-House'"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  :class="editForm.technician_type === 'In-House'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : ''" />
               </div>
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Technician Type</p>
@@ -638,12 +647,23 @@ function cancelEdit() {
   editForm.value = {}
 }
 
+// function onEditEmployeeSelect() {
+//   const emp = employees.value.find(e => e.name === editForm.value.employee)
+//   if (!emp) return
+//   if (!editForm.value.technician_name) editForm.value.technician_name = emp.employee_name
+//   if (!editForm.value.phone && emp.cell_number) editForm.value.phone = emp.cell_number
+//   if (!editForm.value.email && emp.personal_email) editForm.value.email = emp.personal_email
+// }
+
 function onEditEmployeeSelect() {
   const emp = employees.value.find(e => e.name === editForm.value.employee)
-  if (!emp) return
-  if (!editForm.value.technician_name) editForm.value.technician_name = emp.employee_name
-  if (!editForm.value.phone && emp.cell_number) editForm.value.phone = emp.cell_number
-  if (!editForm.value.email && emp.personal_email) editForm.value.email = emp.personal_email
+  if (!emp) {
+    editForm.value.technician_name = ''
+    return
+  }
+  editForm.value.technician_name = emp.employee_name
+  if (emp.cell_number) editForm.value.phone = emp.cell_number
+  if (emp.personal_email) editForm.value.email = emp.personal_email
 }
 
 function onEditSupplierSelect() {
