@@ -1,7 +1,7 @@
 <template>
   <NewReservationForm
     :type="type"
-    @close="router.push('/reservations')"
+    @close="router.push({ name: 'Reservations' })"
     @saved="onSaved"
   />
 </template>
@@ -18,7 +18,7 @@ const type = computed(() => route.query.type || 'Individual')
 function onSaved(doc) {
   const name = doc?.name
   if (!name) {
-    router.push('/reservations')
+    router.push({ name: 'Reservations' })
     return
   }
   router.push({ name: 'SavedReservation', params: { id: name } })

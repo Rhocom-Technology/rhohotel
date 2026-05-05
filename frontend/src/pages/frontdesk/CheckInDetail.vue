@@ -296,6 +296,7 @@ import RefundRequestModal from '@/components/checkin/RefundRequestModal.vue'
 import BillTransferModal from '@/components/checkin/BillTransferModal.vue'
 import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import DiscountModal from '@/components/checkin/DiscountModal.vue'
+import { callMethodForm } from '@/lib/api'
 
 const showRoomTransfer = ref(false)
 const showStayAdjustment = ref(false)
@@ -325,19 +326,12 @@ async function loadCheckIn(silent = false) {
   if (!silent) loading.value = true
   loadError.value = ''
   try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_checkin_detail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({ name: route.params.id }),
+    const data = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.get_checkin_detail', {
+      name: route.params.id,
     })
-    const data = await res.json()
-    if (data.exc) {
-      loadError.value = 'Could not load check-in details.'
-      return
-    }
-    if (data.message) {
-      checkIn.value = data.message
-      invoices.value = data.message.invoices || []
+    if (data) {
+      checkIn.value = data
+      invoices.value = data.invoices || []
     }
   } catch (e) {
     loadError.value = 'Network error — please refresh.'

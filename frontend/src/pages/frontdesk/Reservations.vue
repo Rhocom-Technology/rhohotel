@@ -53,10 +53,13 @@
           <p class="text-xs text-gray-500 mb-1.5">Status</p>
           <select v-model="filterStatus" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Statuses</option>
+            <option value="Hold">Hold</option>
             <option value="Confirmed">Confirmed</option>
             <option value="Checked In">Checked In</option>
             <option value="Checked Out">Checked Out</option>
             <option value="Cancelled">Cancelled</option>
+            <option value="No Show">No Show</option>
+            <option value="Expired">Expired</option>
             <option value="Draft">Draft</option>
           </select>
         </div>
@@ -118,7 +121,7 @@
               @click="openReservation(item)"
             >
               <td class="px-6 py-4">
-                <p class="text-xs font-bold text-gray-900">{{ item.name }}</p>
+                <p class="text-xs font-bold text-gray-900">{{ item.reservation_number || item.name }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.reservation_type }}</p>
               </td>
               <td class="px-4 py-4">
@@ -130,7 +133,7 @@
                 <p class="text-xs text-gray-400 mt-0.5">{{ item.number_of_nights }} Night{{ item.number_of_nights !== 1 ? 's' : '' }}</p>
               </td>
               <td class="px-4 py-4">
-                <p class="text-xs text-gray-700">{{ item.room_number || '—' }}</p>
+                <p class="text-xs text-gray-700">{{ item.roomLabel }}</p>
               </td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-900">
                 {{ formatCurrency(item.net_total) }}
@@ -217,6 +220,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, Building2 } from 'lucide-vue-next'
 import { createResource } from 'frappe-ui'
+import { dateKey, parseServerDate } from '@/lib/utils'
 
 const router = useRouter()
 const search = ref('')
@@ -230,20 +234,23 @@ const showNewReservation = ref(false)
 const reservationResource = createResource({
   url: 'frappe.client.get_list',
   params: {
-    doctype: 'Hotel Room Reservation',
+    doctype: 'Hotel Reservation',
     fields: [
       'name',
+      'reservation_number',
+      'source_channel',
       'reservation_type',
-      'guest_name',
+      'primary_guest_name',
+      'corporate_guest',
       'customer',
-      'room_number',
       'from_date',
       'to_date',
       'number_of_nights',
+      'total_amount',
       'net_total',
-      'status',
+      'reservation_status',
+      'payment_status',
       'docstatus',
-      'front_desk_reservation',
     ],
     order_by: 'creation desc',
     limit_page_length: 500,
@@ -254,8 +261,9 @@ const reservationResource = createResource({
 const reservations = computed(() => (reservationResource.data || []).map((row) => ({
   ...row,
   reservation_type: row.reservation_type || 'Individual',
-  guest_name: row.guest_name || '—',
-  net_total: Number(row.net_total || 0),
+  guest_name: row.primary_guest_name || row.corporate_guest || row.customer || '—',
+  roomLabel: 'View rooms',
+  net_total: Number(row.net_total || row.total_amount || 0),
   number_of_nights: Number(row.number_of_nights || 0),
   statusLabel: mapReservationStatus(row),
 })))
@@ -273,14 +281,16 @@ const filteredList = computed(() => {
     const q = search.value.toLowerCase()
     list = list.filter(r =>
       r.name.toLowerCase().includes(q) ||
+      String(r.reservation_number || '').toLowerCase().includes(q) ||
       r.guest_name.toLowerCase().includes(q) ||
       String(r.customer || '').toLowerCase().includes(q) ||
-      String(r.room_number || '').toLowerCase().includes(q)
+      String(r.corporate_guest || '').toLowerCase().includes(q) ||
+      String(r.source_channel || '').toLowerCase().includes(q)
     )
   }
   if (filterStatus.value) list = list.filter(r => r.statusLabel === filterStatus.value)
   if (filterSource.value) list = list.filter(r => r.reservation_type === filterSource.value)
-  if (filterArrival.value) list = list.filter(r => r.from_date === filterArrival.value)
+  if (filterArrival.value) list = list.filter(r => dateKey(r.from_date) === filterArrival.value)
   return list
 })
 
@@ -298,18 +308,23 @@ function clearFilters() {
 function statusClass(status) {
   return {
     'Confirmed': 'bg-blue-50 text-blue-600',
+    'Hold': 'bg-yellow-50 text-yellow-600',
     'Checked In': 'bg-green-50 text-green-600',
     'Checked Out': 'bg-gray-100 text-gray-500',
     'Cancelled': 'bg-red-50 text-red-500',
     'Draft': 'bg-yellow-50 text-yellow-600',
     'Due Today': 'bg-orange-50 text-orange-600',
+    'No Show': 'bg-orange-50 text-orange-600',
+    'Expired': 'bg-red-50 text-red-500',
     'Partly Paid': 'bg-yellow-50 text-yellow-600',
   }[status] || 'bg-gray-100 text-gray-500'
 }
 
 function formatDateShort(dt) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const parsed = parseServerDate(dt)
+  if (!parsed) return '—'
+  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 function formatCurrency(amount) {
@@ -328,21 +343,16 @@ function openReservation(item) {
 
 function mapReservationStatus(item) {
   if (Number(item.docstatus) === 2) return 'Cancelled'
-  if (Number(item.docstatus) === 0) return 'Draft'
-  // Use the status field directly from Hotel Room Reservation
-  if (item.status === 'Checked In') return 'Checked In'
-  if (item.status === 'Checked Out') return 'Checked Out'
-  if (item.status === 'Cancelled') return 'Cancelled'
-  // For Confirmed reservations, show 'Due Today' if arriving today
-  if (isToday(item.from_date)) return 'Due Today'
-  return item.status || 'Confirmed'
+
+  const status = item.reservation_status || item.status
+  if (!status && Number(item.docstatus) === 0) return 'Draft'
+  if (status === 'Confirmed' && isToday(item.from_date)) return 'Due Today'
+  return status || 'Confirmed'
 }
 
 function isToday(dateValue) {
   if (!dateValue) return false
-  const today = new Date()
-  const date = new Date(dateValue)
-  return date.toDateString() === today.toDateString()
+  return dateKey(dateValue) === dateKey(new Date())
 }
 
 watch([search, filterStatus, filterArrival, filterSource], () => {

@@ -9,8 +9,6 @@
     "editable_grid": 1,
     "engine": "InnoDB",
     "field_order": [
-        "temporary_booking_reference",
-        "front_desk_reservation",
         "booking_number",
         "guest_name",
         "guest_phone",
@@ -50,16 +48,6 @@
             "in_standard_filter": 1,
             "label": "Temporary Booking",
             "options": "Temporary Booking"
-        },
-        {
-            "allow_on_submit": 1,
-            "description": "Linked front desk multi-room reservation",
-            "fieldname": "front_desk_reservation",
-            "fieldtype": "Link",
-            "label": "Front Desk Reservation",
-            "options": "Hotel Front Desk Reservation",
-            "read_only": 1,
-            "search_index": 1
         },
         {
             "description": "Unique booking reference from Temporary Booking",

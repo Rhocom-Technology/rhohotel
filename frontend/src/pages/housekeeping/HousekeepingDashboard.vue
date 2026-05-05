@@ -7,6 +7,10 @@
       <p class="text-xs text-gray-400 mt-1">Monitor housekeeping tasks, attendant workload, and cleaning activity.</p>
     </div>
 
+    <div v-if="dashboardError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+      <p class="text-xs text-red-600">{{ dashboardError }}</p>
+    </div>
+
     <!-- Header Stats -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between mb-2">
@@ -239,11 +243,17 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 
 const router = useRouter()
+const dashboardError = ref('')
+
+function notifyError(message) {
+  dashboardError.value = message
+  console.error(message)
+}
 
 // Create resource for dashboard data
 const dashboardData = createResource({
@@ -252,7 +262,10 @@ const dashboardData = createResource({
   auto: true,
   onError: (error) => {
     console.error('Error fetching dashboard data:', error)
-    frappe.msgprint('Failed to load dashboard data')
+    notifyError('Failed to load dashboard data')
+  },
+  onSuccess: () => {
+    dashboardError.value = ''
   }
 })
 
@@ -267,6 +280,7 @@ const formattedDate = computed(() => {
 })
 
 const refreshData = () => {
+  dashboardError.value = ''
   dashboardData.reload()
 }
 

@@ -252,6 +252,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
+import { parseServerDate } from '@/lib/utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -300,21 +302,12 @@ async function loadDetail() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_checkout_detail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({ check_in_name: route.params.id }),
+    const result = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.get_checkout_detail', {
+      check_in_name: route.params.id,
     })
-    const json = await res.json()
-    if (json.exc) {
-      loadError.value = 'Could not load checkout details.'
-      return
-    }
-    if (json.message) {
-      data.value = json.message
-    }
+    if (result) data.value = result
   } catch (e) {
-    loadError.value = 'Network error — please refresh.'
+    loadError.value = String(e?.message || 'Network error — please refresh.')
     console.error(e)
   } finally {
     loading.value = false
@@ -325,28 +318,18 @@ async function finalizeCheckout() {
   checkoutError.value = ''
   checkingOut.value = true
   try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.process_checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({
+    const result = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.process_checkout', {
         check_in_name: route.params.id,
         remarks: remarks.value || '',
-      }),
     })
-    const json = await res.json()
-    if (json.exc) {
-      const match = json.exc.match(/frappe\.exceptions\.\w+: (.+)/m)
-      checkoutError.value = match ? match[1] : 'Checkout failed. Please try again.'
-      return
-    }
-    if (json.message && json.message.status === 'Checked Out') {
+    if (result && result.status === 'Checked Out') {
       checkoutDone.value = true
       data.value.status = 'Checked Out'
     } else {
       checkoutError.value = 'Unexpected response from server.'
     }
   } catch (e) {
-    checkoutError.value = 'Network error — please try again.'
+    checkoutError.value = String(e?.message || 'Network error — please try again.')
     console.error(e)
   } finally {
     checkingOut.value = false
@@ -355,7 +338,9 @@ async function finalizeCheckout() {
 
 function formatDateTime(dt) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleString('en-GB', {
+  const parsed = parseServerDate(dt)
+  if (!parsed) return '—'
+  return parsed.toLocaleString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -363,7 +348,9 @@ function formatDateTime(dt) {
 
 function formatDate(dt) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  const parsed = parseServerDate(dt)
+  if (!parsed) return '—'
+  return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function formatCurrency(amount) {

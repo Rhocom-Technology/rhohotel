@@ -209,6 +209,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
 
 const router = useRouter()
 
@@ -228,33 +229,13 @@ const totalCount = ref(0)
 const statsLoading = ref(false)
 const stats = ref({ total_guests: 0, in_house: 0, vip_count: 0, outstanding: '₦0' })
 
-// ── API helper ─────────────────────────────────────────────────────
-async function callMethod(method, params = {}) {
-  const body = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== '' && v !== null && v !== undefined) body.append(k, String(v))
-  }
-  const res = await fetch('/api/method/' + method, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Frappe-CSRF-Token': window.csrf_token || '',
-    },
-    body,
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data = await res.json()
-  if (data.exc) throw new Error(data._server_messages || data.exc)
-  return data.message
-}
-
 // ── Fetch ──────────────────────────────────────────────────────────
 async function fetchGuests() {
   loading.value = true
   error.value = null
   currentPage.value = 1
   try {
-    const result = await callMethod('rhohotel.rhocom_hotel.api.guest.get_guests', {
+    const result = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guests', {
       search: search.value,
       guest_type: filterType.value,
       loyalty_tier: filterLoyalty.value,
@@ -275,7 +256,7 @@ async function fetchGuests() {
 async function fetchStats() {
   statsLoading.value = true
   try {
-    stats.value = await callMethod('rhohotel.rhocom_hotel.api.guest.get_guest_stats')
+    stats.value = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guest_stats')
   } catch (e) {
     console.error('Failed to load guest stats', e)
   } finally {

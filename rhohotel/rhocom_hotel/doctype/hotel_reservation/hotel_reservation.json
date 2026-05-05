@@ -47,9 +47,6 @@
     "payment_entry",
     "transaction_id",
     "legacy_section",
-    "frontdesk_reference_legacy",
-    "temporary_booking_legacy",
-    "room_reservation_legacy",
     "amended_from"
   ],
   "fields": [
@@ -322,30 +319,6 @@
       "label": "Legacy / Migration References",
       "collapsible": 1,
       "description": "These fields hold backward-compatibility links to the pre-consolidation doctypes. They are populated during data migration and should not be edited manually. They will be retired after full migration is verified."
-    },
-    {
-      "fieldname": "frontdesk_reference_legacy",
-      "fieldtype": "Link",
-      "options": "Hotel Front Desk Reservation",
-      "label": "Front Desk Reservation (Legacy)",
-      "read_only": 1,
-      "description": "Original Hotel Front Desk Reservation document from which this canonical reservation was migrated. Kept for audit trail during Phase 1–3 of the consolidation migration."
-    },
-    {
-      "fieldname": "temporary_booking_legacy",
-      "fieldtype": "Link",
-      "options": "Temporary Booking",
-      "label": "Temporary Booking (Legacy)",
-      "read_only": 1,
-      "description": "Original Temporary Booking document (online hold) from which this canonical reservation was promoted. Kept for reconciliation during migration."
-    },
-    {
-      "fieldname": "room_reservation_legacy",
-      "fieldtype": "Link",
-      "options": "Hotel Room Reservation",
-      "label": "Room Reservation (Legacy)",
-      "read_only": 1,
-      "description": "Original Hotel Room Reservation document from which this canonical reservation was migrated. A single-room legacy reservation maps to one canonical reservation with one room allocation row."
     },
     {
       "fieldname": "amended_from",

@@ -251,6 +251,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -267,20 +268,7 @@ async function fetchGuest() {
   loading.value = true
   error.value = null
   try {
-    const body = new URLSearchParams({ name: guestId })
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.guest.get_guest', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Frappe-CSRF-Token': window.csrf_token || '',
-      },
-      body,
-    })
-    const data = await res.json()
-    if (!res.ok || data.exc) {
-      throw new Error(data._server_messages || data.exc || 'Guest not found.')
-    }
-    guest.value = data.message
+    guest.value = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guest', { name: guestId })
   } catch (e) {
     error.value = e.message || 'Failed to load guest profile.'
   } finally {

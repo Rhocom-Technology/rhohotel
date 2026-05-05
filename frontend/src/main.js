@@ -10,20 +10,15 @@ import {
     Button,
     FeatherIcon
 } from 'frappe-ui'
-
-function getCookie(name) {
-    let r = document.cookie.match("\\b" + name + "=([^;]*)\\b")
-    return r ? r[1] : undefined
-}
-
-window.csrf_token = window.frappe?.csrf_token
+import { getCsrfToken } from './lib/api'
+import { useSessionStore } from './stores/session'
 
 setConfig('resourceFetcher', (url, options) => {
     if (!options) options = {}
     if (!options.headers) options.headers = {}
     options.credentials = 'include'
 
-    const token = getCookie('csrf_token') || window.frappe?.csrf_token
+    const token = getCsrfToken()
     if (token && token !== 'Guest') {
         options.headers['X-Frappe-CSRF-Token'] = token
     }
@@ -34,11 +29,16 @@ setConfig('resourceFetcher', (url, options) => {
 setConfig('cache', false)
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 app.use(resourcesPlugin)
 app.component('Button', Button)
 app.component('FeatherIcon', FeatherIcon)
 
-app.mount('#app')
+const session = useSessionStore(pinia)
+
+session.initialize().finally(() => {
+    app.mount('#app')
+})

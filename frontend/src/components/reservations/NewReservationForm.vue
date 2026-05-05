@@ -290,7 +290,7 @@ async function callApi(method, args = {}) {
 
 async function loadAvailableRooms() {
   try {
-    const rows = await callApi('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.get_available_rooms', {
+    const rows = await callApi('rhohotel.api.get_available_rooms', {
       from_date: form.value.from_date,
       to_date: form.value.to_date,
       room_type: selectedRoomType.value || undefined,

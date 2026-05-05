@@ -306,4 +306,8 @@ doc_events = {"Sales Invoice": {"validate": "rhohotel.overrides.sales_invoice.va
 website_route_rules = [
     {"from_route": "/frontdesk/<path:app_path>", "to_route": "front-desk"},
     {"from_route": "/frontdesk", "to_route": "front-desk"},
+	{"from_route": "/frontdesk/", "to_route": "front-desk"},
+	{"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
+	{"from_route": "/front-desk", "to_route": "front-desk"},
+	{"from_route": "/front-desk/", "to_route": "front-desk"},
 ]

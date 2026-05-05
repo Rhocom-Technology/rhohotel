@@ -1,5 +1,5 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
 import { createWebHistory } from 'vue-router'
+import { createRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 
 const router = createRouter({
@@ -84,15 +84,19 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to) => {
   const session = useSessionStore()
+  await session.initialize()
+
   if (to.name !== 'Login' && !session.isLoggedIn) {
-    next({ name: 'Login' })
-  } else if (to.name === 'Login' && session.isLoggedIn) {
-    next({ name: 'RoomView' })
-  } else {
-    next()
+    return { name: 'Login' }
   }
+
+  if (to.name === 'Login' && session.isLoggedIn) {
+    return { name: 'RoomView' }
+  }
+
+  return true
 })
 
 export default router

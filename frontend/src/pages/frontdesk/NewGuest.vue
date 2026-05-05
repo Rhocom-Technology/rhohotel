@@ -262,6 +262,7 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -335,44 +336,27 @@ async function createGuest() {
 
   saving.value = true
   try {
-    const body = new URLSearchParams()
     // Build the phone with country code
     const fullPhone = form.phone_number ? `${form.country_code}${form.phone_number}` : ''
-    
-    body.append('hotel_guest_name', form.hotel_guest_name)
-    body.append('first_name', form.first_name.trim())
-    body.append('last_name', form.last_name.trim())
-    body.append('guest_type', form.guest_type)
-    if (form.title) body.append('title', form.title)
-    if (form.gender) body.append('gender', form.gender)
-    if (fullPhone) body.append('phone_number', fullPhone)
-    if (form.email) body.append('email', form.email)
-    if (form.nationality) body.append('nationality', form.nationality)
-    if (form.preferences.length) body.append('preference', form.preferences.join(', '))
-    if (form.date_of_birth) body.append('date_of_birth', form.date_of_birth)
-    if (form.address) body.append('address', form.address)
-    if (form.id_type) body.append('id_type', form.id_type)
-    if (form.id_number) body.append('id_number', form.id_number)
-    if (form.contact_person_name) body.append('contact_person_name', form.contact_person_name)
-    if (form.contact_number) body.append('contact_number', form.contact_number)
-    if (form.notes) body.append('notes', form.notes)
-
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.guest.create_guest', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Frappe-CSRF-Token': window.csrf_token || '',
-      },
-      body,
+    const created = await callMethodForm('rhohotel.rhocom_hotel.api.guest.create_guest', {
+      hotel_guest_name: form.hotel_guest_name,
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      guest_type: form.guest_type,
+      title: form.title,
+      gender: form.gender,
+      phone_number: fullPhone,
+      email: form.email,
+      nationality: form.nationality,
+      preference: form.preferences.length ? form.preferences.join(', ') : '',
+      date_of_birth: form.date_of_birth,
+      address: form.address,
+      id_type: form.id_type,
+      id_number: form.id_number,
+      contact_person_name: form.contact_person_name,
+      contact_number: form.contact_number,
+      notes: form.notes,
     })
-    const data = await res.json()
-    if (data.exc || !res.ok) {
-      const msg = data._server_messages
-        ? JSON.parse(data._server_messages)[0]?.message || data._server_messages
-        : (data.exc || 'Failed to create guest.')
-      throw new Error(msg)
-    }
-    const created = data.message
 
     // Issue #15: If we came from check-in page, route back there
     if (route.query.return_to === 'checkin') {

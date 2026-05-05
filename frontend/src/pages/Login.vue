@@ -116,12 +116,12 @@ const session = useSessionStore()
 
 const loginResource = createResource({
   url: 'login',
-  onSuccess(data) {
+  async onSuccess() {
     success.value = true
     error.value = ''
-    session.user = email.value
+    await session.initialize(true)
     setTimeout(() => {
-      router.push('/room-view')
+      router.push({ name: 'RoomView' })
     }, 800)
   },
   onError(err) {

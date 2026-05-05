@@ -321,6 +321,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -346,13 +347,10 @@ function onGuestInput() {
   showGuestDropdown.value = true
   guestDebounce = setTimeout(async () => {
     try {
-      const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.search_guests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-        body: new URLSearchParams({ query: guestQuery.value }),
+      const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.search_guests', {
+        query: guestQuery.value,
       })
-      const data = await res.json()
-      guestResults.value = data.message || []
+      guestResults.value = Array.isArray(rows) ? rows : []
     } catch {
       guestResults.value = []
     } finally {
@@ -382,13 +380,8 @@ const roomTypes = ref([])
 
 async function loadRoomTypes() {
   try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_room_types', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({}),
-    })
-    const data = await res.json()
-    roomTypes.value = data.message || []
+    const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.get_room_types')
+    roomTypes.value = Array.isArray(rows) ? rows : []
   } catch { /* ignore */ }
 }
 
@@ -399,17 +392,14 @@ async function loadAvailableRooms() {
     const params = { room_type: selectedRoomType.value }
     if (form.check_in_datetime) {
       params.check_in_dt = form.check_in_datetime
-      const ciDate = new Date(form.check_in_datetime)
-      ciDate.setDate(ciDate.getDate() + parseInt(form.number_of_nights || 1))
-      params.check_out_dt = ciDate.toISOString().slice(0, 16)
+      const ciDate = parseLocalDateTime(form.check_in_datetime)
+      if (ciDate) {
+        ciDate.setDate(ciDate.getDate() + parseInt(form.number_of_nights || 1))
+        params.check_out_dt = formatServerDateTime(ciDate)
+      }
     }
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_available_rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams(params),
-    })
-    const data = await res.json()
-    availableRooms.value = data.message || []
+    const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.get_available_rooms', params)
+    availableRooms.value = Array.isArray(rows) ? rows : []
     // Pre-fill from query params after rooms are loaded
     const preRoom = route.query.room
     const preRoomType = route.query.room_type
@@ -483,10 +473,28 @@ const preferenceTags = reactive([
 
 const expectedCheckoutDisplay = computed(() => {
   if (!form.check_in_datetime || !form.number_of_nights) return '—'
-  const dt = new Date(form.check_in_datetime)
+  const dt = parseLocalDateTime(form.check_in_datetime)
+  if (!dt) return '—'
   dt.setDate(dt.getDate() + parseInt(form.number_of_nights))
   return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 })
+
+function parseLocalDateTime(value) {
+  if (!value) return null
+  const normalized = String(value).replace(' ', 'T')
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatServerDateTime(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  const ss = String(date.getSeconds()).padStart(2, '0')
+  return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+}
 
 const estimatedTotal = computed(() => {
   const nights = parseInt(form.number_of_nights) || 0
@@ -557,24 +565,14 @@ async function submitCheckIn() {
       id_type: form.id_type || '',
       contact_number: form.contact_number || '',
     }
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.create_checkin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams(params),
-    })
-    const data = await res.json()
-    if (data.exc) {
-      const match = data.exc.match(/frappe\.exceptions\.\w+: (.+)/m)
-      errorMsg.value = match ? match[1] : (data.exc_type || 'Check-in failed. Please review the details.')
-      return
-    }
-    if (data.message && data.message.name) {
-      router.push('/check-ins/' + data.message.name)
+    const data = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.create_checkin', params)
+    if (data?.name) {
+      router.push({ name: 'CheckInDetail', params: { id: data.name } })
     } else {
       errorMsg.value = 'Unexpected response from server.'
     }
   } catch (e) {
-    errorMsg.value = 'Network error — please try again.'
+    errorMsg.value = String(e?.message || 'Network error — please try again.')
   } finally {
     submitting.value = false
   }

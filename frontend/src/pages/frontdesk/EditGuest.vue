@@ -212,6 +212,7 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -248,18 +249,7 @@ async function loadGuest() {
   loading.value = true
   loadError.value = null
   try {
-    const body = new URLSearchParams({ name: guestId })
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.guest.get_guest', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Frappe-CSRF-Token': window.csrf_token || '',
-      },
-      body,
-    })
-    const data = await res.json()
-    if (!res.ok || data.exc) throw new Error(data._server_messages || data.exc || 'Guest not found.')
-    const g = data.message
+    const g = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guest', { name: guestId })
     originalName.value = g.name
     Object.assign(form, {
       hotel_guest_name: g.hotel_guest_name || '',
@@ -303,27 +293,13 @@ async function saveGuest() {
 
   saving.value = true
   try {
-    const body = new URLSearchParams({ name: originalName.value })
+    const payload = { name: originalName.value }
     for (const [k, v] of Object.entries(form)) {
-      body.append(k, String(v ?? ''))
+      payload[k] = String(v ?? '')
     }
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.guest.update_guest', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Frappe-CSRF-Token': window.csrf_token || '',
-      },
-      body,
-    })
-    const data = await res.json()
-    if (!res.ok || data.exc) {
-      const msg = data._server_messages
-        ? JSON.parse(data._server_messages)[0]?.message || data._server_messages
-        : (data.exc || 'Save failed.')
-      throw new Error(msg)
-    }
+    const data = await callMethodForm('rhohotel.rhocom_hotel.api.guest.update_guest', payload)
     saveSuccess.value = true
-    const updated = data.message
+    const updated = data
     // If name changed, navigate to new route
     if (updated.name !== originalName.value) {
       router.replace({ name: 'EditGuest', params: { id: updated.name } })

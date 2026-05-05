@@ -1014,13 +1014,40 @@ def complete_payment(payment_session):
 
 @frappe.whitelist(allow_guest=True)
 def add_cors_headers(response=None):
-	"""Add CORS headers to allow cross-origin requests."""
+	"""Add CORS headers for explicit allowed origins only."""
 	if response is None:
 		return
-	response.headers["Access-Control-Allow-Origin"] = "*"
-	response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-	response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Frappe-CSRF-Token"
-	response.headers["Access-Control-Allow-Credentials"] = "true"
+
+	def normalize_origins(raw_value):
+		if not raw_value:
+			return set()
+		if isinstance(raw_value, str):
+			items = [x.strip() for x in raw_value.split(",")]
+		elif isinstance(raw_value, (list, tuple, set)):
+			items = [str(x).strip() for x in raw_value]
+		else:
+			items = []
+		return {x.rstrip("/") for x in items if x}
+
+	allowed = set()
+	allowed.update(normalize_origins(frappe.conf.get("rhohotel_cors_allow_origins")))
+	allowed.update(normalize_origins(frappe.conf.get("cors_allow_origins")))
+	allowed.update(normalize_origins(frappe.conf.get("allow_cors")))
+
+	origin = (frappe.get_request_header("Origin") or "").strip().rstrip("/")
+
+	response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+	response.headers["Access-Control-Allow-Headers"] = (
+		"Content-Type, Authorization, X-Frappe-CSRF-Token, X-Frappe-Site-Name"
+	)
+
+	if not origin:
+		return
+
+	if "*" in allowed or origin in allowed:
+		response.headers["Access-Control-Allow-Origin"] = origin
+		response.headers["Access-Control-Allow-Credentials"] = "true"
+		response.headers["Vary"] = "Origin"
 
 
 # from datetime import datetime

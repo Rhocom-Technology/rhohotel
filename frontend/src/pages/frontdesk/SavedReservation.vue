@@ -1,36 +1,108 @@
 <template>
-  <div class="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center">
-    <p v-if="loading" class="text-sm text-gray-500">Opening reservation details...</p>
-    <div v-else>
-      <p class="text-sm font-medium text-red-500">{{ errorMessage || 'Reservation not found.' }}</p>
-      <button
-        @click="router.push('/reservations')"
-        class="mt-4 px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-      >
-        Back to Reservations
-      </button>
-    </div>
-  </div>
+  <SavedReservationDetails
+    :reservation="reservation"
+    :loading="loading"
+    :error="errorMessage"
+    :action-loading="actionLoading"
+    @refresh="loadReservation"
+    @open-payments="openPayments"
+    @check-in="goToCheckIn"
+    @cancel-reservation="cancelReservation"
+    @create-invoice="createInvoice"
+    @submit-reservation="submitReservation"
+  />
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import SavedReservationDetails from '@/components/reservations/SavedReservation.vue'
+import { callMethod } from '@/lib/api'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
+const actionLoading = ref(false)
+const reservation = ref({})
 const errorMessage = ref('')
 
-onMounted(async () => {
-  const id = String(route.params.id || '').trim()
+function getReservationId() {
+  return String(route.params.id || '').trim()
+}
+
+async function loadReservation() {
+  const id = getReservationId()
   if (!id) {
     loading.value = false
     errorMessage.value = 'Missing reservation id.'
     return
   }
 
-  window.location.replace(`/app/hotel-room-reservation/${encodeURIComponent(id)}`)
-})
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const doc = await callMethod('frappe.client.get', {
+      doctype: 'Hotel Reservation',
+      name: id,
+    })
+
+    reservation.value = {
+      ...doc,
+      status: doc.reservation_status || doc.status || 'Draft',
+      rooms: Array.isArray(doc.rooms) ? doc.rooms : [],
+    }
+  } catch (error) {
+    reservation.value = {}
+    errorMessage.value = String(error?.message || 'Could not load reservation details.')
+  } finally {
+    loading.value = false
+  }
+}
+
+function openPayments() {
+  const id = getReservationId()
+  router.push({ name: 'Payments', query: id ? { reservation: id } : undefined })
+}
+
+function goToCheckIn() {
+  const id = getReservationId()
+  router.push({ name: 'NewCheckIn', query: id ? { reservation: id } : undefined })
+}
+
+async function submitReservation() {
+  if (!reservation.value?.name || Number(reservation.value.docstatus) !== 0) return
+
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callMethod('frappe.client.submit', { doc: reservation.value })
+    await loadReservation()
+  } catch (error) {
+    errorMessage.value = String(error?.message || 'Could not submit reservation.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function cancelReservation() {
+  if (!reservation.value?.name || Number(reservation.value.docstatus) === 2) return
+
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callMethod('frappe.client.cancel', { doc: reservation.value })
+    await loadReservation()
+  } catch (error) {
+    errorMessage.value = String(error?.message || 'Could not cancel reservation.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function createInvoice() {
+  errorMessage.value = 'Create Invoice is not available in this view yet.'
+}
+
+loadReservation()
 </script>
