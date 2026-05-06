@@ -65,9 +65,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-4">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Current Check-in Date</p>
-            <input v-if="adjustmentType === 'Change Dates'" v-model="newCheckinDate" type="date"
-              class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <div v-else class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ formatDate(reservation.from_date) }}</div>
+            <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ formatDate(reservation.from_date) }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Current Check-out Date</p>
@@ -77,11 +75,19 @@
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-4">
           <div>
+            <p class="text-xs text-gray-500 mb-1.5">New Check-in Date</p>
+            <input v-model="newCheckinDate" type="date"
+              class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
             <p class="text-xs text-gray-500 mb-1.5">New Check-out Date</p>
             <input v-model="newCheckoutDate" type="date"
               :min="minCheckoutDate"
               class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-4">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Additional Nights</p>
             <div class="flex items-center gap-2">
@@ -164,7 +170,7 @@
     <div class="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
       <div v-if="errorMsg" class="flex-1 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{{ errorMsg }}</div>
       <button @click="$emit('close')" class="px-5 py-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-      <button :disabled="submitting || !newCheckoutDate || additionalNights === 0" @click="apply"
+      <button :disabled="submitting || !canApply" @click="apply"
         class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">
         {{ submitting ? 'Applying…' : 'Apply Stay Adjustment' }}
       </button>
@@ -175,24 +181,25 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 
 const adjustmentType = ref('Extend Stay')
 const adjustmentReason = ref('Guest Request')
-const newCheckoutDate = ref('')
-const newCheckinDate = ref('')
+const newCheckoutDate = ref(asISODate(props.reservation.to_date))
+const newCheckinDate = ref(asISODate(props.reservation.from_date))
 const adjustmentNotes = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
 
 // Earliest valid checkout: one day after check-in
 const minCheckoutDate = computed(() => {
-  if (!props.reservation.from_date) return ''
-  const d = new Date(props.reservation.from_date)
+  if (!newCheckinDate.value) return ''
+  const d = parseDateOnly(newCheckinDate.value)
   d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
+  return formatISODate(d)
 })
 
 // Correct rate per night: subtotal / number_of_nights
@@ -203,38 +210,43 @@ const ratePerNight = computed(() => {
 
 const additionalNights = computed(() => {
   if (!newCheckoutDate.value || !props.reservation.to_date) return 0
-  const current = new Date(props.reservation.to_date)
-  const newDate = new Date(newCheckoutDate.value)
+  const current = parseDateOnly(asISODate(props.reservation.to_date))
+  const newDate = parseDateOnly(newCheckoutDate.value)
   const diff = Math.round((newDate - current) / (1000 * 60 * 60 * 24))
   return diff
 })
 
-function parseErr(data) {
-  try { return JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { return 'Adjustment failed.' }
-}
+const hasDateChanges = computed(() => {
+  return (
+    newCheckinDate.value !== asISODate(props.reservation.from_date) ||
+    newCheckoutDate.value !== asISODate(props.reservation.to_date)
+  )
+})
+
+const isRangeValid = computed(() => {
+  if (!newCheckinDate.value || !newCheckoutDate.value) return false
+  return parseDateOnly(newCheckoutDate.value) > parseDateOnly(newCheckinDate.value)
+})
+
+const canApply = computed(() => hasDateChanges.value && isRangeValid.value)
 
 async function apply() {
-  if (!newCheckoutDate.value || additionalNights.value === 0) return
+  if (!canApply.value) return
   submitting.value = true; errorMsg.value = ''
   try {
     const params = {
       reservation_name: props.reservation.name,
-      new_checkout_date: newCheckoutDate.value,
-      new_checkout_time: '12:00:00',
-      new_discount: 0,
+      new_check_in: newCheckinDate.value,
+      new_checkout: newCheckoutDate.value,
     }
-    if (adjustmentType.value === 'Change Dates' && newCheckinDate.value) {
-      params.new_checkin_date = newCheckinDate.value
-    }
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.adjust_front_desk_reservation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams(params)
-    })
-    const data = await res.json()
-    if (data.exc) { errorMsg.value = parseErr(data); return }
+    await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.adjust_reservation',
+      params,
+    )
     emit('done'); emit('close')
-  } catch { errorMsg.value = 'Network error. Please try again.' } finally { submitting.value = false }
+  } catch (error) {
+    errorMsg.value = String(error?.message || 'Adjustment failed.')
+  } finally { submitting.value = false }
 }
 
 function formatDate(dt) {
@@ -245,5 +257,23 @@ function formatDate(dt) {
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦0.00'
   return `₦${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+}
+
+function asISODate(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value.slice(0, 10)
+  return formatISODate(value)
+}
+
+function parseDateOnly(value) {
+  const [year, month, day] = String(value).slice(0, 10).split('-').map(Number)
+  return new Date(year, (month || 1) - 1, day || 1)
+}
+
+function formatISODate(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 </script>

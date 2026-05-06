@@ -97,16 +97,17 @@
               </div>
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Room Preference</p>
-                <select v-model="form.preference" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-                  <option value="">—</option>
-                  <option>Quiet room / High floor</option>
-                  <option>Low floor</option>
-                  <option>Near elevator</option>
-                  <option>Non-smoking</option>
-                  <option>High floor</option>
-                  <option>Late Checkout</option>
-                  <option>Early Check-in</option>
-                </select>
+                <div class="flex flex-wrap gap-2 px-3 py-2 border border-gray-200 rounded-lg min-h-[38px]">
+                  <span v-for="pref in form.preferences" :key="pref"
+                    class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full flex items-center gap-1">
+                    {{ pref }}
+                    <button @click="removePreference(pref)" class="text-blue-400 hover:text-blue-700">&times;</button>
+                  </span>
+                  <select @change="addPreference($event)" class="flex-1 min-w-[120px] text-xs border-0 focus:outline-none bg-transparent text-gray-600">
+                    <option value="">Add preference...</option>
+                    <option v-for="opt in availablePreferences" :key="opt" :value="opt">{{ opt }}</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Loyalty Tier</p>
@@ -131,6 +132,7 @@
                 <select v-model="form.id_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
                   <option value="">Select ID type</option>
                   <option>Passport</option>
+                  <option>International</option>
                   <option>National ID</option>
                   <option>Driver's License</option>
                   <option>Voter's Card</option>
@@ -140,6 +142,26 @@
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">ID Number</p>
                 <input type="text" v-model="form.id_number" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+
+            <div v-if="form.id_type" style="display:grid;grid-template-columns:1fr;gap:12px;">
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">ID Document Scan</p>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  @change="onIdDocumentChange"
+                  class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white file:mr-3 file:px-3 file:py-1.5 file:text-xs file:font-medium file:border-0 file:rounded-md file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <p v-if="idDocumentName" class="mt-1 text-xs text-green-600">Selected: {{ idDocumentName }}</p>
+                <a
+                  v-if="form.id_document_scan"
+                  :href="form.id_document_scan"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="mt-1 inline-block text-xs text-blue-600 hover:underline"
+                >View current uploaded document</a>
               </div>
             </div>
           </div>
@@ -175,7 +197,7 @@
               <p class="text-sm font-bold text-blue-700 mb-1">{{ form.hotel_guest_name || 'Guest Name' }}</p>
               <p class="text-xs text-blue-600">Type: {{ form.guest_type }}</p>
               <p class="text-xs text-blue-600">Nationality: {{ form.nationality || '—' }}</p>
-              <p class="text-xs text-blue-600">Preference: {{ form.preference || '—' }}</p>
+              <p class="text-xs text-blue-600">Preference: {{ form.preferences.length ? form.preferences.join(', ') : '—' }}</p>
               <p class="text-xs text-blue-600">Loyalty: {{ form.loyalty_tier || 'Base' }}</p>
             </div>
           </div>
@@ -210,9 +232,9 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { callMethodForm } from '@/lib/api'
+import { callMethodForm, requestApi } from '@/lib/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -223,6 +245,20 @@ const loadError = ref(null)
 const saving = ref(false)
 const saveError = ref(null)
 const saveSuccess = ref(false)
+const idDocumentFile = ref(null)
+
+const allPreferences = [
+  'Quiet room / High floor',
+  'Low floor',
+  'Near elevator',
+  'Non-smoking',
+  'High floor',
+  'Late Checkout',
+  'Early Check-in',
+  'Extra Towels',
+  'Extra Pillows',
+  'Ground Floor',
+]
 
 const originalName = ref('')
 
@@ -235,15 +271,57 @@ const form = reactive({
   phone_number: '',
   email: '',
   nationality: '',
-  preference: '',
+  preferences: [],
   loyalty_tier: 'Base',
   address: '',
   id_type: '',
   id_number: '',
+  id_document_scan: '',
   contact_person_name: '',
   contact_number: '',
   notes: '',
 })
+
+const availablePreferences = computed(() =>
+  allPreferences.filter(p => !form.preferences.includes(p))
+)
+
+const idDocumentName = computed(() => idDocumentFile.value?.name || '')
+
+function addPreference(event) {
+  const val = event.target.value
+  if (val && !form.preferences.includes(val)) {
+    form.preferences.push(val)
+  }
+  event.target.value = ''
+}
+
+function removePreference(pref) {
+  form.preferences = form.preferences.filter(p => p !== pref)
+}
+
+function onIdDocumentChange(event) {
+  const [file] = event.target.files || []
+  idDocumentFile.value = file || null
+}
+
+async function uploadIdDocument(guestName) {
+  if (!idDocumentFile.value) return
+
+  const body = new FormData()
+  body.append('file', idDocumentFile.value)
+  body.append('doctype', 'Hotel Guest')
+  body.append('docname', guestName)
+  body.append('fieldname', 'id_document_scan')
+  body.append('is_private', '1')
+
+  const payload = await requestApi('/api/method/upload_file', {
+    method: 'POST',
+    body,
+  })
+
+  form.id_document_scan = payload?.message?.file_url || form.id_document_scan
+}
 
 async function loadGuest() {
   loading.value = true
@@ -260,11 +338,12 @@ async function loadGuest() {
       phone_number: g.phone_number || '',
       email: g.email || '',
       nationality: g.nationality || '',
-      preference: g.preference || '',
+      preferences: (g.preference || '').split(',').map(v => v.trim()).filter(Boolean),
       loyalty_tier: g.loyalty_tier || 'Base',
       address: g.address || '',
       id_type: g.id_type || '',
       id_number: g.id_number || '',
+      id_document_scan: g.id_document_scan || '',
       contact_person_name: g.contact_person_name || '',
       contact_number: g.contact_number || '',
       notes: g.notes || '',
@@ -290,14 +369,44 @@ async function saveGuest() {
     saveError.value = 'Guest name is required.'
     return
   }
+  if (form.id_type && !form.id_document_scan && !idDocumentFile.value) {
+    saveError.value = 'ID document is required when an ID type is selected.'
+    return
+  }
 
   saving.value = true
   try {
-    const payload = { name: originalName.value }
-    for (const [k, v] of Object.entries(form)) {
-      payload[k] = String(v ?? '')
-    }
-    const data = await callMethodForm('rhohotel.rhocom_hotel.api.guest.update_guest', payload)
+    const body = new URLSearchParams()
+    body.append('name', originalName.value)
+    body.append('hotel_guest_name', form.hotel_guest_name)
+    body.append('guest_type', form.guest_type)
+    body.append('title', form.title || '')
+    body.append('gender', form.gender || '')
+    body.append('date_of_birth', form.date_of_birth || '')
+    body.append('phone_number', form.phone_number || '')
+    body.append('email', form.email || '')
+    body.append('nationality', form.nationality || '')
+    body.append('preference', form.preferences.length ? form.preferences.join(', ') : '')
+    body.append('loyalty_tier', form.loyalty_tier || 'Base')
+    body.append('address', form.address || '')
+    body.append('id_type', form.id_type || '')
+    body.append('id_number', form.id_number || '')
+    body.append('id_document_scan', form.id_document_scan || '')
+    body.append('contact_person_name', form.contact_person_name || '')
+    body.append('contact_number', form.contact_number || '')
+    body.append('notes', form.notes || '')
+
+    const payload = await requestApi('/api/method/rhohotel.rhocom_hotel.api.guest.update_guest', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    })
+
+    await uploadIdDocument(originalName.value)
+
+    const data = payload?.message
     saveSuccess.value = true
     const updated = data
     // If name changed, navigate to new route

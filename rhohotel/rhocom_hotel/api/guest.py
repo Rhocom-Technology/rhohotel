@@ -24,7 +24,7 @@ def get_guests(search=None, guest_type=None, loyalty_tier=None, status=None,
 		"name", "hotel_guest_name", "guest_type", "title", "gender",
 		"phone_number", "email", "nationality", "date_of_birth",
 		"id_type", "id_number", "address", "notes", "contact_number",
-		"contact_person_name", "preference", "loyalty_tier", "passport_photo",
+		"contact_person_name", "preference", "loyalty_tier", "passport_photo", "id_document_scan",
 	]
 
 	guests = frappe.get_all(
@@ -236,6 +236,7 @@ def get_guest(name):
 		"loyalty_tier": doc.loyalty_tier or "Base",
 		"notes": doc.notes,
 		"passport_photo": doc.passport_photo or "",
+		"id_document_scan": doc.id_document_scan or "",
 		# computed
 		"total_stays": total_stays,
 		"lifetime_spend": lifetime_spend,
@@ -267,6 +268,7 @@ def create_guest(
 	preference=None,
 	loyalty_tier=None,
 	notes=None,
+	id_document_scan=None,
 ):
 	"""Create a new Hotel Guest document."""
 	hotel_guest_name = cstr(hotel_guest_name).strip()
@@ -293,6 +295,7 @@ def create_guest(
 	doc.preference = preference or ""
 	doc.loyalty_tier = loyalty_tier or "Base"
 	doc.notes = notes or ""
+	doc.id_document_scan = id_document_scan or ""
 
 	doc.insert(ignore_permissions=True)
 	frappe.db.commit()
@@ -323,6 +326,7 @@ def update_guest(
 	preference=None,
 	loyalty_tier=None,
 	notes=None,
+	id_document_scan=None,
 ):
 	"""Update an existing Hotel Guest document."""
 	if not frappe.db.exists("Hotel Guest", name):
@@ -362,6 +366,8 @@ def update_guest(
 		doc.loyalty_tier = loyalty_tier
 	if notes is not None:
 		doc.notes = notes
+	if id_document_scan is not None:
+		doc.id_document_scan = id_document_scan
 
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()

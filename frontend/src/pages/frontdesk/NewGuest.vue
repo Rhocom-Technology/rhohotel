@@ -45,7 +45,6 @@
                 <option value="">Select guest type</option>
                 <option>Individual</option>
                 <option>Corporate</option>
-                <option>Walk-in</option>
               </select>
             </div>
             <div>
@@ -158,6 +157,7 @@
               <select v-model="form.id_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
                 <option value="">Select ID type</option>
                 <option>Passport</option>
+                <option>International</option>
                 <option>National ID</option>
                 <option>Driver's License</option>
                 <option>Voter's Card</option>
@@ -168,6 +168,20 @@
               <p class="text-xs text-gray-500 mb-1.5">ID Number</p>
               <input type="text" v-model="form.id_number" placeholder="Enter ID number"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <div v-if="requiresIdDocument" style="display:grid;grid-template-columns:1fr;gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">ID Document Scan <span class="text-red-500">*</span></p>
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                @change="onIdDocumentChange"
+                class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white file:mr-3 file:px-3 file:py-1.5 file:text-xs file:font-medium file:border-0 file:rounded-md file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              <p v-if="idDocumentName" class="mt-1 text-xs text-green-600">Selected: {{ idDocumentName }}</p>
+              <p class="mt-1 text-xs text-gray-400">Accepted formats: PDF or image files (max upload size follows server settings).</p>
             </div>
           </div>
         </div>
@@ -262,12 +276,13 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { callMethodForm } from '@/lib/api'
+import { callMethodForm, requestApi } from '@/lib/api'
 
 const router = useRouter()
 const route = useRoute()
 const saving = ref(false)
 const saveError = ref(null)
+const idDocumentFile = ref(null)
 
 const allPreferences = [
   'Quiet room / High floor',
@@ -307,6 +322,10 @@ const availablePreferences = computed(() =>
   allPreferences.filter(p => !form.preferences.includes(p))
 )
 
+const requiresIdDocument = computed(() => Boolean(form.id_type))
+
+const idDocumentName = computed(() => idDocumentFile.value?.name || '')
+
 function addPreference(event) {
   const val = event.target.value
   if (val && !form.preferences.includes(val)) {
@@ -317,6 +336,27 @@ function addPreference(event) {
 
 function removePreference(pref) {
   form.preferences = form.preferences.filter(p => p !== pref)
+}
+
+function onIdDocumentChange(event) {
+  const [file] = event.target.files || []
+  idDocumentFile.value = file || null
+}
+
+async function uploadIdDocument(guestName) {
+  if (!idDocumentFile.value) return
+
+  const body = new FormData()
+  body.append('file', idDocumentFile.value)
+  body.append('doctype', 'Hotel Guest')
+  body.append('docname', guestName)
+  body.append('fieldname', 'id_document_scan')
+  body.append('is_private', '1')
+
+  await requestApi('/api/method/upload_file', {
+    method: 'POST',
+    body,
+  })
 }
 
 async function createGuest() {
@@ -333,6 +373,10 @@ async function createGuest() {
     saveError.value = 'Guest type is required.'
     return
   }
+  if (requiresIdDocument.value && !idDocumentFile.value) {
+    saveError.value = 'ID document is required when an ID type is selected.'
+    return
+  }
 
   saving.value = true
   try {
@@ -340,8 +384,6 @@ async function createGuest() {
     const fullPhone = form.phone_number ? `${form.country_code}${form.phone_number}` : ''
     const created = await callMethodForm('rhohotel.rhocom_hotel.api.guest.create_guest', {
       hotel_guest_name: form.hotel_guest_name,
-      first_name: form.first_name.trim(),
-      last_name: form.last_name.trim(),
       guest_type: form.guest_type,
       title: form.title,
       gender: form.gender,
@@ -357,6 +399,8 @@ async function createGuest() {
       contact_number: form.contact_number,
       notes: form.notes,
     })
+
+    await uploadIdDocument(created.name)
 
     // Issue #15: If we came from check-in page, route back there
     if (route.query.return_to === 'checkin') {

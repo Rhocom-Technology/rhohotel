@@ -21,6 +21,7 @@
         "email",
         "notes",
         "passport_photo",
+        "id_document_scan",
         "nationality",
         "date_of_birth",
         "preference",
@@ -66,7 +67,7 @@
             "fieldname": "id_type",
             "fieldtype": "Select",
             "label": "ID Type",
-            "options": "Passport\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card"
+            "options": "Passport\nInternational\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card"
         },
         {
             "fieldname": "id_number",
@@ -111,6 +112,11 @@
             "label": "Passport Photo"
         },
         {
+            "fieldname": "id_document_scan",
+            "fieldtype": "Attach",
+            "label": "ID Document Scan"
+        },
+        {
             "fieldname": "nationality",
             "fieldtype": "Data",
             "label": "Nationality"
@@ -127,9 +133,8 @@
         },
         {
             "fieldname": "preference",
-            "fieldtype": "Select",
-            "label": "Room Preference",
-            "options": "\nQuiet room / High floor\nLow floor\nNear elevator\nNon-smoking\nHigh floor\nLate Checkout\nEarly Check-in"
+            "fieldtype": "Small Text",
+            "label": "Room Preference"
         },
         {
             "default": "Base",

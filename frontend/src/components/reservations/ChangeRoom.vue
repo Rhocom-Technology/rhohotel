@@ -91,6 +91,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
@@ -106,29 +107,20 @@ const error = ref('')
 
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
 function fmtDate(dt) { if (!dt) return '—'; return new Date(dt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
-function parseErr(data) { try { return JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { return 'Request failed.' } }
-
-async function apiPost(method, params) {
-  const res = await fetch(`/api/method/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-    body: new URLSearchParams(params),
-  })
-  return res.json()
-}
 
 async function loadRooms() {
   if (!props.reservation.from_date || !props.reservation.to_date) return
   loadingRooms.value = true; error.value = ''
   const reservedRooms = rooms.value.map(r => r.room_number)
   try {
-    const data = await apiPost('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
+    const rows = await callMethodForm('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
       check_in_dt: props.reservation.from_date + ' 12:00:00',
       check_out_dt: props.reservation.to_date + ' 12:00:00',
     })
-    if (data.exc) { error.value = parseErr(data); return }
-    availableRooms.value = (data.message || []).filter(r => !reservedRooms.includes(r.name))
-  } catch { error.value = 'Failed to load available rooms.' } finally { loadingRooms.value = false }
+    availableRooms.value = (rows || []).filter(r => !reservedRooms.includes(r.name))
+  } catch (err) {
+    error.value = String(err?.message || 'Failed to load available rooms.')
+  } finally { loadingRooms.value = false }
 }
 
 onMounted(loadRooms)
@@ -137,14 +129,15 @@ async function applyChange() {
   if (!selectedOldRoom.value || !selectedNewRoom.value) return
   submitting.value = true; error.value = ''
   try {
-    const data = await apiPost('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.change_room_in_reservation', {
+    await callMethodForm('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.change_room_in_reservation', {
       reservation_name: props.reservation.name,
       old_room_number: selectedOldRoom.value,
       new_room_number: selectedNewRoom.value,
       reason: reason.value,
     })
-    if (data.exc) { error.value = parseErr(data); return }
     emit('done'); emit('close')
-  } catch { error.value = 'Network error. Please try again.' } finally { submitting.value = false }
+  } catch (err) {
+    error.value = String(err?.message || 'Could not change room.')
+  } finally { submitting.value = false }
 }
 </script>

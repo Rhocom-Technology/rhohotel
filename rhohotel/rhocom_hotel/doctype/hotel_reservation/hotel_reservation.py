@@ -297,3 +297,51 @@ class HotelReservation(Document):
             if room.status == "Reserved":
                 room.status = "Vacant"
                 room.save(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def adjust_reservation(reservation_name, new_checkout, new_check_in):
+    """
+    Adjust the arrival and/or departure dates of a submitted Hotel Reservation.
+    Recalculates nights and totals; saves the document in-place.
+    """
+    from frappe.utils import getdate, date_diff, flt
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    new_from = getdate(new_check_in)
+    new_to = getdate(new_checkout)
+
+    if new_to <= new_from:
+        frappe.throw("Departure date must be after arrival date.")
+
+    current_from = getdate(doc.from_date)
+    current_to = getdate(doc.to_date)
+
+    if new_from == current_from and new_to == current_to:
+        frappe.throw("No change detected – dates are the same as the current stay.")
+
+    new_nights = date_diff(new_to, new_from)
+    if new_nights < 1:
+        new_nights = 1
+
+    doc.flags.ignore_validate_update_after_submit = True
+    doc.from_date = new_from
+    doc.to_date = new_to
+    doc.number_of_nights = new_nights
+
+    # Recalculate per-room totals using the new night count
+    for row in doc.rooms:
+        rate = flt(row.rate_per_night)
+        row.room_total = round(rate * new_nights, 2)
+
+    doc._recalculate_totals()
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "status": "success",
+        "new_from_date": str(new_from),
+        "new_to_date": str(new_to),
+        "new_nights": new_nights,
+    }

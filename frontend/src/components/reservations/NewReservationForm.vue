@@ -229,7 +229,22 @@ const nightsCount = computed(() => {
   return diff > 0 ? diff : 0
 })
 
-const subTotal = computed(() => selectedRooms.value.reduce((acc, room) => acc + Number(room.rate_per_night || 0) * nightsCount.value, 0))
+function getRoomRate(room) {
+  return Number(room?.rate_per_night ?? room?.rate ?? 0)
+}
+
+function getRoomDiscount(room) {
+  return Number(room?.discount ?? 0)
+}
+
+function getRoomAmount(room) {
+  const rate = getRoomRate(room)
+  const discount = getRoomDiscount(room)
+  const fallbackAmount = (rate * nightsCount.value) - discount
+  return Number(room?.room_total ?? room?.total_amount ?? room?.amount ?? fallbackAmount)
+}
+
+const subTotal = computed(() => selectedRooms.value.reduce((acc, room) => acc + (getRoomRate(room) * nightsCount.value), 0))
 const discountAmount = computed(() => {
   const discount = Number(form.value.discount || 0)
   if (!discount || !form.value.discount_type) return 0
@@ -291,7 +306,12 @@ function addRoom() {
   const room = availableRooms.value.find((r) => r.name === selectedRoom.value)
   if (!room) return
   if (selectedRooms.value.some((r) => r.name === room.name)) return
-  selectedRooms.value.push({ ...room })
+  selectedRooms.value.push({
+    ...room,
+    rate_per_night: getRoomRate(room),
+    discount: getRoomDiscount(room),
+    room_total: getRoomAmount(room),
+  })
 }
 
 function removeRoom(roomName) {
@@ -340,11 +360,16 @@ async function saveReservation(submitAfterSave) {
       customer: guestDoc?.customer || undefined,
       discount_type: form.value.discount_type || undefined,
       discount: Number(form.value.discount || 0),
+      subtotal: Number(subTotal.value || 0),
+      discount_amount: Number(discountAmount.value || 0),
+      total_amount: Number(grandTotal.value || 0),
+      net_total: Number(grandTotal.value || 0),
       rooms: selectedRooms.value.map((room) => ({
         room_number: room.name,
-        rate_per_night: Number(room.rate_per_night || 0),
+        rate_per_night: getRoomRate(room),
         number_of_nights: nightsCount.value,
-        room_total: Number(room.rate_per_night || 0) * nightsCount.value,
+        discount: getRoomDiscount(room),
+        room_total: getRoomAmount(room),
         occupant_name: form.value.primary_guest_name,
         occupant_email: form.value.primary_guest_email,
         occupant_phone: form.value.primary_guest_phone,

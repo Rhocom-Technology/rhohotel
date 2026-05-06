@@ -152,13 +152,25 @@
                   {{ guest.id_type || '—' }} {{ guest.id_number ? '• ' + guest.id_number : '' }}
                 </div>
               </div>
+              <div style="grid-column:span 2;" v-if="guest.id_document_scan">
+                <p class="text-xs text-gray-500 mb-1.5">Uploaded ID Document</p>
+                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">
+                  <a :href="guest.id_document_scan" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
+                    View uploaded document
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
 
           <div v-if="guest.preference" class="bg-white rounded-xl border border-gray-200 px-6 py-5">
             <h3 class="text-sm font-bold text-gray-900 mb-3">Guest Preferences</h3>
             <div class="flex items-center gap-2 flex-wrap px-3 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">{{ guest.preference }}</span>
+              <span
+                v-for="pref in preferenceList"
+                :key="pref"
+                class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-600 rounded-full"
+              >{{ pref }}</span>
             </div>
           </div>
 
@@ -249,7 +261,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
 
@@ -263,6 +275,13 @@ const guest = ref(null)
 
 const activeTab = ref('Profile')
 const tabs = ['Profile', 'Stay History', 'Spend', 'Loyalty', 'Messages']
+
+const preferenceList = computed(() =>
+  (guest.value?.preference || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+)
 
 async function fetchGuest() {
   loading.value = true
