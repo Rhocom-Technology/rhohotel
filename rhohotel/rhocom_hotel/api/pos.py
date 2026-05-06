@@ -14,18 +14,20 @@ def _get_user_pos_profile(user=None):
     if not user or user == "Guest":
         return None
 
-    mapped_profile = frappe.db.sql(
+        mapped_profile = frappe.db.sql(
         """
         SELECT p.name
         FROM `tabPOS Profile` p
         INNER JOIN `tabPOS Profile User` pu ON pu.parent = p.name
         WHERE p.disabled = 0
-          AND pu.parenttype = 'POS Profile'
-          AND pu.user = %s
+                    AND (
+                                LOWER(pu.user) = LOWER(%s)
+                                OR LOWER(SUBSTRING_INDEX(pu.user, '@', 1)) = LOWER(SUBSTRING_INDEX(%s, '@', 1))
+                    )
         ORDER BY p.modified DESC
         LIMIT 1
         """,
-        (user,),
+                (user, user),
     )
 
     if mapped_profile:
@@ -51,25 +53,54 @@ def _get_allowed_item_groups_for_profile(pos_profile):
 
 
 def _get_user_pos_profiles(user=None):
-    """Return active POS Profiles mapped to user."""
+    """Return active POS Profiles accessible to the given user.
+
+    Priority:
+    1. Profiles that explicitly list this user in their Users table.
+    2. Profiles whose Users table is empty (available to everyone).
+
+    This mirrors ERPNext behaviour where an unmapped profile is global.
+    """
     user = user or frappe.session.user
     if not user or user == "Guest":
         return []
 
-    rows = frappe.db.sql(
+    # Explicitly mapped profiles (case-insensitive user match)
+    explicit = frappe.db.sql(
         """
-        SELECT p.name
+        SELECT DISTINCT p.name
         FROM `tabPOS Profile` p
         INNER JOIN `tabPOS Profile User` pu ON pu.parent = p.name
         WHERE p.disabled = 0
-          AND pu.parenttype = 'POS Profile'
-          AND pu.user = %s
+          AND (
+                LOWER(pu.user) = LOWER(%s)
+                OR LOWER(SUBSTRING_INDEX(pu.user, '@', 1)) = LOWER(SUBSTRING_INDEX(%s, '@', 1))
+          )
         ORDER BY p.modified DESC
         """,
-        (user,),
+        (user, user),
         as_dict=1,
     )
-    return [r.name for r in rows]
+    explicit_names = [r.get("name") for r in explicit if r.get("name")]
+
+    if explicit_names:
+        return explicit_names
+
+    # Fallback: profiles with no user restrictions
+    global_profiles = frappe.db.sql(
+        """
+        SELECT p.name
+        FROM `tabPOS Profile` p
+        WHERE p.disabled = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM `tabPOS Profile User` pu2
+              WHERE pu2.parent = p.name
+          )
+        ORDER BY p.modified DESC
+        """,
+        as_dict=1,
+    )
+    return [r.get("name") for r in global_profiles if r.get("name")]
 
 
 def _get_open_pos_entry(user, pos_profile=None):
@@ -119,21 +150,26 @@ def get_pos_opening_profiles():
 
     profile_rows = []
     for profile_name in profiles:
-        profile_doc = frappe.get_cached_doc("POS Profile", profile_name)
-        payments = [
-            row.mode_of_payment
-            for row in (profile_doc.get("payments") or [])
-            if row.mode_of_payment
-        ]
-        profile_rows.append(
-            {
-                "name": profile_name,
-                "company": profile_doc.company,
-                "payments": payments,
-            }
-        )
+        try:
+            profile_doc = frappe.get_doc("POS Profile", profile_name)
+            payments = [
+                row.mode_of_payment
+                for row in (profile_doc.get("payments") or [])
+                if row.mode_of_payment
+            ]
+            profile_rows.append(
+                {
+                    "name": profile_name,
+                    "company": profile_doc.company,
+                    "payments": payments,
+                }
+            )
+        except Exception:
+            # If a profile doc can't be loaded, still include its name
+            profile_rows.append({"name": profile_name, "company": "", "payments": []})
 
     return {
+        "current_user": user,
         "has_open_shift": bool(open_entry),
         "open_pos_opening_entry": open_entry.get("name") if open_entry else None,
         "open_pos_profile": open_entry.get("pos_profile") if open_entry else None,
@@ -249,6 +285,7 @@ def get_pos_menu_items(search=None, category=None):
             COALESCE(p.price_list_rate, i.standard_rate, 0) AS price,
             i.image,
             i.stock_uom AS uom,
+            i.is_stock_item,
             COALESCE(b.actual_qty, 0) AS stock
         FROM `tabItem` i
         LEFT JOIN `tabItem Price` p ON p.item_code = i.name

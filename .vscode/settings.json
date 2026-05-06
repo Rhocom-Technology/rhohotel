@@ -12,6 +12,10 @@
     "python.testing.pytestEnabled": false,
     "chat.tools.terminal.autoApprove": {
         "bench": true,
-        "npm run build": true
+        "npm run build": true,
+        "/^cd /home/frappe/frappe-bench && bench --site \\$\\(bench --site all list-sites 2>/dev/null \\| head -1\\) execute frappe\\.db\\.sql --args '\\[\"SELECT p\\.name, COUNT\\(pu\\.name\\) as user_count FROM \\\\`tabPOS Profile\\\\` p LEFT JOIN \\\\`tabPOS Profile User\\\\` pu ON pu\\.parent = p\\.name WHERE p\\.disabled = 0 GROUP BY p\\.name LIMIT 10\", \\[\\], True\\]' 2>/dev/null \\| python3 -c \"import sys,json; data=sys\\.stdin\\.read\\(\\); print\\(data\\[:3000\\]\\)\" 2>/dev/null \\|\\| echo \"bench query failed\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

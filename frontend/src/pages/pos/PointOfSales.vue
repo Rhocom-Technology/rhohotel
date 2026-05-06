@@ -71,16 +71,16 @@
         <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div>
 
         <!-- Menu grid -->
-        <div v-else style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div v-else class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div v-for="item in filteredMenuItems" :key="item.id"
             @click="addToCart(item)"
             class="menu-card bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer relative select-none"
-            :class="item.stock === 0 ? 'opacity-60 cursor-not-allowed' : ''">
+            :class="item.isStockItem && item.stock === 0 ? 'opacity-60 cursor-not-allowed' : ''">
             <div class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm"
-              :class="item.stock === 0 ? 'bg-red-500 text-white' : item.stock < 10 ? 'bg-orange-400 text-white' : 'bg-green-500 text-white'">
-              {{ item.stock }}
+              :class="!item.isStockItem ? 'bg-blue-500 text-white' : item.stock === 0 ? 'bg-red-500 text-white' : item.stock < 10 ? 'bg-orange-400 text-white' : 'bg-green-500 text-white'">
+              {{ item.isStockItem ? item.stock : '∞' }}
             </div>
-            <div class="h-24 bg-gray-100 overflow-hidden">
+            <div class="aspect-[4/3] lg:aspect-[5/4] bg-gray-100 overflow-hidden">
               <img v-if="item.image" :src="item.image" :alt="item.name"
                 class="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
               <div v-else class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
@@ -323,55 +323,94 @@
       :service-charge="serviceCharge"
     />
 
-    <!-- Opening Entry Modal (shown when no open shift) -->
+    <!-- ── Open POS Shift — enforced blocking modal ─────────────────── -->
     <Teleport to="body">
-      <div v-if="showOpenShiftModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4" style="background:rgba(15,23,42,0.55);">
-        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl modal-panel">
-          <h3 class="text-sm font-bold text-gray-900">Open POS Shift</h3>
-          <p class="text-xs text-gray-500 mt-1">No active POS Opening Entry was found for your account. Open a shift to start billing.</p>
+      <div v-if="showOpenShiftModal" class="fixed inset-0 z-[90] flex items-center justify-center p-4" style="background:rgba(15,23,42,0.72);">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl modal-panel overflow-hidden">
 
-          <div class="mt-4 space-y-3">
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1.5">POS Profile</label>
-              <select
-                v-model="selectedOpeningProfile"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option disabled value="">Select profile</option>
-                <option v-for="p in openingProfiles" :key="p.name" :value="p.name">
-                  {{ p.name }}
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1.5">Opening Cash Amount</label>
-              <input
-                v-model="openingCash"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          <!-- Header -->
+          <div class="px-6 pt-6 pb-4 border-b border-gray-100">
+            <div class="flex items-center gap-3 mb-1">
+              <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-gray-900">Open POS Shift</h3>
+                <p class="text-xs text-gray-400">A shift must be open before you can process sales.</p>
+              </div>
             </div>
           </div>
 
-          <p v-if="openShiftError" class="mt-3 text-xs text-red-600">{{ openShiftError }}</p>
+          <!-- Body -->
+          <div class="px-6 py-5 space-y-4">
 
-          <div class="mt-5 flex gap-2">
+            <!-- Loading profiles -->
+            <div v-if="openingProfilesResource.loading" class="text-center py-6">
+              <div class="inline-block w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div>
+              <p class="text-xs text-gray-400">Loading POS profiles…</p>
+            </div>
+
+            <!-- API error -->
+            <div v-else-if="openingProfilesResource.error" class="text-center py-6">
+              <svg class="w-8 h-8 text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <p class="text-xs font-semibold text-red-500 mb-1">Failed To Load POS Profiles</p>
+              <p class="text-xs text-gray-400">{{ openingProfilesResource.error?.message || 'Could not fetch assigned profiles.' }}</p>
+              <button
+                @click="openingProfilesResource.reload()"
+                class="mt-3 px-3 py-1.5 text-xs font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50"
+              >Retry</button>
+            </div>
+
+            <!-- No profiles mapped -->
+            <div v-else-if="openingProfiles.length === 0" class="text-center py-6">
+              <svg class="w-8 h-8 text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <p class="text-xs font-semibold text-red-500 mb-1">No POS Profile Assigned</p>
+              <p class="text-xs text-gray-400">No POS Profile mapping found for user <span class="font-semibold text-gray-500">{{ openingProfilesResource.data?.current_user || 'current user' }}</span>.</p>
+            </div>
+
+            <!-- Profile selector + cash -->
+            <template v-else>
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5">POS Profile</label>
+                <select
+                  v-model="selectedOpeningProfile"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option disabled value="">— select profile —</option>
+                  <option v-for="p in openingProfiles" :key="p.name" :value="p.name">{{ p.name }}</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Opening Cash Float (₦)</label>
+                <input
+                  v-model="openingCash"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </template>
+
+            <p v-if="openShiftError" class="px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{{ openShiftError }}</p>
+          </div>
+
+          <!-- Footer -->
+          <div class="px-6 pb-6 flex gap-2">
             <button
               @click="goToShiftClose"
-              class="flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Go to Shift Page
-            </button>
+              class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >Shift Manager</button>
             <button
+              v-if="openingProfiles.length > 0"
               @click="openShiftNow"
               :disabled="openingShift || !selectedOpeningProfile"
-              class="flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {{ openingShift ? 'Opening…' : 'Open Shift' }}
+              <span v-if="openingShift" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              {{ openingShift ? 'Opening shift…' : 'Open Shift Now' }}
             </button>
           </div>
         </div>
@@ -461,6 +500,10 @@ const terminalInfo = computed(() => {
 const openingProfilesResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_opening_profiles',
   auto: true,
+  onError() {
+    // Keep modal visible even if loading fails so user can't bypass
+    showOpenShiftModal.value = true
+  },
 })
 
 const openingProfiles = computed(() => openingProfilesResource.data?.profiles || [])
@@ -472,8 +515,12 @@ watch(() => openingProfilesResource.data, (data) => {
     selectedOpeningProfile.value = data.default_profile || data.open_pos_profile || ''
   }
 
+  // Always enforce: modal stays open until a shift is confirmed open
   showOpenShiftModal.value = !data.has_open_shift
 })
+
+// Show a locked loading state immediately so the POS is never usable before check
+showOpenShiftModal.value = true
 
 watch(() => terminalInfo.value.has_open_shift, (hasOpenShift) => {
   if (hasOpenShift) showOpenShiftModal.value = false
@@ -564,6 +611,7 @@ const allMenuItems = computed(() =>
     category: it.category,
     price: Number(it.price) || 0,
     stock: Number(it.stock),
+    isStockItem: !!it.is_stock_item,
     image: it.image || null,
   }))
 )
@@ -612,7 +660,7 @@ const filteredRoomSuggestions = computed(() => {
 const cart = ref([])
 
 function addToCart(item) {
-  if (item.stock === 0) return
+  if (item.isStockItem && item.stock === 0) return
   const existing = cart.value.find(c => c.id === item.id)
   if (existing) existing.qty++
   else cart.value.push({ ...item, qty: 1 })
