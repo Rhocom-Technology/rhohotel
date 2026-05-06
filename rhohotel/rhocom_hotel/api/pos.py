@@ -50,21 +50,158 @@ def _get_allowed_item_groups_for_profile(pos_profile):
     return list(set(groups))
 
 
-def _get_open_pos_entry(user, pos_profile):
-    """Return current open POS Opening Entry for user/profile."""
-    if not user or user == "Guest" or not pos_profile:
+def _get_user_pos_profiles(user=None):
+    """Return active POS Profiles mapped to user."""
+    user = user or frappe.session.user
+    if not user or user == "Guest":
+        return []
+
+    rows = frappe.db.sql(
+        """
+        SELECT p.name
+        FROM `tabPOS Profile` p
+        INNER JOIN `tabPOS Profile User` pu ON pu.parent = p.name
+        WHERE p.disabled = 0
+          AND pu.parenttype = 'POS Profile'
+          AND pu.user = %s
+        ORDER BY p.modified DESC
+        """,
+        (user,),
+        as_dict=1,
+    )
+    return [r.name for r in rows]
+
+
+def _get_open_pos_entry(user, pos_profile=None):
+    """Return an open POS Opening Entry for user, preferring the given profile.
+
+    If no open entry exists for the preferred profile, falls back to any open
+    entry for the same user.
+    """
+    if not user or user == "Guest":
         return None
 
-    return frappe.db.get_value(
+    if pos_profile:
+        preferred = frappe.db.get_value(
+            "POS Opening Entry",
+            {
+                "user": user,
+                "pos_profile": pos_profile,
+                "status": "Open",
+                "docstatus": 1,
+            },
+            ["name", "pos_profile"],
+            as_dict=True,
+        )
+        if preferred:
+            return preferred
+
+    fallback = frappe.db.get_value(
         "POS Opening Entry",
         {
             "user": user,
-            "pos_profile": pos_profile,
             "status": "Open",
             "docstatus": 1,
         },
-        "name",
+        ["name", "pos_profile"],
+        as_dict=True,
+        order_by="modified desc",
     )
+    return fallback
+
+
+@frappe.whitelist()
+def get_pos_opening_profiles():
+    """Return opening-entry modal setup data for current POS user."""
+    user = frappe.session.user
+    open_entry = _get_open_pos_entry(user)
+    profiles = _get_user_pos_profiles(user)
+
+    profile_rows = []
+    for profile_name in profiles:
+        profile_doc = frappe.get_cached_doc("POS Profile", profile_name)
+        payments = [
+            row.mode_of_payment
+            for row in (profile_doc.get("payments") or [])
+            if row.mode_of_payment
+        ]
+        profile_rows.append(
+            {
+                "name": profile_name,
+                "company": profile_doc.company,
+                "payments": payments,
+            }
+        )
+
+    return {
+        "has_open_shift": bool(open_entry),
+        "open_pos_opening_entry": open_entry.get("name") if open_entry else None,
+        "open_pos_profile": open_entry.get("pos_profile") if open_entry else None,
+        "profiles": profile_rows,
+        "default_profile": profiles[0] if profiles else None,
+    }
+
+
+@frappe.whitelist()
+def create_pos_opening_entry(pos_profile=None, opening_cash=0):
+    """Create and submit POS Opening Entry for current user."""
+    user = frappe.session.user
+    if not user or user == "Guest":
+        frappe.throw(_("Please login to open a POS shift."))
+
+    existing = _get_open_pos_entry(user, pos_profile)
+    if existing:
+        return {
+            "pos_opening_entry": existing.get("name"),
+            "pos_profile": existing.get("pos_profile"),
+            "already_open": True,
+        }
+
+    mapped_profiles = _get_user_pos_profiles(user)
+    if not mapped_profiles:
+        frappe.throw(_("No POS Profile is mapped to your user."))
+
+    if not pos_profile:
+        pos_profile = mapped_profiles[0]
+
+    if pos_profile not in mapped_profiles:
+        frappe.throw(_("POS Profile {0} is not mapped to your user.").format(pos_profile))
+
+    profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+    opening = frappe.new_doc("POS Opening Entry")
+    opening.company = profile_doc.company or frappe.db.get_single_value("Global Defaults", "default_company")
+    opening.user = user
+    opening.pos_profile = pos_profile
+    opening.period_start_date = now_datetime()
+
+    payment_modes = [row.mode_of_payment for row in (profile_doc.get("payments") or []) if row.mode_of_payment]
+    if not payment_modes:
+        frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
+
+    cash_opening = flt(opening_cash)
+    for mode in payment_modes:
+        opening.append(
+            "balance_details",
+            {
+                "mode_of_payment": mode,
+                "opening_amount": cash_opening if mode == "Cash" else 0,
+            },
+        )
+
+    try:
+        opening.flags.ignore_permissions = True
+        opening.insert()
+        opening.submit()
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POS Opening Entry creation failed")
+        frappe.throw(_("Failed to open POS shift. Please check POS profile setup."))
+
+    return {
+        "pos_opening_entry": opening.name,
+        "pos_profile": pos_profile,
+        "already_open": False,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -267,7 +404,14 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
     if not pos_profile:
         frappe.throw(_("No POS Profile is mapped to your user."))
 
-    # Ensure mode of payment is valid for the selected POS profile.
+    pos_opening_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
+    if not pos_opening_entry:
+        frappe.throw(_("No open POS Opening Entry found for your user. Please open a shift before charging."))
+
+    # Always align profile to the currently open shift to satisfy POS invoice validation.
+    pos_profile = pos_opening_entry.get("pos_profile") or pos_profile
+
+    # Ensure mode of payment is valid for the resolved POS profile.
     profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
     allowed_modes = [row.mode_of_payment for row in (profile_doc.get("payments") or []) if row.mode_of_payment]
     if not allowed_modes:
@@ -281,10 +425,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
     pi.posting_date = nowdate()
     pi.pos_profile = pos_profile
 
-    pos_opening_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
-    if not pos_opening_entry:
-        frappe.throw(_("No open POS Opening Entry found for profile {0}. Please open a shift before charging.").format(pos_profile))
-    pi.pos_opening_entry = pos_opening_entry
+    pi.pos_opening_entry = pos_opening_entry.get("name")
 
     if kitchen_note:
         pi.remarks = kitchen_note

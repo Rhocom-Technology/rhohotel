@@ -322,6 +322,61 @@
       :cart-items="cart"
       :service-charge="serviceCharge"
     />
+
+    <!-- Opening Entry Modal (shown when no open shift) -->
+    <Teleport to="body">
+      <div v-if="showOpenShiftModal" class="fixed inset-0 z-[80] flex items-center justify-center p-4" style="background:rgba(15,23,42,0.55);">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl modal-panel">
+          <h3 class="text-sm font-bold text-gray-900">Open POS Shift</h3>
+          <p class="text-xs text-gray-500 mt-1">No active POS Opening Entry was found for your account. Open a shift to start billing.</p>
+
+          <div class="mt-4 space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">POS Profile</label>
+              <select
+                v-model="selectedOpeningProfile"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option disabled value="">Select profile</option>
+                <option v-for="p in openingProfiles" :key="p.name" :value="p.name">
+                  {{ p.name }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Opening Cash Amount</label>
+              <input
+                v-model="openingCash"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <p v-if="openShiftError" class="mt-3 text-xs text-red-600">{{ openShiftError }}</p>
+
+          <div class="mt-5 flex gap-2">
+            <button
+              @click="goToShiftClose"
+              class="flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Go to Shift Page
+            </button>
+            <button
+              @click="openShiftNow"
+              :disabled="openingShift || !selectedOpeningProfile"
+              class="flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {{ openingShift ? 'Opening…' : 'Open Shift' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -345,6 +400,11 @@ const showOpenTables = ref(false)
 const showPostToRoom = ref(false)
 const showSplitBill = ref(false)
 const draftOrdersKey = ref(0)
+const showOpenShiftModal = ref(false)
+const selectedOpeningProfile = ref('')
+const openingCash = ref('0')
+const openShiftError = ref('')
+const openingShift = ref(false)
 
 // ── POS state ──────────────────────────────────────────────────────
 const menuSearch = ref('')
@@ -397,6 +457,58 @@ const terminalInfo = computed(() => {
     pos_opening_entry: d.pos_opening_entry || null,
   }
 })
+
+const openingProfilesResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_opening_profiles',
+  auto: true,
+})
+
+const openingProfiles = computed(() => openingProfilesResource.data?.profiles || [])
+
+watch(() => openingProfilesResource.data, (data) => {
+  if (!data) return
+
+  if (!selectedOpeningProfile.value) {
+    selectedOpeningProfile.value = data.default_profile || data.open_pos_profile || ''
+  }
+
+  showOpenShiftModal.value = !data.has_open_shift
+})
+
+watch(() => terminalInfo.value.has_open_shift, (hasOpenShift) => {
+  if (hasOpenShift) showOpenShiftModal.value = false
+})
+
+const openShiftResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.create_pos_opening_entry',
+  onSuccess() {
+    openingShift.value = false
+    openShiftError.value = ''
+    showOpenShiftModal.value = false
+    shiftInfoResource.reload()
+    openingProfilesResource.reload()
+    chargeSuccess.value = 'POS shift opened successfully'
+    setTimeout(() => { chargeSuccess.value = '' }, 3000)
+  },
+  onError(err) {
+    openingShift.value = false
+    openShiftError.value = err?.message || 'Failed to open shift'
+  },
+})
+
+function openShiftNow() {
+  if (!selectedOpeningProfile.value || openingShift.value) return
+  openingShift.value = true
+  openShiftError.value = ''
+  openShiftResource.submit({
+    pos_profile: selectedOpeningProfile.value,
+    opening_cash: Number(openingCash.value || 0),
+  })
+}
+
+function goToShiftClose() {
+  router.push('/pos/shift-close')
+}
 
 // ── API: Menu Items ────────────────────────────────────────────────
 const menuResource = createResource({
@@ -724,7 +836,14 @@ function clearCart() {
 }
 
 function onHoldSale() {
-  if (cart.value.length === 0 || holding.value) return
+  if (cart.value.length === 0 || holding.value || !terminalInfo.value.has_open_shift) {
+    if (!terminalInfo.value.has_open_shift) {
+      showOpenShiftModal.value = true
+      chargeError.value = 'Open POS shift before saving draft.'
+      setTimeout(() => { chargeError.value = '' }, 3500)
+    }
+    return
+  }
   chargeError.value = ''
   holding.value = true
   captureSubmissionSnapshot()
@@ -754,7 +873,14 @@ function setSettlementMethod(method) {
 }
 
 function onChargeNow() {
-  if (cart.value.length === 0 || charging.value) return
+  if (cart.value.length === 0 || charging.value || !terminalInfo.value.has_open_shift) {
+    if (!terminalInfo.value.has_open_shift) {
+      showOpenShiftModal.value = true
+      chargeError.value = 'Open POS shift before charging.'
+      setTimeout(() => { chargeError.value = '' }, 3500)
+    }
+    return
+  }
   chargeError.value = ''
 
   if (settlementMethod.value === 'Post to Room') {
