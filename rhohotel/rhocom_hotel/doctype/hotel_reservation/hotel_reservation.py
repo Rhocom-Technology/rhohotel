@@ -345,3 +345,52 @@ def adjust_reservation(reservation_name, new_checkout, new_check_in):
         "new_to_date": str(new_to),
         "new_nights": new_nights,
     }
+
+
+@frappe.whitelist()
+def change_room_in_reservation(reservation_name, old_room_number, new_room_number, reason=None):
+    """
+    Swap a room row in a submitted Hotel Reservation.
+    Validates the new room is not already reserved for the same period.
+    """
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    # Find the row to replace
+    target_row = None
+    for row in doc.rooms:
+        if row.room_number == old_room_number:
+            target_row = row
+            break
+
+    if not target_row:
+        frappe.throw(f"Room {old_room_number} is not part of this reservation.")
+
+    if old_room_number == new_room_number:
+        frappe.throw("New room is the same as the current room.")
+
+    # Fetch new room details
+    new_room = frappe.get_doc("Hotel Room", new_room_number)
+
+    doc.flags.ignore_validate_update_after_submit = True
+
+    # Update the room row
+    target_row.room_number = new_room_number
+    target_row.room_type = new_room.room_type or target_row.room_type
+
+    # Update the old room status back to Reserved (if not occupied)
+    try:
+        old_room = frappe.get_doc("Hotel Room", old_room_number)
+        if old_room.status == "Reserved":
+            old_room.status = "Vacant"
+            old_room.save(ignore_permissions=True)
+    except Exception:
+        pass
+
+    # Mark new room as Reserved
+    new_room.status = "Reserved"
+    new_room.save(ignore_permissions=True)
+
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"status": "success", "new_room": new_room_number}

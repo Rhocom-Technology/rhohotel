@@ -1,3 +1,5 @@
+# Deprecated: This file is no longer in active use and may be removed in a future release. Please refer to the new reservation module for current code.
+
 # Copyright (c) 2017, Frappe Technologies Pvt. Ltd. and contributors
 # For license information, please see license.txt
 import frappe

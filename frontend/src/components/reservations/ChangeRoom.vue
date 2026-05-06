@@ -129,7 +129,7 @@ async function applyChange() {
   if (!selectedOldRoom.value || !selectedNewRoom.value) return
   submitting.value = true; error.value = ''
   try {
-    await callMethodForm('rhohotel.rhocom_hotel.doctype.hotel_front_desk_reservation.hotel_front_desk_reservation.change_room_in_reservation', {
+    await callMethodForm('rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.change_room_in_reservation', {
       reservation_name: props.reservation.name,
       old_room_number: selectedOldRoom.value,
       new_room_number: selectedNewRoom.value,
