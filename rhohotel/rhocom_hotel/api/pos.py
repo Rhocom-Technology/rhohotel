@@ -14,20 +14,20 @@ def _get_user_pos_profile(user=None):
     if not user or user == "Guest":
         return None
 
-        mapped_profile = frappe.db.sql(
+    mapped_profile = frappe.db.sql(
         """
         SELECT p.name
         FROM `tabPOS Profile` p
         INNER JOIN `tabPOS Profile User` pu ON pu.parent = p.name
         WHERE p.disabled = 0
-                    AND (
-                                LOWER(pu.user) = LOWER(%s)
-                                OR LOWER(SUBSTRING_INDEX(pu.user, '@', 1)) = LOWER(SUBSTRING_INDEX(%s, '@', 1))
-                    )
+            AND (
+                LOWER(pu.user) = LOWER(%s)
+                OR LOWER(SUBSTRING_INDEX(pu.user, '@', 1)) = LOWER(SUBSTRING_INDEX(%s, '@', 1))
+            )
         ORDER BY p.modified DESC
         LIMIT 1
         """,
-                (user, user),
+        (user, user),
     )
 
     if mapped_profile:
@@ -876,12 +876,9 @@ def get_pos_shift_stats(pos_opening_entry=None):
     user = frappe.session.user
 
     if not pos_opening_entry:
-        entry = frappe.db.get_value(
-            "POS Opening Entry",
-            {"user": user, "status": "Open", "docstatus": 1},
-            "name",
-        )
-        pos_opening_entry = entry
+        # Keep shift detection consistent with the POS opening/profile APIs.
+        entry = _get_open_pos_entry(user)
+        pos_opening_entry = entry.get("name") if entry else None
 
     if not pos_opening_entry:
         # No open shift for this user

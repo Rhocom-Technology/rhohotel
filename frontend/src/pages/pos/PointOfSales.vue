@@ -444,6 +444,7 @@ const selectedOpeningProfile = ref('')
 const openingCash = ref('0')
 const openShiftError = ref('')
 const openingShift = ref(false)
+const localShiftOpened = ref(false)
 
 // ── POS state ──────────────────────────────────────────────────────
 const menuSearch = ref('')
@@ -507,6 +508,11 @@ const openingProfilesResource = createResource({
 })
 
 const openingProfiles = computed(() => openingProfilesResource.data?.profiles || [])
+const hasOpenShift = computed(() => {
+  const fromShiftStats = !!terminalInfo.value.has_open_shift
+  const fromOpeningProfiles = !!openingProfilesResource.data?.has_open_shift
+  return localShiftOpened.value || fromShiftStats || fromOpeningProfiles
+})
 
 watch(() => openingProfilesResource.data, (data) => {
   if (!data) return
@@ -515,15 +521,22 @@ watch(() => openingProfilesResource.data, (data) => {
     selectedOpeningProfile.value = data.default_profile || data.open_pos_profile || ''
   }
 
+  if (data.has_open_shift) {
+    localShiftOpened.value = true
+  }
+
   // Always enforce: modal stays open until a shift is confirmed open
-  showOpenShiftModal.value = !data.has_open_shift
+  showOpenShiftModal.value = !hasOpenShift.value
 })
 
 // Show a locked loading state immediately so the POS is never usable before check
 showOpenShiftModal.value = true
 
-watch(() => terminalInfo.value.has_open_shift, (hasOpenShift) => {
-  if (hasOpenShift) showOpenShiftModal.value = false
+watch(() => terminalInfo.value.has_open_shift, (isOpen) => {
+  if (isOpen) {
+    localShiftOpened.value = true
+    showOpenShiftModal.value = false
+  }
 })
 
 const openShiftResource = createResource({
@@ -531,6 +544,7 @@ const openShiftResource = createResource({
   onSuccess() {
     openingShift.value = false
     openShiftError.value = ''
+    localShiftOpened.value = true
     showOpenShiftModal.value = false
     shiftInfoResource.reload()
     openingProfilesResource.reload()
@@ -884,8 +898,8 @@ function clearCart() {
 }
 
 function onHoldSale() {
-  if (cart.value.length === 0 || holding.value || !terminalInfo.value.has_open_shift) {
-    if (!terminalInfo.value.has_open_shift) {
+  if (cart.value.length === 0 || holding.value || !hasOpenShift.value) {
+    if (!hasOpenShift.value) {
       showOpenShiftModal.value = true
       chargeError.value = 'Open POS shift before saving draft.'
       setTimeout(() => { chargeError.value = '' }, 3500)
@@ -921,8 +935,8 @@ function setSettlementMethod(method) {
 }
 
 function onChargeNow() {
-  if (cart.value.length === 0 || charging.value || !terminalInfo.value.has_open_shift) {
-    if (!terminalInfo.value.has_open_shift) {
+  if (cart.value.length === 0 || charging.value || !hasOpenShift.value) {
+    if (!hasOpenShift.value) {
       showOpenShiftModal.value = true
       chargeError.value = 'Open POS shift before charging.'
       setTimeout(() => { chargeError.value = '' }, 3500)
