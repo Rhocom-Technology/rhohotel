@@ -19,6 +19,13 @@
           class="btn-hover px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
           Close POS
         </button>
+        <button @click="toggleFullscreen"
+          class="btn-hover px-4 py-2 text-xs font-medium border rounded-lg"
+          :class="isFullscreen
+            ? 'text-gray-700 border-gray-300 hover:bg-gray-50'
+            : 'text-blue-700 border-blue-300 hover:bg-blue-50'">
+          {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
+        </button>
         <button @click="showDraftOrders = true"
           class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Draft Orders
@@ -320,7 +327,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
 import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
@@ -330,6 +337,7 @@ import SplitBillModal from '@/components/pos/SplitBillModal.vue'
 console.log('PointOfSales component loaded')
 
 const router = useRouter()
+const route = useRoute()
 
 // ── Modals ─────────────────────────────────────────────────────────
 const showDraftOrders = ref(false)
@@ -360,6 +368,18 @@ const lastSubmittedItems = ref([])
 const lastSubmittedContext = ref({ tableOrRoom: '', source: 'Restaurant Dining', kitchenNote: '', sendScope: 'all', selectedItemCodes: [] })
 
 const lastInvoiceName = ref('')
+
+const isFullscreen = computed(() => route.query.fullscreen === '1')
+
+function toggleFullscreen() {
+  const nextQuery = { ...route.query }
+  if (isFullscreen.value) {
+    delete nextQuery.fullscreen
+  } else {
+    nextQuery.fullscreen = '1'
+  }
+  router.replace({ query: nextQuery })
+}
 
 // ── API: Current Shift / Terminal Info ────────────────────────────
 const shiftInfoResource = createResource({
@@ -715,9 +735,11 @@ function onHoldSale() {
       qty: i.qty,
       price: i.price,
     }))),
-    customer: selectedBillTo.value?.name || null,
+    // Bill-To in this POS screen is guest/table context, not ERPNext Customer master.
+    customer: null,
     service_charge: serviceCharge.value,
     kitchen_note: kitchenNote.value || null,
+    pos_profile: terminalInfo.value?.pos_profile || null,
   })
 }
 
@@ -755,7 +777,8 @@ function onChargeNow() {
       price: i.price,
     }))),
     mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
-    customer: selectedBillTo.value?.name || null,
+    // Bill-To here is operational context (guest/table), not a Customer docname.
+    customer: null,
     service_charge: serviceCharge.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,

@@ -50,6 +50,23 @@ def _get_allowed_item_groups_for_profile(pos_profile):
     return list(set(groups))
 
 
+def _get_open_pos_entry(user, pos_profile):
+    """Return current open POS Opening Entry for user/profile."""
+    if not user or user == "Guest" or not pos_profile:
+        return None
+
+    return frappe.db.get_value(
+        "POS Opening Entry",
+        {
+            "user": user,
+            "pos_profile": pos_profile,
+            "status": "Open",
+            "docstatus": 1,
+        },
+        "name",
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Menu Items
 # ─────────────────────────────────────────────────────────────────────────────
@@ -236,9 +253,13 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
-    # Resolve customer — use the walk-in customer or provided name
+    # Resolve customer from POS settings; this endpoint should not use guest/table labels as customer.
+    if customer and not frappe.db.exists("Customer", customer):
+        customer = None
     if not customer:
-        customer = frappe.db.get_single_value("POS Settings", "customer") or "Guest"
+        customer = frappe.db.get_single_value("POS Settings", "customer")
+    if not customer or not frappe.db.exists("Customer", customer):
+        frappe.throw(_("Set a valid default customer in POS Settings before charging."))
 
     # Resolve POS profile from current user to match opening-entry/profile validations
     if not pos_profile:
@@ -259,6 +280,12 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
     pi.company = company
     pi.posting_date = nowdate()
     pi.pos_profile = pos_profile
+
+    pos_opening_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
+    if not pos_opening_entry:
+        frappe.throw(_("No open POS Opening Entry found for profile {0}. Please open a shift before charging.").format(pos_profile))
+    pi.pos_opening_entry = pos_opening_entry
+
     if kitchen_note:
         pi.remarks = kitchen_note
 
@@ -290,9 +317,9 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         pi.insert()
         pi.submit()
         frappe.db.commit()
-    except Exception:
+    except Exception as e:
         frappe.log_error(frappe.get_traceback(), "POS Invoice creation failed")
-        frappe.throw(_("Failed to create POS Invoice. Please check item and customer configuration."))
+        frappe.throw(_("Failed to create POS Invoice: {0}").format(cstr(e)))
 
     return {"pos_invoice": pi.name, "grand_total": flt(pi.grand_total)}
 
