@@ -11,7 +11,7 @@
       <div>
         <h3 class="text-sm font-bold text-gray-900">Current Terminal</h3>
         <p class="text-xs text-gray-400 mt-0.5">
-          {{ terminalInfo.pos_profile || 'POS Terminal' }}<template v-if="terminalInfo.cashier"> • Cashier: {{ terminalInfo.cashier }}</template><template v-if="terminalInfo.shift_date"> • {{ terminalInfo.shift_date }}</template>
+          {{ terminalInfo.pos_profile || 'POS Terminal' }}<template v-if="terminalInfo.cashier"> • Cashier: {{ terminalInfo.cashier }}</template><template v-if="terminalInfo.shift_date"> • {{ terminalInfo.shift_date }}</template><template v-if="terminalInfo.pos_opening_entry"> • Entry: {{ terminalInfo.pos_opening_entry }}</template>
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -718,6 +718,22 @@ function selectRoomFromNumber(r) {
   selectedBillTo.value = { id: r.check_in, name: r.guest, room: r.room, type: r.payment_type || 'Direct Guest' }
 }
 
+function extractApiErrorMessage(err, fallback = 'Request failed') {
+  const serverMessage = err?._server_messages
+  if (serverMessage) {
+    try {
+      const parsed = JSON.parse(serverMessage)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const first = JSON.parse(parsed[0])
+        if (first?.message) return String(first.message)
+      }
+    } catch (_) {
+      // Ignore malformed server message payload and fall back below.
+    }
+  }
+  return err?.message || fallback
+}
+
 // ── API: Create POS Invoice (Cash / POS terminal) ──────────────────
 const chargeResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
@@ -733,7 +749,7 @@ const chargeResource = createResource({
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
-    chargeError.value = err?.message || 'Failed to create invoice'
+    chargeError.value = extractApiErrorMessage(err, 'Failed to create invoice')
     charging.value = false
     setTimeout(() => { chargeError.value = '' }, 6000)
   },
@@ -755,7 +771,7 @@ const holdSaleResource = createResource({
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
-    chargeError.value = err?.message || 'Failed to hold sale'
+    chargeError.value = extractApiErrorMessage(err, 'Failed to hold sale')
     holding.value = false
     setTimeout(() => { chargeError.value = '' }, 6000)
   },
@@ -916,8 +932,8 @@ function onHoldSale() {
       qty: i.qty,
       price: i.price,
     }))),
-    // Bill-To in this POS screen is guest/table context, not ERPNext Customer master.
-    customer: null,
+    // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
+    customer: selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
@@ -965,8 +981,8 @@ function onChargeNow() {
       price: i.price,
     }))),
     mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
-    // Bill-To here is operational context (guest/table), not a Customer docname.
-    customer: null,
+    // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
+    customer: selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,

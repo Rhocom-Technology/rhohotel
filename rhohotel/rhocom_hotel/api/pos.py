@@ -141,6 +141,38 @@ def _get_open_pos_entry(user, pos_profile=None):
     return fallback
 
 
+def _has_pos_opening_entry_on_invoice():
+    """Return True when POS Invoice has the pos_opening_entry column."""
+    return bool(frappe.db.has_column("POS Invoice", "pos_opening_entry"))
+
+
+def _resolve_pos_customer(explicit_customer=None, profile_doc=None, allow_guest_fallback=False):
+    """Resolve POS customer safely across ERPNext schema variants."""
+    customer = explicit_customer
+    if customer and frappe.db.exists("Customer", customer):
+        return customer
+
+    if profile_doc:
+        profile_customer = cstr(profile_doc.get("customer") or "").strip()
+        if profile_customer and frappe.db.exists("Customer", profile_customer):
+            return profile_customer
+
+    try:
+        if frappe.db.has_column("POS Settings", "customer"):
+            settings_customer = cstr(frappe.db.get_single_value("POS Settings", "customer") or "").strip()
+            if settings_customer and frappe.db.exists("Customer", settings_customer):
+                return settings_customer
+    except Exception:
+        pass  # POS Settings table absent in this ERPNext version — skip silently.
+
+    if allow_guest_fallback:
+        for walk_in in ("Guest", "Walk-in Customer", "Walk In Customer", "POS Customer", "Cash Customer"):
+            if frappe.db.exists("Customer", walk_in):
+                return walk_in
+
+    return None
+
+
 @frappe.whitelist()
 def get_pos_opening_profiles():
     """Return opening-entry modal setup data for current POS user."""
@@ -421,82 +453,101 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
     """Create and submit a POS Invoice for non-room-posting settlements."""
     import json
 
-    items = json.loads(items) if isinstance(items, str) else items
-    if not items:
-        frappe.throw(_("No items in cart"))
+    try:
+        items = json.loads(items) if isinstance(items, str) else items
+        if not items:
+            frappe.throw(_("No items in cart"))
 
-    company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
+        company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
-    # Resolve customer from POS settings; this endpoint should not use guest/table labels as customer.
-    if customer and not frappe.db.exists("Customer", customer):
-        customer = None
-    if not customer:
-        customer = frappe.db.get_single_value("POS Settings", "customer")
-    if not customer or not frappe.db.exists("Customer", customer):
-        frappe.throw(_("Set a valid default customer in POS Settings before charging."))
+        # Resolve POS profile from current user to match opening-entry/profile validations
+        if not pos_profile:
+            pos_profile = _get_user_pos_profile()
+        if not pos_profile:
+            frappe.throw(_("No POS Profile is mapped to your user."))
 
-    # Resolve POS profile from current user to match opening-entry/profile validations
-    if not pos_profile:
-        pos_profile = _get_user_pos_profile()
-    if not pos_profile:
-        frappe.throw(_("No POS Profile is mapped to your user."))
+        pos_opening_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
+        if not pos_opening_entry:
+            frappe.throw(_("No open POS Opening Entry found for your user. Please open a shift before charging."))
 
-    pos_opening_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
-    if not pos_opening_entry:
-        frappe.throw(_("No open POS Opening Entry found for your user. Please open a shift before charging."))
+        # Always align profile to the currently open shift to satisfy POS invoice validation.
+        pos_profile = pos_opening_entry.get("pos_profile") or pos_profile
 
-    # Always align profile to the currently open shift to satisfy POS invoice validation.
-    pos_profile = pos_opening_entry.get("pos_profile") or pos_profile
+        # Ensure mode of payment is valid for the resolved POS profile.
+        profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+        allowed_modes = [row.mode_of_payment for row in (profile_doc.get("payments") or []) if row.mode_of_payment]
+        if not allowed_modes:
+            frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
+        if mode_of_payment not in allowed_modes:
+            mode_of_payment = allowed_modes[0]
 
-    # Ensure mode of payment is valid for the resolved POS profile.
-    profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
-    allowed_modes = [row.mode_of_payment for row in (profile_doc.get("payments") or []) if row.mode_of_payment]
-    if not allowed_modes:
-        frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
-    if mode_of_payment not in allowed_modes:
-        mode_of_payment = allowed_modes[0]
+        customer = _resolve_pos_customer(customer, profile_doc=profile_doc, allow_guest_fallback=True)
 
-    pi = frappe.new_doc("POS Invoice")
-    pi.customer = customer
-    pi.company = company
-    pi.posting_date = nowdate()
-    pi.pos_profile = pos_profile
+        if not customer:
+            frappe.throw(_("Set a valid default customer on POS Profile {0}. Optionally configure POS Settings.customer if available in your ERPNext version.").format(pos_profile))
 
-    pi.pos_opening_entry = pos_opening_entry.get("name")
+        pi = frappe.new_doc("POS Invoice")
+        pi.customer = customer
+        pi.company = company
+        pi.posting_date = nowdate()
+        pi.pos_profile = pos_profile
 
-    if kitchen_note:
-        pi.remarks = kitchen_note
+        if _has_pos_opening_entry_on_invoice():
+            pi.pos_opening_entry = pos_opening_entry.get("name")
 
-    for it in items:
-        pi.append("items", {
-            "item_code": it.get("item_code") or it.get("id"),
-            "qty": flt(it.get("qty", 1)),
-            "rate": flt(it.get("price", 0)),
+        if kitchen_note:
+            pi.remarks = kitchen_note
+
+        for it in items:
+            pi.append("items", {
+                "item_code": it.get("item_code") or it.get("id"),
+                "qty": flt(it.get("qty", 1)),
+                "rate": flt(it.get("price", 0)),
+            })
+
+        # Service charge as a separate item if present
+        svc = flt(service_charge)
+        if svc > 0:
+            svc_item = frappe.db.get_value("Item", {"item_name": ["like", "%service charge%"]}, "name")
+            if svc_item:
+                pi.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
+
+        pi.append("payments", {
+            "mode_of_payment": mode_of_payment,
+            "amount": flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + svc,
         })
 
-    # Service charge as a separate item if present
-    svc = flt(service_charge)
-    if svc > 0:
-        svc_item = frappe.db.get_value("Item", {"item_name": ["like", "%service charge%"]}, "name")
-        if svc_item:
-            pi.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
-        else:
-            # add as additional discount adjustment is not clean; skip silently
-            pass
-
-    pi.append("payments", {
-        "mode_of_payment": mode_of_payment,
-        "amount": flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + svc,
-    })
-
-    try:
         pi.flags.ignore_permissions = True
         pi.set_missing_values()
         pi.insert()
         pi.submit()
         frappe.db.commit()
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "POS Invoice creation failed")
+        safe_items = []
+        for it in (items or []):
+            safe_items.append({
+                "item_code": it.get("item_code") or it.get("id"),
+                "qty": flt(it.get("qty", 1)),
+                "rate": flt(it.get("price", 0)),
+            })
+
+        context = {
+            "user": frappe.session.user,
+            "pos_profile": pos_profile,
+            "mode_of_payment": mode_of_payment,
+            "customer": customer,
+            "service_charge": flt(service_charge),
+            "item_count": len(safe_items),
+            "items": safe_items,
+            "error": cstr(e),
+            "error_type": type(e).__name__,
+        }
+        frappe.log_error(
+            f"{frappe.get_traceback()}\n\nContext:\n{frappe.as_json(context)}",
+            "POS create_pos_invoice failed",
+        )
+        if isinstance(e, frappe.ValidationError):
+            raise
         frappe.throw(_("Failed to create POS Invoice: {0}").format(cstr(e)))
 
     return {"pos_invoice": pi.name, "grand_total": flt(pi.grand_total)}
@@ -591,13 +642,16 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
         frappe.throw(_("No items in cart"))
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
-    if not customer:
-        customer = frappe.db.get_single_value("POS Settings", "customer") or "Guest"
 
     if not pos_profile:
         pos_profile = _get_user_pos_profile()
     if not pos_profile:
         frappe.throw(_("No POS Profile is mapped to your user."))
+
+    profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+    customer = _resolve_pos_customer(customer, profile_doc=profile_doc, allow_guest_fallback=True)
+    if not customer:
+        frappe.throw(_("Set a valid default customer on POS Profile {0}. Optionally configure POS Settings.customer if available in your ERPNext version.").format(pos_profile))
 
     pi = frappe.new_doc("POS Invoice")
     pi.customer = customer
@@ -822,21 +876,42 @@ def get_pos_dashboard_stats():
     """, today)[0][0] or 0
 
     # Active terminals — open POS Opening Entries
-    terminals_raw = frappe.db.sql("""
-        SELECT
-            poe.name,
-            poe.pos_profile AS terminal_name,
-            poe.user AS cashier,
-            poe.period_start_date AS shift_date,
-            COUNT(pi.name) AS bills,
-            COALESCE(SUM(pi.grand_total), 0) AS sales
-        FROM `tabPOS Opening Entry` poe
-        LEFT JOIN `tabPOS Invoice` pi ON pi.pos_opening_entry = poe.name AND pi.docstatus = 1
-        WHERE poe.status = 'Open' AND poe.docstatus = 1
-        GROUP BY poe.name
-        ORDER BY poe.creation DESC
-        LIMIT 10
-    """, as_dict=1)
+    if _has_pos_opening_entry_on_invoice():
+        terminals_raw = frappe.db.sql("""
+            SELECT
+                poe.name,
+                poe.pos_profile AS terminal_name,
+                poe.user AS cashier,
+                poe.period_start_date AS shift_date,
+                COUNT(pi.name) AS bills,
+                COALESCE(SUM(pi.grand_total), 0) AS sales
+            FROM `tabPOS Opening Entry` poe
+            LEFT JOIN `tabPOS Invoice` pi ON pi.pos_opening_entry = poe.name AND pi.docstatus = 1
+            WHERE poe.status = 'Open' AND poe.docstatus = 1
+            GROUP BY poe.name
+            ORDER BY poe.creation DESC
+            LIMIT 10
+        """, as_dict=1)
+    else:
+        # Fallback for schemas where POS Invoice has no pos_opening_entry link.
+        terminals_raw = frappe.db.sql("""
+            SELECT
+                poe.name,
+                poe.pos_profile AS terminal_name,
+                poe.user AS cashier,
+                poe.period_start_date AS shift_date,
+                COUNT(CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bills,
+                COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS sales
+            FROM `tabPOS Opening Entry` poe
+            LEFT JOIN `tabPOS Invoice` pi
+                ON pi.pos_profile = poe.pos_profile
+                AND pi.owner = poe.user
+                AND pi.posting_date >= DATE(poe.period_start_date)
+            WHERE poe.status = 'Open' AND poe.docstatus = 1
+            GROUP BY poe.name
+            ORDER BY poe.creation DESC
+            LIMIT 10
+        """, as_dict=1)
 
     # Revenue by outlet (pos_profile groups by profile name = outlet)
     outlet_revenue = frappe.db.sql("""
@@ -897,26 +972,58 @@ def get_pos_shift_stats(pos_opening_entry=None):
 
     entry_doc = frappe.get_doc("POS Opening Entry", pos_opening_entry)
 
-    gross = frappe.db.sql("""
-        SELECT COALESCE(SUM(grand_total), 0)
-        FROM `tabPOS Invoice`
-        WHERE pos_opening_entry = %s AND docstatus = 1
-    """, pos_opening_entry)[0][0] or 0
+    if _has_pos_opening_entry_on_invoice():
+        gross = frappe.db.sql("""
+            SELECT COALESCE(SUM(grand_total), 0)
+            FROM `tabPOS Invoice`
+            WHERE pos_opening_entry = %s AND docstatus = 1
+        """, pos_opening_entry)[0][0] or 0
 
-    open_drafts = frappe.db.count("POS Invoice", {
-        "pos_opening_entry": pos_opening_entry, "docstatus": 0
-    })
+        open_drafts = frappe.db.count("POS Invoice", {
+            "pos_opening_entry": pos_opening_entry, "docstatus": 0
+        })
 
-    # Tender breakdown by payment mode
-    tender = frappe.db.sql("""
-        SELECT
-            pip.mode_of_payment AS payment_type,
-            COALESCE(SUM(pip.amount), 0) AS system_amount
-        FROM `tabPOS Invoice` pi
-        JOIN `tabSales Invoice Payment` pip ON pip.parent = pi.name
-        WHERE pi.pos_opening_entry = %s AND pi.docstatus = 1
-        GROUP BY pip.mode_of_payment
-    """, pos_opening_entry, as_dict=1)
+        # Tender breakdown by payment mode
+        tender = frappe.db.sql("""
+            SELECT
+                pip.mode_of_payment AS payment_type,
+                COALESCE(SUM(pip.amount), 0) AS system_amount
+            FROM `tabPOS Invoice` pi
+            JOIN `tabSales Invoice Payment` pip ON pip.parent = pi.name
+            WHERE pi.pos_opening_entry = %s AND pi.docstatus = 1
+            GROUP BY pip.mode_of_payment
+        """, pos_opening_entry, as_dict=1)
+    else:
+        entry_start = getdate(entry_doc.period_start_date)
+        gross = frappe.db.sql("""
+            SELECT COALESCE(SUM(grand_total), 0)
+            FROM `tabPOS Invoice`
+            WHERE pos_profile = %s
+              AND owner = %s
+              AND posting_date >= %s
+              AND docstatus = 1
+        """, (entry_doc.pos_profile, entry_doc.user, entry_start))[0][0] or 0
+
+        open_drafts = frappe.db.count("POS Invoice", {
+            "pos_profile": entry_doc.pos_profile,
+            "owner": entry_doc.user,
+            "posting_date": [">=", entry_start],
+            "docstatus": 0,
+        })
+
+        # Fallback grouping by profile + user + opening date when no explicit shift link exists.
+        tender = frappe.db.sql("""
+            SELECT
+                pip.mode_of_payment AS payment_type,
+                COALESCE(SUM(pip.amount), 0) AS system_amount
+            FROM `tabPOS Invoice` pi
+            JOIN `tabSales Invoice Payment` pip ON pip.parent = pi.name
+            WHERE pi.pos_profile = %s
+              AND pi.owner = %s
+              AND pi.posting_date >= %s
+              AND pi.docstatus = 1
+            GROUP BY pip.mode_of_payment
+        """, (entry_doc.pos_profile, entry_doc.user, entry_start), as_dict=1)
 
     for t in tender:
         t["editable"] = t["payment_type"] == "Cash"
@@ -1122,28 +1229,55 @@ def delete_pos_draft_invoice(invoice_name):
 @frappe.whitelist()
 def get_open_pos_terminals():
     """Return active POS Opening Entries with live stats for the Close Terminal modal."""
-    rows = frappe.db.sql(
-        """
-        SELECT
-            poe.name AS opening_entry,
-            poe.pos_profile AS terminal_name,
-            poe.user,
-            poe.period_start_date AS shift_start,
-            poe.company,
-            COALESCE(u.full_name, poe.user) AS cashier,
-            COUNT(DISTINCT CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bill_count,
-            COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS gross_sales,
-            COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts
-        FROM `tabPOS Opening Entry` poe
-        LEFT JOIN `tabUser` u ON u.name = poe.user
-        LEFT JOIN `tabPOS Invoice` pi ON pi.pos_opening_entry = poe.name
-        WHERE poe.status = 'Open' AND poe.docstatus = 1
-        GROUP BY poe.name
-        ORDER BY poe.creation DESC
-        LIMIT 20
-        """,
-        as_dict=1,
-    )
+    if _has_pos_opening_entry_on_invoice():
+        rows = frappe.db.sql(
+            """
+            SELECT
+                poe.name AS opening_entry,
+                poe.pos_profile AS terminal_name,
+                poe.user,
+                poe.period_start_date AS shift_start,
+                poe.company,
+                COALESCE(u.full_name, poe.user) AS cashier,
+                COUNT(DISTINCT CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bill_count,
+                COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS gross_sales,
+                COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts
+            FROM `tabPOS Opening Entry` poe
+            LEFT JOIN `tabUser` u ON u.name = poe.user
+            LEFT JOIN `tabPOS Invoice` pi ON pi.pos_opening_entry = poe.name
+            WHERE poe.status = 'Open' AND poe.docstatus = 1
+            GROUP BY poe.name
+            ORDER BY poe.creation DESC
+            LIMIT 20
+            """,
+            as_dict=1,
+        )
+    else:
+        rows = frappe.db.sql(
+            """
+            SELECT
+                poe.name AS opening_entry,
+                poe.pos_profile AS terminal_name,
+                poe.user,
+                poe.period_start_date AS shift_start,
+                poe.company,
+                COALESCE(u.full_name, poe.user) AS cashier,
+                COUNT(DISTINCT CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bill_count,
+                COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS gross_sales,
+                COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts
+            FROM `tabPOS Opening Entry` poe
+            LEFT JOIN `tabUser` u ON u.name = poe.user
+            LEFT JOIN `tabPOS Invoice` pi
+                ON pi.pos_profile = poe.pos_profile
+                AND pi.owner = poe.user
+                AND pi.posting_date >= DATE(poe.period_start_date)
+            WHERE poe.status = 'Open' AND poe.docstatus = 1
+            GROUP BY poe.name
+            ORDER BY poe.creation DESC
+            LIMIT 20
+            """,
+            as_dict=1,
+        )
 
     for r in rows:
         r["gross_sales"] = flt(r["gross_sales"])
