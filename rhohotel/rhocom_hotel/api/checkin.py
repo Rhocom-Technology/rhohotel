@@ -207,12 +207,15 @@ def get_rooms_for_transfer(current_room="", check_in_dt=None, check_out_dt=None)
 
 
 @frappe.whitelist()
-def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None):
+def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclude_reservation=None):
     """Get rooms available for the given period, optionally filtered by room type.
 
     When check_in_dt / check_out_dt are supplied the result is filtered through
     the full room-availability engine (all three booking surfaces).  When dates
     are omitted the function falls back to a simple status = 'Vacant' query.
+
+    exclude_reservation: Hotel Reservation name whose room allocations should be
+    treated as available (used when checking in from an existing reservation).
     """
     from rhohotel.rhocom_hotel.utils.room_availability import _normalize_dt
 
@@ -285,8 +288,9 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None):
                   ('Cancelled', 'Checked Out', 'No Show', 'Expired')
               AND hr.from_date < %s
               AND hr.to_date > %s
+              AND hr.name != %s
             """,
-            tuple(room_names) + (co_str, ci_str),
+            tuple(room_names) + (co_str, ci_str, exclude_reservation or ''),
             as_dict=True,
         )
 

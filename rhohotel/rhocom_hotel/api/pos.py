@@ -111,7 +111,6 @@ def get_pos_menu_items(search=None, category=None):
 
 
 @frappe.whitelist()
-@frappe.whitelist()
 def get_pos_item_categories():
     """Return distinct item groups that have active sales items."""
     pos_profile = _get_user_pos_profile()
@@ -190,7 +189,6 @@ def search_pos_bill_to(query=""):
 # Occupied Rooms (for Post to Room)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@frappe.whitelist()
 @frappe.whitelist()
 def get_occupied_rooms_for_pos(search=None):
     """Return rooms with active check-ins for the Post to Room feature."""
@@ -847,3 +845,98 @@ def get_pos_staff_roster_stats():
         "evening_coverage": 83,
         "staff_off": 0,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Draft Invoice: Detail (resume) + Delete
+# ─────────────────────────────────────────────────────────────────────────────
+
+@frappe.whitelist()
+def get_pos_draft_invoice_detail(invoice_name):
+    """Return full item details for a draft POS Invoice so the cashier can resume it."""
+    if not frappe.db.exists("POS Invoice", invoice_name):
+        frappe.throw(_("Invoice {0} not found").format(invoice_name))
+
+    pi = frappe.get_doc("POS Invoice", invoice_name)
+    if pi.docstatus != 0:
+        frappe.throw(_("Only draft invoices can be resumed."))
+
+    items = []
+    for row in pi.items:
+        item_group = frappe.db.get_value("Item", row.item_code, "item_group") or ""
+        image = frappe.db.get_value("Item", row.item_code, "image") or ""
+        items.append({
+            "item_code": row.item_code,
+            "name": row.item_name,
+            "qty": flt(row.qty),
+            "price": flt(row.rate),
+            "category": item_group,
+            "image": image,
+            "stock": 999,
+        })
+
+    return {
+        "invoice": pi.name,
+        "customer": pi.customer or "",
+        "items": items,
+        "remarks": pi.remarks or "",
+    }
+
+
+@frappe.whitelist()
+def delete_pos_draft_invoice(invoice_name):
+    """Cancel and delete a draft POS Invoice."""
+    if not frappe.db.exists("POS Invoice", invoice_name):
+        frappe.throw(_("Invoice {0} not found").format(invoice_name))
+
+    pi = frappe.get_doc("POS Invoice", invoice_name)
+    if pi.docstatus != 0:
+        frappe.throw(_("Only draft invoices can be deleted."))
+
+    try:
+        pi.flags.ignore_permissions = True
+        pi.delete()
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POS draft invoice deletion failed")
+        frappe.throw(_("Failed to delete invoice {0}.").format(invoice_name))
+
+    return {"deleted": invoice_name}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Active POS Terminals (for manager Close Terminal modal)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@frappe.whitelist()
+def get_open_pos_terminals():
+    """Return active POS Opening Entries with live stats for the Close Terminal modal."""
+    rows = frappe.db.sql(
+        """
+        SELECT
+            poe.name AS opening_entry,
+            poe.pos_profile AS terminal_name,
+            poe.user,
+            poe.period_start_date AS shift_start,
+            poe.company,
+            COALESCE(u.full_name, poe.user) AS cashier,
+            COUNT(DISTINCT CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bill_count,
+            COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS gross_sales,
+            COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts
+        FROM `tabPOS Opening Entry` poe
+        LEFT JOIN `tabUser` u ON u.name = poe.user
+        LEFT JOIN `tabPOS Invoice` pi ON pi.pos_opening_entry = poe.name
+        WHERE poe.status = 'Open' AND poe.docstatus = 1
+        GROUP BY poe.name
+        ORDER BY poe.creation DESC
+        LIMIT 20
+        """,
+        as_dict=1,
+    )
+
+    for r in rows:
+        r["gross_sales"] = flt(r["gross_sales"])
+        r["bill_count"] = int(r["bill_count"])
+        r["open_drafts"] = int(r["open_drafts"])
+
+    return rows

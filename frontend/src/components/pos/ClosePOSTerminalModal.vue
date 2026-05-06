@@ -13,10 +13,11 @@
               <p class="text-xs text-gray-400 mt-1">Manager view to review active cashier terminals, confirm readiness, and close staff POS shifts from one control point.</p>
             </div>
             <div class="flex items-center gap-2 ml-4 flex-shrink-0">
-              <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh List</button>
+              <button @click="terminalsResource.reload()" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh List</button>
               <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                 :class="!selectedTerminal ? 'opacity-50 cursor-not-allowed' : ''"
-                :disabled="!selectedTerminal">Close Selected Shift</button>
+                  :disabled="!selectedTerminal || closing"
+                  @click="closeSelectedShift">{{ closing ? 'Closing…' : 'Close Selected Shift' }}</button>
               <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 @click="$emit('close')">Cancel</button>
             </div>
@@ -29,11 +30,11 @@
           <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
             <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
               <p class="text-xs text-gray-400 mb-1">Open terminals</p>
-              <p class="text-2xl font-bold text-gray-900">3</p>
+                <p class="text-2xl font-bold text-gray-900">{{ terminalsResource.loading ? '…' : terminals.length }}</p>
             </div>
             <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
               <p class="text-xs text-gray-400 mb-1">Pending drafts</p>
-              <p class="text-2xl font-bold text-gray-900">7</p>
+                <p class="text-2xl font-bold text-gray-900">{{ terminalsResource.loading ? '…' : terminals.reduce((s,t)=>s+t.drafts,0) }}</p>
             </div>
             <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
               <p class="text-xs text-gray-400 mb-1">Open tables</p>
@@ -81,6 +82,8 @@
           </div>
 
           <!-- Terminals + Detail -->
+            <div v-if="closeError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-600">{{ closeError }}</div>
+            <div v-if="closeSuccess" class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-xs text-green-700 font-semibold">{{ closeSuccess }}</div>
           <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;">
 
             <!-- Terminal Table -->
@@ -101,7 +104,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="t in terminals" :key="t.name"
+                  <tr v-for="t in filteredTerminals" :key="t.name"
                     @click="selectedTerminal = t.name"
                     class="border-b border-gray-50 last:border-0 cursor-pointer transition-colors"
                     :class="selectedTerminal === t.name ? 'bg-blue-50' : 'hover:bg-gray-50'">
@@ -184,18 +187,88 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
 defineEmits(['close'])
 
 const searchText = ref('')
 const selectedTerminal = ref('Restaurant POS 01')
 
-const terminals = [
-  { name: 'Restaurant POS 01', cashier: 'Adaeze', outlet: 'Main Restaurant', drafts: 2, tables: 5, diff: '₦0.00',   sales: '₦1.82M', shiftLabel: 'Morning shift •', opened: 'Opened 07:00 AM', readiness: 'All tender counts balanced. 2 draft orders and 5 open tables still need attention before shift closure.' },
-  { name: 'Bar POS 02',        cashier: 'Ifeoma', outlet: 'Bar Lounge',      drafts: 1, tables: 3, diff: '₦0.00',   sales: '₦1.06M', shiftLabel: 'Morning shift •', opened: 'Opened 07:00 AM', readiness: 'All tender counts balanced. 1 draft order and 3 open tables pending.' },
-  { name: 'Mini-Mart POS 03',  cashier: 'Boma',   outlet: 'Retail Corner',   drafts: 4, tables: 0, diff: '₦41,300', sales: '₦980K',  shiftLabel: 'Morning shift •', opened: 'Opened 07:00 AM', readiness: 'Cash difference of ₦41,300 flagged. Requires manager review before shift can be closed.' },
-]
+const closing = ref(false)
+const closeError = ref('')
+const closeSuccess = ref('')
 
-const selected = computed(() => terminals.find(t => t.name === selectedTerminal.value) || null)
+// ── API ───────────────────────────────────────────────────────────────────
+const terminalsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_open_pos_terminals',
+  auto: true,
+})
+
+const closeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.close_pos_shift',
+  onSuccess() {
+    closing.value = false
+    closeSuccess.value = `Shift closed for ${selectedTerminal.value}`
+    selectedTerminal.value = ''
+    terminalsResource.reload()
+    setTimeout(() => { closeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    closing.value = false
+    closeError.value = err?.message || 'Failed to close shift'
+    setTimeout(() => { closeError.value = '' }, 5000)
+  },
+})
+
+const terminals = computed(() =>
+  (terminalsResource.data || []).map(t => ({
+    name: t.terminal_name || t.opening_entry,
+    opening_entry: t.opening_entry,
+    cashier: t.cashier || t.user || '—',
+    outlet: t.terminal_name || '—',
+    drafts: t.open_drafts || 0,
+    tables: 0,
+    diff: '₦0.00',
+    sales: `₦${Number(t.gross_sales || 0).toLocaleString()}`,
+    shiftLabel: 'Active shift •',
+    opened: t.shift_start ? `Opened ${t.shift_start}` : '',
+    readiness: t.open_drafts > 0
+      ? `${t.open_drafts} draft order(s) still pending. Resolve before closing.`
+      : 'No pending drafts. Ready to close.',
+  }))
+)
+
+const filteredTerminals = computed(() => {
+  const q = (searchText.value || '').trim().toLowerCase()
+  if (!q) return terminals.value
+  return terminals.value.filter(t =>
+    (t.name || '').toLowerCase().includes(q) ||
+    (t.cashier || '').toLowerCase().includes(q) ||
+    (t.outlet || '').toLowerCase().includes(q)
+  )
+})
+
+const selected = computed(() => terminals.value.find(t => t.name === selectedTerminal.value) || null)
+
+watch(filteredTerminals, (rows) => {
+  if (!rows.length) {
+    selectedTerminal.value = ''
+    return
+  }
+  if (!rows.some(t => t.name === selectedTerminal.value)) {
+    selectedTerminal.value = rows[0].name
+  }
+}, { immediate: true })
+
+function closeSelectedShift() {
+  if (!selected.value || closing.value) return
+  if (!confirm(`Close shift for ${selected.value.cashier} on ${selected.value.name}?`)) return
+  closing.value = true
+  closeResource.submit({
+    pos_opening_entry: selected.value.opening_entry,
+    tender_rows: JSON.stringify([]),
+    closing_note: null,
+  })
+}
 </script>

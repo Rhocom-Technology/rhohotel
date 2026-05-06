@@ -221,7 +221,13 @@
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="None">None</option>
                 <option value="Percentage">Percentage</option>
-                <option value="Amount">Amount</option>
+                <option value="Fixed Amount">Fixed Amount</option>
+
+                  <!-- Reservation Payment / Invoice Notice -->
+                  <div v-if="reservationNotices.length" class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 space-y-1">
+                    <p class="text-xs font-bold text-amber-700 mb-1">Reservation Payment Notice</p>
+                    <p v-for="(n, i) in reservationNotices" :key="i" class="text-xs text-amber-700">{{ n }}</p>
+                  </div>
               </select>
             </div>
             <div>
@@ -538,11 +544,16 @@ async function loadAvailableRooms() {
         params.check_out_dt = formatServerDateTime(ciDate)
       }
     }
+    // Pass the reservation so its rooms are not excluded by availability check
+    const preReservation = String(route.query.reservation || '').trim()
+    if (preReservation) params.exclude_reservation = preReservation
+
     const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.get_available_rooms', params)
     availableRooms.value = Array.isArray(rows) ? rows : []
+
     // Pre-fill from query params after rooms are loaded
-    const preRoom = route.query.room
-    const preRoomType = route.query.room_type
+    const preRoom = String(route.query.room || '').trim()
+    const preRoomType = String(route.query.room_type || '').trim()
     if (preRoomType && !form.room_type) {
       selectedRoomType.value = preRoomType
       form.room_type = preRoomType
@@ -553,8 +564,21 @@ async function loadAvailableRooms() {
         form.room_number = match.name
         onRoomSelect()
       } else {
-        // Room not in available list (e.g. already occupied), still set it
+        // Room still not in list (e.g. wrong status) — inject it so the select shows it
+        const injected = {
+          name: preRoom,
+          room_number: preRoom,
+          room_type: preRoomType || '',
+          floor: '',
+          default_rate: 0,
+        }
+        availableRooms.value = [injected, ...availableRooms.value]
         form.room_number = preRoom
+        if (preRoomType) {
+          form.room_type = preRoomType
+          selectedRoomType.value = preRoomType
+        }
+        onRoomSelect()
       }
     }
   } catch {
@@ -668,6 +692,7 @@ function formatCurrency(amount) {
 // ---- Submit ----
 const submitting = ref(false)
 const errorMsg = ref('')
+const reservationNotices = ref([])
 
 async function submitCheckIn() {
   errorMsg.value = ''
@@ -721,5 +746,86 @@ async function submitCheckIn() {
 onMounted(() => {
   loadRoomTypes()
   loadAvailableRooms()
+
+  const preReservation = String(route.query.reservation || '').trim()
+  const preGuest = String(route.query.guest || '').trim()
+  const preGuestName = String(route.query.guest_name || '').trim()
+  const preGuestPhone = String(route.query.guest_phone || '').trim()
+  const preGuestEmail = String(route.query.guest_email || '').trim()
+  const preNights = parseInt(route.query.nights || '0')
+  const preCheckoutDate = String(route.query.checkout_date || '').trim()
+  const preDiscountType = String(route.query.discount_type || '').trim()
+  const preDiscount = parseFloat(route.query.discount || '0')
+  const preAdvancePaid = parseFloat(route.query.advance_paid || '0')
+  const preSalesInvoice = String(route.query.sales_invoice || '').trim()
+
+  // Pre-fill number_of_nights from query before async reservation fetch
+  // so selectReservation's guard (!form.number_of_nights) won't overwrite it.
+  if (preNights >= 1) {
+    form.number_of_nights = preNights
+  } else if (preCheckoutDate && form.check_in_datetime) {
+    const ci = new Date(form.check_in_datetime)
+    const co = new Date(preCheckoutDate)
+    const diff = Math.round((co - ci) / 86400000)
+    if (diff >= 1) form.number_of_nights = diff
+  }
+
+  if (preDiscountType && preDiscountType !== 'None') {
+    form.discount_type = preDiscountType
+    if (preDiscount > 0) form.discount = preDiscount
+  }
+
+  // Build notices for the front-desk agent
+  const notices = []
+  if (preAdvancePaid > 0) {
+    notices.push(`Advance paid from reservation: ${formatCurrency(preAdvancePaid)}. Verify before charging the guest again.`)
+  }
+  if (preSalesInvoice) {
+    notices.push(`Sales Invoice ${preSalesInvoice} already exists for this reservation.`)
+  }
+  reservationNotices.value = notices
+
+  if (preReservation) {
+    reservationQuery.value = preReservation
+    fetchReservations(preReservation).then(() => {
+      const match = reservationResults.value.find(r => r.name === preReservation)
+      if (match) selectReservation(match)
+    })
+  }
+
+  if (preGuest) {
+    form.guest = preGuest
+  }
+  if (preGuestName) {
+    guestQuery.value = preGuestName
+    selectedGuest.value = {
+      ...selectedGuest.value,
+      hotel_guest_name: preGuestName,
+      phone_number: preGuestPhone || selectedGuest.value?.phone_number || '',
+      email: preGuestEmail || selectedGuest.value?.email || '',
+    }
+
+    if (!preGuest) {
+      callMethodForm('rhohotel.rhocom_hotel.api.checkin.search_guests', { query: preGuestName })
+        .then((rows) => {
+          const list = Array.isArray(rows) ? rows : []
+          const exact = list.find((g) => (g.hotel_guest_name || '').toLowerCase() === preGuestName.toLowerCase())
+          const pick = exact || list[0]
+          if (pick) {
+            form.guest = pick.name
+            selectedGuest.value = pick
+            if (!form.contact_number && pick.phone_number) {
+              form.contact_number = pick.phone_number
+            }
+          }
+        })
+        .catch(() => {
+          // Keep name-only prefill when guest lookup fails.
+        })
+    }
+  }
+  if (preGuestPhone && !form.contact_number) {
+    form.contact_number = preGuestPhone
+  }
 })
 </script>

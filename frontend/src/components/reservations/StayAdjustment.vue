@@ -208,12 +208,21 @@ const ratePerNight = computed(() => {
   return Number(props.reservation.subtotal || 0) / nights
 })
 
+const currentNights = computed(() => {
+  const fromDate = asISODate(props.reservation.from_date)
+  const toDate = asISODate(props.reservation.to_date)
+  if (!fromDate || !toDate) return Number(props.reservation.number_of_nights) || 0
+  return Math.max(1, Math.round((parseDateOnly(toDate) - parseDateOnly(fromDate)) / (1000 * 60 * 60 * 24)))
+})
+
+const newNights = computed(() => {
+  if (!newCheckinDate.value || !newCheckoutDate.value) return 0
+  return Math.max(1, Math.round((parseDateOnly(newCheckoutDate.value) - parseDateOnly(newCheckinDate.value)) / (1000 * 60 * 60 * 24)))
+})
+
 const additionalNights = computed(() => {
-  if (!newCheckoutDate.value || !props.reservation.to_date) return 0
-  const current = parseDateOnly(asISODate(props.reservation.to_date))
-  const newDate = parseDateOnly(newCheckoutDate.value)
-  const diff = Math.round((newDate - current) / (1000 * 60 * 60 * 24))
-  return diff
+  if (!newCheckinDate.value || !newCheckoutDate.value) return 0
+  return newNights.value - currentNights.value
 })
 
 const hasDateChanges = computed(() => {

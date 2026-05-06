@@ -17,10 +17,18 @@
               class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm ml-4 flex-shrink-0">✕</button>
           </div>
           <div class="flex items-center gap-2 mt-5">
-            <button class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Delete Draft</button>
+              <p v-if="actionError" class="text-xs text-red-500 flex-1">{{ actionError }}</p>
+            <button @click="deleteDraft" :disabled="!selectedDraft || deleting"
+              class="btn-hover px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              {{ deleting ? 'Deleting…' : 'Delete Draft' }}
+            </button>
             <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Close Page</button>
-            <button class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print Draft Bill</button>
-            <button class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Resume Draft</button>
+            <button @click="printDraftBill" :disabled="!selectedDraft"
+              class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Print Draft Bill</button>
+            <button @click="resumeDraft" :disabled="!selectedDraft || resuming"
+              class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              {{ resuming ? 'Loading…' : 'Resume Draft' }}
+            </button>
           </div>
         </div>
 
@@ -57,7 +65,7 @@
               </div>
               <button @click="draftSearch='';draftFilterPoint='';draftFilterCashier='';draftPage=1"
                 class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Reset</button>
-              <button class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create New Draft</button>
+              <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create New Draft</button>
             </div>
           </div>
 
@@ -156,7 +164,7 @@ import { createResource } from 'frappe-ui'
 const props = defineProps({
   modelValue: Boolean,
 })
-defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'resume'])
 
 const draftSearch = ref('')
 const draftFilterPoint = ref('')
@@ -164,6 +172,10 @@ const draftFilterCashier = ref('')
 const draftPage = ref(1)
 const perPage = 10
 const selectedDraft = ref(null)
+
+const resuming = ref(false)
+const deleting = ref(false)
+const actionError = ref('')
 
 // ── API: Draft Orders ──────────────────────────────────────────────────────
 const draftsResource = createResource({
@@ -241,6 +253,57 @@ const draftPageEnd = computed(() => Math.min(draftPageStart.value + perPage, fil
 const pagedDrafts = computed(() => filteredDrafts.value.slice(draftPageStart.value, draftPageEnd.value))
 
 watch(filteredDrafts, () => { draftPage.value = 1 })
+
+// ── Actions ────────────────────────────────────────────────────────────────
+const resumeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_draft_invoice_detail',
+  onSuccess(data) {
+    resuming.value = false
+    emit('resume', data)
+    emit('update:modelValue', false)
+  },
+  onError(err) {
+    resuming.value = false
+    actionError.value = err?.message || 'Failed to load draft'
+    setTimeout(() => { actionError.value = '' }, 4000)
+  },
+})
+
+const deleteResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.delete_pos_draft_invoice',
+  onSuccess() {
+    deleting.value = false
+    selectedDraft.value = null
+    draftsResource.reload()
+    statsResource.reload()
+  },
+  onError(err) {
+    deleting.value = false
+    actionError.value = err?.message || 'Failed to delete draft'
+    setTimeout(() => { actionError.value = '' }, 4000)
+  },
+})
+
+function resumeDraft() {
+  if (!selectedDraft.value || resuming.value) return
+  resuming.value = true
+  resumeResource.submit({ invoice_name: selectedDraft.value.invoice })
+}
+
+function deleteDraft() {
+  if (!selectedDraft.value || deleting.value) return
+  if (!confirm(`Delete draft ${selectedDraft.value.invoice}? This cannot be undone.`)) return
+  deleting.value = true
+  deleteResource.submit({ invoice_name: selectedDraft.value.invoice })
+}
+
+function printDraftBill() {
+  if (!selectedDraft.value) return
+  window.open(
+    `/printview?doctype=POS%20Invoice&name=${encodeURIComponent(selectedDraft.value.invoice)}&trigger_print=1`,
+    '_blank'
+  )
+}
 </script>
 
 <style>

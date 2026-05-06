@@ -282,7 +282,6 @@ function itemLines(t) {
 function noteLines(t) {
   const parts = []
   if (t.notes) parts.push(t.notes)
-  if (t.source) parts.push(`Source: ${t.source}`)
   return parts
 }
 

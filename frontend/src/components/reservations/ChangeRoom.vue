@@ -43,8 +43,11 @@
         </div>
         <div class="mt-4">
           <p class="text-xs text-gray-500 mb-1.5">Reason for Change</p>
-          <input type="text" v-model="reason" placeholder="Guest preference / maintenance / upgrade"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <select v-model="reason"
+            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Select reason</option>
+            <option v-for="item in reasonOptions" :key="item" :value="item">{{ item }}</option>
+          </select>
         </div>
       </div>
 
@@ -90,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
@@ -104,6 +107,13 @@ const reason = ref('')
 const loadingRooms = ref(true)
 const submitting = ref(false)
 const error = ref('')
+const reasonOptions = [
+  'Guest Request',
+  'Maintenance Issue',
+  'Room Upgrade',
+  'Room Downgrade',
+  'Operational Reassignment',
+]
 
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
 function fmtDate(dt) { if (!dt) return '—'; return new Date(dt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
@@ -124,6 +134,16 @@ async function loadRooms() {
 }
 
 onMounted(loadRooms)
+
+watch(
+  rooms,
+  (list) => {
+    if (Array.isArray(list) && list.length === 1) {
+      selectedOldRoom.value = list[0].room_number || ''
+    }
+  },
+  { immediate: true },
+)
 
 async function applyChange() {
   if (!selectedOldRoom.value || !selectedNewRoom.value) return

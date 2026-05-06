@@ -376,6 +376,9 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
     # Update the room row
     target_row.room_number = new_room_number
     target_row.room_type = new_room.room_type or target_row.room_type
+    from rhohotel.rhocom_hotel.utils.room_availability import get_room_rate
+    target_row.rate_per_night = get_room_rate(new_room.room_type, check_in_date=str(doc.from_date))
+    target_row.room_total = round(float(target_row.rate_per_night or 0) * float(doc.number_of_nights or 0), 2)
 
     # Update the old room status back to Reserved (if not occupied)
     try:
@@ -390,7 +393,202 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
     new_room.status = "Reserved"
     new_room.save(ignore_permissions=True)
 
+    doc._recalculate_totals()
     doc.save(ignore_permissions=True)
     frappe.db.commit()
 
     return {"status": "success", "new_room": new_room_number}
+
+
+def _find_or_create_customer_for_reservation(doc):
+    if doc.customer:
+        return doc.customer
+
+    customer = frappe.db.get_value(
+        "Customer",
+        {"customer_name": ["like", f"{doc.primary_guest_name or ''}%"]},
+        "name",
+    )
+    if customer:
+        doc.db_set("customer", customer, update_modified=False)
+        return customer
+
+    selling_settings = frappe.get_cached_doc("Selling Settings")
+    customer_doc = frappe.get_doc(
+        {
+            "doctype": "Customer",
+            "customer_name": doc.primary_guest_name or doc.corporate_guest or doc.name,
+            "customer_type": "Company" if doc.reservation_type == "Corporate" else "Individual",
+            "customer_group": selling_settings.default_customer_group,
+            "territory": selling_settings.default_territory,
+            "mobile_number": doc.primary_guest_phone or "",
+            "email_id": doc.primary_guest_email or "",
+        }
+    )
+    customer_doc.insert(ignore_permissions=True)
+    doc.db_set("customer", customer_doc.name, update_modified=False)
+    return customer_doc.name
+
+
+@frappe.whitelist()
+def create_invoice_for_reservation(reservation_name):
+    from frappe.utils import getdate, flt
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    if doc.sales_invoice:
+        return {"sales_invoice": doc.sales_invoice, "already_exists": True}
+
+    if not doc.rooms:
+        frappe.throw(_("Cannot create invoice without reserved rooms."))
+
+    customer = _find_or_create_customer_for_reservation(doc)
+
+    room_number = doc.rooms[0].room_number
+    item_code = frappe.db.get_value("Hotel Room", room_number, "erpnext_item") or room_number
+    if not frappe.db.exists("Item", item_code):
+        frappe.throw(_("No billable Item found for room {0}. Configure Hotel Room.erpnext_item.").format(room_number))
+
+    si = frappe.get_doc(
+        {
+            "doctype": "Sales Invoice",
+            "customer": customer,
+            "posting_date": frappe.utils.today(),
+            "due_date": getdate(doc.to_date),
+            "update_stock": 0,
+            "items": [
+                {
+                    "item_code": item_code,
+                    "qty": 1,
+                    "rate": flt(doc.total_amount or doc.net_total or 0),
+                    "description": _("Reservation charge for {0} ({1} to {2})").format(
+                        doc.name, doc.from_date, doc.to_date
+                    ),
+                }
+            ],
+        }
+    )
+    si.set_taxes()
+    si.insert(ignore_permissions=True)
+    si.submit()
+
+    doc.flags.ignore_validate_update_after_submit = True
+    doc.sales_invoice = si.name
+    doc.payment_status = "Pending"
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"sales_invoice": si.name}
+
+
+@frappe.whitelist()
+def get_outstanding_invoices_for_reservation(reservation_name):
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    invoices = []
+
+    if doc.sales_invoice:
+        inv = frappe.db.get_value(
+            "Sales Invoice",
+            doc.sales_invoice,
+            ["name", "posting_date", "grand_total", "outstanding_amount"],
+            as_dict=True,
+        )
+        if inv and float(inv.get("outstanding_amount") or 0) > 0:
+            invoices.append(inv)
+
+    return invoices
+
+
+@frappe.whitelist()
+def collect_payment_for_reservation(reservation_name, payment_info=None):
+    import json
+
+    if payment_info and isinstance(payment_info, str):
+        payment_info = json.loads(payment_info)
+    payment_info = payment_info or {}
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    if not doc.sales_invoice:
+        frappe.throw(_("No Sales Invoice is linked to this reservation."))
+
+    invoice = frappe.get_doc("Sales Invoice", doc.sales_invoice)
+    outstanding = float(invoice.outstanding_amount or 0)
+    paid_amount = float(payment_info.get("paid_amount") or 0)
+    if paid_amount <= 0:
+        frappe.throw(_("Paid amount must be greater than zero."))
+
+    company = invoice.company or frappe.db.get_single_value("Global Defaults", "default_company")
+    mode_of_payment = payment_info.get("mode_of_payment")
+    if not mode_of_payment:
+        frappe.throw(_("Mode of Payment is required."))
+
+    mop = frappe.get_doc("Mode of Payment", mode_of_payment)
+    mop_account = next((a.default_account for a in mop.accounts if a.company == company), None)
+    if not mop_account:
+        frappe.throw(_("No account found for selected Mode of Payment in company {0}.").format(company))
+
+    allocated_amount = min(paid_amount, outstanding)
+
+    pe = frappe.new_doc("Payment Entry")
+    pe.payment_type = "Receive"
+    pe.company = company
+    pe.party_type = "Customer"
+    pe.party = invoice.customer
+    pe.posting_date = payment_info.get("payment_date") or frappe.utils.today()
+    pe.mode_of_payment = mode_of_payment
+    pe.paid_to = mop_account
+    pe.paid_amount = allocated_amount
+    pe.received_amount = allocated_amount
+    pe.source_exchange_rate = 1
+    pe.target_exchange_rate = 1
+    if payment_info.get("reference_no"):
+        pe.reference_no = payment_info.get("reference_no")
+    if payment_info.get("reference_date"):
+        pe.reference_date = payment_info.get("reference_date")
+    if payment_info.get("remarks"):
+        pe.remarks = payment_info.get("remarks")
+
+    pe.append(
+        "references",
+        {
+            "reference_doctype": "Sales Invoice",
+            "reference_name": invoice.name,
+            "allocated_amount": allocated_amount,
+        },
+    )
+
+    pe.insert(ignore_permissions=True)
+    pe.submit()
+
+    doc.flags.ignore_validate_update_after_submit = True
+    doc.payment_entry = pe.name
+    if allocated_amount >= outstanding and outstanding > 0:
+        doc.payment_status = "Paid"
+    elif allocated_amount > 0:
+        doc.payment_status = "Partly Paid"
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"payment_entry": pe.name}
+
+
+@frappe.whitelist()
+def cancel_reservation(reservation_name, reason=None):
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    if int(doc.docstatus or 0) == 2:
+        return {"status": "already_cancelled"}
+
+    if int(doc.docstatus or 0) == 1:
+        # Submitted doc -> use cancel workflow
+        doc.flags.ignore_permissions = True
+        doc.cancel()
+    else:
+        # Draft/Hold docs can be cancelled in-place
+        doc.reservation_status = STATUS_CANCELLED
+        doc.flags.ignore_validate_update_after_submit = True
+        doc._release_rooms()
+        doc.save(ignore_permissions=True)
+
+    frappe.db.commit()
+    return {"status": "success", "reason": reason or ""}

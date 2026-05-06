@@ -1,6 +1,5 @@
 <template>
   <div class="space-y-4">
-    <div>PointOfSales Component Loaded</div>
 
     <!-- Top bar info -->
     <div>
@@ -11,7 +10,9 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Current Terminal</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Main Restaurant POS • Cashier: Adaeze • Shift: Morning</p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          {{ terminalInfo.pos_profile || 'POS Terminal' }}<template v-if="terminalInfo.cashier"> • Cashier: {{ terminalInfo.cashier }}</template><template v-if="terminalInfo.shift_date"> • {{ terminalInfo.shift_date }}</template>
+        </p>
       </div>
       <div class="flex items-center gap-2">
         <button @click="router.push('/pos/shift-close')"
@@ -22,7 +23,7 @@
           class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Draft Orders
         </button>
-        <button
+        <button @click="showOpenTables = true"
           class="btn-hover px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
           Open Tables
         </button>
@@ -105,7 +106,7 @@
                   class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" />
                 <div v-if="billToFocused || billToSearch"
                   class="dropdown-panel absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
-                  <!-- <div v-if="billToResults.length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">No results</div>
+                  <div v-if="billToResults.length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">No results</div>
                   <div v-for="r in billToResults" :key="r.id"
                     @mousedown="selectBillTo(r)"
                     class="px-4 py-3 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-3 transition-colors">
@@ -115,7 +116,7 @@
                       <p class="font-semibold text-gray-900">{{ r.name }}</p>
                       <p class="text-gray-400 mt-0.5">{{ r.room ? `Room ${r.room}` : r.type }}</p>
                     </div>
-                  </div> -->
+                  </div>
                 </div>
               </div>
               <div v-if="settlementMethod === 'Post to Room'" class="relative w-32">
@@ -126,12 +127,12 @@
                   class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" />
                 <div v-if="roomFocused || roomNumber"
                   class="dropdown-panel absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
-                  <!-- <div v-for="r in filteredRoomSuggestions" :key="r.room"
+                  <div v-for="r in filteredRoomSuggestions" :key="r.room"
                     @mousedown="selectRoomFromNumber(r)"
                     class="px-3 py-2.5 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors">
                     <span class="font-bold text-gray-900">Room {{ r.room }}</span>
                     <span class="text-gray-400 ml-2">{{ r.guest }}</span>
-                  </div> -->
+                  </div>
                 </div>
               </div>
             </div>
@@ -266,8 +267,8 @@
 
         <!-- Actions -->
         <div class="flex gap-2">
-          <button class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Edit Selection</button>
-          <button class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
+          <button @click="clearKitchenSelection" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Edit Selection</button>
+          <button @click="printBill" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
           <button @click="onHoldSale"
             :disabled="holding || cart.length === 0"
             class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -297,8 +298,7 @@
     </Teleport>
 
     <!-- Modals -->
-    <DraftOrdersModal :key="draftOrdersKey" v-model="showDraftOrders" />
-    <!--
+    <DraftOrdersModal :key="draftOrdersKey" v-model="showDraftOrders" @resume="onResumeDraft" />
     <OpenTablesModal v-model="showOpenTables" />
     <PostToRoomModal
       v-model="showPostToRoom"
@@ -315,7 +315,6 @@
       :cart-items="cart"
       :service-charge="serviceCharge"
     />
-    -->
   </div>
 </template>
 
@@ -334,6 +333,7 @@ const router = useRouter()
 
 // ── Modals ─────────────────────────────────────────────────────────
 const showDraftOrders = ref(false)
+const showOpenTables = ref(false)
 const showPostToRoom = ref(false)
 const showSplitBill = ref(false)
 const draftOrdersKey = ref(0)
@@ -359,6 +359,25 @@ const selectedKitchenItemMap = ref({})
 const lastSubmittedItems = ref([])
 const lastSubmittedContext = ref({ tableOrRoom: '', source: 'Restaurant Dining', kitchenNote: '', sendScope: 'all', selectedItemCodes: [] })
 
+const lastInvoiceName = ref('')
+
+// ── API: Current Shift / Terminal Info ────────────────────────────
+const shiftInfoResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_shift_stats',
+  auto: true,
+})
+
+const terminalInfo = computed(() => {
+  const d = shiftInfoResource.data || {}
+  return {
+    cashier: d.cashier || '',
+    pos_profile: d.pos_profile || '',
+    shift_date: d.shift_date || '',
+    has_open_shift: !!d.has_open_shift,
+    pos_opening_entry: d.pos_opening_entry || null,
+  }
+})
+
 // ── API: Menu Items ────────────────────────────────────────────────
 const menuResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
@@ -377,26 +396,26 @@ const kitchenGroupsResource = createResource({
 })
 
 // ── API: Occupied Rooms (for room-number dropdown) ─────────────────
-// const occupiedRoomsResource = createResource({
-//   url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
-//   auto: false,
-// })
+const occupiedRoomsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
+  auto: false,
+})
 
 // ── API: Bill-To search ────────────────────────────────────────────
-// const billToResource = createResource({
-//   url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
-//   params: { query: '' },
-//   auto: false,
-// })
+const billToResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
+  params: { query: '' },
+  auto: false,
+})
 
-// let billToTimer = null
-// watch(billToSearch, (q) => {
-//   clearTimeout(billToTimer)
-//   billToTimer = setTimeout(() => {
-//     billToResource.params = { query: q }
-//     billToResource.reload()
-//   }, 300)
-// })
+let billToTimer = null
+watch(billToSearch, (q) => {
+  clearTimeout(billToTimer)
+  billToTimer = setTimeout(() => {
+    billToResource.params = { query: q }
+    billToResource.reload()
+  }, 300)
+})
 
 // ── Computed: categories ───────────────────────────────────────────
 const categories = computed(() => {
@@ -435,27 +454,27 @@ const selectedKitchenCount = computed(() =>
 )
 
 // ── Computed: bill-to results ──────────────────────────────────────
-// const billToResults = computed(() =>
-//   (billToResource.data || []).map(r => ({
-//     id: r.id,
-//     name: r.name,
-//     room: r.room || null,
-//     type: r.type,
-//   }))
-// )
+const billToResults = computed(() =>
+  (billToResource.data || []).map(r => ({
+    id: r.id,
+    name: r.name,
+    room: r.room || null,
+    type: r.type,
+  }))
+)
 
 // ── Computed: room suggestions ─────────────────────────────────────
-// const occupiedRooms = computed(() => occupiedRoomsResource.data || [])
+const occupiedRooms = computed(() => occupiedRoomsResource.data || [])
 
-// const filteredRoomSuggestions = computed(() => {
-//   const rooms = occupiedRooms.value
-//   if (!roomNumber.value) return rooms.slice(0, 5)
-//   const q = roomNumber.value.toLowerCase()
-//   return rooms.filter(r =>
-//     (r.room || '').includes(q) ||
-//     (r.guest || '').toLowerCase().includes(q)
-//   )
-// })
+const filteredRoomSuggestions = computed(() => {
+  const rooms = occupiedRooms.value
+  if (!roomNumber.value) return rooms.slice(0, 5)
+  const q = roomNumber.value.toLowerCase()
+  return rooms.filter(r =>
+    (r.room || '').includes(q) ||
+    (r.guest || '').toLowerCase().includes(q)
+  )
+})
 
 // ── Cart ───────────────────────────────────────────────────────────
 const cart = ref([])
@@ -513,6 +532,7 @@ const chargeResource = createResource({
     const context = { ...lastSubmittedContext.value }
 
     chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
+      lastInvoiceName.value = data.pos_invoice
     clearCart()
     charging.value = false
     triggerKitchenSend(data.pos_invoice, submitted, context)
@@ -532,6 +552,7 @@ const holdSaleResource = createResource({
     const context = { ...lastSubmittedContext.value }
 
     chargeSuccess.value = `Sale held as draft ${data.pos_invoice}`
+      lastInvoiceName.value = data.pos_invoice
     holding.value = false
     clearCart()
     showDraftOrders.value = true
@@ -590,7 +611,7 @@ function getKitchenItemsFrom(orderItems, context) {
 
 function triggerKitchenSend(posInvoice, submittedItems, context) {
   const kitchenItems = getKitchenItemsFrom(submittedItems, context)
-  if (!posInvoice || kitchenItems.length === 0 || sendingKitchen.value) return
+  if (kitchenItems.length === 0 || sendingKitchen.value) return
 
   sendingKitchen.value = true
   sendKitchenResource.submit({
@@ -626,6 +647,41 @@ function isKitchenEligible(item) {
   return kitchenItemGroups.value.has(item.category)
 }
 
+  function clearKitchenSelection() {
+    selectedKitchenItemMap.value = {}
+  }
+
+  function printBill() {
+    if (!lastInvoiceName.value) {
+      chargeError.value = 'No invoice to print. Complete a sale first.'
+      setTimeout(() => { chargeError.value = '' }, 3000)
+      return
+    }
+    window.open(
+      `/printview?doctype=POS%20Invoice&name=${encodeURIComponent(lastInvoiceName.value)}&trigger_print=1`,
+      '_blank'
+    )
+  }
+
+  function onResumeDraft(data) {
+    if (!data || !data.items || data.items.length === 0) return
+    cart.value = data.items.map(i => ({
+      id: i.item_code,
+      item_code: i.item_code,
+      name: i.name,
+      category: i.category || '',
+      price: Number(i.price) || 0,
+      stock: Number(i.stock) || 999,
+      image: i.image || null,
+      qty: Number(i.qty) || 1,
+    }))
+    selectedKitchenItemMap.value = {}
+    kitchenNote.value = data.remarks || ''
+    showDraftOrders.value = false
+    chargeSuccess.value = `Draft ${data.invoice} resumed`
+    setTimeout(() => { chargeSuccess.value = '' }, 3000)
+  }
+
 function isKitchenSelected(item) {
   return !!selectedKitchenItemMap.value[item.id]
 }
@@ -640,6 +696,7 @@ function onKitchenSelectionChange(item, checked) {
 
 function clearCart() {
   cart.value = []
+  selectedKitchenItemMap.value = {}
   selectedBillTo.value = null
   roomNumber.value = ''
   kitchenNote.value = ''
@@ -667,8 +724,10 @@ function onHoldSale() {
 // ── Settlement ─────────────────────────────────────────────────────
 function setSettlementMethod(method) {
   settlementMethod.value = method
-  // if (method === 'Split') { showSplitBill.value = true; return }
-  if (method === 'Post to Room') return
+  if (method === 'Post to Room') {
+    occupiedRoomsResource.reload()
+    return
+  }
   roomNumber.value = ''
 }
 
@@ -677,6 +736,7 @@ function onChargeNow() {
   chargeError.value = ''
 
   if (settlementMethod.value === 'Post to Room') {
+    captureSubmissionSnapshot()
     showPostToRoom.value = true
     return
   }
@@ -709,8 +769,11 @@ function onRoomSelected(room) {
 }
 
 function onPostConfirmed() {
+  const submitted = [...lastSubmittedItems.value]
+  const context = { ...lastSubmittedContext.value }
   chargeSuccess.value = 'Bill posted to room folio successfully'
   clearCart()
+  triggerKitchenSend(null, submitted, context)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
 

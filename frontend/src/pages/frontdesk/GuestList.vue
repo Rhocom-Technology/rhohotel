@@ -48,7 +48,7 @@
       <div class="flex items-end gap-3 flex-wrap">
         <div class="flex-1 min-w-48">
           <p class="text-xs text-gray-500 mb-1.5">Search guest</p>
-          <input v-model="search" @keyup.enter="fetchGuests" type="text" placeholder="Guest name, phone, email, ID no..."
+          <input v-model="search" @input="onSearchInput" @keyup.enter="fetchGuests" type="text" placeholder="Guest name, phone, email, ID no..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div class="min-w-36">
@@ -86,6 +86,9 @@
         <button @click="resetFilters"
           class="px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Reset
+        </button>
+        <button @click="fetchGuests" class="px-4 py-2.5 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800">
+          Search
         </button>
         <button @click="$router.push('/guests/new')" class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
           New Guest
@@ -207,7 +210,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
 
@@ -228,6 +231,8 @@ const totalCount = ref(0)
 
 const statsLoading = ref(false)
 const stats = ref({ total_guests: 0, in_house: 0, vip_count: 0, outstanding: '₦0' })
+
+let searchDebounceTimer = null
 
 // ── Fetch ──────────────────────────────────────────────────────────
 async function fetchGuests() {
@@ -272,9 +277,25 @@ function resetFilters() {
   fetchGuests()
 }
 
+function onSearchInput() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+
+  searchDebounceTimer = setTimeout(() => {
+    fetchGuests()
+  }, 300)
+}
+
 onMounted(() => {
   fetchGuests()
   fetchStats()
+})
+
+onBeforeUnmount(() => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
 })
 
 // ── Pagination ─────────────────────────────────────────────────────

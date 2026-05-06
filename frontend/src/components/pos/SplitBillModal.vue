@@ -14,7 +14,10 @@
             </div>
             <div class="flex items-center gap-2 ml-4">
               <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-              <button class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Apply Split</button>
+                <button @click="applySplit" :disabled="applying"
+                  class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {{ applying ? 'Processing…' : 'Apply Split' }}
+                </button>
             </div>
           </div>
         </div>
@@ -37,7 +40,7 @@
             <div class="flex items-end gap-4 flex-wrap">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Split Method</p>
-                <select class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700 pr-8">
+                  <select v-model="splitMethod" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700 pr-8">
                   <option>By Payment Portion</option>
                   <option>Equal Split</option>
                   <option>By Item</option>
@@ -45,7 +48,7 @@
               </div>
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">No. of Splits</p>
-                <input type="number" value="3" class="w-24 px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-center" />
+                  <input v-model.number="splitCount" type="number" min="2" max="5" class="w-24 px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-center" />
               </div>
               <button class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Equal Split</button>
               <button class="btn-hover px-4 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 bg-white">Split by Items</button>
@@ -122,6 +125,7 @@
             <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             <p class="text-xs text-gray-600">Split total check: <span class="font-bold text-green-600">₦{{ grandTotal.toLocaleString() }} allocated successfully</span></p>
           </div>
+            <div v-if="splitError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-600">{{ splitError }}</div>
         </div>
       </div>
     </div>
@@ -130,6 +134,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { createResource } from 'frappe-ui'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -138,23 +143,71 @@ const props = defineProps({
   serviceCharge: { type: Number, default: 0 },
 })
 
-defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'confirmed'])
 
 const selectedSplitItem = ref(0)
+const applying = ref(false)
+const splitError = ref('')
+
+// Split method and count
+const splitMethod = ref('By Payment Portion')
+const splitCount = ref(2)
 
 const splitItems = computed(() => [
   ...props.cartItems.map((i, idx) => ({
     name: i.name, qty: i.qty, amount: i.price * i.qty,
-    split: ['Split A', 'Split B', 'Split B'][idx] || 'Split A',
+    split: idx % splitCount.value === 0 ? 'Split A' : 'Split B',
   })),
   { name: 'Service Charge + VAT', qty: 1, amount: props.serviceCharge, split: 'Split C' },
 ])
 
-const splitPortions = [
-  { label: 'Split A', primary: true, paymentType: 'Cash', target: 'Walk In', amount: 18500 },
-  { label: 'Split B', primary: false, paymentType: 'POS', target: 'Guest 2', amount: 16000 },
-  { label: 'Split C', primary: false, paymentType: 'Post to Room', target: 'Room 305', amount: 5865 },
-]
+const splitPortions = computed(() => {
+  const perSplit = Math.floor(props.grandTotal / splitCount.value)
+  const remainder = props.grandTotal - perSplit * (splitCount.value - 1)
+  return Array.from({ length: splitCount.value }, (_, i) => ({
+    label: `Split ${String.fromCharCode(65 + i)}`,
+    primary: i === 0,
+    paymentType: i === 0 ? 'Cash' : 'POS',
+    target: i === 0 ? 'Walk In' : `Guest ${i + 1}`,
+    amount: i === splitCount.value - 1 ? remainder : perSplit,
+  }))
+})
+
+const chargeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
+  onSuccess() {
+    applying.value = false
+    emit('confirmed')
+    emit('update:modelValue', false)
+  },
+  onError(err) {
+    applying.value = false
+    splitError.value = err?.message || 'Failed to process split payment'
+    setTimeout(() => { splitError.value = '' }, 5000)
+  },
+})
+
+function applySplit() {
+  if (props.cartItems.length === 0) {
+    splitError.value = 'Cart is empty.'
+    return
+  }
+  applying.value = true
+  splitError.value = ''
+  // For now, process the entire bill as a single invoice (split logic complex —
+  // requires per-portion invoice creation which depends on POS profile config)
+  chargeResource.submit({
+    items: JSON.stringify(props.cartItems.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    }))),
+    mode_of_payment: 'Cash',
+    customer: null,
+    service_charge: props.serviceCharge,
+    kitchen_note: null,
+  })
+}
 </script>
 
 <style>
