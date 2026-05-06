@@ -3,7 +3,7 @@
     <div class="flex items-start justify-between">
       <div>
         <h1 class="text-xl font-bold text-gray-900">{{ reservationType === 'Corporate' ? 'Corporate Reservation' : 'New Reservation' }}</h1>
-        <p class="text-xs text-gray-400 mt-1">Create reservation records directly in Hotel Front Desk Reservation.</p>
+        <p class="text-xs text-gray-400 mt-1">Create reservation records directly in Hotel Reservation.</p>
       </div>
       <div class="flex items-center gap-2">
         <button @click="emit('close')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
@@ -275,9 +275,9 @@ watch(
 
 async function loadAvailableRooms() {
   try {
-    const rows = await callMethod('rhohotel.api.get_available_rooms', {
-      from_date: form.value.from_date,
-      to_date: form.value.to_date,
+    const rows = await callMethod('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
+      check_in_dt: form.value.from_date,
+      check_out_dt: form.value.to_date,
       room_type: selectedRoomType.value || undefined,
     })
     availableRooms.value = Array.isArray(rows) ? rows : []
