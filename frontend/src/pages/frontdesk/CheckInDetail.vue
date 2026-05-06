@@ -155,6 +155,18 @@
             <p class="text-xs text-gray-400 mb-1">Discount Type</p>
             <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ checkIn.discount_type || '—' }}</div>
           </div>
+          <div style="grid-column:span 2;" v-if="preferenceList.length">
+            <p class="text-xs text-gray-400 mb-1">Room Preferences</p>
+            <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2 flex-wrap">
+              <span
+                v-for="pref in preferenceList"
+                :key="pref"
+                class="px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full"
+              >
+                {{ pref }}
+              </span>
+            </div>
+          </div>
           <div style="grid-column:span 2;">
             <p class="text-xs text-gray-400 mb-1">Total Charges</p>
             <div class="px-3 py-2.5 text-xs font-bold text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ formatCurrency(checkIn.total_charges) }}</div>
@@ -378,6 +390,16 @@ const isOverdue = computed(() => {
   if (!checkIn.value?.expected_check_out_datetime) return false
   return new Date(checkIn.value.expected_check_out_datetime) < new Date()
 })
+const preferenceList = computed(() =>
+  String(
+    checkIn.value?.room_preferences
+      || (checkIn.value?.housekeeping_notes || '').match(/Room Preferences:\s*([^\n]+)/i)?.[1]
+      || ''
+  )
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+)
 
 function formatDateTime(dt) {
   if (!dt) return '—'

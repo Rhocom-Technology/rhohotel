@@ -240,16 +240,25 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
     if not customer:
         customer = frappe.db.get_single_value("POS Settings", "customer") or "Guest"
 
-    # Resolve POS profile (use first available if not specified)
+    # Resolve POS profile from current user to match opening-entry/profile validations
     if not pos_profile:
-        profiles = frappe.get_all("POS Profile", filters={"disabled": 0}, limit=1)
-        pos_profile = profiles[0].name if profiles else None
+        pos_profile = _get_user_pos_profile()
+    if not pos_profile:
+        frappe.throw(_("No POS Profile is mapped to your user."))
+
+    # Ensure mode of payment is valid for the selected POS profile.
+    profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+    allowed_modes = [row.mode_of_payment for row in (profile_doc.get("payments") or []) if row.mode_of_payment]
+    if not allowed_modes:
+        frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
+    if mode_of_payment not in allowed_modes:
+        mode_of_payment = allowed_modes[0]
 
     pi = frappe.new_doc("POS Invoice")
     pi.customer = customer
     pi.company = company
     pi.posting_date = nowdate()
-    pi.pos_profile = pos_profile or ""
+    pi.pos_profile = pos_profile
     if kitchen_note:
         pi.remarks = kitchen_note
 

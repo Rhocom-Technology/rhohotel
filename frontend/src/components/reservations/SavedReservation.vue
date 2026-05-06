@@ -77,7 +77,7 @@
       <div class="bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-bold text-gray-900">Reserved Rooms</h3>
-          <button v-if="rooms.length > 1" @click="bulkCheckIn" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Bulk Check In</button>
+          <button v-if="canBulkCheckIn" @click="bulkCheckIn" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Bulk Check In</button>
         </div>
         <div class="overflow-x-auto border border-gray-100 rounded-lg">
           <table class="w-full">
@@ -113,7 +113,11 @@
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.rate_per_night) }}</td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.room_total) }}</td>
                 <td class="px-3 py-2 text-xs text-gray-700">
-                  <button @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
+                  <span
+                    v-if="isRoomCheckedIn(row)"
+                    class="inline-flex px-2 py-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded"
+                  >Checked In</span>
+                  <button v-else @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
                 </td>
               </tr>
             </tbody>
@@ -219,6 +223,8 @@ function handleModalDone() {
 }
 
 const rooms = computed(() => props.reservation?.rooms || [])
+const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn(row)))
+const canBulkCheckIn = computed(() => pendingRooms.value.length > 1)
 
 const statusClass = computed(() => {
   const status = String(props.reservation?.status || '').toLowerCase()
@@ -254,7 +260,13 @@ function onGuestSelected(row, guest) {
   emit('update-occupant', { row, guest })
 }
 
+function isRoomCheckedIn(row) {
+  if (!row) return false
+  return Boolean(row.check_in_reference)
+}
+
 function checkIn(row) {
+  if (isRoomCheckedIn(row)) return
   const roomLabel = row?.room_number || row?.name || 'selected room'
   checkInToastMessage.value = `Opening check-in for ${roomLabel}...`
   showCheckInToast.value = true
@@ -269,7 +281,8 @@ function checkIn(row) {
 }
 
 function bulkCheckIn() {
-  emit('bulk-check-in', rooms.value)
+  if (!canBulkCheckIn.value) return
+  emit('bulk-check-in', pendingRooms.value)
 }
 
 function applyDiscount(discount) {

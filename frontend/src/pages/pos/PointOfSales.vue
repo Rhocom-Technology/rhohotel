@@ -745,7 +745,7 @@ function onChargeNow() {
     return
   }
 
-  const mopMap = { Cash: 'Cash', POS: 'Bank Transfer' }
+  const mopMap = { Cash: 'Cash', POS: 'POS' }
   charging.value = true
   captureSubmissionSnapshot()
   chargeResource.submit({
@@ -758,6 +758,7 @@ function onChargeNow() {
     customer: selectedBillTo.value?.name || null,
     service_charge: serviceCharge.value,
     kitchen_note: kitchenNote.value || null,
+    pos_profile: terminalInfo.value?.pos_profile || null,
   })
 }
 

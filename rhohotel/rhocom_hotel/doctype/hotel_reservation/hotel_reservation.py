@@ -300,7 +300,13 @@ class HotelReservation(Document):
 
 
 @frappe.whitelist()
-def adjust_reservation(reservation_name, new_checkout, new_check_in):
+def adjust_reservation(
+    reservation_name,
+    new_checkout,
+    new_check_in,
+    new_discount_type=None,
+    new_discount=None,
+):
     """
     Adjust the arrival and/or departure dates of a submitted Hotel Reservation.
     Recalculates nights and totals; saves the document in-place.
@@ -330,11 +336,15 @@ def adjust_reservation(reservation_name, new_checkout, new_check_in):
     doc.to_date = new_to
     doc.number_of_nights = new_nights
 
-    # Recalculate per-room totals using the new night count
-    for row in doc.rooms:
-        rate = flt(row.rate_per_night)
-        row.room_total = round(rate * new_nights, 2)
 
+    # Allow discount to be changed during stay adjustment if provided
+    if new_discount_type is not None:
+        doc.discount_type = new_discount_type
+    if new_discount is not None:
+        doc.discount = new_discount
+
+    # Recalculate per-room totals and reservation totals using the new night count
+    doc._recalculate_room_totals()
     doc._recalculate_totals()
     doc.save(ignore_permissions=True)
     frappe.db.commit()
@@ -344,6 +354,10 @@ def adjust_reservation(reservation_name, new_checkout, new_check_in):
         "new_from_date": str(new_from),
         "new_to_date": str(new_to),
         "new_nights": new_nights,
+        "discount_type": doc.discount_type,
+        "discount": flt(doc.discount),
+        "discount_amount": flt(doc.discount_amount),
+        "total_amount": flt(doc.total_amount),
     }
 
 

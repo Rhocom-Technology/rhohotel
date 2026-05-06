@@ -222,12 +222,6 @@
                 <option value="None">None</option>
                 <option value="Percentage">Percentage</option>
                 <option value="Fixed Amount">Fixed Amount</option>
-
-                  <!-- Reservation Payment / Invoice Notice -->
-                  <div v-if="reservationNotices.length" class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 space-y-1">
-                    <p class="text-xs font-bold text-amber-700 mb-1">Reservation Payment Notice</p>
-                    <p v-for="(n, i) in reservationNotices" :key="i" class="text-xs text-amber-700">{{ n }}</p>
-                  </div>
               </select>
             </div>
             <div>
@@ -237,6 +231,12 @@
                 placeholder="0"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50" />
             </div>
+          </div>
+
+          <!-- Reservation Payment / Invoice Notice -->
+          <div v-if="reservationNotices.length" class="mb-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 space-y-1">
+            <p class="text-xs font-bold text-amber-700 mb-1">Reservation Payment Notice</p>
+            <p v-for="(n, i) in reservationNotices" :key="i" class="text-xs text-amber-700">{{ n }}</p>
           </div>
 
           <div class="mt-3">
@@ -445,6 +445,7 @@ async function selectReservation(r) {
         form.guest = matchedGuest.name
         guestQuery.value = matchedGuest.hotel_guest_name
         selectedGuest.value = matchedGuest
+        applyPreferenceTagsFromGuest(matchedGuest)
         if (!form.contact_number && matchedGuest.phone_number) {
           form.contact_number = matchedGuest.phone_number
         }
@@ -509,6 +510,7 @@ function selectGuest(g) {
   form.guest = g.name
   guestQuery.value = g.hotel_guest_name
   selectedGuest.value = g
+  applyPreferenceTagsFromGuest(g)
   if (!form.contact_number && g.phone_number) form.contact_number = g.phone_number
   showGuestDropdown.value = false
   guestResults.value = []
@@ -635,6 +637,27 @@ const preferenceTags = reactive([
   { label: 'Extra Towels', active: false, activeClass: 'bg-gray-100 text-gray-600' },
 ])
 
+const selectedPreferenceLabels = computed(() =>
+  preferenceTags.filter(tag => tag.active).map(tag => tag.label)
+)
+
+const roomPreferencesPayload = computed(() => selectedPreferenceLabels.value.join(', '))
+
+function applyPreferenceString(raw) {
+  const normalized = String(raw || '')
+    .split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean)
+
+  preferenceTags.forEach((tag) => {
+    tag.active = normalized.includes(tag.label.toLowerCase())
+  })
+}
+
+function applyPreferenceTagsFromGuest(guest) {
+  applyPreferenceString(guest?.preference || '')
+}
+
 const expectedCheckoutDisplay = computed(() => {
   if (!form.check_in_datetime || !form.number_of_nights) return '—'
   const dt = parseLocalDateTime(form.check_in_datetime)
@@ -727,6 +750,7 @@ async function submitCheckIn() {
       late_checkout: form.late_checkout ? 1 : 0,
       housekeeping_notes: form.housekeeping_notes || '',
       keycard_assigned: form.keycard_assigned || '',
+      room_preferences: roomPreferencesPayload.value,
       id_type: form.id_type || '',
       contact_number: form.contact_number || '',
     }
@@ -814,6 +838,7 @@ onMounted(() => {
           if (pick) {
             form.guest = pick.name
             selectedGuest.value = pick
+            applyPreferenceTagsFromGuest(pick)
             if (!form.contact_number && pick.phone_number) {
               form.contact_number = pick.phone_number
             }

@@ -113,6 +113,21 @@
           <p class="text-xs text-gray-400 mt-1">This note will appear in the reservation activity timeline and audit history.</p>
         </div>
 
+
+        <div class="mb-4">
+          <p class="text-xs text-gray-500 mb-1.5">Discount Type</p>
+          <select v-model="discountType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+            <option value="Percentage">Percentage (%)</option>
+            <option value="Fixed Amount">Fixed Amount</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <p class="text-xs text-gray-500 mb-1.5">Discount Value</p>
+          <input v-model.number="discountValue" type="number" min="0" step="0.01"
+            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            :placeholder="discountType === 'Percentage' ? 'e.g. 10 for 10%' : 'e.g. 5000'" />
+        </div>
+
         <p class="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">
           Updating the stay will recalculate reservation totals, occupancy, room availability, and activity history.
         </p>
@@ -134,15 +149,27 @@
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-gray-500">Additional Room Charges</span>
-              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(ratePerNight * additionalNights) }}</span>
+              <span class="text-xs font-semibold text-gray-900">{{ formatSignedCurrency(subtotalImpact) }}</span>
+            </div>
+            <div v-if="discountImpact !== 0" class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">Discount Impact</span>
+              <span class="text-xs font-semibold text-gray-900">{{ formatSignedCurrency(-discountImpact) }}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs text-gray-500">Taxes & Fees</span>
               <span class="text-xs font-semibold text-gray-900">₦0</span>
             </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">Current Net Total</span>
+              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(currentNetTotal) }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">New Net Total</span>
+              <span class="text-xs font-semibold text-gray-900">{{ formatCurrency(newNetTotal) }}</span>
+            </div>
             <div class="flex items-center justify-between pt-2 border-t border-gray-100">
               <span class="text-xs font-bold text-gray-900">New Balance Impact</span>
-              <span class="text-xs font-bold text-gray-900">{{ formatCurrency(ratePerNight * additionalNights) }}</span>
+              <span class="text-xs font-bold text-gray-900">{{ formatSignedCurrency(totalImpact) }}</span>
             </div>
           </div>
           <div class="mt-2">
@@ -190,6 +217,8 @@ const adjustmentType = ref('Extend Stay')
 const adjustmentReason = ref('Guest Request')
 const newCheckoutDate = ref(asISODate(props.reservation.to_date))
 const newCheckinDate = ref(asISODate(props.reservation.from_date))
+const discountType = ref(props.reservation.discount_type || 'Percentage')
+const discountValue = ref(Number(props.reservation.discount || 0))
 const adjustmentNotes = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -225,6 +254,31 @@ const additionalNights = computed(() => {
   return newNights.value - currentNights.value
 })
 
+const currentSubtotalAmount = computed(() => Number(props.reservation.subtotal || (ratePerNight.value * currentNights.value) || 0))
+const currentDiscountAmount = computed(() => Number(props.reservation.discount_amount || 0))
+const currentNetTotal = computed(() => Number(props.reservation.total_amount || (currentSubtotalAmount.value - currentDiscountAmount.value) || 0))
+
+const newSubtotalAmount = computed(() => {
+  if (newNights.value < 1) return 0
+  return Number(ratePerNight.value || 0) * newNights.value
+})
+
+const computedNewDiscountAmount = computed(() => {
+  // Calculate new discount based on type and value
+  if (discountType.value === 'Percentage') {
+    const pct = Math.min(Math.max(Number(discountValue.value) || 0, 0), 100)
+    return round2(newSubtotalAmount.value * pct / 100)
+  } else if (discountType.value === 'Fixed Amount') {
+    return Math.min(Number(discountValue.value) || 0, newSubtotalAmount.value)
+  }
+  return 0
+})
+
+const newNetTotal = computed(() => round2(Math.max(0, Number(newSubtotalAmount.value || 0) - Number(computedNewDiscountAmount.value || 0))))
+const totalImpact = computed(() => round2(newNetTotal.value - currentNetTotal.value))
+const subtotalImpact = computed(() => round2(newSubtotalAmount.value - currentSubtotalAmount.value))
+const discountImpact = computed(() => round2(computedNewDiscountAmount.value - currentDiscountAmount.value))
+
 const hasDateChanges = computed(() => {
   return (
     newCheckinDate.value !== asISODate(props.reservation.from_date) ||
@@ -247,6 +301,8 @@ async function apply() {
       reservation_name: props.reservation.name,
       new_check_in: newCheckinDate.value,
       new_checkout: newCheckoutDate.value,
+      new_discount_type: discountType.value,
+      new_discount: discountValue.value,
     }
     await callMethodForm(
       'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.adjust_reservation',
@@ -268,6 +324,13 @@ function formatCurrency(amount) {
   return `₦${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 }
 
+function formatSignedCurrency(amount) {
+  const value = Number(amount || 0)
+  if (value === 0) return '₦0.00'
+  const sign = value > 0 ? '+' : '-'
+  return `${sign}${formatCurrency(Math.abs(value))}`
+}
+
 function asISODate(value) {
   if (!value) return ''
   if (typeof value === 'string') return value.slice(0, 10)
@@ -284,5 +347,9 @@ function formatISODate(value) {
   const month = String(value.getMonth() + 1).padStart(2, '0')
   const day = String(value.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function round2(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
 }
 </script>

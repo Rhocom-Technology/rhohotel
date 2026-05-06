@@ -74,7 +74,7 @@ def search_guests(query=""):
 
     q = f"%{query.strip()}%"
     guests = frappe.db.sql("""
-        SELECT name, hotel_guest_name, phone_number, email, guest_type
+        SELECT name, hotel_guest_name, phone_number, email, guest_type, preference
         FROM `tabHotel Guest`
         WHERE hotel_guest_name LIKE %s
             OR phone_number LIKE %s
@@ -334,6 +334,7 @@ def create_checkin(
     late_checkout=0,
     housekeeping_notes="",
     keycard_assigned="",
+    room_preferences="",
     id_type="",
     contact_number="",
 ):
@@ -362,6 +363,14 @@ def create_checkin(
     doc.late_checkout = cint(late_checkout)
     doc.housekeeping_notes = housekeeping_notes or ""
     doc.keycard_assigned = keycard_assigned or ""
+    if frappe.get_meta("Hotel Room Check In").has_field("room_preferences"):
+        doc.room_preferences = room_preferences or ""
+    elif room_preferences:
+        pref_note = f"Room Preferences: {room_preferences}"
+        doc.housekeeping_notes = (
+            f"{doc.housekeeping_notes}\n{pref_note}".strip()
+            if doc.housekeeping_notes else pref_note
+        )
     doc.id_type = id_type or ""
     doc.contact_number = contact_number or ""
     # Skip room availability overlap check for direct front desk check-in
