@@ -88,6 +88,53 @@ def search_guests(query=""):
 
 
 @frappe.whitelist()
+def search_reservations(query=""):
+    """Search Hotel Room Reservation by name, guest name, or phone for autocomplete.
+
+    Returns active reservations not yet checked in. When query is empty,
+    returns the next 10 reservations by from_date.
+    """
+    # Status labels vary by deployment; exclude only terminal states.
+    base_conditions = """
+        IFNULL(r.status, '') NOT IN ('Cancelled', 'Completed', 'Checked-In', 'Checked In')
+        AND NOT EXISTS (
+            SELECT 1 FROM `tabHotel Room Check In` ci
+            WHERE ci.reservation = r.name AND ci.docstatus != 2
+        )
+    """
+
+    if query and len(query.strip()) >= 1:
+        q = f"%{query.strip()}%"
+        rows = frappe.db.sql(
+            f"""
+            SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
+                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate
+            FROM `tabHotel Room Reservation` r
+            WHERE {base_conditions}
+              AND (r.name LIKE %s OR r.guest_name LIKE %s OR r.guest_phone LIKE %s)
+            ORDER BY r.from_date ASC
+            LIMIT 10
+            """,
+            (q, q, q),
+            as_dict=1,
+        )
+    else:
+        rows = frappe.db.sql(
+            f"""
+            SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
+                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate
+            FROM `tabHotel Room Reservation` r
+            WHERE {base_conditions}
+            ORDER BY r.from_date ASC
+            LIMIT 10
+            """,
+            as_dict=1,
+        )
+
+    return rows
+
+
+@frappe.whitelist()
 def get_room_types():
     """List available Hotel Room Types."""
     types = frappe.get_all("Hotel Room Type", fields=["name"], order_by="name")

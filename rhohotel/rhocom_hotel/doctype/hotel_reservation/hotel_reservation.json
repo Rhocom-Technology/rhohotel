@@ -142,7 +142,7 @@
     },
     {
       "fieldname": "primary_guest_phone",
-      "fieldtype": "Phone",
+      "fieldtype": "Data",
       "label": "Primary Guest Phone",
       "depends_on": "eval:doc.guest_profile_kind == 'Primary Guest'",
       "description": "Contact phone number for the primary guest."

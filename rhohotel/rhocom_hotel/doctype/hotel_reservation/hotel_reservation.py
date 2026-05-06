@@ -140,6 +140,7 @@ class HotelReservation(Document):
         self._validate_rooms_present()
         self._validate_corporate_guest()
         self._validate_room_availability()
+        self._recalculate_room_totals()
         self._recalculate_totals()
 
     def on_submit(self):
@@ -238,6 +239,20 @@ class HotelReservation(Document):
     # ------------------------------------------------------------------
     # Pricing
     # ------------------------------------------------------------------
+
+    def _recalculate_room_totals(self):
+        """
+        Compute room_total and sync number_of_nights for each child row.
+
+        rate_per_night * number_of_nights - row-level discount = room_total.
+        This must run before _recalculate_totals() which sums room_total values.
+        """
+        nights = date_diff(getdate(self.to_date), getdate(self.from_date)) if self.from_date and self.to_date else 0
+        for row in self.rooms:
+            row.number_of_nights = nights
+            rate = float(row.rate_per_night or 0)
+            row_discount = float(row.discount or 0)
+            row.room_total = round(rate * nights - row_discount, 2)
 
     def _recalculate_totals(self):
         """

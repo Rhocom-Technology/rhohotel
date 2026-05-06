@@ -76,7 +76,16 @@ async function submitReservation() {
   actionLoading.value = true
   errorMessage.value = ''
   try {
-    await callMethod('frappe.client.submit', { doc: reservation.value })
+    const docToSubmit = {
+      ...reservation.value,
+      reservation_status: reservation.value?.reservation_status || reservation.value?.status || 'Confirmed',
+    }
+
+    if (docToSubmit.reservation_status === 'Draft' || docToSubmit.reservation_status === 'Hold') {
+      docToSubmit.reservation_status = 'Confirmed'
+    }
+
+    await callMethod('frappe.client.submit', { doc: docToSubmit })
     await loadReservation()
   } catch (error) {
     errorMessage.value = String(error?.message || 'Could not submit reservation.')

@@ -155,6 +155,7 @@
 import { computed, ref, watch } from 'vue'
 import { createResource } from 'frappe-ui'
 import { useRouter } from 'vue-router'
+import { callMethod } from '@/lib/api'
 
 const props = defineProps({ type: { type: String, required: true } })
 const emit = defineEmits(['close', 'saved'])
@@ -272,25 +273,9 @@ watch(
   },
 )
 
-async function callApi(method, args = {}) {
-  const response = await fetch('/api/method/' + method, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(args),
-  })
-
-  const payload = await response.json()
-  if (!response.ok || payload.exc) {
-    const msg = payload?._server_messages || payload?.message || 'Request failed'
-    throw new Error(typeof msg === 'string' ? msg : 'Request failed')
-  }
-  return payload.message
-}
-
 async function loadAvailableRooms() {
   try {
-    const rows = await callApi('rhohotel.api.get_available_rooms', {
+    const rows = await callMethod('rhohotel.api.get_available_rooms', {
       from_date: form.value.from_date,
       to_date: form.value.to_date,
       room_type: selectedRoomType.value || undefined,
@@ -342,8 +327,10 @@ async function saveReservation(submitAfterSave) {
       : individualGuests.value.find((g) => g.name === form.value.individual_guest)
 
     const doc = {
-      doctype: 'Hotel Front Desk Reservation',
+      doctype: 'Hotel Reservation',
+      source_channel: 'Front Desk',
       reservation_type: reservationType.value,
+      guest_profile_kind: reservationType.value === 'Corporate' ? 'Corporate Account' : 'Primary Guest',
       from_date: form.value.from_date,
       to_date: form.value.to_date,
       primary_guest_name: form.value.primary_guest_name,
@@ -355,17 +342,28 @@ async function saveReservation(submitAfterSave) {
       discount: Number(form.value.discount || 0),
       rooms: selectedRooms.value.map((room) => ({
         room_number: room.name,
-        guest_name: form.value.primary_guest_name,
-        guest_email: form.value.primary_guest_email,
-        guest_phone: form.value.primary_guest_phone,
+        rate_per_night: Number(room.rate_per_night || 0),
+        number_of_nights: nightsCount.value,
+        room_total: Number(room.rate_per_night || 0) * nightsCount.value,
+        occupant_name: form.value.primary_guest_name,
+        occupant_email: form.value.primary_guest_email,
+        occupant_phone: form.value.primary_guest_phone,
       })),
     }
 
-    const inserted = await callApi('frappe.client.insert', { doc })
+    const inserted = await callMethod('frappe.client.insert', { doc })
     let target = inserted
 
     if (submitAfterSave) {
-      target = await callApi('frappe.client.submit', { doc: inserted })
+      const docToSubmit = {
+        ...inserted,
+        reservation_status: inserted?.reservation_status || 'Confirmed',
+      }
+      if (docToSubmit.reservation_status === 'Draft' || docToSubmit.reservation_status === 'Hold') {
+        docToSubmit.reservation_status = 'Confirmed'
+      }
+
+      target = await callMethod('frappe.client.submit', { doc: docToSubmit })
       successMessage.value = 'Reservation submitted successfully.'
     } else {
       successMessage.value = 'Reservation saved as draft.'

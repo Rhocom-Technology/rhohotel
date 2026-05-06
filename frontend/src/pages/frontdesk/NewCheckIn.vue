@@ -37,10 +37,47 @@
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
           <div class="flex items-center gap-4">
             <p class="text-xs font-medium text-gray-500 flex-shrink-0">Reservation (optional)</p>
-            <input type="text" v-model="form.reservation"
-              placeholder="Leave blank for walk-in"
-              class="flex-1 px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div class="relative flex-1">
+              <input
+                type="text"
+                v-model="reservationQuery"
+                @input="onReservationInput"
+                @focus="onReservationFocus"
+                @blur="onReservationBlur"
+                placeholder="Search by ID, guest name, or phone"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :class="form.reservation ? 'border-green-300 bg-green-50' : ''"
+              />
+              <div v-if="showReservationDropdown && reservationResults.length > 0"
+                class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto">
+                <button
+                  v-for="r in reservationResults"
+                  :key="r.name"
+                  @mousedown.prevent="selectReservation(r)"
+                  class="block w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+                  <span class="font-semibold text-gray-900">{{ r.name }}</span>
+                  <span class="text-gray-500 ml-2">{{ r.guest_name }}</span>
+                  <span v-if="r.room_number" class="text-gray-400 ml-2">· Room {{ r.room_number }}</span>
+                  <span class="ml-2 text-gray-400">· {{ r.from_date }}</span>
+                </button>
+              </div>
+              <div v-if="reservationSearching"
+                class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 px-4 py-3">
+                <p class="text-xs text-gray-400">Searching...</p>
+              </div>
+              <div v-if="!reservationSearching && showReservationDropdown && reservationResults.length === 0"
+                class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 px-4 py-3">
+                <p class="text-xs text-gray-400">No pending reservations found.</p>
+              </div>
+            </div>
+            <button v-if="form.reservation" @click="clearReservation"
+              class="px-3 py-2.5 text-xs text-gray-500 hover:text-red-500 flex-shrink-0 transition-colors">
+              ✕
+            </button>
           </div>
+          <p v-if="form.reservation" class="mt-1.5 text-xs text-green-600 font-medium">
+            ✓ {{ form.reservation }} linked
+          </p>
         </div>
 
         <!-- Guest Details -->
@@ -325,6 +362,109 @@ import { callMethodForm } from '@/lib/api'
 
 const router = useRouter()
 const route = useRoute()
+
+// ---- Reservation search ----
+const reservationQuery = ref('')
+const reservationResults = ref([])
+const reservationSearching = ref(false)
+const showReservationDropdown = ref(false)
+let reservationDebounce = null
+
+async function fetchReservations(query = '') {
+  reservationSearching.value = true
+  try {
+    const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.search_reservations', { query })
+    reservationResults.value = Array.isArray(rows) ? rows : []
+  } catch {
+    reservationResults.value = []
+  } finally {
+    reservationSearching.value = false
+  }
+}
+
+function onReservationInput() {
+  form.reservation = ''
+  clearTimeout(reservationDebounce)
+  showReservationDropdown.value = true
+  reservationDebounce = setTimeout(() => fetchReservations(reservationQuery.value), 300)
+}
+
+function onReservationFocus() {
+  showReservationDropdown.value = true
+  if (reservationResults.value.length === 0 && !reservationSearching.value) {
+    fetchReservations(reservationQuery.value)
+  }
+}
+
+function onReservationBlur() {
+  setTimeout(() => { showReservationDropdown.value = false }, 150)
+}
+
+async function selectReservation(r) {
+  form.reservation = r.name
+  reservationQuery.value = r.name
+  showReservationDropdown.value = false
+
+  if (!form.reservation_source) {
+    form.reservation_source = 'Reservation'
+  }
+
+  if (r.guest_phone && !form.contact_number) {
+    form.contact_number = r.guest_phone
+  }
+
+  if (r.guest_name) {
+    guestQuery.value = r.guest_name
+    selectedGuest.value = {
+      hotel_guest_name: r.guest_name,
+      phone_number: r.guest_phone || '',
+      email: r.guest_email || '',
+    }
+  }
+
+  const lookup = (r.guest_name || r.guest_phone || r.guest_email || '').trim()
+  if (lookup.length >= 2) {
+    try {
+      const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.search_guests', {
+        query: lookup,
+      })
+      const candidates = Array.isArray(rows) ? rows : []
+      const exact = candidates.find(g =>
+        (r.guest_name && (g.hotel_guest_name || '').toLowerCase() === r.guest_name.toLowerCase())
+        || (r.guest_phone && g.phone_number === r.guest_phone)
+        || (r.guest_email && (g.email || '').toLowerCase() === r.guest_email.toLowerCase())
+      )
+      const matchedGuest = exact || candidates[0]
+      if (matchedGuest) {
+        form.guest = matchedGuest.name
+        guestQuery.value = matchedGuest.hotel_guest_name
+        selectedGuest.value = matchedGuest
+        if (!form.contact_number && matchedGuest.phone_number) {
+          form.contact_number = matchedGuest.phone_number
+        }
+      }
+    } catch {
+      // Keep reservation guest details if lookup fails.
+    }
+  }
+
+  if (r.room_number && !form.room_number) {
+    form.room_number = r.room_number
+    onRoomSelect()
+  }
+  if (r.number_of_nights && !form.number_of_nights) {
+    form.number_of_nights = r.number_of_nights
+  }
+  if (r.rate && !form.rate_amount) {
+    form.rate_amount = r.rate
+  }
+}
+
+function clearReservation() {
+  form.reservation = ''
+  reservationQuery.value = ''
+  reservationResults.value = []
+}
 
 // ---- Guest search ----
 const guestQuery = ref('')
