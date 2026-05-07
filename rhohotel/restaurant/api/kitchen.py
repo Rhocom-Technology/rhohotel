@@ -157,6 +157,17 @@ def get_sent_to_kitchen_items(pos_invoice):
 @frappe.whitelist()
 def get_kitchen_tickets(search=None, station=None, source=None, status=None):
     """Return active Kitchen Order Tickets for the live board."""
+    # Auto-transition stale tickets to Delayed (Pending > 25 min, In Progress > 35 min)
+    frappe.db.sql("""
+        UPDATE `tabKitchen Order Ticket`
+        SET status = 'Delayed'
+        WHERE docstatus = 0
+          AND status IN ('Pending', 'In Progress')
+          AND TIMESTAMPDIFF(MINUTE, sent_at, NOW()) >
+              CASE WHEN status = 'Pending' THEN 25 ELSE 35 END
+    """)
+    frappe.db.commit()
+
     conditions = ["kt.docstatus = 0", "kt.status != 'Served'"]
     args = []
 

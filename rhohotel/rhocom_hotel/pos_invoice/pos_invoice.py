@@ -455,6 +455,15 @@ class POSInvoice(SalesInvoice):
 				if is_negative_stock_allowed(item_code=d.item_code):
 					return
 
+				# Skip items with no warehouse set (e.g. fee/service rows).
+				if not d.warehouse:
+					continue
+
+				# Skip items the Item master marks as non-stock
+				# (belt-and-suspenders in case set_missing_values fills in warehouse).
+				if not frappe.db.get_value("Item", d.item_code, "is_stock_item"):
+					continue
+
 				available_stock, is_stock_item = get_stock_availability(d.item_code, d.warehouse)
 
 				item_code, warehouse, _qty = (

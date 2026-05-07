@@ -146,7 +146,7 @@
                 </div>
                 <div class="flex gap-2">
                   <button class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">Settle Table</button>
-                  <button class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Resume Order</button>
+                  <button @click="$emit('resume', selectedTable); $emit('update:modelValue', false)" class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Resume Order</button>
                 </div>
               </div>
             </div>
@@ -161,7 +161,7 @@
 import { ref, computed, watch } from 'vue'
 
 defineProps({ modelValue: Boolean })
-defineEmits(['update:modelValue'])
+defineEmits(['update:modelValue', 'resume'])
 
 const tableSearch = ref('')
 const tableFilterArea = ref('')

@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 px-4 py-4 max-w-[1600px] mx-auto">
 
     <!-- Top bar info -->
     <div>
@@ -180,12 +180,14 @@
                 <td class="py-2 pr-1">
                   <input
                     type="checkbox"
-                    class="w-3.5 h-3.5 accent-blue-600"
+                    class="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
                     :checked="isKitchenSelected(item)"
-                    :disabled="!isKitchenEligible(item)"
                     @change="onKitchenSelectionChange(item, $event.target.checked)" />
                 </td>
-                <td class="py-2 pr-2"><span class="text-xs font-medium text-gray-900">{{ item.name }}</span></td>
+                <td class="py-2 pr-2">
+                  <span class="text-xs font-medium text-gray-900">{{ item.name }}</span>
+                  <span v-if="kitchenSentIds.has(item.id)" class="ml-1 text-orange-500 text-xs" title="Sent to kitchen">🔥</span>
+                </td>
                 <td class="py-2">
                   <div class="flex items-center gap-1">
                     <button @click="decrementCart(item)" class="qty-btn w-5 h-5 flex items-center justify-center text-gray-400 border border-gray-200 rounded text-xs font-bold">−</button>
@@ -201,9 +203,30 @@
         </div>
 
         <!-- Discount -->
-        <button class="w-full py-2 text-xs font-medium text-gray-400 border border-dashed border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300 transition-all mb-4">
-          + Add Discount
-        </button>
+        <div class="mb-4">
+          <button @click="showDiscountPanel = !showDiscountPanel"
+            class="w-full py-2 text-xs font-medium border border-dashed rounded-lg transition-all"
+            :class="discountAmount > 0 ? 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100' : 'text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300'">
+            {{ discountAmount > 0 ? `Discount applied: −₦${discountAmount.toLocaleString()}` : '+ Add Discount' }}
+          </button>
+          <div v-if="showDiscountPanel" class="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <div class="flex gap-1.5">
+              <button @click="discountType = 'flat'"
+                class="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all"
+                :class="discountType === 'flat' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'">Flat (₦)</button>
+              <button @click="discountType = 'percent'"
+                class="flex-1 py-1.5 text-xs font-medium rounded-lg border transition-all"
+                :class="discountType === 'percent' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'">Percent (%)</button>
+            </div>
+            <div class="flex gap-2 items-center">
+              <input v-model="discountInput" type="number" min="0"
+                :placeholder="discountType === 'flat' ? 'Amount (₦)' : 'Percent (%)'"
+                class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button @click="discountInput = ''; showDiscountPanel = false"
+                class="px-3 py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg border border-red-200 transition-colors">Clear</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Totals -->
         <div class="space-y-1.5 mb-4 border-t border-gray-100 pt-3">
@@ -211,13 +234,9 @@
             <span class="text-xs text-gray-400">Sub Total</span>
             <span class="text-xs font-medium text-gray-700">₦{{ subTotal.toLocaleString() }}</span>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-gray-400">Discount</span>
-            <span class="text-xs font-medium text-gray-700">₦0.00</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-gray-400">Service Charge</span>
-            <span class="text-xs font-medium text-gray-700">₦{{ serviceCharge.toLocaleString() }}</span>
+          <div v-if="discountAmount > 0" class="flex items-center justify-between">
+            <span class="text-xs text-green-600">Discount</span>
+            <span class="text-xs font-medium text-green-600">−₦{{ discountAmount.toLocaleString() }}</span>
           </div>
           <div class="flex items-center justify-between pt-2.5 mt-1 border-t border-gray-200">
             <span class="text-sm font-bold text-gray-900">Grand Total</span>
@@ -262,6 +281,15 @@
             </button>
           </div>
           <p class="text-[11px] text-gray-400 mt-1">Only items in configured kitchen item groups are sent.</p>
+          <!-- Send to Kitchen Now -->
+          <button @click="sendToKitchenNow"
+            :disabled="sendingKitchenNow || cart.length === 0"
+            class="btn-hover mt-2 w-full py-2 text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            :class="Object.keys(kitchenSentMap).length > 0
+              ? 'text-orange-700 bg-orange-50 border border-orange-300 hover:bg-orange-100'
+              : 'text-white bg-orange-500 hover:bg-orange-600'">
+            {{ sendingKitchenNow ? 'Sending to Kitchen…' : (Object.keys(kitchenSentMap).length > 0 ? '🔥 Send More to Kitchen' : `🔥 Send to Kitchen${Object.values(selectedKitchenItemMap).some(Boolean) ? ' (' + cart.filter(i => selectedKitchenItemMap[i.id]).length + ' selected)' : ' (All)'}`) }}
+          </button>
         </div>
 
         <!-- Note -->
@@ -306,13 +334,16 @@
 
     <!-- Modals -->
     <DraftOrdersModal :key="draftOrdersKey" v-model="showDraftOrders" @resume="onResumeDraft" />
-    <OpenTablesModal v-model="showOpenTables" />
+    <OpenTablesModal v-model="showOpenTables" @resume="onResumeTable" />
     <PostToRoomModal
       v-model="showPostToRoom"
       :grand-total="grandTotal"
       :cart-items="cart"
       :service-charge="serviceCharge"
       :kitchen-note="kitchenNote"
+      :cashier="terminalInfo.cashier"
+      :pos-profile="terminalInfo.pos_profile"
+      :bill-to="selectedBillTo?.name || billToSearch || ''"
       @room-selected="onRoomSelected"
       @confirmed="onPostConfirmed"
     />
@@ -686,8 +717,29 @@ function decrementCart(item) {
 }
 
 const subTotal = computed(() => cart.value.reduce((s, i) => s + i.price * i.qty, 0))
-const serviceCharge = computed(() => Math.round(subTotal.value * 0.07))
-const grandTotal = computed(() => subTotal.value + serviceCharge.value)
+const serviceCharge = computed(() => 0)
+const showDiscountPanel = ref(false)
+const discountType = ref('flat')
+const discountInput = ref('')
+const discountAmount = computed(() => {
+  const val = parseFloat(discountInput.value) || 0
+  if (!val) return 0
+  if (discountType.value === 'percent') return Math.min(Math.round(subTotal.value * val / 100), subTotal.value)
+  return Math.min(val, subTotal.value)
+})
+const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
+
+// ── Kitchen send tracking ─────────────────────────────────────────
+const kitchenSentMap = ref({}) // { item_code: qty_already_sent_to_kitchen }
+const sendingKitchenNow = ref(false)
+const kitchenSentIds = computed(() => {
+  const sent = new Set()
+  for (const item of cart.value) {
+    const code = item.item_code || item.id
+    if ((kitchenSentMap.value[code] || 0) >= item.qty) sent.add(item.id)
+  }
+  return sent
+})
 
 // ── Bill-To interaction ────────────────────────────────────────────
 function delayBlur(field) {
@@ -743,8 +795,10 @@ const chargeResource = createResource({
 
     chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
       lastInvoiceName.value = data.pos_invoice
+    playSuccessSound()
     clearCart()
     charging.value = false
+    menuResource.reload()
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
@@ -763,8 +817,10 @@ const holdSaleResource = createResource({
 
     chargeSuccess.value = `Sale held as draft ${data.pos_invoice}`
       lastInvoiceName.value = data.pos_invoice
+    playSuccessSound()
     holding.value = false
     clearCart()
+    menuResource.reload()
     showDraftOrders.value = true
     draftOrdersKey.value += 1
     triggerKitchenSend(data.pos_invoice, submitted, context)
@@ -792,6 +848,34 @@ const sendKitchenResource = createResource({
   },
 })
 
+// Pre-billing kitchen send (explicit "Send to Kitchen" button)
+const sendKitchenNowResource = createResource({
+  url: 'rhohotel.restaurant.api.kitchen.send_to_kitchen',
+  onSuccess(data) {
+    sendingKitchenNow.value = false
+    if (data?.skipped) {
+      chargeSuccess.value = 'All kitchen items already sent for this order'
+      setTimeout(() => { chargeSuccess.value = '' }, 3000)
+      return
+    }
+    // Mark items as sent locally so billing doesn't double-send them
+    const sentCodes = new Set(data.item_codes || [])
+    const updated = { ...kitchenSentMap.value }
+    for (const item of cart.value) {
+      const code = item.item_code || item.id
+      if (sentCodes.has(code)) updated[code] = item.qty
+    }
+    kitchenSentMap.value = updated
+    chargeSuccess.value = `Sent ${data.item_count} item(s) to kitchen — Ticket ${data.ticket}`
+    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    sendingKitchenNow.value = false
+    chargeError.value = err?.message || 'Failed to send to kitchen'
+    setTimeout(() => { chargeError.value = '' }, 5000)
+  },
+})
+
 function getKitchenSource() {
   if (settlementMethod.value === 'Post to Room' || selectedBillTo.value?.room) {
     return 'Room Service'
@@ -803,13 +887,19 @@ function getKitchenItemsFrom(orderItems, context) {
   const groups = kitchenItemGroups.value
   if (!groups.size) return []
 
+  // Subtract quantities already sent via the "Send to Kitchen" button
   let filtered = orderItems
     .filter(i => groups.has(i.category))
-    .map(i => ({
-      item_code: i.item_code || i.id,
-      item_name: i.name,
-      qty: i.qty,
-    }))
+    .map(i => {
+      const code = i.item_code || i.id
+      const alreadySent = kitchenSentMap.value[code] || 0
+      return {
+        item_code: code,
+        item_name: i.name,
+        qty: Math.max(0, i.qty - alreadySent),
+      }
+    })
+    .filter(i => i.qty > 0)
 
   if (context?.sendScope === 'selected') {
     const selectedCodes = new Set(context?.selectedItemCodes || [])
@@ -830,6 +920,42 @@ function triggerKitchenSend(posInvoice, submittedItems, context) {
     source: context.source || 'Restaurant Dining',
     kitchen_note: context.kitchenNote || null,
     items: JSON.stringify(kitchenItems),
+  })
+}
+
+function sendToKitchenNow() {
+  if (cart.value.length === 0 || sendingKitchenNow.value) return
+
+  // Only send checked items; if none checked, send all (fallback)
+  const checkedItems = cart.value.filter(i => selectedKitchenItemMap.value[i.id])
+  const sourceItems = checkedItems.length > 0 ? checkedItems : cart.value
+
+  // Further filter by kitchen item groups if configured
+  const groups = kitchenItemGroups.value
+  const eligibleItems = groups.size
+    ? sourceItems.filter(i => groups.has(i.category))
+    : sourceItems
+
+  const toSend = eligibleItems
+    .map(i => {
+      const code = i.item_code || i.id
+      const alreadySent = kitchenSentMap.value[code] || 0
+      return { item_code: code, item_name: i.name, qty: Math.max(0, i.qty - alreadySent) }
+    })
+    .filter(i => i.qty > 0)
+
+  if (toSend.length === 0) {
+    chargeSuccess.value = 'All selected items already sent to kitchen'
+    setTimeout(() => { chargeSuccess.value = '' }, 3000)
+    return
+  }
+  sendingKitchenNow.value = true
+  sendKitchenNowResource.submit({
+    pos_invoice: null,
+    table_or_room: selectedBillTo.value?.room || roomNumber.value || '',
+    source: getKitchenSource(),
+    kitchen_note: kitchenNote.value || null,
+    items: JSON.stringify(toSend),
   })
 }
 
@@ -892,12 +1018,32 @@ function isKitchenEligible(item) {
     setTimeout(() => { chargeSuccess.value = '' }, 3000)
   }
 
+function playSuccessSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const notes = [523.25, 659.25, 783.99] // C5, E5, G5 — ascending major arpeggio
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const t = ctx.currentTime + i * 0.13
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.28, t + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38)
+      osc.start(t)
+      osc.stop(t + 0.38)
+    })
+  } catch (_) {}
+}
+
 function isKitchenSelected(item) {
   return !!selectedKitchenItemMap.value[item.id]
 }
 
 function onKitchenSelectionChange(item, checked) {
-  if (!isKitchenEligible(item)) return
   selectedKitchenItemMap.value = {
     ...selectedKitchenItemMap.value,
     [item.id]: !!checked,
@@ -907,10 +1053,13 @@ function onKitchenSelectionChange(item, checked) {
 function clearCart() {
   cart.value = []
   selectedKitchenItemMap.value = {}
+  kitchenSentMap.value = {}
   selectedBillTo.value = null
   roomNumber.value = ''
   kitchenNote.value = ''
   billToSearch.value = ''
+  discountInput.value = ''
+  showDiscountPanel.value = false
 }
 
 function onHoldSale() {
@@ -935,6 +1084,7 @@ function onHoldSale() {
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
     customer: selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
+    discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
   })
@@ -984,6 +1134,7 @@ function onChargeNow() {
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
     customer: selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
+    discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
   })
@@ -996,13 +1147,36 @@ function onRoomSelected(room) {
   }
 }
 
-function onPostConfirmed() {
+function onPostConfirmed(data) {
   const submitted = [...lastSubmittedItems.value]
   const context = { ...lastSubmittedContext.value }
+  lastInvoiceName.value = data?.pos_invoice || data?.sales_invoice || ''
   chargeSuccess.value = 'Bill posted to room folio successfully'
+  playSuccessSound()
   clearCart()
-  triggerKitchenSend(null, submitted, context)
+  menuResource.reload()
+  triggerKitchenSend(data?.pos_invoice || null, submitted, context)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
+}
+
+function onResumeTable(table) {
+  if (!table || !table.items || table.items.length === 0) return
+  cart.value = table.items.map(i => ({
+    id: i.name,
+    item_code: i.name,
+    name: i.name,
+    category: '',
+    price: i.qty > 0 ? Math.round(i.amount / i.qty) : 0,
+    stock: 999,
+    isStockItem: false,
+    image: null,
+    qty: i.qty,
+  }))
+  selectedKitchenItemMap.value = {}
+  kitchenNote.value = ''
+  showOpenTables.value = false
+  chargeSuccess.value = `Table ${table.name} loaded — ₦${table.bill.toLocaleString()}`
+  setTimeout(() => { chargeSuccess.value = '' }, 3000)
 }
 
 watch(settlementMethod, (val) => {

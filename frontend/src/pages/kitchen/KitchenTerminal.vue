@@ -229,11 +229,38 @@ const filterStation = ref('')
 const filterSource = ref('')
 const showDelayedOnly = ref(false)
 const updating = ref(null)  // ticket name being updated
+let lastTicketCount = 0
+
+function playNewTicketSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    // Short double-beep: urgent but not annoying
+    [[880, 0], [1046.5, 0.18]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'square'
+      osc.frequency.value = freq
+      const t = ctx.currentTime + delay
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.15, t + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14)
+      osc.start(t)
+      osc.stop(t + 0.14)
+    })
+  } catch (_) {}
+}
 
 // ── API ────────────────────────────────────────────────────────────────────
 const ticketsResource = createResource({
   url: 'rhohotel.restaurant.api.kitchen.get_kitchen_tickets',
   auto: true,
+  onSuccess(data) {
+    const count = (data || []).filter(t => t.status === 'Pending').length
+    if (count > lastTicketCount && lastTicketCount >= 0) playNewTicketSound()
+    lastTicketCount = count
+  },
 })
 
 const statsResource = createResource({

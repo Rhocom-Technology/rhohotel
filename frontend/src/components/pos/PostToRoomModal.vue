@@ -22,9 +22,9 @@
           <div class="bg-gray-50 rounded-xl border border-gray-200 p-6">
             <h4 class="text-xs font-bold text-gray-700 mb-4">POS Bill Snapshot</h4>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;">
-              <div><p class="text-xs text-gray-400 mb-1.5">Bill No.</p><p class="text-sm font-bold text-gray-900">POS-2026-00184</p></div>
-              <div><p class="text-xs text-gray-400 mb-1.5">Service Point</p><p class="text-sm font-bold text-gray-900">Table 03</p></div>
-              <div><p class="text-xs text-gray-400 mb-1.5">Cashier</p><p class="text-sm font-bold text-gray-900">Adaeze</p></div>
+              <div><p class="text-xs text-gray-400 mb-1.5">Bill No.</p><p class="text-sm font-bold text-gray-900">Pending</p></div>
+              <div><p class="text-xs text-gray-400 mb-1.5">Service Point</p><p class="text-sm font-bold text-gray-900">{{ billTo || posProfile || 'POS Terminal' }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-1.5">Cashier</p><p class="text-sm font-bold text-gray-900">{{ cashier || '—' }}</p></div>
               <div><p class="text-xs text-gray-400 mb-1.5">Bill Total</p><p class="text-sm font-bold text-blue-600">₦{{ grandTotal.toLocaleString() }}</p></div>
             </div>
           </div>
@@ -108,8 +108,8 @@
               </div>
               <div class="mx-6 mb-5 bg-white rounded-xl border border-gray-200 p-4">
                 <p class="text-xs font-bold text-gray-900 mb-2">Posting Note</p>
-                <p class="text-xs text-gray-500 leading-relaxed">Restaurant dining bill from Table 03 will be posted to Room {{ selectedPostRoom.room }} folio.</p>
-                <p class="text-xs text-gray-400 mt-2">Cashier: Adaeze • Time: 10:46 AM</p>
+                <p class="text-xs text-gray-500 leading-relaxed">POS bill{{ billTo ? ' from ' + billTo : '' }} will be posted to Room {{ selectedPostRoom.room }} folio.</p>
+                <p class="text-xs text-gray-400 mt-2">{{ cashier ? 'Cashier: ' + cashier + ' • ' : '' }}Time: {{ now }}</p>
               </div>
               <div class="px-6 pb-6">
                 <p class="text-xs text-gray-500 mb-1.5">Narration / Remark</p>
@@ -143,9 +143,14 @@ const props = defineProps({
   cartItems: { type: Array, default: () => [] },
   serviceCharge: { type: Number, default: 0 },
   kitchenNote: { type: String, default: '' },
+  cashier: { type: String, default: '' },
+  posProfile: { type: String, default: '' },
+  billTo: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirmed', 'room-selected'])
+
+const now = computed(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
 
 const roomSearch = ref('')
 const roomPage = ref(1)
@@ -195,9 +200,9 @@ function selectRoom(r) {
 // ── API: Post to Room ───────────────────────────────────────────────
 const postResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.post_bill_to_room',
-  onSuccess() {
+  onSuccess(data) {
     posting.value = false
-    emit('confirmed')
+    emit('confirmed', data)
     emit('update:modelValue', false)
     // reset state
     selectedPostRoom.value = null
@@ -224,6 +229,7 @@ function confirm() {
     service_charge: props.serviceCharge,
     narration: postingNarration.value || null,
     kitchen_note: props.kitchenNote || null,
+    pos_profile: props.posProfile || null,
   })
 }
 

@@ -309,6 +309,11 @@ def get_pos_menu_items(search=None, category=None):
 
     where = " AND ".join(conditions)
 
+    # Filter stock by the POS profile's warehouse so the correct bin is used.
+    pos_warehouse = frappe.db.get_value("POS Profile", pos_profile, "warehouse") or None
+    warehouse_join = "AND b.warehouse = %s" if pos_warehouse else ""
+    join_args = [pos_warehouse] if pos_warehouse else []
+
     items = frappe.db.sql(f"""
         SELECT
             i.name AS item_code,
@@ -318,17 +323,18 @@ def get_pos_menu_items(search=None, category=None):
             i.image,
             i.stock_uom AS uom,
             i.is_stock_item,
-            COALESCE(b.actual_qty, 0) AS stock
+            COALESCE(SUM(b.actual_qty), 0) AS stock
         FROM `tabItem` i
         LEFT JOIN `tabItem Price` p ON p.item_code = i.name
             AND p.selling = 1
             AND (p.price_list = 'Standard Selling' OR p.price_list IS NULL)
         LEFT JOIN `tabBin` b ON b.item_code = i.name
+            {warehouse_join}
         WHERE {where}
         GROUP BY i.name
         ORDER BY i.item_group, i.item_name
         LIMIT 100
-    """, tuple(args), as_dict=1)
+    """, tuple(join_args + args), as_dict=1)
 
     return items
 
@@ -449,7 +455,7 @@ def get_occupied_rooms_for_pos(search=None):
 
 @frappe.whitelist()
 def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
-                        service_charge=0, kitchen_note=None, pos_profile=None):
+                        service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0):
     """Create and submit a POS Invoice for non-room-posting settlements."""
     import json
 
@@ -505,16 +511,11 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
                 "rate": flt(it.get("price", 0)),
             })
 
-        # Service charge as a separate item if present
-        svc = flt(service_charge)
-        if svc > 0:
-            svc_item = frappe.db.get_value("Item", {"item_name": ["like", "%service charge%"]}, "name")
-            if svc_item:
-                pi.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
-
+        _items_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items))
+        pi.discount_amount = flt(discount_amount)
         pi.append("payments", {
             "mode_of_payment": mode_of_payment,
-            "amount": flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + svc,
+            "amount": max(0, _items_total - flt(discount_amount)),
         })
 
         pi.flags.ignore_permissions = True
@@ -558,8 +559,10 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen_note=None):
-    """Create a Sales Invoice linked to a Hotel Room Check In folio."""
+def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen_note=None, pos_profile=None):
+    """Create a Sales Invoice linked to a Hotel Room Check In folio, then immediately
+    create and consolidate a POS Invoice against the open shift so the transaction
+    appears in shift reports without waiting for the end-of-shift consolidation job."""
     import json
 
     items = json.loads(items) if isinstance(items, str) else items
@@ -624,8 +627,69 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
         frappe.log_error(frappe.get_traceback(), "Post to Room invoice creation failed")
         frappe.throw(_("Failed to post bill to room. Check item/customer configuration."))
 
+    # ── Immediately create & consolidate a POS Invoice for shift tracking ──
+    pos_invoice_name = None
+    try:
+        resolved_pos_profile = pos_profile or _get_user_pos_profile()
+        if resolved_pos_profile:
+            pos_opening_entry = _get_open_pos_entry(frappe.session.user, resolved_pos_profile)
+            if pos_opening_entry:
+                resolved_pos_profile = pos_opening_entry.get("pos_profile") or resolved_pos_profile
+                profile_doc = frappe.get_cached_doc("POS Profile", resolved_pos_profile)
+                allowed_modes = [
+                    row.mode_of_payment
+                    for row in (profile_doc.get("payments") or [])
+                    if row.mode_of_payment
+                ]
+                mode_of_payment = allowed_modes[0] if allowed_modes else "Cash"
+
+                pi = frappe.new_doc("POS Invoice")
+                pi.customer = _resolve_pos_customer(
+                    customer, profile_doc=profile_doc, allow_guest_fallback=True
+                )
+                pi.company = company
+                pi.posting_date = nowdate()
+                pi.pos_profile = resolved_pos_profile
+                pi.custom_hotel_room_check_in = check_in
+
+                if _has_pos_opening_entry_on_invoice():
+                    pi.pos_opening_entry = pos_opening_entry.get("name")
+
+                if si.remarks:
+                    pi.remarks = si.remarks
+
+                for it in items:
+                    pi.append("items", {
+                        "item_code": it.get("item_code") or it.get("id"),
+                        "qty": flt(it.get("qty", 1)),
+                        "rate": flt(it.get("price", 0)),
+                    })
+
+                total_amount = flt(sum(
+                    flt(it.get("price", 0)) * flt(it.get("qty", 1)) for it in items
+                ))
+                pi.append("payments", {
+                    "mode_of_payment": mode_of_payment,
+                    "amount": total_amount,
+                })
+
+                pi.flags.ignore_permissions = True
+                pi.set_missing_values()
+                pi.insert()
+                pi.submit()
+
+                # Mark as immediately consolidated — the room folio Sales Invoice
+                # serves as the consolidated invoice; no end-of-shift re-processing needed.
+                frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", si.name)
+                frappe.db.commit()
+                pos_invoice_name = pi.name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Post to Room POS Invoice consolidation failed")
+        # Non-fatal: the room folio Sales Invoice was already committed; continue.
+
     return {
         "sales_invoice": si.name,
+        "pos_invoice": pos_invoice_name,
         "grand_total": flt(si.grand_total),
         "check_in": check_in,
         "room": ci.room_number,
@@ -633,7 +697,7 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
 
 
 @frappe.whitelist()
-def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=None, pos_profile=None):
+def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0):
     """Create a draft POS Invoice for suspended/held sales."""
     import json
 
@@ -668,16 +732,12 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
             "rate": flt(it.get("price", 0)),
         })
 
-    svc = flt(service_charge)
-    if svc > 0:
-        svc_item = frappe.db.get_value("Item", {"item_name": ["like", "%service charge%"]}, "name")
-        if svc_item:
-            pi.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
-
     # Keep one payment row to satisfy POS validations while still saving as draft.
+    _draft_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items))
+    pi.discount_amount = flt(discount_amount)
     pi.append("payments", {
         "mode_of_payment": "Cash",
-        "amount": flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + svc,
+        "amount": max(0, _draft_total - flt(discount_amount)),
     })
 
     try:
