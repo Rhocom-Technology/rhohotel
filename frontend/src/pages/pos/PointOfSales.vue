@@ -848,6 +848,32 @@ const sendKitchenResource = createResource({
   },
 })
 
+// Draft saved silently when user taps "Send to Kitchen" — keeps cart alive
+const kitchenDraftResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
+  onSuccess(data) {
+    lastInvoiceName.value = data.pos_invoice
+    // Now fire the kitchen ticket linked to this draft
+    const toSend = kitchenDraftResource._pendingKitchenItems
+    if (toSend && toSend.length > 0) {
+      sendKitchenNowResource.submit({
+        pos_invoice: data.pos_invoice,
+        table_or_room: selectedBillTo.value?.room || roomNumber.value || '',
+        source: getKitchenSource(),
+        kitchen_note: kitchenNote.value || null,
+        items: JSON.stringify(toSend),
+      })
+    } else {
+      sendingKitchenNow.value = false
+    }
+  },
+  onError(err) {
+    sendingKitchenNow.value = false
+    chargeError.value = extractApiErrorMessage(err, 'Failed to save draft order')
+    setTimeout(() => { chargeError.value = '' }, 5000)
+  },
+})
+
 // Pre-billing kitchen send (explicit "Send to Kitchen" button)
 const sendKitchenNowResource = createResource({
   url: 'rhohotel.restaurant.api.kitchen.send_to_kitchen',
@@ -866,8 +892,8 @@ const sendKitchenNowResource = createResource({
       if (sentCodes.has(code)) updated[code] = item.qty
     }
     kitchenSentMap.value = updated
-    chargeSuccess.value = `Sent ${data.item_count} item(s) to kitchen — Ticket ${data.ticket}`
-    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+    chargeSuccess.value = `Sent ${data.item_count} item(s) to kitchen — Ticket ${data.ticket} (order saved as draft)`
+    setTimeout(() => { chargeSuccess.value = '' }, 5000)
   },
   onError(err) {
     sendingKitchenNow.value = false
@@ -926,11 +952,18 @@ function triggerKitchenSend(posInvoice, submittedItems, context) {
 function sendToKitchenNow() {
   if (cart.value.length === 0 || sendingKitchenNow.value) return
 
-  // Only send checked items; if none checked, send all (fallback)
+  // 1. Customer must be selected
+  const customer = selectedBillTo.value?.name || billToSearch.value || null
+  if (!customer) {
+    chargeError.value = 'Select a customer before sending to kitchen.'
+    setTimeout(() => { chargeError.value = '' }, 4000)
+    return
+  }
+
+  // 2. Resolve items to send (checked first, then all)
   const checkedItems = cart.value.filter(i => selectedKitchenItemMap.value[i.id])
   const sourceItems = checkedItems.length > 0 ? checkedItems : cart.value
 
-  // Further filter by kitchen item groups if configured
   const groups = kitchenItemGroups.value
   const eligibleItems = groups.size
     ? sourceItems.filter(i => groups.has(i.category))
@@ -949,13 +982,21 @@ function sendToKitchenNow() {
     setTimeout(() => { chargeSuccess.value = '' }, 3000)
     return
   }
+
+  // 3. Save a draft order first (persists order on refresh), then send to kitchen
   sendingKitchenNow.value = true
-  sendKitchenNowResource.submit({
-    pos_invoice: null,
-    table_or_room: selectedBillTo.value?.room || roomNumber.value || '',
-    source: getKitchenSource(),
+  kitchenDraftResource._pendingKitchenItems = toSend
+  kitchenDraftResource.submit({
+    items: JSON.stringify(cart.value.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    }))),
+    customer,
+    service_charge: serviceCharge.value,
+    discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
-    items: JSON.stringify(toSend),
+    pos_profile: terminalInfo.value?.pos_profile || null,
   })
 }
 
