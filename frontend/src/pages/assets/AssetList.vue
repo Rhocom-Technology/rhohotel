@@ -8,14 +8,16 @@
     <!-- Control Bar -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
-        <h3 class="text-sm font-bold text-gray-900">Asset Register Control</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Search assets, track assignments, review service status, and access maintenance or warranty details from one page.</p>
+        <h3 class="text-sm font-bold text-gray-900">Asset Register</h3>
+        <p class="text-xs text-gray-400 mt-0.5">Search assets, track assignments, review service status, and access asset details.</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          @click="$router.push('/maintenance/list')">Maintenance List</button>
-        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export List</button>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">New Asset</button>
+          @click="$router.push('/assets-mgmt')">Dashboard</button>
+        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          @click="$router.push('/assets-mgmt/repair')">Asset Repair</button>
+        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          @click="$router.push('/assets-mgmt/maintenance')">Asset Maintenance</button>
       </div>
     </div>
 
@@ -24,30 +26,30 @@
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Assets</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Live</span>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">All</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">1,284</p>
+        <p class="text-3xl font-bold text-gray-900">{{ dashboard.total }}</p>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-green-300 transition-colors" @click="setFilter('Submitted')">
         <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Assigned Assets</p>
+          <p class="text-xs text-gray-400">Submitted</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Active</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">846</p>
+        <p class="text-3xl font-bold text-gray-900">{{ dashboard.submitted }}</p>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-yellow-300 transition-colors" @click="setFilter('In Maintenance')">
         <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Under Maintenance</p>
+          <p class="text-xs text-gray-400">In Maintenance</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Watch</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">38</p>
+        <p class="text-3xl font-bold text-gray-900">{{ dashboard.in_maintenance }}</p>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-gray-400 transition-colors" @click="setFilter('Draft')">
         <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Warranty Expiring</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Alert</span>
+          <p class="text-xs text-gray-400">Draft</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Pending</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">14</p>
+        <p class="text-3xl font-bold text-gray-900">{{ dashboard.draft }}</p>
       </div>
     </div>
 
@@ -56,41 +58,27 @@
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
       <div class="flex items-center gap-3 flex-wrap">
         <div class="flex-1" style="min-width:180px;">
-          <input v-model="search" type="text" placeholder="Search asset tag, name, serial..."
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <input v-model="search" type="text" placeholder="Search asset ID, name, item, location..."
+            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            @input="debouncedFetch" />
         </div>
-        <select v-model="filterCategory" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+          @change="fetchAssets">
+          <option value="">All Statuses</option>
+          <option v-for="s in statusOptions" :key="s" :value="s">{{ s }}</option>
+        </select>
+        <select v-model="filterCategory" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+          @change="fetchAssets">
           <option value="">All Categories</option>
-          <option>Electronics</option>
-          <option>Laundry</option>
-          <option>Room Appliance</option>
-          <option>Power</option>
-          <option>Housekeeping</option>
+          <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
         </select>
-        <select v-model="filterLocation" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterLocation" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+          @change="fetchAssets">
           <option value="">All Locations</option>
-          <option>Room 305</option>
-          <option>Laundry Room</option>
-          <option>Room 214</option>
-          <option>Power House</option>
-          <option>Store Room</option>
-          <option>Archive</option>
+          <option v-for="l in locationOptions" :key="l" :value="l">{{ l }}</option>
         </select>
-        <select v-model="filterCondition" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-          <option value="">All Conditions</option>
-          <option>Excellent</option>
-          <option>Good</option>
-          <option>Fair</option>
-          <option>Poor</option>
-        </select>
-        <button @click="search='';filterCategory='';filterLocation='';filterCondition='';showMaintenance=false;currentPage=1"
+        <button @click="resetFilters"
           class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
-        <button
-          class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
-          :class="showMaintenance ? 'text-white bg-yellow-500 hover:bg-yellow-600' : 'text-white bg-blue-600 hover:bg-blue-700'"
-          @click="showMaintenance = !showMaintenance">
-          {{ showMaintenance ? 'Show All Assets' : 'Show Maintenance Assets' }}
-        </button>
       </div>
     </div>
 
@@ -98,49 +86,67 @@
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 class="text-sm font-bold text-gray-900">Asset Records</h3>
-        <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} assets</p>
+        <p class="text-xs text-gray-400">Showing {{ assets.length }} of {{ totalAssets }} assets</p>
       </div>
-      <table class="w-full">
+
+      <!-- Loading -->
+      <div v-if="loading" class="px-6 py-12 text-center">
+        <p class="text-xs text-gray-400">Loading assets...</p>
+      </div>
+
+      <!-- Empty state -->
+      <div v-else-if="assets.length === 0" class="px-6 py-12 text-center">
+        <p class="text-sm text-gray-500">No assets found.</p>
+      </div>
+
+      <!-- Table -->
+      <table v-else class="w-full">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50">
-            <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Asset Tag</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Asset ID</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Asset Name</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Category</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Location</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Assigned To</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Condition</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Warranty</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Department</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Purchase Date</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Status</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Action</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="a in paged" :key="a.tag" class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ a.tag }}</td>
-            <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ a.name }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ a.category }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ a.location }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ a.assignedTo }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ a.condition }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ a.warranty }}</td>
+          <tr v-for="a in assets" :key="a.name" class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ a.name }}</td>
+            <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ a.asset_name }}</td>
+            <td class="px-4 py-4 text-xs text-gray-600">{{ a.asset_category || '—' }}</td>
+            <td class="px-4 py-4 text-xs text-gray-600">{{ a.location || '—' }}</td>
+            <td class="px-4 py-4 text-xs text-gray-600">{{ a.department || '—' }}</td>
+            <td class="px-4 py-4 text-xs text-gray-600">{{ formatDate(a.purchase_date) }}</td>
             <td class="px-4 py-4">
-              <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="assetStatusClass(a.status)">{{ a.status }}</span>
+              <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="assetStatusClass(a.status || (a.docstatus === 0 ? 'Draft' : ''))">
+                {{ a.status || (a.docstatus === 0 ? 'Draft' : '—') }}
+              </span>
             </td>
             <td class="px-4 py-4">
-              <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">View</button>
+              <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                @click="$router.push(`/assets-mgmt/asset/${a.name}`)">View</button>
             </td>
           </tr>
         </tbody>
       </table>
-      <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-        <p class="text-xs text-gray-400">Rows per page: 25</p>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+        <p class="text-xs text-gray-400">Page {{ currentPage }} of {{ totalPages }}</p>
         <div class="flex items-center gap-1">
-          <button v-for="p in totalPages" :key="p" @click="currentPage=p"
+          <button @click="goToPage(currentPage - 1)" :disabled="currentPage <= 1"
+            class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white transition-colors disabled:opacity-40">Prev</button>
+          <button v-for="p in displayPages" :key="p" @click="goToPage(p)"
             class="w-7 h-7 flex items-center justify-center text-xs rounded-lg transition-colors"
             :class="currentPage===p ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-white border border-gray-200'">
             {{ p }}
           </button>
-          <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white ml-1 transition-colors">Next</button>
+          <button @click="goToPage(currentPage + 1)" :disabled="currentPage >= totalPages"
+            class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white transition-colors disabled:opacity-40">Next</button>
         </div>
       </div>
     </div>
@@ -149,52 +155,125 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { createResource } from 'frappe-ui'
 
 const search = ref('')
+const filterStatus = ref('')
 const filterCategory = ref('')
 const filterLocation = ref('')
-const filterCondition = ref('')
-const showMaintenance = ref(false)
 const currentPage = ref(1)
 const perPage = 25
+const loading = ref(false)
+const assets = ref([])
+const totalAssets = ref(0)
+const totalPages = ref(1)
 
-const assets = [
-  { tag: 'AST-004821', name: 'Samsung Smart TV 55"', category: 'Electronics',    location: 'Room 305',    assignedTo: 'Executive Suite', condition: 'Good',      warranty: '12 Feb 2027', status: 'Active' },
-  { tag: 'AST-003761', name: 'Industrial Laundry Dryer', category: 'Laundry',   location: 'Laundry Room',assignedTo: 'Ops Team',        condition: 'Fair',      warranty: '05 Sep 2026', status: 'Maintenance' },
-  { tag: 'AST-002990', name: 'Kettle',                category: 'Room Appliance',location: 'Room 214',    assignedTo: 'Standard Room',   condition: 'Excellent', warranty: '18 Dec 2026', status: 'Active' },
-  { tag: 'AST-001884', name: 'Generator Battery Bank', category: 'Power',       location: 'Power House', assignedTo: 'Engineering',     condition: 'Fair',      warranty: '30 Apr 2026', status: 'Alert' },
-  { tag: 'AST-004118', name: 'Vacuum Cleaner Pro',    category: 'Housekeeping', location: 'Store Room',  assignedTo: 'Housekeeping',    condition: 'Good',      warranty: '22 Jan 2028', status: 'In Store' },
-  { tag: 'AST-003176', name: 'Old Minibar Unit',      category: 'Room Appliance',location: 'Archive',    assignedTo: 'Retired',         condition: 'Poor',      warranty: 'Expired',     status: 'Retired' },
-  { tag: 'AST-004510', name: 'Air Conditioner Split Unit', category: 'Electronics', location: 'Room 401', assignedTo: 'Presidential Suite', condition: 'Good',  warranty: '14 Mar 2028', status: 'Active' },
-  { tag: 'AST-003902', name: 'Commercial Dishwasher', category: 'Laundry',      location: 'Kitchen',     assignedTo: 'F&B Team',        condition: 'Fair',      warranty: '08 Jun 2026', status: 'Maintenance' },
-]
+const categoryOptions = ref([])
+const locationOptions = ref([])
+const statusOptions = ref([])
 
-const filtered = computed(() => {
-  let list = assets
-  if (search.value) {
-    const q = search.value.toLowerCase()
-    list = list.filter(a => a.tag.toLowerCase().includes(q) || a.name.toLowerCase().includes(q))
-  }
-  if (filterCategory.value) list = list.filter(a => a.category === filterCategory.value)
-  if (filterLocation.value) list = list.filter(a => a.location === filterLocation.value)
-  if (filterCondition.value) list = list.filter(a => a.condition === filterCondition.value)
-  if (showMaintenance.value) list = list.filter(a => a.status === 'Maintenance')
-  return list
+const dashboard = ref({
+  total: 0,
+  submitted: 0,
+  in_maintenance: 0,
+  scrapped: 0,
+  draft: 0,
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage)))
-const pageStart = computed(() => (currentPage.value - 1) * perPage)
-const pageEnd = computed(() => Math.min(pageStart.value + perPage, filtered.value.length))
-const paged = computed(() => filtered.value.slice(pageStart.value, pageEnd.value))
+// Dashboard stats
+createResource({
+  url: 'rhohotel.rhocom_hotel.api.assets.get_asset_dashboard',
+  auto: true,
+  onSuccess(data) { dashboard.value = data }
+})
+
+// Filter options
+createResource({ url: 'rhohotel.rhocom_hotel.api.assets.get_asset_categories', auto: true, onSuccess(d) { categoryOptions.value = d } })
+createResource({ url: 'rhohotel.rhocom_hotel.api.assets.get_asset_locations', auto: true, onSuccess(d) { locationOptions.value = d } })
+createResource({ url: 'rhohotel.rhocom_hotel.api.assets.get_asset_statuses', auto: true, onSuccess(d) { statusOptions.value = d } })
+
+function fetchAssets() {
+  loading.value = true
+  const resource = createResource({
+    url: 'rhohotel.rhocom_hotel.api.assets.get_asset_list',
+    params: {
+      search: search.value || null,
+      filter_status: filterStatus.value || null,
+      filter_category: filterCategory.value || null,
+      filter_location: filterLocation.value || null,
+      page: currentPage.value,
+      page_size: perPage,
+    },
+    onSuccess(data) {
+      assets.value = data.assets
+      totalAssets.value = data.total
+      totalPages.value = data.total_pages
+      loading.value = false
+    },
+    onError() { loading.value = false }
+  })
+  resource.fetch()
+}
+
+let debounceTimer = null
+function debouncedFetch() {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    fetchAssets()
+  }, 300)
+}
+
+function setFilter(status) {
+  filterStatus.value = status
+  currentPage.value = 1
+  fetchAssets()
+}
+
+function resetFilters() {
+  search.value = ''
+  filterStatus.value = ''
+  filterCategory.value = ''
+  filterLocation.value = ''
+  currentPage.value = 1
+  fetchAssets()
+}
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  fetchAssets()
+}
+
+const displayPages = computed(() => {
+  const pages = []
+  const max = Math.min(totalPages.value, 7)
+  for (let i = 1; i <= max; i++) pages.push(i)
+  return pages
+})
 
 function assetStatusClass(s) {
   return {
-    'Active':      'bg-green-50 text-green-600',
-    'Maintenance': 'bg-yellow-50 text-yellow-600',
-    'Alert':       'bg-red-50 text-red-500',
-    'In Store':    'bg-blue-50 text-blue-600',
-    'Retired':     'bg-gray-100 text-gray-500',
+    'Draft':                'bg-gray-100 text-gray-500',
+    'Submitted':            'bg-green-50 text-green-600',
+    'Partially Depreciated':'bg-blue-50 text-blue-600',
+    'Fully Depreciated':    'bg-blue-100 text-blue-700',
+    'Sold':                 'bg-purple-50 text-purple-600',
+    'Scrapped':             'bg-red-50 text-red-500',
+    'In Maintenance':       'bg-yellow-50 text-yellow-600',
+    'Out of Order':         'bg-red-100 text-red-600',
+    'Capitalized':          'bg-indigo-50 text-indigo-600',
   }[s] || 'bg-gray-100 text-gray-500'
 }
+
+function formatDate(dt) {
+  if (!dt) return '—'
+  const d = new Date(dt)
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+onMounted(() => {
+  fetchAssets()
+})
 </script>

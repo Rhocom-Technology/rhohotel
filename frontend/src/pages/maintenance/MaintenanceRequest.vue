@@ -65,7 +65,7 @@
       <div class="flex items-center gap-3 flex-wrap">
         <div style="flex:1;min-width:180px;">
           <input v-model="search" @input="debouncedFetch" type="text"
-            placeholder="Search request ID, room, asset..."
+            placeholder="Search request ID, room, location..."
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <select v-model="filterIssueType" @change="fetchRequests(1)"
@@ -92,7 +92,10 @@
           class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
           <option value="">All Statuses</option>
           <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="In Progress">In Progress</option>
           <option value="Completed">Completed</option>
+          <option value="Rejected">Rejected</option>
           <option value="Cancelled">Cancelled</option>
         </select>
         <button @click="clearFilters"
@@ -128,7 +131,7 @@
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left text-xs font-semibold text-gray-400 px-6 py-3">Request ID</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Room / Asset</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Location</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Issue Type</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Reported By</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Reported At</th>
@@ -144,8 +147,8 @@
               @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: req.name } })">
               <td class="px-6 py-4 text-xs font-bold text-gray-900 font-mono">{{ req.name }}</td>
               <td class="px-4 py-4">
-                <p class="text-xs font-semibold text-gray-900">{{ req.room_number || req.room || '—' }}</p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ req.asset_name || req.asset || '—' }}</p>
+                <p class="text-xs font-semibold text-gray-900">{{ req.location_display || '—' }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ req.location_type || '—' }}</p>
               </td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ req.issue_type }}</td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ req.reported_by_name || req.reported_by || '—' }}</td>
@@ -156,8 +159,8 @@
                 </span>
               </td>
               <td class="px-4 py-4">
-                <span class="text-xs font-semibold" :class="req.approved ? 'text-green-600' : 'text-gray-400'">
-                  {{ req.approved ? '✓ Yes' : '—' }}
+                <span class="text-xs font-semibold" :class="approvedClass(req.approved)">
+                  {{ req.approved || 'Pending' }}
                 </span>
               </td>
               <td class="px-4 py-4">
@@ -294,10 +297,21 @@ function priorityClass(p) {
 
 function statusClass(s) {
   return {
-    'Pending':   'bg-blue-50 text-blue-600 border-blue-200',
-    'Completed': 'bg-green-50 text-green-600 border-green-200',
-    'Cancelled': 'bg-red-50 text-red-500 border-red-200',
+    'Pending':     'bg-blue-50 text-blue-600 border-blue-200',
+    'Approved':    'bg-green-50 text-green-600 border-green-200',
+    'In Progress': 'bg-purple-50 text-purple-600 border-purple-200',
+    'Completed':   'bg-green-50 text-green-600 border-green-200',
+    'Rejected':    'bg-red-50 text-red-500 border-red-200',
+    'Cancelled':   'bg-red-50 text-red-500 border-red-200',
   }[s] || 'bg-gray-50 text-gray-500 border-gray-200'
+}
+
+function approvedClass(a) {
+  return {
+    'Approved': 'text-green-600',
+    'Rejected': 'text-red-500',
+    'Pending':  'text-gray-400',
+  }[a] || 'text-gray-400'
 }
 
 onMounted(() => {

@@ -3,13 +3,12 @@
     "allow_rename": 1,
     "autoname": "MNT-TASK-.YYYY.-.#####",
     "creation": "2025-10-27 12:13:19.867021",
-    "custom": 0,
     "doctype": "DocType",
     "engine": "InnoDB",
     "field_order": [
         "task_details_section",
-        "task_type",
         "maintenance_request",
+        "task_type",
         "priority",
         "status",
         "amended_from",
@@ -23,9 +22,6 @@
         "expected_duration",
         "location_section",
         "location",
-        "column_break_loc_asset",
-        "asset",
-        "final_asset_status",
         "description_section",
         "task_description",
         "column_break_desc",
@@ -35,14 +31,10 @@
         "completion_notes",
         "checklist_section",
         "fault_diagnosed",
-        "parts_replaced",
-        "column_break_checklist",
         "test_run_passed",
+        "column_break_checklist",
         "supervisor_verified",
         "parts_section",
-        "parts_approval_status",
-        "parts_approved_by",
-        "parts_approved_on",
         "parts_used",
         "stock_entry"
     ],
@@ -53,41 +45,42 @@
             "label": "Task Details"
         },
         {
+            "fieldname": "maintenance_request",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Maintenance Request",
+            "options": "Maintenance Request",
+            "read_only": 1
+        },
+        {
+            "default": "Corrective",
             "fieldname": "task_type",
             "fieldtype": "Select",
             "in_list_view": 1,
             "in_standard_filter": 1,
             "label": "Task Type",
             "options": "Corrective\nPreventive\nRoutine\nInspection",
-            "reqd": 1,
-            "default": "Corrective"
+            "reqd": 1
         },
         {
-            "fieldname": "maintenance_request",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Maintenance Request",
-            "options": "Maintenance Request"
-        },
-        {
+            "default": "Medium",
             "fieldname": "priority",
             "fieldtype": "Select",
             "in_list_view": 1,
             "in_standard_filter": 1,
             "label": "Priority",
-            "options": "Low\nMedium\nHigh",
-            "reqd": 1,
-            "default": "Medium"
+            "options": "Low\nMedium\nHigh\nCritical",
+            "reqd": 1
         },
         {
+            "default": "Open",
             "fieldname": "status",
-            "label": "Status",
             "fieldtype": "Select",
             "in_list_view": 1,
             "in_standard_filter": 1,
-            "options": "Open\nIn Progress\nDone\nHold\nCancelled",
-            "default": "Open"
+            "label": "Status",
+            "options": "Open\nIn Progress\nDone\nHold\nCancelled"
         },
         {
             "fieldname": "amended_from",
@@ -106,16 +99,15 @@
         {
             "fieldname": "assigned_technician",
             "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
             "label": "Assigned Technician",
             "options": "Maintenance Technician",
-            "reqd": 1,
-            "in_list_view": 1,
-            "in_standard_filter": 1
+            "reqd": 1
         },
         {
             "fieldname": "supervisor",
             "fieldtype": "Link",
-            "in_list_view": 0,
             "label": "Supervisor",
             "options": "Employee"
         },
@@ -129,11 +121,6 @@
             "fieldtype": "Datetime",
             "in_list_view": 1,
             "label": "Start Time"
-        },
-        {
-            "fieldname": "expected_duration",
-            "fieldtype": "Duration",
-            "label": "Expected Duration"
         },
         {
             "fieldname": "column_break_timing",
@@ -153,30 +140,10 @@
         {
             "fieldname": "location",
             "fieldtype": "Data",
-            "label": "Location",
-            "in_list_view": 1,
-            "in_standard_filter": 1
-        },
-        {
-            "fieldname": "column_break_loc_asset",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "asset",
-            "fieldtype": "Link",
             "in_list_view": 1,
             "in_standard_filter": 1,
-            "label": "Asset",
-            "options": "Asset",
+            "label": "Location",
             "reqd": 1
-        },
-        {
-            "fieldname": "final_asset_status",
-            "fieldtype": "Select",
-            "label": "Final Asset Status",
-            "options": "\nOperational\nOut of Service\nUnder Repair\nDecommissioned",
-            "reqd": 0,
-            "mandatory_depends_on": "eval:doc.workflow_state === 'Completed'"
         },
         {
             "fieldname": "description_section",
@@ -195,8 +162,7 @@
         {
             "fieldname": "work_performed",
             "fieldtype": "Small Text",
-            "label": "Work Performed",
-            "mandatory_depends_on": "eval:doc.workflow_state === 'Completed'"
+            "label": "Work Performed"
         },
         {
             "fieldname": "completion_section",
@@ -204,10 +170,10 @@
             "label": "Completion"
         },
         {
+            "default": "0",
             "fieldname": "inspection_required",
             "fieldtype": "Check",
-            "label": "Inspection Required (Inspector must verify)",
-            "default": "0"
+            "label": "Inspection Required"
         },
         {
             "fieldname": "completion_notes",
@@ -217,69 +183,35 @@
         {
             "fieldname": "checklist_section",
             "fieldtype": "Section Break",
-            "label": "Maintenance Checklist"
+            "label": "Checklist"
         },
         {
+            "default": "0",
             "fieldname": "fault_diagnosed",
             "fieldtype": "Check",
-            "label": "Fault Diagnosed",
-            "default": "0"
+            "label": "Fault Diagnosed"
         },
         {
-            "fieldname": "parts_replaced",
+            "default": "0",
+            "fieldname": "test_run_passed",
             "fieldtype": "Check",
-            "label": "Parts Replaced",
-            "default": "0"
+            "label": "Test Run Passed"
         },
         {
             "fieldname": "column_break_checklist",
             "fieldtype": "Column Break"
         },
         {
-            "fieldname": "test_run_passed",
-            "fieldtype": "Check",
-            "label": "Test Run Passed",
-            "default": "0"
-        },
-        {
+            "default": "0",
             "fieldname": "supervisor_verified",
             "fieldtype": "Check",
             "label": "Supervisor Verified",
-            "default": "0",
             "depends_on": "eval:doc.inspection_required == 1"
         },
         {
             "fieldname": "parts_section",
             "fieldtype": "Section Break",
             "label": "Parts / Material Usage"
-        },
-        {
-            "fieldname": "parts_approval_status",
-            "fieldtype": "Select",
-            "label": "Parts Approval Status",
-            "options": "\nPending Approval\nApproved",
-            "default": "",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "read_only": 1,
-            "description": "Set automatically when parts are added. Must be approved by Admin/Hotel Manager before submission."
-        },
-        {
-            "fieldname": "column_break_parts_approval",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "parts_approved_by",
-            "fieldtype": "Link",
-            "label": "Parts Approved By",
-            "options": "User",
-            "read_only": 1
-        },
-        {
-            "fieldname": "parts_approved_on",
-            "fieldtype": "Datetime",
-            "label": "Parts Approved On",
-            "read_only": 1
         },
         {
             "fieldname": "parts_used",
@@ -292,8 +224,7 @@
             "fieldtype": "Link",
             "label": "Stock Entry",
             "options": "Stock Entry",
-            "read_only": 1,
-            "in_list_view": 0
+            "read_only": 1
         }
     ],
     "grid_page_length": 50,
@@ -338,14 +269,9 @@
         {
             "create": 1,
             "delete": 0,
-            "email": 1,
-            "export": 1,
-            "print": 1,
             "read": 1,
             "report": 1,
             "role": "Front Desk",
-            "share": 1,
-            "submit": 0,
             "write": 1
         }
     ],

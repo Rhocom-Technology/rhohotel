@@ -58,7 +58,15 @@ app_include_js = [
 
 doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 
-fixtures = [{"doctype": "Workflow"}, {"doctype": "Workflow State"}, {"doctype": "Workflow Action"}]
+# fixtures = [{"doctype": "Workflow"}, {"doctype": "Workflow State"}, {"doctype": "Workflow Action"}]
+
+fixtures = [
+    {"doctype": "Workflow"},
+    {"doctype": "Workflow State"},
+    {"doctype": "Workflow Action"}
+]
+
+
 # Svg Icons
 # ------------------
 # include app icons in desk
@@ -246,15 +254,15 @@ scheduler_events = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
-doc_events = {
-	"Asset Repair": {
-		"after_insert": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
-		"on_submit": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
-		"on_update": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
-		"after_amend": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
-		"on_cancel": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
-	},
-}
+# doc_events = {
+# 	"Asset Repair": {
+# 		"after_insert": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+# 		"on_submit": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+# 		"on_update": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+# 		"after_amend": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+# 		"on_cancel": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+# 	},
+# }
 
 frappe_csrf_exempt_methods = [
 	"rhohotel.search_available_rooms.search_available_rooms",
@@ -268,7 +276,9 @@ frappe.csrf_exempt_methods = frappe_csrf_exempt_methods
 after_request = "rhohotel.api.add_cors_headers"
 
 override_doctype_class = {
-	"POS Invoice": "rhohotel.rhocom_hotel.pos_invoice.pos_invoice.POSInvoice"
+    "POS Invoice": "rhohotel.rhocom_hotel.pos_invoice.pos_invoice.POSInvoice",
+    "Asset Repair": "rhohotel.overrides.asset_repair.CustomAssetRepair",
+	"Asset Maintenance": "rhohotel.overrides.asset_maintenance.CustomAssetMaintenance",
 }
 
 
@@ -300,7 +310,20 @@ override_doctype_class = {
 # }
 
 
-doc_events = {"Sales Invoice": {"validate": "rhohotel.overrides.sales_invoice.validate_sales_invoice"}}
+# doc_events = {"Sales Invoice": {"validate": "rhohotel.overrides.sales_invoice.validate_sales_invoice"}}
+
+doc_events = {
+    # "Asset Repair": {
+    #     "after_insert": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+    #     "on_submit": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+    #     "on_update": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+    #     "after_amend": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+    #     "on_cancel": "rhohotel.rhocom_hotel.utils.asset_repair_events.sync_maintenance_request",
+    # },
+    "Sales Invoice": {
+        "validate": "rhohotel.overrides.sales_invoice.validate_sales_invoice"
+    },
+}
 
 
 website_route_rules = [

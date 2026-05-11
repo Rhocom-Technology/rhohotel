@@ -2,7 +2,6 @@
     "actions": [],
     "allow_rename": 1,
     "creation": "2025-10-27 12:04:41.922821",
-    "custom": 0,
     "doctype": "DocType",
     "editable_grid": 1,
     "engine": "InnoDB",
@@ -26,20 +25,23 @@
             "reqd": 1
         },
         {
+            "fetch_from": "item_code.item_name",
             "fieldname": "item_name",
             "fieldtype": "Data",
             "in_list_view": 1,
-            "label": "Item Name"
+            "label": "Item Name",
+            "read_only": 1
         },
         {
+            "default": "1",
             "fieldname": "quantity",
             "fieldtype": "Float",
             "in_list_view": 1,
             "label": "Quantity",
-            "reqd": 1,
-            "default": "1"
+            "reqd": 1
         },
         {
+            "fetch_from": "item_code.stock_uom",
             "fieldname": "uom",
             "fieldtype": "Link",
             "in_list_view": 1,
@@ -61,12 +63,12 @@
             "label": "Cost"
         },
         {
+            "default": "Reduce Stock",
             "fieldname": "store_impact",
             "fieldtype": "Select",
             "in_list_view": 1,
             "label": "Store Impact",
-            "options": "\nReduce Stock\nNo Impact\nReturn to Store",
-            "default": "Reduce Stock"
+            "options": "\nReduce Stock\nNo Impact\nReturn to Store"
         },
         {
             "fieldname": "stock_entry",

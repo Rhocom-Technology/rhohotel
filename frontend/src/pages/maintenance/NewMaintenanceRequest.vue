@@ -20,7 +20,7 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h2 class="text-sm font-bold text-gray-900">Request Control</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Capture request source, location, asset, urgency, and issue details for quick response.</p>
+        <p class="text-xs text-gray-400 mt-0.5">Capture request source, location, urgency, and issue details for quick response.</p>
       </div>
       <div class="flex items-center gap-2">
         <button @click="router.push('/maintenance/request')"
@@ -79,23 +79,6 @@
               </select>
             </div>
           </div>
-
-          <!-- Request Type -->
-          <div>
-            <p class="text-xs text-gray-500 mb-1.5">Request Type <span class="text-red-400">*</span></p>
-            <div class="flex rounded-lg overflow-hidden border border-gray-200 h-[38px]">
-              <button @click="form.request_type = 'Repair'"
-                class="flex-1 text-xs font-medium transition-colors"
-                :class="form.request_type === 'Repair' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
-                🔧 Repair — Asset Repair auto-created on approval
-              </button>
-              <button @click="form.request_type = 'Maintenance'"
-                class="flex-1 text-xs font-medium transition-colors border-l border-gray-200"
-                :class="form.request_type === 'Maintenance' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
-                🛠 Maintenance — Convert to Task after approval
-              </button>
-            </div>
-          </div>
         </div>
 
         <!-- Requester -->
@@ -124,14 +107,31 @@
         <!-- Issue Target -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Issue Target</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
 
-            <!-- Room -->
-            <div>
+          <!-- Location Type -->
+          <div class="mb-4">
+            <p class="text-xs text-gray-500 mb-1.5">Location Type <span class="text-red-400">*</span></p>
+            <div class="flex rounded-lg overflow-hidden border border-gray-200 h-[38px]">
+              <button @click="form.location_type = 'Room'"
+                class="flex-1 text-xs font-medium transition-colors"
+                :class="form.location_type === 'Room' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
+                🏨 Room
+              </button>
+              <button @click="form.location_type = 'Other Location'"
+                class="flex-1 text-xs font-medium transition-colors border-l border-gray-200"
+                :class="form.location_type === 'Other Location' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
+                📍 Other Location
+              </button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
+            <!-- Room (shown when location_type is Room) -->
+            <div v-if="form.location_type === 'Room'">
               <p class="text-xs text-gray-500 mb-1.5">Room <span class="text-red-400">*</span></p>
               <select v-model="form.room"
                 class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                :class="attempted && !form.room ? 'border-red-300 bg-red-50' : 'border-gray-200'">
+                :class="attempted && form.location_type === 'Room' && !form.room ? 'border-red-300 bg-red-50' : 'border-gray-200'">
                 <option value="">Select room</option>
                 <option v-for="r in rooms" :key="r.name" :value="r.name">
                   {{ r.room_number || r.name }}
@@ -139,17 +139,13 @@
               </select>
             </div>
 
-            <!-- Asset — all assets -->
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Asset <span class="text-red-400">*</span></p>
-              <select v-model="form.asset"
-                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                :class="attempted && !form.asset ? 'border-red-300 bg-red-50' : 'border-gray-200'">
-                <option value="">Select asset</option>
-                <option v-for="a in assets" :key="a.name" :value="a.name">
-                  {{ a.asset_name || a.name }}
-                </option>
-              </select>
+            <!-- Location (shown when location_type is Other Location) -->
+            <div v-if="form.location_type === 'Other Location'">
+              <p class="text-xs text-gray-500 mb-1.5">Location <span class="text-red-400">*</span></p>
+              <input v-model="form.location" type="text"
+                placeholder="e.g. Laundry, Gym, Kitchen, Pool..."
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+                :class="attempted && form.location_type === 'Other Location' && !form.location ? 'border-red-300 bg-red-50' : 'border-gray-200'" />
             </div>
           </div>
 
@@ -170,10 +166,9 @@
             <h4 class="text-xs font-bold text-blue-700 mb-3">New Request</h4>
             <div class="space-y-1.5">
               <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Request Type</span>
-                <span class="text-xs font-semibold"
-                  :class="form.request_type === 'Repair' ? 'text-blue-700' : 'text-orange-600'">
-                  {{ form.request_type === 'Repair' ? '🔧 Repair' : '🛠 Maintenance' }}
+                <span class="text-xs text-blue-500">Location Type</span>
+                <span class="text-xs font-semibold text-blue-700">
+                  {{ form.location_type === 'Room' ? '🏨 Room' : '📍 Other' }}
                 </span>
               </div>
               <div class="flex justify-between">
@@ -185,12 +180,8 @@
                 <span class="text-xs font-semibold" :class="priorityTextClass(form.priority)">{{ form.priority || '—' }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Room</span>
-                <span class="text-xs font-medium text-blue-800">{{ selectedRoomLabel || '—' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Asset</span>
-                <span class="text-xs font-medium text-blue-800 truncate max-w-[130px]">{{ selectedAssetLabel || '—' }}</span>
+                <span class="text-xs text-blue-500">Location</span>
+                <span class="text-xs font-medium text-blue-800">{{ locationLabel || '—' }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-xs text-blue-500">Reported By</span>
@@ -205,16 +196,9 @@
           <div class="bg-gray-50 rounded-lg border border-gray-100 p-3">
             <p class="text-xs text-gray-500 font-medium mb-1">What happens next:</p>
             <p class="text-xs text-gray-500">1. Request created as <strong>Pending</strong></p>
-            <p class="text-xs text-gray-500 mt-0.5">2. Manager <strong>approves</strong></p>
-            <template v-if="form.request_type === 'Repair'">
-              <p class="text-xs text-gray-500 mt-0.5">3. <strong>Asset Repair</strong> auto-created</p>
-              <p class="text-xs text-gray-500 mt-0.5">4. Fill &amp; submit Asset Repair</p>
-              <p class="text-xs text-gray-500 mt-0.5">5. Mark request as <strong>Completed</strong></p>
-            </template>
-            <template v-else>
-              <p class="text-xs text-gray-500 mt-0.5">3. <strong>Convert to Maintenance Task</strong></p>
-              <p class="text-xs text-gray-500 mt-0.5">4. Assign technician &amp; track work</p>
-            </template>
+            <p class="text-xs text-gray-500 mt-0.5">2. Manager assigns technician &amp; <strong>approves</strong></p>
+            <p class="text-xs text-gray-500 mt-0.5">3. <strong>Maintenance Task</strong> auto-created</p>
+            <p class="text-xs text-gray-500 mt-0.5">4. Technician completes work &amp; submits task</p>
           </div>
         </div>
 
@@ -240,7 +224,6 @@ const router = useRouter()
 const submitting = ref(false)
 const attempted = ref(false)
 const rooms = ref([])
-const assets = ref([])
 const employees = ref([])
 
 const toasts = ref([])
@@ -256,14 +239,24 @@ const now = new Date()
 const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
 const form = ref({
-  room: '', asset: '', issue_type: '', priority: 'Medium',
-  request_type: 'Repair',
-  reported_by: '', reported_at: localNow, issue_description: '',
+  location_type: 'Room',
+  room: '',
+  location: '',
+  issue_type: '',
+  priority: 'Medium',
+  reported_by: '',
+  reported_at: localNow,
+  issue_description: '',
 })
 
 // ─── Computed labels ──────────────────────────────────────────────────────────
-const selectedRoomLabel = computed(() => rooms.value.find(x => x.name === form.value.room)?.room_number || null)
-const selectedAssetLabel = computed(() => assets.value.find(x => x.name === form.value.asset)?.asset_name || null)
+const locationLabel = computed(() => {
+  if (form.value.location_type === 'Room') {
+    const r = rooms.value.find(x => x.name === form.value.room)
+    return r?.room_number || null
+  }
+  return form.value.location || null
+})
 const reportedByLabel = computed(() => employees.value.find(x => x.name === form.value.reported_by)?.employee_name || null)
 
 const validationErrors = computed(() => {
@@ -271,16 +264,14 @@ const validationErrors = computed(() => {
   const e = []
   if (!form.value.issue_type)    e.push('Issue type is required')
   if (!form.value.priority)      e.push('Priority is required')
-  if (!form.value.request_type)  e.push('Request type is required')
-  if (!form.value.room)          e.push('Room is required')
-  if (!form.value.asset)         e.push('Asset is required')
+  if (form.value.location_type === 'Room' && !form.value.room) e.push('Room is required')
+  if (form.value.location_type === 'Other Location' && !form.value.location) e.push('Location is required')
   if (!form.value.reported_by)   e.push('Reported by is required')
   if (!form.value.reported_at)   e.push('Reported at is required')
   return e
 })
 
 const roomsResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_rooms_for_request', auto: false })
-const assetsResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_assets_for_task', auto: false })
 const employeesResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_employees_for_request', auto: false })
 const createResource_   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.create_maintenance_request', auto: false })
 
@@ -305,9 +296,8 @@ function priorityTextClass(p) {
 }
 
 onMounted(async () => {
-  const [rRes, aRes, eRes] = await Promise.all([roomsResource.fetch(), assetsResource.fetch(), employeesResource.fetch()])
+  const [rRes, eRes] = await Promise.all([roomsResource.fetch(), employeesResource.fetch()])
   rooms.value = rRes || []
-  assets.value = aRes || []
   employees.value = eRes || []
 })
 </script>

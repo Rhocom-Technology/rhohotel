@@ -139,27 +139,24 @@
             </div>
           </div>
 
-          <!-- Asset Details -->
+          <!-- Location & Description -->
           <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 class="text-sm font-bold text-gray-900 mb-4">Asset Details</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-4">
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Asset</p>
-                <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-mono">
-                  {{ task.asset || '—' }}
-                </div>
-              </div>
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Asset Name</p>
-                <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700">
-                  {{ task.asset_name || '—' }}
-                </div>
-              </div>
+            <h3 class="text-sm font-bold text-gray-900 mb-4">Location & Description</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Location</p>
                 <input v-model="form.location" :disabled="isReadOnly" type="text"
                   class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
                   :class="{'bg-gray-100': isReadOnly}" />
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Linked Request</p>
+                <div v-if="task.maintenance_request"
+                  class="px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 font-medium cursor-pointer hover:underline"
+                  @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: task.maintenance_request } })">
+                  {{ task.maintenance_request }}
+                </div>
+                <div v-else class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">None</div>
               </div>
             </div>
             <div>
@@ -219,10 +216,6 @@
           <div class="bg-white rounded-xl border border-gray-200 p-5">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-sm font-bold text-gray-900">Parts / Material Usage</h3>
-              <span v-if="task.parts_approval_status" class="px-2.5 py-1 text-xs font-semibold rounded-full"
-                :class="task.parts_approval_status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'">
-                {{ task.parts_approval_status }}
-              </span>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full">
@@ -311,10 +304,6 @@
                 <span class="text-xs text-gray-700">Fault diagnosed</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" v-model="form.parts_replaced" :disabled="isReadOnly" class="w-4 h-4 accent-green-500" />
-                <span class="text-xs text-gray-700">Parts replaced</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" v-model="form.test_run_passed" :disabled="isReadOnly" class="w-4 h-4 accent-green-500" />
                 <span class="text-xs text-gray-700">Test run passed</span>
               </label>
@@ -339,18 +328,6 @@
                 <option value="In Progress">In Progress</option>
                 <option value="Hold">On Hold</option>
                 <option value="Done">Done</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <p class="text-xs text-gray-500 mb-1.5">Final Asset Status</p>
-              <select v-model="form.final_asset_status" :disabled="isReadOnly"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                :class="{'bg-gray-100': isReadOnly}">
-                <option value="">— select —</option>
-                <option value="Operational">Operational</option>
-                <option value="Out of Service">Out of Service</option>
-                <option value="Under Repair">Under Repair</option>
-                <option value="Decommissioned">Decommissioned</option>
               </select>
             </div>
             <div class="mb-3">
@@ -406,16 +383,6 @@
                   {{ technicianLabel || task.technician_name || '—' }}
                 </span>
               </div>
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Asset</span>
-                <span class="text-xs font-medium text-blue-800 text-right max-w-[140px] truncate">
-                  {{ task.asset_name || task.asset || '—' }}
-                </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Final Asset</span>
-                <span class="text-xs font-medium text-blue-800">{{ form.final_asset_status || '—' }}</span>
-              </div>
               <div class="flex justify-between pt-1 border-t border-blue-200">
                 <span class="text-xs text-blue-500">Parts</span>
                 <span class="text-xs font-medium text-blue-800">{{ partsUsed.filter(p => p.item_code).length }} item(s)</span>
@@ -461,10 +428,8 @@ const form = ref({
   task_description: '',
   work_performed: '',
   completion_notes: '',
-  final_asset_status: '',
   inspection_required: false,
   fault_diagnosed: false,
-  parts_replaced: false,
   test_run_passed: false,
   supervisor_verified: false,
 })
@@ -539,10 +504,8 @@ async function loadTask() {
       task_description: res.task_description || '',
       work_performed: res.work_performed || '',
       completion_notes: res.completion_notes || '',
-      final_asset_status: res.final_asset_status || '',
       inspection_required: Boolean(res.inspection_required),
       fault_diagnosed: Boolean(res.fault_diagnosed),
-      parts_replaced: Boolean(res.parts_replaced),
       test_run_passed: Boolean(res.test_run_passed),
       supervisor_verified: Boolean(res.supervisor_verified),
     }

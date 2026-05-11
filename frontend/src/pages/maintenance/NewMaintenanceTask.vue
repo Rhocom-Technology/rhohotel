@@ -88,31 +88,19 @@
           </div>
         </div>
 
-        <!-- Asset Details -->
+        <!-- Location & Description -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Asset Details</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-4">
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Location & Description</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Asset <span class="text-red-400">*</span></p>
-              <select v-model="form.asset" @change="onAssetSelect"
-                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                :class="attempted && !form.asset ? 'border-red-300 bg-red-50' : 'border-gray-200'">
-                <option value="">— select asset —</option>
-                <option v-for="a in assets" :key="a.name" :value="a.name">
-                  {{ a.asset_name || a.name }}
-                </option>
-              </select>
+              <p class="text-xs text-gray-500 mb-1.5">Location <span class="text-red-400">*</span></p>
+              <input v-model="form.location" type="text" placeholder="Enter location"
+                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+                :class="attempted && !form.location ? 'border-red-300 bg-red-50' : 'border-gray-200'" />
             </div>
             <div>
-              <p class="text.xs text-gray-500 mb-1.5">Asset Name</p>
-              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700">
-                {{ selectedAsset?.asset_name || '—' }}
-              </div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Location</p>
-              <input v-model="form.location" type="text" placeholder="Auto-fill or enter manually"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <p class="text-xs text-gray-500 mb-1.5">Maintenance Request</p>
+              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Linked after creation (optional)</div>
             </div>
           </div>
           <div>
@@ -157,8 +145,8 @@
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Expected Duration</p>
-              <input v-model="form.expected_duration" type="text" placeholder="e.g. 3 hours"
+              <p class="text-xs text-gray-500 mb-1.5">Planned End</p>
+              <input v-model="form.end_time" type="datetime-local"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
           </div>
@@ -242,10 +230,6 @@
               <span class="text-xs text-gray-700">Diagnosis required</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="form.parts_replaced" class="w-4 h-4 accent-blue-500" />
-              <span class="text-xs text-gray-700">Parts likely needed</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" v-model="form.test_run_passed" class="w-4 h-4 accent-blue-500" />
               <span class="text-xs text-gray-700">Test run on completion</span>
             </label>
@@ -264,17 +248,6 @@
               <option value="Open">Open</option>
               <option value="In Progress">In Progress</option>
               <option value="Hold">On Hold</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <p class="text-xs text-gray-500 mb-1.5">Expected Asset Status After Repair</p>
-            <select v-model="form.final_asset_status"
-              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700">
-              <option value="">— select —</option>
-              <option value="Operational">Operational</option>
-              <option value="Out of Service">Out of Service</option>
-              <option value="Under Repair">Under Repair</option>
-              <option value="Decommissioned">Decommissioned</option>
             </select>
           </div>
           <div class="mb-3">
@@ -308,8 +281,8 @@
               </span>
             </div>
             <div class="flex justify-between">
-              <span class="text-xs text-blue-500">Asset</span>
-              <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ selectedAsset?.asset_name || '—' }}</span>
+              <span class="text-xs text-blue-500">Location</span>
+              <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ form.location || '—' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-xs text-blue-500">Technician</span>
@@ -348,7 +321,6 @@ import { createResource } from 'frappe-ui'
 const router = useRouter()
 const creating = ref(false) // 'draft' | 'create' | false
 const attempted = ref(false)
-const assets = ref([])
 const technicians = ref([])
 const supervisors = ref([])
 const stockItems = ref([])
@@ -369,27 +341,19 @@ const form = ref({
   task_type: '',
   priority: 'Medium',
   status: 'Open',
-  asset: '',
   location: '',
   task_description: '',
   assigned_technician: '',
   supervisor: '',
   start_time: '',
   end_time: '',
-  expected_duration: '',
-  final_asset_status: '',
   inspection_required: true,
   fault_diagnosed: false,
-  parts_replaced: false,
   test_run_passed: false,
   completion_notes: '',
 })
 
 // ─── Computed helpers ─────────────────────────────────────────────────────────
-const selectedAsset = computed(() =>
-  assets.value.find(a => a.name === form.value.asset) || null
-)
-
 const technicianLabel = computed(() => {
   const t = technicians.value.find(x => x.name === form.value.assigned_technician)
   return t?.technician_name || null
@@ -400,18 +364,10 @@ const validationErrors = computed(() => {
   const errors = []
   if (!form.value.task_type) errors.push('Task type is required')
   if (!form.value.priority) errors.push('Priority is required')
-  if (!form.value.asset) errors.push('Asset is required')
+  if (!form.value.location) errors.push('Location is required')
   if (!form.value.assigned_technician) errors.push('Assigned technician is required')
   return errors
 })
-
-// ─── Auto-fill location from asset ───────────────────────────────────────────
-function onAssetSelect() {
-  const asset = selectedAsset.value
-  if (asset?.location && !form.value.location) {
-    form.value.location = asset.location
-  }
-}
 
 // ─── Part item select: auto-fill UOM ─────────────────────────────────────────
 function onPartSelect(part) {
@@ -423,20 +379,17 @@ function onPartSelect(part) {
 }
 
 // ─── Resources ────────────────────────────────────────────────────────────────
-const assetsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_assets_for_task', auto: false })
 const techResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_technicians_for_task', auto: false })
 const supResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_supervisors_for_task', auto: false })
 const itemsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
 const createResource_ = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.create_maintenance_task', auto: false })
 
 async function loadDropdowns() {
-  const [aRes, tRes, sRes, iRes] = await Promise.all([
-    assetsResource.fetch(),
+  const [tRes, sRes, iRes] = await Promise.all([
     techResource.fetch(),
     supResource.fetch(),
     itemsResource.fetch(),
   ])
-  assets.value = aRes || []
   technicians.value = tRes || []
   supervisors.value = sRes || []
   stockItems.value = iRes || []

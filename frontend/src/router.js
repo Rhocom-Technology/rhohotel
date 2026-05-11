@@ -68,6 +68,13 @@ const router = createRouter({
     // Asset Management
     { path: '/assets-mgmt', name: 'AssetManagement', component: () => import('@/pages/assets/AssetManagement.vue') },
     { path: '/assets-mgmt/list', name: 'AssetList', component: () => import('@/pages/assets/AssetList.vue') },
+    { path: '/assets-mgmt/asset/:id', name: 'SavedAsset', component: () => import('@/pages/assets/SavedAsset.vue') },
+    { path: '/assets-mgmt/repair', name: 'AssetRepair', component: () => import('@/pages/assets/AssetRepair.vue') },
+    { path: '/assets-mgmt/repair/new', name: 'NewAssetRepair', component: () => import('@/pages/assets/NewAssetRepair.vue') },
+    { path: '/assets-mgmt/repair/:id', name: 'SavedAssetRepair', component: () => import('@/pages/assets/SavedAssetRepair.vue') },
+    { path: '/assets-mgmt/maintenance', name: 'AssetMaintenance', component: () => import('@/pages/assets/AssetMaintenance.vue') },
+    { path: '/assets-mgmt/maintenance/new', name: 'NewAssetMaintenance', component: () => import('@/pages/assets/NewAssetMaintenance.vue') },
+    { path: '/assets-mgmt/maintenance/:id', name: 'SavedAssetMaintenance', component: () => import('@/pages/assets/SavedAssetMaintenance.vue') },
 
     // Billing
     { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },

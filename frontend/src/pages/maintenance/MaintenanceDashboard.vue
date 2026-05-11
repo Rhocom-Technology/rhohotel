@@ -134,22 +134,22 @@
         </div>
       </div>
 
-      <!-- Top Assets by Open Tasks -->
+      <!-- Top Locations by Open Tasks -->
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
-        <h3 class="text-sm font-bold text-gray-900">Top Assets — Open Tasks</h3>
-        <p class="text-xs text-gray-400 mt-0.5 mb-5">Assets with the most unresolved maintenance work.</p>
+        <h3 class="text-sm font-bold text-gray-900">Top Locations — Open Tasks</h3>
+        <p class="text-xs text-gray-400 mt-0.5 mb-5">Locations with the most unresolved maintenance work.</p>
         <div class="space-y-3">
-          <div v-for="item in data.top_assets" :key="item.asset">
+          <div v-for="item in data.top_locations" :key="item.location">
             <div class="flex items-center justify-between mb-1">
-              <span class="text-xs text-gray-700 font-medium truncate max-w-[140px]">{{ item.asset_name }}</span>
+              <span class="text-xs text-gray-700 font-medium truncate max-w-[140px]">{{ item.location }}</span>
               <span class="text-xs text-gray-400">{{ item.open_tasks }} tasks</span>
             </div>
             <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div class="h-full rounded-full bg-blue-500 transition-all duration-500"
-                :style="{ width: assetBarPct(item.open_tasks) + '%' }"></div>
+                :style="{ width: locationBarPct(item.open_tasks) + '%' }"></div>
             </div>
           </div>
-          <div v-if="data.top_assets.length === 0" class="text-xs text-gray-400 italic text-center py-4">
+          <div v-if="data.top_locations.length === 0" class="text-xs text-gray-400 italic text-center py-4">
             No open tasks
           </div>
         </div>
@@ -174,7 +174,7 @@
             <div class="flex-1 min-w-0 pr-3">
               <p class="text-xs font-semibold text-gray-900 font-mono leading-snug">{{ task.name }}</p>
               <p class="text-xs text-gray-500 mt-0.5">
-                {{ task.asset_name || task.asset || '—' }} •
+                {{ task.location || '—' }} •
                 {{ task.technician_name }}
                 <span v-if="task.task_type" class="text-gray-400"> • {{ task.task_type }}</span>
               </p>
@@ -276,9 +276,9 @@ function barHeight(value) {
   return Math.max(8, Math.round((value / max) * 80))
 }
 
-function assetBarPct(count) {
-  if (!data.value?.top_assets?.length) return 0
-  const max = Math.max(...data.value.top_assets.map(a => a.open_tasks), 1)
+function locationBarPct(count) {
+  if (!data.value?.top_locations?.length) return 0
+  const max = Math.max(...data.value.top_locations.map(a => a.open_tasks), 1)
   return Math.round((count / max) * 100)
 }
 

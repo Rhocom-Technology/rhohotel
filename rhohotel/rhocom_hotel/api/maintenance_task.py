@@ -87,18 +87,23 @@ def get_maintenance_list(
     if filter_technician:
         filters["assigned_technician"] = filter_technician
 
-    # Text search across name, asset, location, task_description
+    task_fields = [
+        "name", "task_type", "status", "priority",
+        "location", "task_description",
+        "assigned_technician", "start_time", "end_time",
+        "maintenance_request"
+    ]
+
     if search:
         tasks = frappe.db.sql("""
             SELECT
                 name, task_type, status, priority,
-                asset, location, task_description,
+                location, task_description,
                 assigned_technician, start_time, end_time,
                 maintenance_request
             FROM `tabMaintenance Task`
             WHERE (
                 name LIKE %(q)s
-                OR asset LIKE %(q)s
                 OR location LIKE %(q)s
                 OR task_description LIKE %(q)s
             )
@@ -115,7 +120,7 @@ def get_maintenance_list(
 
         total = frappe.db.sql("""
             SELECT COUNT(name) as cnt FROM `tabMaintenance Task`
-            WHERE (name LIKE %(q)s OR asset LIKE %(q)s OR location LIKE %(q)s OR task_description LIKE %(q)s)
+            WHERE (name LIKE %(q)s OR location LIKE %(q)s OR task_description LIKE %(q)s)
             {filter_clause}
         """.format(filter_clause=_build_filter_clause(filters)),
             {"q": f"%{search}%"}, as_dict=1)[0].cnt or 0
@@ -123,12 +128,7 @@ def get_maintenance_list(
         tasks = frappe.get_all(
             "Maintenance Task",
             filters=filters,
-            fields=[
-                "name", "task_type", "status", "priority",
-                "asset", "location", "task_description",
-                "assigned_technician", "start_time", "end_time",
-                "maintenance_request"
-            ],
+            fields=task_fields,
             order_by="modified desc",
             limit_page_length=page_size,
             limit_start=(page - 1) * page_size
@@ -189,10 +189,6 @@ def get_maintenance_task(task_name):
 
     task = frappe.get_doc("Maintenance Task", task_name)
 
-    asset_name = None
-    if task.asset:
-        asset_name = frappe.db.get_value("Asset", task.asset, "asset_name")
-
     technician_name = None
     if task.assigned_technician:
         technician_name = frappe.db.get_value(
@@ -236,22 +232,14 @@ def get_maintenance_task(task_name):
         "supervisor_name": supervisor_name,
         "start_time": str(task.start_time) if task.start_time else None,
         "end_time": str(task.end_time) if task.end_time else None,
-        "expected_duration": task.expected_duration,
         "location": task.location,
-        "asset": task.asset,
-        "asset_name": asset_name,
-        "final_asset_status": task.final_asset_status,
         "task_description": task.task_description,
         "work_performed": task.work_performed,
         "completion_notes": task.completion_notes,
         "inspection_required": task.inspection_required,
         "fault_diagnosed": task.fault_diagnosed,
-        "parts_replaced": task.parts_replaced,
         "test_run_passed": task.test_run_passed,
         "supervisor_verified": task.supervisor_verified,
-        "parts_approval_status": task.parts_approval_status,
-        "parts_approved_by": task.parts_approved_by,
-        "parts_approved_on": str(task.parts_approved_on) if task.parts_approved_on else None,
         "stock_entry": task.stock_entry,
         "parts_used": parts_used,
     }
@@ -273,10 +261,10 @@ def save_maintenance_task(task_name, task_data, parts_used=None):
 
         field_map = [
             "task_type", "priority", "status", "assigned_technician",
-            "supervisor", "location", "final_asset_status",
+            "supervisor", "location",
             "task_description", "work_performed", "completion_notes",
-            "inspection_required", "fault_diagnosed", "parts_replaced",
-            "test_run_passed", "supervisor_verified", "expected_duration"
+            "inspection_required", "fault_diagnosed",
+            "test_run_passed", "supervisor_verified"
         ]
         for field in field_map:
             if field in task_data:
@@ -300,7 +288,6 @@ def save_maintenance_task(task_name, task_data, parts_used=None):
                         "cost": p.get("cost") or 0,
                         "store_impact": p.get("store_impact") or "Reduce Stock",
                     })
-            task.parts_approval_status = "Pending Approval" if parts_used else ""
 
         task.save()
         frappe.db.commit()
@@ -320,12 +307,6 @@ def submit_maintenance_task(task_name):
 
         if task.docstatus == 1:
             return {"success": False, "error": "Task is already submitted"}
-
-        if task.parts_used and task.parts_approval_status != "Approved":
-            return {
-                "success": False,
-                "error": "Parts have not been approved yet. An admin must approve before submission."
-            }
 
         task.status = "Done"
         task.submit()
@@ -402,16 +383,13 @@ def create_maintenance_task(task_data, parts_used=None):
         task.task_type = task_data.get("task_type", "Corrective")
         task.priority = task_data.get("priority", "Medium")
         task.status = task_data.get("status", "Open")
-        task.asset = task_data.get("asset") or None
         task.location = task_data.get("location") or ""
         task.task_description = task_data.get("task_description") or ""
         task.assigned_technician = task_data.get("assigned_technician") or None
         task.supervisor = task_data.get("supervisor") or None
         task.maintenance_request = task_data.get("maintenance_request") or None
-        task.final_asset_status = task_data.get("final_asset_status") or ""
         task.inspection_required = 1 if task_data.get("inspection_required") else 0
         task.fault_diagnosed = 1 if task_data.get("fault_diagnosed") else 0
-        task.parts_replaced = 1 if task_data.get("parts_replaced") else 0
         task.test_run_passed = 1 if task_data.get("test_run_passed") else 0
         task.completion_notes = task_data.get("completion_notes") or ""
 
@@ -419,8 +397,6 @@ def create_maintenance_task(task_data, parts_used=None):
             task.start_time = task_data["start_time"]
         if task_data.get("end_time"):
             task.end_time = task_data["end_time"]
-        if task_data.get("expected_duration"):
-            task.expected_duration = task_data["expected_duration"]
 
         if parts_used:
             for p in parts_used:
@@ -434,7 +410,6 @@ def create_maintenance_task(task_data, parts_used=None):
                         "cost": p.get("cost") or 0,
                         "store_impact": p.get("store_impact") or "Reduce Stock",
                     })
-            task.parts_approval_status = "Pending Approval"
 
         task.insert()
         frappe.db.commit()
@@ -447,22 +422,10 @@ def create_maintenance_task(task_data, parts_used=None):
 
 
 @frappe.whitelist()
-def get_assets_for_task():
-    """Assets for the asset dropdown"""
-    return frappe.get_all(
-        "Asset",
-        filters={"docstatus": 1, "status": ["not in", ["Scrapped", "Sold"]]},
-        fields=["name", "asset_name", "location", "asset_category"],
-        order_by="asset_name asc",
-        limit_page_length=500
-    )
-
-
-@frappe.whitelist()
 def get_maintenance_dashboard_summary():
     """
     Dashboard summary for the Maintenance Control Center.
-    Returns stats, task type mix, recent activity, and top assets by open tasks.
+    Returns stats, task type mix, recent activity, and top locations by open tasks.
     """
     today = nowdate()
     week_start = get_first_day_of_week(today)
@@ -502,31 +465,27 @@ def get_maintenance_dashboard_summary():
     """, (week_start,), as_dict=1)
     avg_resolution_hrs = round(avg_res[0].avg_hrs or 0, 1) if avg_res else 0
 
-    # ── Top assets by open task count ─────────────────────────────────────────
-    top_assets = frappe.db.sql("""
-        SELECT asset, COUNT(name) as open_tasks
+    # ── Top locations by open task count ──────────────────────────────────────
+    top_locations = frappe.db.sql("""
+        SELECT location, COUNT(name) as open_tasks
         FROM `tabMaintenance Task`
         WHERE status NOT IN ('Done','Cancelled')
-        AND asset IS NOT NULL
-        GROUP BY asset
+        AND location IS NOT NULL AND location != ''
+        GROUP BY location
         ORDER BY open_tasks DESC
         LIMIT 4
     """, as_dict=1)
 
-    for row in top_assets:
-        row["asset_name"] = frappe.db.get_value("Asset", row["asset"], "asset_name") or row["asset"]
-
     # ── Recent activity (latest 5 tasks) ─────────────────────────────────────
     recent = frappe.get_all(
         "Maintenance Task",
-        fields=["name", "task_type", "status", "priority", "asset",
+        fields=["name", "task_type", "status", "priority",
                 "assigned_technician", "location", "task_description", "modified"],
         order_by="modified desc",
         limit_page_length=5
     )
 
     tech_cache = {}
-    asset_cache = {}
     for task in recent:
         if task.get("assigned_technician"):
             tid = task["assigned_technician"]
@@ -535,14 +494,6 @@ def get_maintenance_dashboard_summary():
             task["technician_name"] = tech_cache[tid]
         else:
             task["technician_name"] = "Unassigned"
-
-        if task.get("asset"):
-            aid = task["asset"]
-            if aid not in asset_cache:
-                asset_cache[aid] = frappe.db.get_value("Asset", aid, "asset_name") or aid
-            task["asset_name"] = asset_cache[aid]
-        else:
-            task["asset_name"] = None
 
     return {
         "stats": {
@@ -557,6 +508,6 @@ def get_maintenance_dashboard_summary():
         },
         "type_mix": type_mix,
         "corrective_pct": corrective_pct,
-        "top_assets": top_assets,
+        "top_locations": top_locations,
         "recent_activity": recent,
     }

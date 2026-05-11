@@ -107,7 +107,7 @@
       <div class="flex items-center gap-3 flex-wrap">
         <div class="relative" style="flex:1;min-width:180px;">
           <input v-model="search" @input="debouncedFetch" type="text"
-            placeholder="Search task ID, asset, location, description..."
+            placeholder="Search task ID, location, description..."
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <select v-model="filterType" @change="fetchTasks(1)" class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none">
@@ -168,7 +168,7 @@
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left text-xs font-semibold text-gray-400 px-6 py-3">Task ID</th>
-              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Asset / Description</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Description</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Type</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Location</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Technician</th>
@@ -184,8 +184,7 @@
               @click="router.push({ name: 'MaintenanceTask', params: { id: item.name } })">
               <td class="px-6 py-4 text-xs font-bold text-gray-900 font-mono">{{ item.name }}</td>
               <td class="px-4 py-4">
-                <p class="text-xs font-semibold text-gray-900">{{ item.asset || '—' }}</p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ item.task_description || '' }}</p>
+                <p class="text-xs font-semibold text-gray-900">{{ item.task_description || '—' }}</p>
               </td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ item.task_type }}</td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ item.location || '—' }}</td>
