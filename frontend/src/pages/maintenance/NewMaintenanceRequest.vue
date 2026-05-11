@@ -275,20 +275,49 @@ const roomsResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maint
 const employeesResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_employees_for_request', auto: false })
 const createResource_   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.create_maintenance_request', auto: false })
 
+// async function submitRequest() {
+//   attempted.value = true
+//   if (validationErrors.value.length) { validationErrors.value.forEach(e => showToast(e, 'warning')); return }
+//   submitting.value = true
+//   try {
+//     const res = await createResource_.fetch({ request_data: form.value })
+//     if (res?.success && res?.request_name) {
+//       showToast('Request submitted: ' + res.request_name, 'success')
+//       setTimeout(() => router.replace({ name: 'SavedMaintenanceRequest', params: { id: res.request_name } }), 600)
+//     } else {
+//       showToast('Failed: ' + (res?.error || JSON.stringify(res)))
+//     }
+//   } catch (e) { showToast('Error: ' + (e?.message || String(e))) }
+//   finally { submitting.value = false }
+// }
+
+
 async function submitRequest() {
   attempted.value = true
-  if (validationErrors.value.length) { validationErrors.value.forEach(e => showToast(e, 'warning')); return }
+  if (validationErrors.value.length) {
+    validationErrors.value.forEach(e => showToast(e, 'warning'))
+    return
+  }
   submitting.value = true
   try {
     const res = await createResource_.fetch({ request_data: form.value })
     if (res?.success && res?.request_name) {
-      showToast('Request submitted: ' + res.request_name, 'success')
-      setTimeout(() => router.replace({ name: 'SavedMaintenanceRequest', params: { id: res.request_name } }), 600)
+      const msg = res.already_existed
+        ? 'A request already exists: ' + res.request_name
+        : 'Request submitted: ' + res.request_name
+      showToast(msg, res.already_existed ? 'warning' : 'success')
+      setTimeout(() => router.replace({
+        name: 'SavedMaintenanceRequest',
+        params: { id: res.request_name }
+      }), 600)
     } else {
       showToast('Failed: ' + (res?.error || JSON.stringify(res)))
     }
-  } catch (e) { showToast('Error: ' + (e?.message || String(e))) }
-  finally { submitting.value = false }
+  } catch (e) {
+    showToast('Error: ' + (e?.message || String(e)))
+  } finally {
+    submitting.value = false
+  }
 }
 
 function priorityTextClass(p) {

@@ -225,18 +225,70 @@ def get_maintenance_request(request_name):
     }
 
 
+# @frappe.whitelist()
+# def create_maintenance_request(request_data):
+#     """Create a new Maintenance Request."""
+#     if isinstance(request_data, str):
+#         request_data = json.loads(request_data)
+
+#     try:
+#         req = frappe.new_doc("Maintenance Request")
+#         req.location_type = request_data.get("location_type") or "Room"
+#         req.room = request_data.get("room") if req.location_type == "Room" else None
+#         req.location = request_data.get("location") if req.location_type == "Other Location" else None
+#         req.issue_type = request_data.get("issue_type")
+#         req.priority = request_data.get("priority", "Medium")
+#         req.reported_by = request_data.get("reported_by")
+#         req.reported_at = request_data.get("reported_at") or now_datetime()
+#         req.issue_description = request_data.get("issue_description") or ""
+#         req.status = "Pending"
+
+#         req.insert(ignore_permissions=True)
+#         # req.insert()
+#         frappe.db.commit()
+#         return {"success": True, "request_name": req.name}
+
+#     except Exception as e:
+#         frappe.log_error(frappe.get_traceback(), "create_maintenance_request error")
+#         frappe.db.rollback()
+#         return {"success": False, "error": str(e)}
+
 @frappe.whitelist()
 def create_maintenance_request(request_data):
-    """Create a new Maintenance Request."""
     if isinstance(request_data, str):
         request_data = json.loads(request_data)
 
     try:
+        location_type = request_data.get("location_type") or "Room"
+        room = request_data.get("room") if location_type == "Room" else None
+        location = request_data.get("location") if location_type == "Other Location" else None
+        issue_type = request_data.get("issue_type")
+
+        # Check if a pending request already exists for same location/issue
+        # If so return it instead of creating a duplicate
+        filters = {
+            "issue_type": issue_type,
+            "location_type": location_type,
+            "status": ["in", ["Pending", "Approved", "In Progress"]],
+        }
+        if location_type == "Room" and room:
+            filters["room"] = room
+        elif location_type == "Other Location" and location:
+            filters["location"] = location
+
+        existing = frappe.db.get_value("Maintenance Request", filters, "name")
+        if existing:
+            return {
+                "success": True,
+                "request_name": existing,
+                "already_existed": True
+            }
+
         req = frappe.new_doc("Maintenance Request")
-        req.location_type = request_data.get("location_type") or "Room"
-        req.room = request_data.get("room") if req.location_type == "Room" else None
-        req.location = request_data.get("location") if req.location_type == "Other Location" else None
-        req.issue_type = request_data.get("issue_type")
+        req.location_type = location_type
+        req.room = room
+        req.location = location
+        req.issue_type = issue_type
         req.priority = request_data.get("priority", "Medium")
         req.reported_by = request_data.get("reported_by")
         req.reported_at = request_data.get("reported_at") or now_datetime()
@@ -244,7 +296,6 @@ def create_maintenance_request(request_data):
         req.status = "Pending"
 
         req.insert(ignore_permissions=True)
-        req.insert()
         frappe.db.commit()
         return {"success": True, "request_name": req.name}
 
@@ -253,6 +304,7 @@ def create_maintenance_request(request_data):
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
 
+        
 
 @frappe.whitelist()
 def approve_request(request_name, assigned_technician=None):
@@ -275,7 +327,8 @@ def approve_request(request_name, assigned_technician=None):
             return {"success": False, "error": "Please assign a technician before approving"}
 
         req.approved = "Approved"
-        req.save()
+        req.save(ignore_permissions=True)
+        # req.save()
         frappe.db.commit()
         return {"success": True}
 
@@ -294,7 +347,8 @@ def reject_request(request_name):
             return {"success": False, "error": "Request is already rejected"}
 
         req.approved = "Rejected"
-        req.save()
+        req.save(ignore_permissions=True)
+        # req.save()
         frappe.db.commit()
         return {"success": True}
 
@@ -333,7 +387,8 @@ def update_maintenance_request(request_name, request_data):
         if request_data.get("reported_at"):
             req.reported_at = request_data["reported_at"]
 
-        req.save()
+        # req.save()
+        req.save(ignore_permissions=True)
         frappe.db.commit()
         return {"success": True}
 
