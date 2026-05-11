@@ -243,6 +243,7 @@ def create_maintenance_request(request_data):
         req.issue_description = request_data.get("issue_description") or ""
         req.status = "Pending"
 
+        req.insert(ignore_permissions=True)
         req.insert()
         frappe.db.commit()
         return {"success": True, "request_name": req.name}
