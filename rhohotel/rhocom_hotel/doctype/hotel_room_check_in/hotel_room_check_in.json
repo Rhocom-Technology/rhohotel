@@ -36,6 +36,7 @@
         "payments_html",
         "section_break_lpyl",
         "housekeeping_notes",
+        "room_preferences",
         "late_checkout_sb",
         "late_checkout",
         "hotel_season",
@@ -243,6 +244,11 @@
             "label": "Housekeeping Notes"
         },
         {
+            "fieldname": "room_preferences",
+            "fieldtype": "Small Text",
+            "label": "Room Preferences"
+        },
+        {
             "fieldname": "column_break_ddup",
             "fieldtype": "Column Break"
         },
@@ -314,7 +320,7 @@
     "index_web_pages_for_search": 1,
     "is_submittable": 1,
     "links": [],
-    "modified": "2026-01-07 13:37:43.478820",
+    "modified": "2026-05-13 12:00:00.000000",
     "modified_by": "Administrator",
     "module": "Rhocom Hotel",
     "name": "Hotel Room Check In",

@@ -84,12 +84,53 @@
             <option v-for="t in roomTypes" :key="t.name" :value="t.name">{{ t.room_type || t.name }}</option>
           </select>
         </div>
-        <div>
-          <p class="text-xs text-gray-500 mb-1.5">Available Room</p>
-          <select v-model="selectedRoom" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
-            <option value="">Select room</option>
-            <option v-for="room in availableRooms" :key="room.name" :value="room.name">{{ room.name }} • {{ room.room_type }}</option>
-          </select>
+        <div class="relative" ref="roomPickerRef">
+          <p class="text-xs text-gray-500 mb-1.5">Available Rooms</p>
+          <!-- tag + search trigger -->
+          <div
+            @click="roomDropdownOpen = true"
+            class="w-full min-h-[38px] px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus-within:ring-1 focus-within:ring-blue-400 cursor-text flex flex-wrap gap-1 items-center bg-white"
+          >
+            <span
+              v-for="roomName in selectedRoom"
+              :key="roomName"
+              class="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium"
+            >
+              {{ roomName }}
+              <button type="button" @click.stop="toggleRoomSelection(roomName)" class="hover:text-blue-900 leading-none">&times;</button>
+            </span>
+            <input
+              v-model="roomSearch"
+              @focus="roomDropdownOpen = true"
+              @keydown.escape="roomDropdownOpen = false"
+              placeholder="Search rooms…"
+              class="flex-1 min-w-[80px] outline-none text-xs bg-transparent placeholder-gray-300"
+            />
+          </div>
+          <!-- dropdown list -->
+          <div
+            v-if="roomDropdownOpen"
+            class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+          >
+            <p v-if="filteredAvailableRooms.length === 0" class="px-3 py-2.5 text-xs text-gray-400">No rooms available</p>
+            <div
+              v-for="room in filteredAvailableRooms"
+              :key="room.name"
+              @mousedown.prevent="toggleRoomSelection(room.name)"
+              class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50"
+              :class="selectedRoom.includes(room.name) ? 'bg-blue-50' : ''"
+            >
+              <span
+                class="w-3.5 h-3.5 flex-shrink-0 rounded border flex items-center justify-center"
+                :class="selectedRoom.includes(room.name) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'"
+              >
+                <svg v-if="selectedRoom.includes(room.name)" class="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </span>
+              <span class="text-xs text-gray-700">{{ room.name }} &bull; {{ room.room_type }}</span>
+            </div>
+          </div>
         </div>
         <div class="flex items-end">
           <button @click="addRoom" class="w-full px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Add Room</button>
@@ -152,7 +193,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createResource } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 import { callMethod } from '@/lib/api'
@@ -179,9 +220,38 @@ const successMessage = ref('')
 const isSaving = ref(false)
 
 const selectedRoomType = ref('')
-const selectedRoom = ref('')
+const selectedRoom = ref([])
 const selectedRooms = ref([])
 const availableRooms = ref([])
+const roomSearch = ref('')
+const roomDropdownOpen = ref(false)
+const roomPickerRef = ref(null)
+
+const filteredAvailableRooms = computed(() => {
+  const q = roomSearch.value.trim().toLowerCase()
+  if (!q) return availableRooms.value
+  return availableRooms.value.filter(
+    (r) => r.name.toLowerCase().includes(q) || (r.room_type || '').toLowerCase().includes(q),
+  )
+})
+
+function toggleRoomSelection(roomName) {
+  const idx = selectedRoom.value.indexOf(roomName)
+  if (idx === -1) {
+    selectedRoom.value = [...selectedRoom.value, roomName]
+  } else {
+    selectedRoom.value = selectedRoom.value.filter((n) => n !== roomName)
+  }
+}
+
+function handleClickOutside(e) {
+  if (roomPickerRef.value && !roomPickerRef.value.contains(e.target)) {
+    roomDropdownOpen.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('mousedown', handleClickOutside))
+onUnmounted(() => document.removeEventListener('mousedown', handleClickOutside))
 
 const corporateGuestsResource = createResource({
   url: 'frappe.client.get_list',
@@ -257,7 +327,8 @@ watch(
   () => [form.value.from_date, form.value.to_date, selectedRoomType.value],
   () => {
     availableRooms.value = []
-    selectedRoom.value = ''
+    selectedRoom.value = []
+    roomSearch.value = ''
     if (form.value.from_date && form.value.to_date && nightsCount.value > 0) {
       loadAvailableRooms()
     }
@@ -302,16 +373,21 @@ async function loadAvailableRooms() {
 }
 
 function addRoom() {
-  if (!selectedRoom.value) return
-  const room = availableRooms.value.find((r) => r.name === selectedRoom.value)
-  if (!room) return
-  if (selectedRooms.value.some((r) => r.name === room.name)) return
-  selectedRooms.value.push({
-    ...room,
-    rate_per_night: getRoomRate(room),
-    discount: getRoomDiscount(room),
-    room_total: getRoomAmount(room),
-  })
+  if (!selectedRoom.value.length) return
+  for (const roomName of selectedRoom.value) {
+    const room = availableRooms.value.find((r) => r.name === roomName)
+    if (!room) continue
+    if (selectedRooms.value.some((r) => r.name === room.name)) continue
+    selectedRooms.value.push({
+      ...room,
+      rate_per_night: getRoomRate(room),
+      discount: getRoomDiscount(room),
+      room_total: getRoomAmount(room),
+    })
+  }
+  selectedRoom.value = []
+  roomSearch.value = ''
+  roomDropdownOpen.value = false
 }
 
 function removeRoom(roomName) {

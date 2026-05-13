@@ -74,7 +74,7 @@ def search_guests(query=""):
 
     q = f"%{query.strip()}%"
     guests = frappe.db.sql("""
-        SELECT name, hotel_guest_name, phone_number, email, guest_type, preference
+        SELECT name, hotel_guest_name, phone_number, email, guest_type, preference, id_type
         FROM `tabHotel Guest`
         WHERE hotel_guest_name LIKE %s
             OR phone_number LIKE %s
@@ -421,21 +421,30 @@ def get_checkout_detail(check_in_name):
 
     doc = frappe.get_doc("Hotel Room Check In", check_in_name)
 
-    # Fetch all invoices (Sales + POS) linked to this check-in
+    # Fetch all invoices (Sales + POS) linked to this check-in — split into separate
+    # queries so a missing column on one table does not silently kill both.
     invoices = []
     try:
-        invoices = frappe.db.sql("""
+        si_rows = frappe.db.sql("""
             SELECT name AS invoice_id, grand_total AS amount, outstanding_amount,
                    posting_date, status, 'Sales Invoice' AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
-            UNION ALL
+            ORDER BY posting_date DESC
+        """, check_in_name, as_dict=1) or []
+        invoices.extend(si_rows)
+    except Exception:
+        pass
+
+    try:
+        pos_rows = frappe.db.sql("""
             SELECT name AS invoice_id, grand_total AS amount, outstanding_amount,
                    posting_date, status, 'POS Invoice' AS invoice_type
             FROM `tabPOS Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
-        """, (check_in_name, check_in_name), as_dict=1) or []
+        """, check_in_name, as_dict=1) or []
+        invoices.extend(pos_rows)
     except Exception:
         pass
 
@@ -492,6 +501,62 @@ def get_checkout_detail(check_in_name):
         "invoices": invoices,
         "payments": payments,
     }
+
+
+@frappe.whitelist()
+def create_bill_transfer(from_check_in, to_guest, invoices, reason="", note=""):
+    """Create Bill Transfer document(s) in Pending Approval state for selected invoices."""
+    invoices = json.loads(invoices) if isinstance(invoices, str) else invoices
+    if not invoices:
+        frappe.throw("Please select at least one invoice to transfer.")
+
+    if not frappe.db.exists("Hotel Room Check In", from_check_in):
+        frappe.throw(f"Check-in {from_check_in} not found.")
+
+    check_in_doc = frappe.get_doc("Hotel Room Check In", from_check_in)
+    from_guest = check_in_doc.guest
+
+    if from_guest == to_guest:
+        frappe.throw("Cannot transfer a bill to the same guest.")
+
+    full_reason = reason
+    if note:
+        full_reason = f"{reason} — {note}" if reason else note
+
+    created = []
+    for inv_name in invoices:
+        if not frappe.db.exists("Sales Invoice", inv_name):
+            continue  # Skip POS Invoices and non-existing docs
+
+        inv_doc = frappe.get_doc("Sales Invoice", inv_name)
+        total_amount = flt(inv_doc.outstanding_amount)
+
+        if total_amount <= 0:
+            continue
+
+        bt = frappe.new_doc("Bill Transfer")
+        bt.from_guest = from_guest
+        bt.from_check_in = from_check_in
+        bt.to_guest = to_guest
+        bt.source_invoice = inv_name
+        bt.total_amount = total_amount
+        bt.reason = full_reason
+        bt.status = "Pending Approval"
+        bt.insert(ignore_permissions=True)
+
+        created.append({
+            "name": bt.name,
+            "invoice": inv_name,
+            "amount": total_amount,
+        })
+
+    if not created:
+        frappe.throw(
+            "No eligible Sales Invoices found with outstanding balances. "
+            "Only submitted Sales Invoices with outstanding amounts can be transferred."
+        )
+
+    return created
 
 
 @frappe.whitelist()

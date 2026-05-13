@@ -243,7 +243,6 @@
             <p class="text-xs text-gray-500 mb-1.5">Reservation Source</p>
             <select v-model="form.reservation_source"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Walk-in</option>
               <option value="Walk in">Walk-in</option>
               <option value="Reservation">Reservation</option>
               <option value="Online Booking">Online Booking</option>
@@ -446,6 +445,7 @@ async function selectReservation(r) {
         guestQuery.value = matchedGuest.hotel_guest_name
         selectedGuest.value = matchedGuest
         applyPreferenceTagsFromGuest(matchedGuest)
+        if (matchedGuest.id_type) form.id_type = matchedGuest.id_type
         if (!form.contact_number && matchedGuest.phone_number) {
           form.contact_number = matchedGuest.phone_number
         }
@@ -512,6 +512,7 @@ function selectGuest(g) {
   selectedGuest.value = g
   applyPreferenceTagsFromGuest(g)
   if (!form.contact_number && g.phone_number) form.contact_number = g.phone_number
+  if (g.id_type) form.id_type = g.id_type
   showGuestDropdown.value = false
   guestResults.value = []
 }
@@ -839,6 +840,7 @@ onMounted(() => {
             form.guest = pick.name
             selectedGuest.value = pick
             applyPreferenceTagsFromGuest(pick)
+            if (pick.id_type) form.id_type = pick.id_type
             if (!form.contact_number && pick.phone_number) {
               form.contact_number = pick.phone_number
             }

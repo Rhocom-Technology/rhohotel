@@ -115,8 +115,9 @@ const navGroups = [
     label: 'Billing',
     icon: CreditCard,
     children: [
-      { label: 'Billing Dashboard',   to: '/billing' },
-  { label: 'Corporate Billing',   to: '/billing/corporate' },
+      { label: 'Billing Dashboard', to: '/billing' },
+      { label: 'Corporate Billing', to: '/billing/corporate' },
+      { label: 'Bill Transfers',    to: '/billing/bill-transfers' },
     ],
   },
   {

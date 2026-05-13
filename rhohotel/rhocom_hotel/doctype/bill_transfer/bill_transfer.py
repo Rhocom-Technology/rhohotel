@@ -92,6 +92,7 @@ class BillTransfer(Document):
         })
 
         # Save & Submit JE
+        je.flags.ignore_permissions = True
         je.insert(ignore_permissions=True)
         je.submit()
 
@@ -120,3 +121,81 @@ def approve_transfer(docname):
     doc.save()
 
     frappe.msgprint("Bill Transfer approved. You can now Submit the document.")
+
+
+# ------------------------------------------
+#   LIST / FILTER API
+# ------------------------------------------
+@frappe.whitelist()
+def get_bill_transfers(status="", from_date="", to_date="", search=""):
+    """Return list of Bill Transfer documents for the frontend list page."""
+    conditions = []
+    values = {}
+
+    if status:
+        conditions.append("bt.status = %(status)s")
+        values["status"] = status
+
+    if from_date:
+        conditions.append("DATE(bt.creation) >= %(from_date)s")
+        values["from_date"] = from_date
+
+    if to_date:
+        conditions.append("DATE(bt.creation) <= %(to_date)s")
+        values["to_date"] = to_date
+
+    if search:
+        s = f"%{search}%"
+        conditions.append(
+            "(bt.name LIKE %(s)s OR bt.from_guest LIKE %(s)s OR bt.to_guest LIKE %(s)s OR bt.source_invoice LIKE %(s)s)"
+        )
+        values["s"] = s
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    rows = frappe.db.sql(
+        f"""
+        SELECT
+            bt.name,
+            bt.status,
+            bt.from_guest,
+            bt.to_guest,
+            bt.from_check_in,
+            bt.to_check_in,
+            bt.source_invoice,
+            bt.total_amount,
+            bt.reason,
+            bt.authorized_by,
+            bt.journal_entry,
+            bt.creation,
+            bt.modified
+        FROM `tabBill Transfer` bt
+        {where}
+        ORDER BY bt.creation DESC
+        LIMIT 200
+        """,
+        values,
+        as_dict=True,
+    )
+
+    return rows or []
+
+
+# ------------------------------------------
+#   APPROVE AND EXECUTE (frontend workflow)
+# ------------------------------------------
+@frappe.whitelist()
+def approve_and_execute_transfer(docname):
+    """Approve and submit a Bill Transfer document, creating the journal entry."""
+    doc = frappe.get_doc("Bill Transfer", docname)
+
+    if doc.status not in ("Pending Approval", "Draft"):
+        frappe.throw(f"Bill Transfer {docname} is not in Pending Approval state.")
+
+    doc.status = "Approved"
+    doc.authorized_by = frappe.session.user
+    doc.flags.ignore_permissions = True
+    doc.save()
+    doc.submit()
+
+    return {"name": doc.name, "journal_entry": doc.journal_entry}

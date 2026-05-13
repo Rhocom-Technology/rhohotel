@@ -8,9 +8,11 @@
     </div>
 
     <div v-if="loading" class="bg-white rounded-xl border border-gray-200 px-6 py-10 text-sm text-gray-400 text-center">Loading reservation...</div>
-    <div v-else-if="error" class="bg-white rounded-xl border border-red-200 px-6 py-10 text-sm text-red-500 text-center">{{ error }}</div>
+    <div v-else-if="error && !reservation.name" class="bg-white rounded-xl border border-red-200 px-6 py-10 text-sm text-red-500 text-center">{{ error }}</div>
 
-    <template v-else>
+    <template v-else-if="!loading">
+      <div v-if="error" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">{{ error }}</div>
+
       <div class="bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-start justify-between mb-3">
           <div>

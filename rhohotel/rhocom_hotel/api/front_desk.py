@@ -171,10 +171,18 @@ def get_room_view_data(filters=None):
 		row["subtitle"] = _compute_room_subtitle(row)
 		room_rows.append(row)
 
+	reserved_today = frappe.db.count(
+		"Hotel Room Reservation",
+		filters={
+			"from_date": frappe.utils.today(),
+			"status": ["not in", ["Cancelled", "Completed", "Checked-In"]],
+		},
+	)
+
 	stats = {
 		"vacant": len([r for r in room_rows if r.get("status") == "Vacant"]),
 		"occupied": len([r for r in room_rows if r.get("status") == "Occupied"]),
-		"reserved": len([r for r in room_rows if r.get("status") == "Reserved"]),
+		"reserved": reserved_today,
 		"dirty": len([r for r in room_rows if r.get("housekeeping_status") == "Dirty"]),
 		"maintenance": len([r for r in room_rows if r.get("status") == "Maintenance"]),
 		"overdue": len([r for r in room_rows if r.get("overdue")]),

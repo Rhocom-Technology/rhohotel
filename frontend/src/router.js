@@ -79,6 +79,7 @@ const router = createRouter({
     // Billing
     { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
     { path: '/billing/corporate', name: 'CorporateBillList', component: () => import('@/pages/billing/CorporateBillList.vue') },
+    { path: '/billing/bill-transfers', name: 'BillTransferList', component: () => import('@/pages/billing/BillTransferList.vue') },
 
     // Rooms
     { path: '/rooms', name: 'RoomList', component: () => import('@/pages/rooms/RoomList.vue') },

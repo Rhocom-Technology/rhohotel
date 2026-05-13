@@ -27,6 +27,10 @@
           <span v-else class="px-3 py-1 text-xs font-semibold bg-green-50 text-green-600 border border-green-200 rounded-full">
             Settled
           </span>
+          <span v-if="data.late_checkout"
+            class="px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200 rounded-full">
+            Late Check-out
+          </span>
         </div>
         <button @click="$router.push('/check-ins/' + data.name)"
           class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -105,6 +109,13 @@
                 {{ computedOutstanding > 0 ? 'Outstanding balance remains' : 'Fully settled' }}
               </div>
             </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Check-out Type</p>
+              <div class="px-3 py-2.5 text-xs font-semibold rounded-lg border"
+                :class="data.late_checkout ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-gray-900 bg-gray-50 border-gray-200'">
+                {{ data.late_checkout ? 'Late Check-out' : 'Standard Check-out' }}
+              </div>
+            </div>
           </div>
 
           <!-- Invoice Breakdown -->
@@ -160,6 +171,12 @@
       <div class="space-y-5">
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5 space-y-5">
           <h3 class="text-sm font-bold text-gray-900">Checkout Control Panel</h3>
+
+          <!-- Late Check-out Alert -->
+          <div v-if="data.late_checkout" class="bg-amber-50 rounded-xl border border-amber-200 px-4 py-4">
+            <p class="text-xs font-bold text-amber-600 mb-1">Late Check-out Approved</p>
+            <p class="text-xs text-amber-600 leading-relaxed">This guest has been approved for a late check-out. Confirm any applicable late check-out charges are included before finalizing.</p>
+          </div>
 
           <!-- Balance Alert -->
           <div v-if="computedOutstanding > 0" class="bg-red-50 rounded-xl border border-red-200 px-4 py-4">
@@ -269,20 +286,28 @@ const data = ref({
   total_charges: 0,
 })
 
-// Computed values that correctly derive from invoice and payment data
+// Computed values that correctly derive from invoice and payment data.
+// Use explicit length check so a fully-paid/zero-balance folio does not
+// accidentally fall through to a potentially stale doc-level field.
 const computedTotalCharges = computed(() => {
-  const fromInvoices = (data.value.invoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
-  return fromInvoices || data.value.total_invoice || data.value.total_charges || 0
+  if (data.value.invoices && data.value.invoices.length > 0) {
+    return (data.value.invoices).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
+  }
+  return data.value.total_invoice || data.value.total_charges || 0
 })
 
 const computedTotalPaid = computed(() => {
-  const fromPayments = (data.value.payments || []).reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0)
-  return fromPayments || data.value.total_paid || 0
+  if (data.value.payments && data.value.payments.length > 0) {
+    return (data.value.payments).reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0)
+  }
+  return data.value.total_paid || 0
 })
 
 const computedOutstanding = computed(() => {
-  const fromInvoices = (data.value.invoices || []).reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
-  return fromInvoices || data.value.total_outstanding || 0
+  if (data.value.invoices && data.value.invoices.length > 0) {
+    return (data.value.invoices).reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
+  }
+  return data.value.total_outstanding || 0
 })
 
 const remarks = ref('')

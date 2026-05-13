@@ -178,7 +178,11 @@
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-bold text-gray-900">Bills and Payments</h3>
-          <button class="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">View Invoice Details</button>
+          <button
+            class="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            @click="viewInvoiceDetails">
+            View Invoice Details
+          </button>
         </div>
 
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-5">
@@ -201,8 +205,8 @@
               <tr v-for="inv in invoices" :key="inv.invoice"
                 class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3 text-xs text-gray-700">{{ inv.invoice || '—' }}</td>
-                <td class="px-3 py-3 text-xs text-gray-500">{{ inv.invoice_type || 'Room Charge' }}</td>
-                <td class="px-3 py-3 text-xs text-gray-500">{{ inv.posting_date ? formatDateTime(inv.posting_date).split(',')[0] : formatDateTime(checkIn.check_in_datetime).split(',')[0] }}</td>
+                <td class="px-3 py-3 text-xs text-gray-500">{{ formatInvoiceType(inv.invoice_type) }}</td>
+                <td class="px-3 py-3 text-xs text-gray-500">{{ formatDate(inv.posting_date || checkIn.check_in_datetime) }}</td>
                 <td class="px-4 py-3 text-xs text-right text-gray-700">{{ formatCurrency(inv.amount) }}</td>
                 <td class="px-4 py-3 text-xs text-right font-semibold"
                   :class="(inv.outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-gray-400'">
@@ -407,6 +411,20 @@ function formatDateTime(dt) {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
+}
+function formatDate(dt) {
+  if (!dt) return '—'
+  const d = new Date(dt)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+function formatInvoiceType(type) {
+  if (type === 'Sales Invoice') return 'Room Charge'
+  if (type === 'POS Invoice') return 'Restaurant'
+  return type || 'Room Charge'
+}
+function viewInvoiceDetails() {
+  window.open('/app/sales-invoice?custom_hotel_room_check_in=' + checkIn.value.name, '_blank')
 }
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦ 0.00'
