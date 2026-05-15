@@ -257,7 +257,7 @@
           </div>
 
           <!-- Quick Actions -->
-          <div v-if="!checkoutDone">
+          <div v-if="!checkoutDone && data.status !== 'Checked Out'">
             <h4 class="text-xs font-bold text-gray-900 mb-3">Quick Actions</h4>
             <div class="flex items-center gap-2 flex-wrap">
               <button @click="finalizeCheckout"
@@ -267,6 +267,11 @@
                 {{ checkingOut ? 'Processing...' : 'Finalize Check-out' }}
               </button>
             </div>
+          </div>
+          <!-- Already checked out -->
+          <div v-if="!checkoutDone && data.status === 'Checked Out'" class="bg-blue-50 rounded-xl border border-blue-200 px-4 py-4">
+            <p class="text-xs font-bold text-blue-700 mb-1">Already Checked Out</p>
+            <p class="text-xs text-blue-600">This guest has already been checked out.</p>
           </div>
         </div>
       </div>

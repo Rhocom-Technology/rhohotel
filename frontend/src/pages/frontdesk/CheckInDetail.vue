@@ -42,7 +42,7 @@
     </div>
 
     <!-- Action Buttons -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center gap-2 flex-wrap">
+    <div v-if="checkIn.status === 'Checked In'" class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center gap-2 flex-wrap">
       <button @click="showRoomTransfer = true"
         class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Room Transfer
@@ -178,11 +178,6 @@
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-bold text-gray-900">Bills and Payments</h3>
-          <button
-            class="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            @click="viewInvoiceDetails">
-            View Invoice Details
-          </button>
         </div>
 
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-5">
@@ -203,8 +198,9 @@
                 </td>
               </tr>
               <tr v-for="inv in invoices" :key="inv.invoice"
-                class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                <td class="px-4 py-3 text-xs text-gray-700">{{ inv.invoice || '—' }}</td>
+                class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer"
+                @click="openInvoiceDetail(inv)">
+                <td class="px-4 py-3 text-xs text-blue-600 font-medium underline-offset-2 hover:underline">{{ inv.invoice || '—' }}</td>
                 <td class="px-3 py-3 text-xs text-gray-500">{{ formatInvoiceType(inv.invoice_type) }}</td>
                 <td class="px-3 py-3 text-xs text-gray-500">{{ formatDate(inv.posting_date || checkIn.check_in_datetime) }}</td>
                 <td class="px-4 py-3 text-xs text-right text-gray-700">{{ formatCurrency(inv.amount) }}</td>
@@ -298,6 +294,10 @@
     <BillTransferModal v-if="showBillTransfer" :checkIn="checkIn" @close="showBillTransfer = false" @done="onActionDone" />
     <ReceivePaymentModal v-if="showPayment" :checkIn="checkIn" @close="showPayment = false" @done="onActionDone" />
     <DiscountModal v-if="showDiscount" :checkIn="checkIn" @close="showDiscount = false" @done="onActionDone" />
+    <InvoiceDetailModal v-if="showInvoiceDetail && selectedInvoice"
+      :invoiceName="selectedInvoice.invoice"
+      :invoiceType="selectedInvoice.invoice_type"
+      @close="showInvoiceDetail = false; selectedInvoice = null" />
 
     </template>
   </div>
@@ -312,6 +312,7 @@ import RefundRequestModal from '@/components/checkin/RefundRequestModal.vue'
 import BillTransferModal from '@/components/checkin/BillTransferModal.vue'
 import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import DiscountModal from '@/components/checkin/DiscountModal.vue'
+import InvoiceDetailModal from '@/components/checkin/InvoiceDetailModal.vue'
 import { callMethodForm } from '@/lib/api'
 
 const showRoomTransfer = ref(false)
@@ -320,6 +321,8 @@ const showRefund = ref(false)
 const showBillTransfer = ref(false)
 const showPayment = ref(false)
 const showDiscount = ref(false)
+const showInvoiceDetail = ref(false)
+const selectedInvoice = ref(null)
 
 
 const route = useRoute()
@@ -423,8 +426,9 @@ function formatInvoiceType(type) {
   if (type === 'POS Invoice') return 'Restaurant'
   return type || 'Room Charge'
 }
-function viewInvoiceDetails() {
-  window.open('/app/sales-invoice?custom_hotel_room_check_in=' + checkIn.value.name, '_blank')
+function openInvoiceDetail(inv) {
+  selectedInvoice.value = inv
+  showInvoiceDetail.value = true
 }
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦ 0.00'

@@ -66,47 +66,8 @@ class DotDict(dict):
 
 
 class TestRoomAvailability(unittest.TestCase):
-	def test_check_reservation_conflict_applies_exclusion_filter(self):
-		captured = {}
-
-		def fake_get_all(doctype, filters, fields, limit):
-			captured["doctype"] = doctype
-			captured["filters"] = filters
-			captured["fields"] = fields
-			captured["limit"] = limit
-			return [DotDict(name="RES-001", from_date="2026-04-10", to_date="2026-04-12")]
-
-		with patch.object(ra.frappe, "get_all", side_effect=fake_get_all):
-			conflict = ra.check_reservation_conflict(
-				"R-101",
-				"2026-04-10",
-				"2026-04-12",
-				exclude_reservation="RES-CURRENT",
-			)
-
-		self.assertEqual(captured["doctype"], "Hotel Room Reservation")
-		self.assertEqual(captured["filters"]["room_number"], "R-101")
-		self.assertEqual(captured["filters"]["name"], ["!=", "RES-CURRENT"])
-		self.assertEqual(conflict.name, "RES-001")
-
-	def test_assert_room_available_throws_when_reservation_conflicts(self):
-		with (
-			patch.object(
-				ra,
-				"check_reservation_conflict",
-				return_value=DotDict(name="RES-009", from_date="2026-04-10", to_date="2026-04-12"),
-			),
-			patch.object(ra, "check_checkin_conflict", return_value=None),
-			patch.object(ra.frappe, "throw", side_effect=RuntimeError("reservation conflict")) as throw_mock,
-		):
-			with self.assertRaises(RuntimeError):
-				ra.assert_room_available("R-101", "2026-04-10", "2026-04-12")
-
-		self.assertTrue(throw_mock.called)
-
 	def test_assert_room_available_throws_when_checkin_conflicts(self):
 		with (
-			patch.object(ra, "check_reservation_conflict", return_value=None),
 			patch.object(
 				ra,
 				"check_checkin_conflict",
@@ -138,8 +99,6 @@ class TestRoomAvailability(unittest.TestCase):
 			return rooms
 
 		sql_calls = [
-			[DotDict(room_number="R-102")],  # held rooms (Temporary Booking)
-			[],  # booked rooms (legacy Hotel Room Reservation)
 			[],  # checked-in rooms (Hotel Room Check In)
 			[],  # canonical rooms (Hotel Reservation Room child table)
 		]
@@ -159,8 +118,7 @@ class TestRoomAvailability(unittest.TestCase):
 
 		self.assertEqual(captured["filters"]["room_type"], "Deluxe")
 		self.assertEqual(captured["filters"]["status"], "Vacant")
-		self.assertEqual(len(available), 1)
-		self.assertEqual(available[0]["name"], "R-101")
+		self.assertEqual(len(available), 2)
 		self.assertEqual(available[0]["rate_per_night"], 50000)
 		self.assertEqual(available[0]["total_amount"], 100000)
 

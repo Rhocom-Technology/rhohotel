@@ -45,7 +45,7 @@
                 </div>
                 <div v-if="selectedRoom" class="bg-green-50 rounded-lg border border-green-200 px-4 py-3">
                   <p class="text-xs font-bold text-green-700">Selected: Room {{ selectedRoom.name }}</p>
-                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(selectedRoom.rate_per_night) }} / night</p>
+                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(selectedRoom.default_rate) }} / night</p>
                 </div>
                 <div v-else class="bg-gray-50 rounded-lg border border-gray-200 px-4 py-3">
                   <p class="text-xs text-gray-400">Select a room from the list →</p>
@@ -72,7 +72,7 @@
                   <div>
                     <p class="text-sm font-bold text-gray-900">{{ r.name }}</p>
                     <p class="text-xs text-gray-500 mt-0.5">{{ r.room_type }} • {{ r.floor || '' }}</p>
-                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(r.rate_per_night) }} / night</p>
+                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(r.default_rate) }} / night</p>
                   </div>
                   <button
                     class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
@@ -118,12 +118,13 @@ async function loadRooms() {
   loadingRooms.value = true
   error.value = ''
   try {
-    const data = await apiPost('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
+    const data = await apiPost('rhohotel.rhocom_hotel.api.checkin.get_rooms_for_transfer', {
+      current_room: props.checkIn.room_number || '',
       check_in_dt: props.checkIn.check_in_datetime || '',
       check_out_dt: props.checkIn.expected_check_out_datetime || '',
     })
     if (data.exc) { error.value = parseErr(data); return }
-    availableRooms.value = (data.message || []).filter(r => r.name !== props.checkIn.room_number)
+    availableRooms.value = data.message || []
   } catch { error.value = 'Failed to load rooms.' } finally { loadingRooms.value = false }
 }
 onMounted(loadRooms)

@@ -251,7 +251,7 @@ def get_rooms_summary(filters=None):
 		left join
 			`tabHotel Room Check In` ci on ci.name = room.current_check_in
 		left join
-			`tabHotel Room Reservation` r on r.name = ci.reservation
+			`tabHotel Reservation` r on r.name = ci.reservation
 		where {" AND ".join(conds)}
 		order by room.floor, room.name
 	"""
@@ -698,9 +698,9 @@ def get_night_audit_data(audit_date=None):
 		noshows = int(
 			frappe.db.sql(
 				"""
-				SELECT COUNT(*) FROM `tabHotel Room Reservation`
-				WHERE DATE(check_in_date) = %s
-				  AND status NOT IN ('Checked In','Checked Out','Cancelled')
+				SELECT COUNT(*) FROM `tabHotel Reservation`
+				WHERE DATE(from_date) = %s
+				  AND reservation_status NOT IN ('Checked In','Checked Out','Cancelled')
 				""",
 				audit_date_str,
 			)[0][0]

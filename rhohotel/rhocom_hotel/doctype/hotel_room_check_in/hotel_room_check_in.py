@@ -14,7 +14,6 @@ from datetime import datetime, time
 
 class HotelRoomCheckIn(Document):
 	def validate(self):
-		self.validate_reservation()
 		self.validate_rate_amount()
 		self.validate_discount()
 		self.validate_room()
@@ -82,38 +81,6 @@ class HotelRoomCheckIn(Document):
 		if tariff:
 			self.rate_amount = tariff[0].rate_amount
 
-	def validate_reservation(self):
-		if not self.reservation:
-			return
-
-		if not frappe.db.exists("Hotel Room Reservation", self.reservation):
-			frappe.throw(_("Reservation {0} does not exist").format(self.reservation))
-
-		reservation = frappe.get_doc("Hotel Room Reservation", self.reservation)
-
-		# ensure the room is vacant
-		room = frappe.get_doc("Hotel Room", self.room_number)
-		if room.status != "Vacant":
-			frappe.throw(_("Room {0} is not vacant").format(self.room_number))
-
-		check_in_date = get_datetime(self.check_in_datetime).date()
-		if check_in_date < reservation.from_date:
-			frappe.throw(_("Check-in date cannot be before reservation start date"))
-		if check_in_date > reservation.to_date:
-			frappe.throw(_("Check-in date cannot be after reservation end date"))
-
-		existing = frappe.get_all(
-			"Hotel Room Check In",
-			filters={
-				"reservation": self.reservation,
-				"docstatus": 1,
-				"status": ["in", ["Draft", "Checked In"]],
-			},
-		)
-
-		if existing and self.is_new():
-			frappe.throw(_("Reservation {0} is already checked in").format(self.reservation))
-
 	def validate_room(self):
 		if not frappe.db.exists("Hotel Room", self.room_number):
 			frappe.throw(_("Room {0} does not exist").format(self.room_number))
@@ -129,13 +96,10 @@ class HotelRoomCheckIn(Document):
 
 		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
-		# self.reservation holds the linked Hotel Room Reservation (set by front desk flow too)
-		# Excluding it prevents self-conflict while still catching overlaps with other bookings.
 		assert_room_available(
 			self.room_number,
 			self.check_in_datetime,
 			self.expected_check_out_datetime,
-			exclude_reservation=self.reservation or None,
 			exclude_checkin=self.name if not self.is_new() else None,
 		)
 
@@ -150,9 +114,6 @@ class HotelRoomCheckIn(Document):
 		self.update_room_status("Occupied")
 		self.update_room()
 		self.make_sales_invoice()
-
-		if self.reservation:
-			frappe.db.set_value("Hotel Room Reservation", self.reservation, "status", "Completed")
 
 		frappe.publish_realtime("rhohotel_front_desk_update")
 
@@ -207,34 +168,10 @@ class HotelRoomCheckIn(Document):
 			payer_info = resolve_payer(canonical_res_name, charge_category="Room")
 
 		# ------------------------------------------------------------------
-		# Handle legacy-only path (no canonical reservation linked)
+		# Handle fallback (no canonical reservation linked) – use guest customer
 		# ------------------------------------------------------------------
 		if not payer_info:
-			if self.reservation:
-				reservation = frappe.get_doc("Hotel Room Reservation", self.reservation)
-
-				if getattr(reservation, "reservation_type", None) == "Corporate":
-					return
-
-				if reservation.sales_invoice:
-					invoice = frappe.get_doc("Sales Invoice", reservation.sales_invoice)
-					invoice.db_set("custom_hotel_room_check_in", self.name)
-
-					payments = frappe.db.get_all(
-						"Payment Entry Reference",
-						filters={
-							"reference_doctype": "Sales Invoice",
-							"reference_name": reservation.sales_invoice,
-						},
-						fields=["parent"],
-					)
-
-					for payment in payments:
-						payment_doc = frappe.get_doc("Payment Entry", payment.parent)
-						payment_doc.db_set("custom_hotel_room_check_in", self.name)
-						payment_doc.save(ignore_permissions=True)
-
-					return
+			pass  # fall through to guest customer resolution below
 
 		# ------------------------------------------------------------------
 		# Determine customer from payer_info or fallback to guest customer
@@ -489,19 +426,28 @@ def apply_discount(check_in_name, discount_amount, reason=None):
 	"""
 	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in_name)
 
+	customer = frappe.get_value("Hotel Guest", check_in_doc.guest, "customer")
+	if not customer:
+		frappe.throw(_("No customer linked to guest {0}").format(check_in_doc.guest))
+
+	room_doc = frappe.get_doc("Hotel Room", check_in_doc.room_number)
+
 	# Create credit note (Sales Invoice with is_return = 1)
 	credit_note = frappe.get_doc(
 		{
 			"doctype": "Sales Invoice",
-			"customer": check_in_doc.guest,
+			"customer": customer,
 			"is_return": 1,
 			"update_stock": 0,
 			"custom_hotel_room_check_in": check_in_doc.name,
-			"items": [{"item_code": "Room Discount", "qty": -1, "rate": discount_amount}],
+			"items": [{"item_code": room_doc.erpnext_item, "qty": -1, "rate": discount_amount}],
 			"posting_date": frappe.utils.today(),
 			"remarks": reason or f"Discount applied to Check In {check_in_doc.name}",
 		}
 	)
+	credit_note.flags.ignore_permissions = True
+	credit_note.flags.ignore_mandatory = True
+	credit_note.flags.ignore_links = True
 	credit_note.insert()
 	credit_note.submit()
 
@@ -676,18 +622,24 @@ def reduce_stay(check_in_name, new_checkout):
 	if diff_nights > 0:
 		credit_amount = flt(doc.rate_amount) * diff_nights
 
+		customer = frappe.get_value("Hotel Guest", doc.guest, "customer")
+		if not customer:
+			frappe.throw(_("No customer linked to guest {0}").format(doc.guest))
+
+		room_doc = frappe.get_doc("Hotel Room", doc.room_number)
+
 		# Create credit note (Sales Invoice with is_return = 1)
 		credit_note = frappe.get_doc(
 			{
 				"doctype": "Sales Invoice",
-				"customer": doc.guest,
+				"customer": customer,
 				"is_return": 1,
 				"update_stock": 0,
 				"check_in": doc.name,
 				"custom_hotel_room_check_in": doc.name,
 				"items": [
 					{
-						"item_code": doc.room_number,
+						"item_code": room_doc.erpnext_item,
 						"qty": -diff_nights,
 						"rate": doc.rate_amount,
 						"amount": credit_amount,
@@ -697,6 +649,9 @@ def reduce_stay(check_in_name, new_checkout):
 				"remarks": f"Credit note for reduced stay ({diff_nights} nights)",
 			}
 		)
+		credit_note.flags.ignore_permissions = True
+		credit_note.flags.ignore_mandatory = True
+		credit_note.flags.ignore_links = True
 		credit_note.insert()
 		credit_note.submit()
 
@@ -773,9 +728,13 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 		)
 
 	amount = flt(doc.rate_amount) * diff_nights
-	amount_with_discount = flt(amount) - flt(new_discount) if flt(new_discount) > 0 else 0
-	frappe.log_error(amount_with_discount)
 	adjustment_invoice_name = None
+
+	customer = frappe.get_value("Hotel Guest", doc.guest, "customer")
+	if not customer:
+		frappe.throw(_("No customer linked to guest {0}").format(doc.guest))
+
+	room_doc = frappe.get_doc("Hotel Room", doc.room_number)
 
 	try:
 		# === EXTENSION INVOICE ===
@@ -783,13 +742,13 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 			invoice = frappe.get_doc(
 				{
 					"doctype": "Sales Invoice",
-					"customer": doc.guest,
+					"customer": customer,
 					"is_return": 0,
 					"update_stock": 0,
 					"custom_hotel_room_check_in": doc.name,
 					"items": [
 						{
-							"item_code": doc.room_number,
+							"item_code": room_doc.erpnext_item,
 							"qty": diff_nights,
 							"rate": doc.rate_amount,
 							"amount": diff_nights * doc.rate_amount,
@@ -828,13 +787,13 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 			credit_note = frappe.get_doc(
 				{
 					"doctype": "Sales Invoice",
-					"customer": doc.guest,
+					"customer": customer,
 					"is_return": 1,
 					"update_stock": 0,
 					"custom_hotel_room_check_in": doc.name,
 					"items": [
 						{
-							"item_code": doc.room_number,
+							"item_code": room_doc.erpnext_item,
 							"qty": -diff_nights,
 							"rate": doc.rate_amount,
 						}
@@ -1011,6 +970,9 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, note=None):
 		return
 
 	guest = check_in_doc.guest
+	customer = frappe.get_value("Hotel Guest", guest, "customer")
+	if not customer:
+		frappe.throw(_("No customer linked to guest {0}").format(guest))
 	company = frappe.defaults.get_user_default("Company")
 
 	if not company:
@@ -1040,7 +1002,7 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, note=None):
 	# Create Sales Invoice
 	# -----------------------------------------------------
 	invoice = frappe.new_doc("Sales Invoice")
-	invoice.customer = guest
+	invoice.customer = customer
 	invoice.company = company
 	invoice.posting_date = posting_date
 	invoice.is_return = bool(is_refund)
@@ -1054,6 +1016,7 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, note=None):
 	invoice.append(
 		"items",
 		{
+			"item_code": new_room.erpnext_item,
 			"item_name": invoice_title,
 			"description": f"{invoice_title} for {remaining_nights} night(s)",
 			"qty": qty,

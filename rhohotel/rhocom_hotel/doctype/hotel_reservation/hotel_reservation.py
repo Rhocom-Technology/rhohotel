@@ -6,22 +6,15 @@ hotel_reservation.py – Canonical single-reservation doctype for Rhohotel.
 
 Background
 ----------
-Previously the system spread reservation logic across multiple doctypes:
-  - Hotel Front Desk Reservation  (multi-room, front-desk-initiated)
-  - Hotel Room Reservation        (single-room, created per allocated room)
-  - Temporary Booking             (online hold before payment)
-  - Corporate Check In            (corporate walk-in / reservation)
-
-This module is the *canonical* replacement.  One Hotel Reservation document
-represents the full lifecycle of a stay — from initial hold through check-in,
-checkout, and invoicing — regardless of the originating channel.
+This module is the *canonical* reservation doctype.  One Hotel Reservation
+document represents the full lifecycle of a stay — from initial hold through
+check-in, checkout, and invoicing — regardless of the originating channel
+(Individual, Corporate, Group, OTA, House Use, or Complimentary).
 
 Lifecycle / state machine
 -------------------------
   Draft → Hold
     Room hold is activated; hold_expires_at is set.
-    Background job (background_jobs.py) watches for expiry and transitions
-    the status to Expired when hold_expires_at is passed without payment.
 
   Hold → Confirmed
     Payment received (or front-desk confirm override).
@@ -41,9 +34,6 @@ Lifecycle / state machine
     Guest departs.  check_out_time is stamped.
     Hotel Room reverts to Vacant (housekeeping task auto-created).
 
-  Checked In → Cancelled (admin override only)
-    Emergency use.  Treated as a forced checkout for reporting purposes.
-
   Any active state → No Show
     Policy-driven transition when guest does not arrive by a threshold time.
 
@@ -52,9 +42,8 @@ Room availability
 All availability checks are delegated to the centralized utility:
     rhohotel.rhocom_hotel.utils.room_availability
 
-The utility now checks *both* legacy doctypes (Hotel Room Reservation,
-Hotel Room Check In) *and* canonical Hotel Reservation room allocations so
-that double-booking is prevented across all booking channels.
+The utility checks Hotel Room Check In and canonical Hotel Reservation room
+allocations so that double-booking is prevented across all booking channels.
 
 Pricing totals
 --------------
@@ -62,15 +51,6 @@ Pricing totals
   discount_amt  = % or fixed amount applied to subtotal
   total_amount  = subtotal - discount_amount
   net_total     = total_amount (+ taxes when invoice is created)
-
-Legacy migration fields
------------------------
-  frontdesk_reference_legacy  – source Hotel Front Desk Reservation
-  temporary_booking_legacy    – source Temporary Booking (online hold)
-  room_reservation_legacy     – source Hotel Room Reservation (single-room)
-
-These fields are read-only and will be retired once the full consolidation
-migration (Phases 1-6) is complete and verified.
 """
 
 from frappe.model.document import Document

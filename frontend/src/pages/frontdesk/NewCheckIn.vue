@@ -697,7 +697,7 @@ const estimatedTotal = computed(() => {
   let total = nights * rate
   if (form.discount_type === 'Percentage' && form.discount > 0) {
     total = total * (1 - form.discount / 100)
-  } else if (form.discount_type === 'Amount' && form.discount > 0) {
+  } else if (form.discount_type === 'Fixed Amount' && form.discount > 0) {
     total = total - form.discount
   }
   return Math.max(0, total)
@@ -709,7 +709,7 @@ const discountDisplayAmount = computed(() => {
   const subtotal = nights * rate
   if (form.discount_type === 'Percentage' && form.discount > 0) {
     return subtotal * (form.discount / 100)
-  } else if (form.discount_type === 'Amount' && form.discount > 0) {
+  } else if (form.discount_type === 'Fixed Amount' && form.discount > 0) {
     return form.discount
   }
   return 0

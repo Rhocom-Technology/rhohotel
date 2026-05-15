@@ -4,7 +4,6 @@
     "doctype": "DocType",
     "engine": "InnoDB",
     "field_order": [
-        "reservation",
         "canonical_reservation",
         "guest_details_section",
         "guest",
@@ -45,18 +44,10 @@
         "adjustments",
         "transfer_history_tab",
         "corporate_check_in",
-        "front_desk_reservation",
         "total_outstanding_amount",
         "transfer_history"
     ],
     "fields": [
-        {
-            "fieldname": "reservation",
-            "fieldtype": "Link",
-            "label": "Reservation",
-            "options": "Hotel Room Reservation",
-            "search_index": 1
-        },
         {
             "fieldname": "canonical_reservation",
             "fieldtype": "Link",
@@ -73,15 +64,6 @@
             "hidden": 1,
             "label": "Corporate Check In",
             "options": "Corporate Check In",
-            "read_only": 1
-        },
-        {
-            "allow_on_submit": 1,
-            "description": "Linked front desk multi-room reservation",
-            "fieldname": "front_desk_reservation",
-            "fieldtype": "Link",
-            "label": "Front Desk Reservation",
-            "options": "Hotel Front Desk Reservation",
             "read_only": 1
         },
         {

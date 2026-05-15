@@ -67,77 +67,37 @@ def get_checkin_detail(name):
 
 
 @frappe.whitelist()
-def search_guests(query=""):
+def search_guests(query="", guest_type=""):
     """Search Hotel Guest by name/phone/email for autocomplete."""
     if not query or len(query.strip()) < 2:
         return []
 
     q = f"%{query.strip()}%"
-    guests = frappe.db.sql("""
+    type_clause = "AND guest_type = %s" if guest_type else ""
+    params = (q, q, q, q, guest_type) if guest_type else (q, q, q, q)
+    guests = frappe.db.sql(f"""
         SELECT name, hotel_guest_name, phone_number, email, guest_type, preference, id_type
         FROM `tabHotel Guest`
-        WHERE hotel_guest_name LIKE %s
+        WHERE (hotel_guest_name LIKE %s
             OR phone_number LIKE %s
             OR email LIKE %s
-            OR name LIKE %s
+            OR name LIKE %s)
+        {type_clause}
         ORDER BY hotel_guest_name
         LIMIT 10
-    """, (q, q, q, q), as_dict=1)
+    """, params, as_dict=1)
 
     return guests
 
 
 @frappe.whitelist()
 def search_reservations(query=""):
-    """Search reservations (both legacy Hotel Room Reservation and canonical Hotel Reservation)
-    by name, guest name, or phone for autocomplete.
+    """Search canonical Hotel Reservation by name, guest name, or phone for autocomplete.
 
-    Returns active reservations not yet fully checked in.  Results from both
-    doctypes are merged and deduplicated before returning.
+    Returns active reservations not yet fully checked in.
     """
     # -----------------------------------------------------------------------
-    # 1. Legacy: Hotel Room Reservation
-    # -----------------------------------------------------------------------
-    base_conditions = """
-        IFNULL(r.status, '') NOT IN ('Cancelled', 'Completed', 'Checked-In', 'Checked In')
-        AND NOT EXISTS (
-            SELECT 1 FROM `tabHotel Room Check In` ci
-            WHERE ci.reservation = r.name AND ci.docstatus != 2
-        )
-    """
-
-    if query and len(query.strip()) >= 1:
-        q = f"%{query.strip()}%"
-        legacy_rows = frappe.db.sql(
-            f"""
-            SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
-                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate,
-                   'legacy' AS source_type
-            FROM `tabHotel Room Reservation` r
-            WHERE {base_conditions}
-              AND (r.name LIKE %s OR r.guest_name LIKE %s OR r.guest_phone LIKE %s)
-            ORDER BY r.from_date ASC
-            LIMIT 10
-            """,
-            (q, q, q),
-            as_dict=1,
-        )
-    else:
-        legacy_rows = frappe.db.sql(
-            f"""
-            SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
-                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate,
-                   'legacy' AS source_type
-            FROM `tabHotel Room Reservation` r
-            WHERE {base_conditions}
-            ORDER BY r.from_date ASC
-            LIMIT 10
-            """,
-            as_dict=1,
-        )
-
-    # -----------------------------------------------------------------------
-    # 2. Canonical: Hotel Reservation
+    # Canonical: Hotel Reservation
     # -----------------------------------------------------------------------
     canonical_base = """
         hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
@@ -190,12 +150,8 @@ def search_reservations(query=""):
             as_dict=1,
         )
 
-    # -----------------------------------------------------------------------
-    # 3. Merge, sort by from_date, cap at 15
-    # -----------------------------------------------------------------------
-    all_rows = list(legacy_rows) + list(canonical_rows)
-    all_rows.sort(key=lambda r: str(r.get("from_date") or ""))
-    return all_rows[:15]
+    canonical_rows.sort(key=lambda r: str(r.get("from_date") or ""))
+    return canonical_rows[:15]
 
 
 @frappe.whitelist()
@@ -325,21 +281,6 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
             as_dict=True,
         )
 
-        # Legacy reservations overlapping the period
-        reservation_rows = frappe.db.sql(
-            f"""
-            SELECT DISTINCT room_number
-            FROM `tabHotel Room Reservation`
-            WHERE room_number IN ({placeholders})
-              AND docstatus != 2
-              AND status NOT IN ('Cancelled', 'Completed', 'No Show')
-              AND from_date < %s
-              AND to_date > %s
-            """,
-            tuple(room_names) + (co_str, ci_str),
-            as_dict=True,
-        )
-
         # Canonical Hotel Reservation allocations overlapping the period
         canonical_rows = frappe.db.sql(
             f"""
@@ -360,7 +301,6 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
 
         unavailable = set(
             [r.room_number for r in checkin_rows]
-            + [r.room_number for r in reservation_rows]
             + [r.room_number for r in canonical_rows]
         )
         rooms = [r for r in rooms if r.name not in unavailable]

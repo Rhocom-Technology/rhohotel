@@ -89,11 +89,7 @@ class HotelRoomCheckOut(Document):
         
     def update_reservation(self):
         """Update reservation status if linked"""
-        check_in = frappe.get_doc("Hotel Room Check In", self.check_in)
-        if check_in.reservation:
-            reservation = frappe.get_doc("Hotel Room Reservation", check_in.reservation)
-            reservation.status = "Completed"
-            reservation.db_update()
+        pass
         
 
     # create house keeping task on checkout
