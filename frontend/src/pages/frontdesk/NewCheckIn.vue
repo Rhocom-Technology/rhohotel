@@ -406,7 +406,14 @@ function onReservationBlur() {
 }
 
 async function selectReservation(r) {
-  form.reservation = r.name
+  // Set canonical_reservation for canonical results so billing routing works
+  if (r.source_type === 'canonical') {
+    form.canonical_reservation = r.name
+    form.reservation = ''  // don't set legacy reservation field for canonical
+  } else {
+    form.reservation = r.name
+    form.canonical_reservation = ''
+  }
   reservationQuery.value = r.name
   showReservationDropdown.value = false
 
@@ -745,6 +752,7 @@ async function submitCheckIn() {
       check_in_datetime: form.check_in_datetime,
       rate_type: form.rate_type || '',
       reservation: form.reservation || '',
+      canonical_reservation: form.canonical_reservation || '',
       reservation_source: form.reservation_source || '',
       discount_type: form.discount_type || 'None',
       discount: form.discount || 0,

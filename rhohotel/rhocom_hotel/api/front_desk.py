@@ -172,10 +172,11 @@ def get_room_view_data(filters=None):
 		room_rows.append(row)
 
 	reserved_today = frappe.db.count(
-		"Hotel Room Reservation",
+		"Hotel Reservation",
 		filters={
 			"from_date": frappe.utils.today(),
-			"status": ["not in", ["Cancelled", "Completed", "Checked-In"]],
+			"reservation_status": "Confirmed",
+			"docstatus": ["!=", 2],
 		},
 	)
 

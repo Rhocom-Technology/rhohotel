@@ -193,34 +193,75 @@ class HotelRoomCheckIn(Document):
 				frappe.throw(_("Discount amount cannot be negative"))
 
 	def make_sales_invoice(self):
-		if self.reservation:
-			reservation = frappe.get_doc("Hotel Room Reservation", self.reservation)
+		from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
 
-			if getattr(reservation, "reservation_type", None) == "Corporate":
-				return
+		# ------------------------------------------------------------------
+		# Resolve payer via billing routing engine
+		# ------------------------------------------------------------------
+		# Prefer the canonical Hotel Reservation for routing; fall back to
+		# the legacy Hotel Room Reservation.
+		canonical_res_name = getattr(self, "canonical_reservation", None)
+		payer_info = None
 
-			if reservation.sales_invoice:
-				invoice = frappe.get_doc("Sales Invoice", reservation.sales_invoice)
-				invoice.db_set("custom_hotel_room_check_in", self.name)
+		if canonical_res_name and frappe.db.exists("Hotel Reservation", canonical_res_name):
+			payer_info = resolve_payer(canonical_res_name, charge_category="Room")
 
-				payments = frappe.db.get_all(
-					"Payment Entry Reference",
-					filters={
-						"reference_doctype": "Sales Invoice",
-						"reference_name": reservation.sales_invoice,
-					},
-					fields=["parent"],
-				)
+		# ------------------------------------------------------------------
+		# Handle legacy-only path (no canonical reservation linked)
+		# ------------------------------------------------------------------
+		if not payer_info:
+			if self.reservation:
+				reservation = frappe.get_doc("Hotel Room Reservation", self.reservation)
 
-				for payment in payments:
-					payment_doc = frappe.get_doc("Payment Entry", payment.parent)
-					payment_doc.db_set("custom_hotel_room_check_in", self.name)
-					payment_doc.save(ignore_permissions=True)
+				if getattr(reservation, "reservation_type", None) == "Corporate":
+					return
 
-				return
+				if reservation.sales_invoice:
+					invoice = frappe.get_doc("Sales Invoice", reservation.sales_invoice)
+					invoice.db_set("custom_hotel_room_check_in", self.name)
 
+					payments = frappe.db.get_all(
+						"Payment Entry Reference",
+						filters={
+							"reference_doctype": "Sales Invoice",
+							"reference_name": reservation.sales_invoice,
+						},
+						fields=["parent"],
+					)
+
+					for payment in payments:
+						payment_doc = frappe.get_doc("Payment Entry", payment.parent)
+						payment_doc.db_set("custom_hotel_room_check_in", self.name)
+						payment_doc.save(ignore_permissions=True)
+
+					return
+
+		# ------------------------------------------------------------------
+		# Determine customer from payer_info or fallback to guest customer
+		# ------------------------------------------------------------------
+		customer = None
+		payer_type = "Guest"
+
+		if payer_info:
+			payer_type = payer_info.get("payer_type", "Guest")
+			customer = payer_info.get("customer")
+
+		# Internal types (House Use / Comp) – no billing invoice
+		if payer_type == "Internal (Cost Centre)":
+			return
+
+		if not customer:
+			customer = frappe.get_value("Hotel Guest", self.guest, "customer")
+
+		if not customer:
+			frappe.throw(
+				_("Cannot create invoice: no customer linked to guest {0}.").format(self.guest)
+			)
+
+		# ------------------------------------------------------------------
+		# Build and submit the Sales Invoice
+		# ------------------------------------------------------------------
 		room_doc = frappe.get_doc("Hotel Room", self.room_number)
-		customer = frappe.get_value("Hotel Guest", self.guest, "customer")
 
 		si = frappe.new_doc("Sales Invoice")
 		si.customer = customer

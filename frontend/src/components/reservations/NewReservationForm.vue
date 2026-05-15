@@ -22,6 +22,10 @@
           <select v-model="reservationType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
             <option>Individual</option>
             <option>Corporate</option>
+            <option>Group</option>
+            <option>House Use</option>
+            <option>Complimentary</option>
+            <option>OTA</option>
           </select>
         </div>
         <div>
@@ -35,6 +39,74 @@
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Nights</p>
           <div class="px-3 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-700">{{ nightsCount }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group Details -->
+    <div v-if="reservationType === 'Group'" class="bg-white rounded-xl border border-amber-200 p-5">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">Group Details</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Group Name</p>
+          <input v-model="form.group_name" type="text" placeholder="e.g. Dangote Wedding Party" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Billing Mode</p>
+          <select v-model="form.group_billing_mode" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+            <option value="">Select billing mode</option>
+            <option>Central</option>
+            <option>Split</option>
+          </select>
+        </div>
+        <div v-if="form.group_billing_mode === 'Central'">
+          <p class="text-xs text-gray-500 mb-1.5">Master Payer (Customer)</p>
+          <input v-model="form.group_master_customer" type="text" placeholder="Customer name" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+        </div>
+      </div>
+    </div>
+
+    <!-- OTA Details -->
+    <div v-if="reservationType === 'OTA'" class="bg-white rounded-xl border border-purple-200 p-5">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">OTA Details</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">OTA Channel</p>
+          <select v-model="form.ota_channel" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+            <option value="">Select channel</option>
+            <option v-for="ch in otaChannels" :key="ch.name" :value="ch.name">{{ ch.name }}</option>
+          </select>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Collection Model</p>
+          <select v-model="form.ota_collection_model" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+            <option value="">Select model</option>
+            <option>Hotel Collect</option>
+            <option>OTA Collect / Prepaid</option>
+          </select>
+        </div>
+        <div v-if="form.ota_collection_model === 'OTA Collect / Prepaid'">
+          <p class="text-xs text-gray-500 mb-1.5">Virtual Card Reference</p>
+          <input v-model="form.ota_virtual_card_ref" type="text" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Commission Amount (₦)</p>
+          <input v-model.number="form.ota_commission_amount" type="number" min="0" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+        </div>
+      </div>
+    </div>
+
+    <!-- House Use / Complimentary Details -->
+    <div v-if="reservationType === 'House Use' || reservationType === 'Complimentary'" class="bg-white rounded-xl border border-green-200 p-5">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">{{ reservationType }} Details</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Reason / Authorisation <span class="text-red-500">*</span></p>
+          <textarea v-model="form.comp_reason" rows="2" placeholder="Who authorised this and why?" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Cost Centre</p>
+          <input v-model="form.internal_cost_center" type="text" placeholder="Department cost centre" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
         </div>
       </div>
     </div>
@@ -82,6 +154,13 @@
           <select v-model="selectedRoomType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
             <option value="">All Types</option>
             <option v-for="t in roomTypes" :key="t.name" :value="t.name">{{ t.room_type || t.name }}</option>
+          </select>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Rate Code</p>
+          <select v-model="selectedRateCode" @change="onRateCodeChange" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+            <option value="">Default rate</option>
+            <option v-for="r in eligibleRateCodes" :key="r.name" :value="r.name">{{ r.rate_code }} – {{ r.rate_type }}</option>
           </select>
         </div>
         <div class="relative" ref="roomPickerRef">
@@ -155,6 +234,8 @@
             <tr>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Room</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Type</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate Code</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Meal Plan</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate/Night</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Nights</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Total</th>
@@ -163,11 +244,13 @@
           </thead>
           <tbody>
             <tr v-if="selectedRooms.length === 0">
-              <td colspan="6" class="px-3 py-4 text-center text-xs text-gray-300">No rooms selected</td>
+              <td colspan="8" class="px-3 py-4 text-center text-xs text-gray-300">No rooms selected</td>
             </tr>
             <tr v-for="room in selectedRooms" :key="room.name" class="border-t border-gray-100">
               <td class="px-3 py-2 text-xs text-gray-700">{{ room.name }}</td>
               <td class="px-3 py-2 text-xs text-gray-700">{{ room.room_type }}</td>
+              <td class="px-3 py-2 text-xs text-gray-500">{{ room.rate_code || '—' }}</td>
+              <td class="px-3 py-2 text-xs text-gray-500">{{ room.meal_plan_snapshot || '—' }}</td>
               <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(room.rate_per_night) }}</td>
               <td class="px-3 py-2 text-xs text-gray-700">{{ nightsCount }}</td>
               <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(room.rate_per_night * nightsCount) }}</td>
@@ -180,9 +263,58 @@
       </div>
     </div>
 
+    <!-- Group Room Blocks -->
+    <div v-if="reservationType === 'Group'" class="bg-white rounded-xl border border-amber-200 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-bold text-gray-900">Room Blocks</h3>
+        <button @click="addRoomBlock" type="button" class="px-3 py-1.5 text-xs font-medium text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-50">+ Add Block</button>
+      </div>
+      <p class="text-xs text-gray-400 mb-3">Block room types to protect inventory for this group. Individual rooms are assigned later.</p>
+      <div class="overflow-x-auto border border-gray-100 rounded-lg">
+        <table class="w-full">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Room Type</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Blocked Qty</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate Code</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Notes</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="roomBlocks.length === 0">
+              <td colspan="5" class="px-3 py-4 text-center text-xs text-gray-300">No blocks added</td>
+            </tr>
+            <tr v-for="(block, idx) in roomBlocks" :key="idx" class="border-t border-gray-100">
+              <td class="px-3 py-1.5">
+                <select v-model="block.room_type" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none">
+                  <option value="">Select type</option>
+                  <option v-for="t in roomTypes" :key="t.name" :value="t.name">{{ t.room_type || t.name }}</option>
+                </select>
+              </td>
+              <td class="px-3 py-1.5">
+                <input v-model.number="block.quantity" type="number" min="1" class="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none" />
+              </td>
+              <td class="px-3 py-1.5">
+                <select v-model="block.rate_code" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none">
+                  <option value="">Default</option>
+                  <option v-for="r in eligibleRateCodes" :key="r.name" :value="r.name">{{ r.rate_code }}</option>
+                </select>
+              </td>
+              <td class="px-3 py-1.5">
+                <input v-model="block.notes" type="text" placeholder="Notes" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none" />
+              </td>
+              <td class="px-3 py-1.5">
+                <button @click="removeRoomBlock(idx)" class="text-red-500 hover:text-red-600 text-xs">Remove</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 class="text-sm font-bold text-gray-900 mb-3">Summary</h3>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <h3 class="text-sm font-bold text-gray-900 mb-3">Summary</h3>      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div class="px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 text-xs">Subtotal: <span class="font-semibold">{{ formatCurrency(subTotal) }}</span></div>
         <div class="px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 text-xs">Discount: <span class="font-semibold">{{ formatCurrency(discountAmount) }}</span></div>
         <div class="px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 text-xs">Total Rooms: <span class="font-semibold">{{ selectedRooms.length }}</span></div>
@@ -213,6 +345,18 @@ const form = ref({
   individual_guest: '',
   discount_type: '',
   discount: 0,
+  // Group fields
+  group_name: '',
+  group_billing_mode: '',
+  group_master_customer: '',
+  // OTA fields
+  ota_channel: '',
+  ota_collection_model: '',
+  ota_virtual_card_ref: '',
+  ota_commission_amount: 0,
+  // House Use / Comp fields
+  comp_reason: '',
+  internal_cost_center: '',
 })
 
 const errorMessage = ref('')
@@ -226,6 +370,9 @@ const availableRooms = ref([])
 const roomSearch = ref('')
 const roomDropdownOpen = ref(false)
 const roomPickerRef = ref(null)
+const selectedRateCode = ref('')
+const eligibleRateCodes = ref([])
+const roomBlocks = ref([])
 
 const filteredAvailableRooms = computed(() => {
   const q = roomSearch.value.trim().toLowerCase()
@@ -292,6 +439,56 @@ const roomTypesResource = createResource({
 const corporateGuests = computed(() => corporateGuestsResource.data || [])
 const individualGuests = computed(() => individualGuestsResource.data || [])
 const roomTypes = computed(() => roomTypesResource.data || [])
+
+const otaChannelsResource = createResource({
+  url: 'frappe.client.get_list',
+  params: {
+    doctype: 'Market Place',
+    fields: ['name'],
+    order_by: 'name asc',
+    limit_page_length: 200,
+  },
+  auto: true,
+})
+const otaChannels = computed(() => otaChannelsResource.data || [])
+
+async function loadEligibleRateCodes() {
+  try {
+    const codes = await callMethod('rhohotel.rhocom_hotel.utils.billing_routing.get_eligible_rate_codes', {
+      reservation_type: reservationType.value,
+      check_in_date: form.value.from_date || undefined,
+    })
+    eligibleRateCodes.value = Array.isArray(codes) ? codes : []
+  } catch {
+    eligibleRateCodes.value = []
+  }
+}
+
+watch(
+  () => [reservationType.value, form.value.from_date],
+  () => loadEligibleRateCodes(),
+  { immediate: true },
+)
+
+function onRateCodeChange() {
+  // When a rate code changes, apply its meal plan to all existing room rows
+  const rateDoc = eligibleRateCodes.value.find((r) => r.name === selectedRateCode.value)
+  if (!rateDoc) return
+  selectedRooms.value = selectedRooms.value.map((room) => ({
+    ...room,
+    rate_code: rateDoc.name,
+    meal_plan_snapshot: rateDoc.meal_plan || '',
+    cancellation_policy_snapshot: rateDoc.cancellation_policy || '',
+  }))
+}
+
+function addRoomBlock() {
+  roomBlocks.value.push({ room_type: '', quantity: 1, rate_code: '', notes: '' })
+}
+
+function removeRoomBlock(idx) {
+  roomBlocks.value.splice(idx, 1)
+}
 
 const nightsCount = computed(() => {
   if (!form.value.from_date || !form.value.to_date) return 0
@@ -374,6 +571,7 @@ async function loadAvailableRooms() {
 
 function addRoom() {
   if (!selectedRoom.value.length) return
+  const rateDoc = eligibleRateCodes.value.find((r) => r.name === selectedRateCode.value)
   for (const roomName of selectedRoom.value) {
     const room = availableRooms.value.find((r) => r.name === roomName)
     if (!room) continue
@@ -383,6 +581,9 @@ function addRoom() {
       rate_per_night: getRoomRate(room),
       discount: getRoomDiscount(room),
       room_total: getRoomAmount(room),
+      rate_code: rateDoc ? rateDoc.name : '',
+      meal_plan_snapshot: rateDoc ? (rateDoc.meal_plan || '') : '',
+      cancellation_policy_snapshot: rateDoc ? (rateDoc.cancellation_policy || '') : '',
     })
   }
   selectedRoom.value = []
@@ -400,9 +601,20 @@ function goToNewGuest() {
 
 function validateForm() {
   if (!form.value.from_date || !form.value.to_date || nightsCount.value < 1) return 'Select valid stay dates.'
+  if (reservationType.value === 'Corporate' && !form.value.corporate_guest) return 'Corporate reservation requires a corporate guest.'
+  if (reservationType.value === 'Group') {
+    if (!form.value.primary_guest_name) return 'Group contact name is required.'
+    if (selectedRooms.value.length === 0 && roomBlocks.value.length === 0) return 'Add at least one room or room block for a Group reservation.'
+    if (form.value.group_billing_mode === 'Central' && !form.value.group_master_customer) return 'A master payer customer is required for Central billing mode.'
+    return ''
+  }
+  if (reservationType.value === 'House Use' || reservationType.value === 'Complimentary') {
+    if (!form.value.comp_reason) return `Reason / Authorisation is required for ${reservationType.value} reservations.`
+    if (selectedRooms.value.length === 0) return 'Add at least one room.'
+    return ''
+  }
   if (!form.value.primary_guest_name || !form.value.primary_guest_phone) return 'Guest name and phone are required.'
   if (selectedRooms.value.length === 0) return 'Add at least one room.'
-  if (reservationType.value === 'Corporate' && !form.value.corporate_guest) return 'Corporate reservation requires a corporate guest.'
   return ''
 }
 
@@ -424,7 +636,7 @@ async function saveReservation(submitAfterSave) {
 
     const doc = {
       doctype: 'Hotel Reservation',
-      source_channel: 'Front Desk',
+      source_channel: reservationType.value === 'OTA' ? 'Online' : 'Front Desk',
       reservation_type: reservationType.value,
       guest_profile_kind: reservationType.value === 'Corporate' ? 'Corporate Account' : 'Primary Guest',
       from_date: form.value.from_date,
@@ -434,6 +646,19 @@ async function saveReservation(submitAfterSave) {
       primary_guest_phone: form.value.primary_guest_phone,
       corporate_guest: reservationType.value === 'Corporate' ? form.value.corporate_guest : undefined,
       customer: guestDoc?.customer || undefined,
+      // Group fields
+      group_name: reservationType.value === 'Group' ? form.value.group_name : undefined,
+      group_billing_mode: reservationType.value === 'Group' ? form.value.group_billing_mode : undefined,
+      group_master_customer: (reservationType.value === 'Group' && form.value.group_billing_mode === 'Central') ? form.value.group_master_customer : undefined,
+      // OTA fields
+      ota_channel: reservationType.value === 'OTA' ? form.value.ota_channel : undefined,
+      ota_collection_model: reservationType.value === 'OTA' ? form.value.ota_collection_model : undefined,
+      ota_virtual_card_ref: (reservationType.value === 'OTA' && form.value.ota_collection_model === 'OTA Collect / Prepaid') ? form.value.ota_virtual_card_ref : undefined,
+      ota_commission_amount: reservationType.value === 'OTA' ? Number(form.value.ota_commission_amount || 0) : undefined,
+      // House Use / Comp fields
+      comp_reason: (reservationType.value === 'House Use' || reservationType.value === 'Complimentary') ? form.value.comp_reason : undefined,
+      internal_cost_center: (reservationType.value === 'House Use' || reservationType.value === 'Complimentary') ? form.value.internal_cost_center : undefined,
+      // Pricing
       discount_type: form.value.discount_type || undefined,
       discount: Number(form.value.discount || 0),
       subtotal: Number(subTotal.value || 0),
@@ -446,10 +671,19 @@ async function saveReservation(submitAfterSave) {
         number_of_nights: nightsCount.value,
         discount: getRoomDiscount(room),
         room_total: getRoomAmount(room),
+        rate_code: room.rate_code || undefined,
+        meal_plan_snapshot: room.meal_plan_snapshot || undefined,
+        cancellation_policy_snapshot: room.cancellation_policy_snapshot || undefined,
         occupant_name: form.value.primary_guest_name,
         occupant_email: form.value.primary_guest_email,
         occupant_phone: form.value.primary_guest_phone,
       })),
+      room_blocks: reservationType.value === 'Group' ? roomBlocks.value.filter((b) => b.room_type && b.quantity > 0).map((b) => ({
+        room_type: b.room_type,
+        quantity: b.quantity,
+        rate_code: b.rate_code || undefined,
+        notes: b.notes || undefined,
+      })) : undefined,
     }
 
     const inserted = await callMethod('frappe.client.insert', { doc })

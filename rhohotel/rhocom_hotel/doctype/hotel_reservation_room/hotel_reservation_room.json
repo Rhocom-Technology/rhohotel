@@ -10,12 +10,16 @@
     "room_number",
     "room_type",
     "rate_type",
+    "rate_code",
     "season_type",
     "column_break_room",
     "rate_per_night",
     "number_of_nights",
     "discount",
     "room_total",
+    "rate_snapshot_section",
+    "meal_plan_snapshot",
+    "cancellation_policy_snapshot",
     "occupant_section",
     "occupant_name",
     "occupant_gender",
@@ -55,6 +59,14 @@
       "label": "Rate Type",
       "read_only": 1,
       "description": "Rate category applied (e.g. Standard, Weekend, Corporate). Populated from the Hotel Room Tariff lookup when the room is selected."
+    },
+    {
+      "fieldname": "rate_code",
+      "fieldtype": "Link",
+      "options": "Hotel Room Rate",
+      "label": "Rate Code",
+      "read_only": 1,
+      "description": "The Rate Card (Hotel Room Rate) used to price this room. Snapshotted at the time of booking so subsequent rate changes do not affect confirmed reservations."
     },
     {
       "fieldname": "season_type",
@@ -97,6 +109,27 @@
       "label": "Room Total",
       "read_only": 1,
       "description": "Computed as: (rate_per_night × number_of_nights) - discount. This value feeds into the parent reservation's subtotal."
+    },
+    {
+      "collapsible": 1,
+      "fieldname": "rate_snapshot_section",
+      "fieldtype": "Section Break",
+      "label": "Rate Snapshot",
+      "description": "Immutable copy of the rate terms at the time of booking."
+    },
+    {
+      "fieldname": "meal_plan_snapshot",
+      "fieldtype": "Data",
+      "label": "Meal Plan",
+      "read_only": 1,
+      "description": "Meal plan included in this rate at time of booking (e.g. Room Only, B&B, Half Board, Full Board). Snapshotted so the guest's entitlement is clear regardless of future rate card changes."
+    },
+    {
+      "fieldname": "cancellation_policy_snapshot",
+      "fieldtype": "Small Text",
+      "label": "Cancellation Policy",
+      "read_only": 1,
+      "description": "Cancellation policy terms applicable to this room at time of booking. Snapshotted for dispute resolution and audit."
     },
     {
       "collapsible": 1,

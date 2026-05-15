@@ -578,14 +578,30 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
-    # Resolve customer from guest
+    # Resolve customer via billing routing engine if canonical reservation is linked
     customer = None
-    if ci.guest:
+    canonical_res_name = getattr(ci, "canonical_reservation", None)
+
+    if canonical_res_name and frappe.db.exists("Hotel Reservation", canonical_res_name):
         try:
-            guest_doc = frappe.get_doc("Hotel Guest", ci.guest)
-            customer = guest_doc.customer
+            from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
+            # Determine charge category from items (use first item's group or default)
+            charge_category = "Restaurant"  # POS bills are typically F&B
+            payer_info = resolve_payer(canonical_res_name, charge_category=charge_category)
+            payer_type = payer_info.get("payer_type", "Guest")
+            if payer_type != "Internal (Cost Centre)":
+                customer = payer_info.get("customer")
         except Exception:
-            pass
+            frappe.log_error(frappe.get_traceback(), "Billing routing failed in post_bill_to_room")
+
+    # Fallback: resolve from guest record
+    if not customer:
+        if ci.guest:
+            try:
+                guest_doc = frappe.get_doc("Hotel Guest", ci.guest)
+                customer = guest_doc.customer
+            except Exception:
+                pass
     if not customer:
         customer = ci.guest or "Guest"
 

@@ -131,17 +131,24 @@ class HotelReservation(Document):
 
         Checks performed:
         1. Dates are logically valid (check-out after check-in).
-        2. At least one room allocation row exists.
+        2. At least one room allocation row exists (relaxed for Group with room_blocks).
         3. No room is double-booked for the given dates (uses centralized utility).
         4. Pricing totals are recalculated from child rows.
         5. Corporate guest is set when reservation_type = Corporate.
+        6. Group: either rooms or room_blocks must be present.
+        7. House Use / Complimentary: comp_reason is mandatory.
+        8. Room block pickup counts are recalculated.
+        9. Theoretical revenue is computed for House Use / Complimentary.
         """
         self._validate_dates()
         self._validate_rooms_present()
         self._validate_corporate_guest()
+        self._validate_house_use_comp()
         self._validate_room_availability()
         self._recalculate_room_totals()
         self._recalculate_totals()
+        self._recalculate_block_pickup_counts()
+        self._compute_theoretical_revenue()
 
     def on_submit(self):
         """
@@ -186,14 +193,30 @@ class HotelReservation(Document):
         self.number_of_nights = date_diff(getdate(self.to_date), getdate(self.from_date))
 
     def _validate_rooms_present(self):
-        """Ensure at least one room allocation row has been added."""
-        if not self.rooms:
-            frappe.throw(
-                _(
-                    "At least one room allocation is required. "
-                    "Add a room in the Rooms table."
+        """
+        Ensure at least one room allocation row OR a room block (for Group) has been added.
+
+        Group reservations may be created with only room blocks (no individual rooms
+        picked up yet). For all other types, at least one room row is required.
+        House Use and Complimentary may also operate with only a room block,
+        but in practice they typically have explicit room rows.
+        """
+        if self.reservation_type == "Group":
+            if not self.rooms and not self.get("room_blocks"):
+                frappe.throw(
+                    _(
+                        "Group reservations require at least one Room Allocation or one Room Block. "
+                        "Add rooms to the Rooms table or define room blocks."
+                    )
                 )
-            )
+        else:
+            if not self.rooms:
+                frappe.throw(
+                    _(
+                        "At least one room allocation is required. "
+                        "Add a room in the Rooms table."
+                    )
+                )
 
     def _validate_corporate_guest(self):
         """
@@ -209,6 +232,19 @@ class HotelReservation(Document):
             )
         if self.reservation_type == "Individual" and not self.primary_guest_name:
             frappe.throw(_("Primary Guest Name is required for individual reservations."))
+
+    def _validate_house_use_comp(self):
+        """
+        House Use and Complimentary reservations must have a reason / authorisation.
+        This is a hard requirement for audit compliance.
+        """
+        if self.reservation_type in ("House Use", "Complimentary") and not self.comp_reason:
+            frappe.throw(
+                _(
+                    "A reason and authorisation is required for {0} reservations. "
+                    "Please fill in the 'Reason / Authorisation' field."
+                ).format(self.reservation_type)
+            )
 
     def _validate_room_availability(self):
         """
@@ -234,6 +270,7 @@ class HotelReservation(Document):
                 self.to_date,
                 exclude_reservation=self.name,   # legacy Hotel Room Reservation exclusion
                 exclude_canonical=self.name,      # canonical Hotel Reservation exclusion
+                reservation_type=self.reservation_type,  # pass type for block-guard bypass
             )
 
     # ------------------------------------------------------------------
@@ -245,6 +282,8 @@ class HotelReservation(Document):
         Compute room_total and sync number_of_nights for each child row.
 
         rate_per_night * number_of_nights - row-level discount = room_total.
+        Also snapshots the rate code's meal_plan and cancellation_policy onto the row
+        when a rate_code is linked.
         This must run before _recalculate_totals() which sums room_total values.
         """
         nights = date_diff(getdate(self.to_date), getdate(self.from_date)) if self.from_date and self.to_date else 0
@@ -253,6 +292,18 @@ class HotelReservation(Document):
             rate = float(row.rate_per_night or 0)
             row_discount = float(row.discount or 0)
             row.room_total = round(rate * nights - row_discount, 2)
+            # Snapshot rate plan details when a rate_code is linked
+            if row.rate_code:
+                try:
+                    rate_doc = frappe.get_cached_doc("Hotel Room Rate", row.rate_code)
+                    if not row.meal_plan_snapshot:
+                        row.meal_plan_snapshot = rate_doc.meal_plan or ""
+                    if not row.cancellation_policy_snapshot:
+                        row.cancellation_policy_snapshot = rate_doc.cancellation_policy or ""
+                    if not row.rate_type:
+                        row.rate_type = rate_doc.rate_type or ""
+                except Exception:
+                    pass
 
     def _recalculate_totals(self):
         """
@@ -278,6 +329,47 @@ class HotelReservation(Document):
         # net_total is kept equal to total_amount until an invoice applies taxes
         self.net_total = self.total_amount
 
+    def _recalculate_block_pickup_counts(self):
+        """
+        For Group reservations, compute picked_up and remaining for each room_block row.
+
+        picked_up  = count of rooms rows whose room_type matches the block's room_type.
+        remaining  = quantity - picked_up (floor at 0).
+        """
+        if self.reservation_type != "Group":
+            return
+        for block in self.get("room_blocks") or []:
+            picked = sum(
+                1 for r in self.rooms if r.room_type == block.room_type
+            )
+            block.picked_up = picked
+            block.remaining = max(int(block.quantity or 0) - picked, 0)
+
+    def _compute_theoretical_revenue(self):
+        """
+        For House Use and Complimentary reservations, compute theoretical_room_revenue
+        using the standard rack tariff for each allocated room.
+
+        No actual revenue is recognised; this is for RevPAR and occupancy reporting.
+        """
+        if self.reservation_type not in ("House Use", "Complimentary"):
+            return
+
+        from rhohotel.rhocom_hotel.utils.room_availability import get_room_rate
+        nights = int(self.number_of_nights or 0)
+        if nights <= 0 or not self.rooms:
+            self.theoretical_room_revenue = 0.0
+            return
+
+        total = 0.0
+        for row in self.rooms:
+            if not row.room_type:
+                continue
+            rack_rate = get_room_rate(row.room_type, check_in_date=str(self.from_date)) or 0.0
+            total += float(rack_rate) * nights
+
+        self.theoretical_room_revenue = round(total, 2)
+
     # ------------------------------------------------------------------
     # Room state management
     # ------------------------------------------------------------------
@@ -289,6 +381,7 @@ class HotelReservation(Document):
 
         Only rooms that are currently in Reserved status (set by this reservation)
         are updated; Occupied rooms (i.e. an active check-in is live) are left alone.
+        Also resets block pickup counts so inventory is cleanly returned.
         """
         for row in self.rooms:
             if not row.room_number:
@@ -297,6 +390,11 @@ class HotelReservation(Document):
             if room.status == "Reserved":
                 room.status = "Vacant"
                 room.save(ignore_permissions=True)
+
+        # Reset block pickup/remaining counts so freed inventory is visible
+        for block in self.get("room_blocks") or []:
+            block.picked_up = 0
+            block.remaining = int(block.quantity or 0)
 
 
 @frappe.whitelist()

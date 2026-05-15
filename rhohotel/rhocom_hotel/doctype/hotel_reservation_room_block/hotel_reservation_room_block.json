@@ -1,0 +1,87 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-15 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "istable": 1,
+ "field_order": [
+  "room_type",
+  "quantity",
+  "rate_code",
+  "column_break_1",
+  "picked_up",
+  "remaining",
+  "pickup_deadline",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "room_type",
+   "fieldtype": "Link",
+   "options": "Hotel Room Type",
+   "label": "Room Type",
+   "in_list_view": 1,
+   "reqd": 1,
+   "description": "The room type category for which inventory is being blocked. All rooms of this type within the hotel's available pool are protected up to the blocked quantity."
+  },
+  {
+   "fieldname": "quantity",
+   "fieldtype": "Int",
+   "label": "Blocked Qty",
+   "in_list_view": 1,
+   "reqd": 1,
+   "description": "Number of rooms of this type to hold for this group reservation. Availability is reduced by this quantity for the parent reservation's check-in to check-out period."
+  },
+  {
+   "fieldname": "rate_code",
+   "fieldtype": "Link",
+   "options": "Hotel Room Rate",
+   "label": "Rate Code",
+   "in_list_view": 1,
+   "description": "Contracted rate code for rooms picked up from this block. When set, the rate from this code overrides the default tariff during room pickup."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "picked_up",
+   "fieldtype": "Int",
+   "label": "Picked Up",
+   "read_only": 1,
+   "description": "Number of rooms already assigned (picked up) from this block into the parent reservation's Rooms table. Computed by the system on save."
+  },
+  {
+   "fieldname": "remaining",
+   "fieldtype": "Int",
+   "label": "Remaining",
+   "read_only": 1,
+   "description": "Quantity minus picked_up. Represents how many rooms of this type can still be added without exceeding the block."
+  },
+  {
+   "fieldname": "pickup_deadline",
+   "fieldtype": "Date",
+   "label": "Pickup Deadline",
+   "description": "Optional last date by which rooms must be picked up from this block. Rooms not picked up by this date will be auto-released to general inventory (v2 feature)."
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "description": "Internal notes for this block (e.g. contracted rate details, special arrangements)."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-05-15 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel Reservation Room Block",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 0
+}

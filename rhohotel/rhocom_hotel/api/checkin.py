@@ -89,12 +89,15 @@ def search_guests(query=""):
 
 @frappe.whitelist()
 def search_reservations(query=""):
-    """Search Hotel Room Reservation by name, guest name, or phone for autocomplete.
+    """Search reservations (both legacy Hotel Room Reservation and canonical Hotel Reservation)
+    by name, guest name, or phone for autocomplete.
 
-    Returns active reservations not yet checked in. When query is empty,
-    returns the next 10 reservations by from_date.
+    Returns active reservations not yet fully checked in.  Results from both
+    doctypes are merged and deduplicated before returning.
     """
-    # Status labels vary by deployment; exclude only terminal states.
+    # -----------------------------------------------------------------------
+    # 1. Legacy: Hotel Room Reservation
+    # -----------------------------------------------------------------------
     base_conditions = """
         IFNULL(r.status, '') NOT IN ('Cancelled', 'Completed', 'Checked-In', 'Checked In')
         AND NOT EXISTS (
@@ -105,10 +108,11 @@ def search_reservations(query=""):
 
     if query and len(query.strip()) >= 1:
         q = f"%{query.strip()}%"
-        rows = frappe.db.sql(
+        legacy_rows = frappe.db.sql(
             f"""
             SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
-                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate
+                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate,
+                   'legacy' AS source_type
             FROM `tabHotel Room Reservation` r
             WHERE {base_conditions}
               AND (r.name LIKE %s OR r.guest_name LIKE %s OR r.guest_phone LIKE %s)
@@ -119,10 +123,11 @@ def search_reservations(query=""):
             as_dict=1,
         )
     else:
-        rows = frappe.db.sql(
+        legacy_rows = frappe.db.sql(
             f"""
             SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
-                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate
+                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate,
+                   'legacy' AS source_type
             FROM `tabHotel Room Reservation` r
             WHERE {base_conditions}
             ORDER BY r.from_date ASC
@@ -131,7 +136,66 @@ def search_reservations(query=""):
             as_dict=1,
         )
 
-    return rows
+    # -----------------------------------------------------------------------
+    # 2. Canonical: Hotel Reservation
+    # -----------------------------------------------------------------------
+    canonical_base = """
+        hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+        AND hr.docstatus != 2
+    """
+
+    if query and len(query.strip()) >= 1:
+        q = f"%{query.strip()}%"
+        canonical_rows = frappe.db.sql(
+            f"""
+            SELECT hr.name, hr.primary_guest_name AS guest_name,
+                   hr.primary_guest_phone AS guest_phone,
+                   hr.primary_guest_email AS guest_email,
+                   NULL AS room_number,
+                   hr.from_date, hr.to_date,
+                   hr.reservation_status AS status,
+                   hr.number_of_nights,
+                   NULL AS rate,
+                   hr.reservation_type,
+                   hr.group_name,
+                   'canonical' AS source_type
+            FROM `tabHotel Reservation` hr
+            WHERE {canonical_base}
+              AND (hr.name LIKE %s OR hr.primary_guest_name LIKE %s OR hr.primary_guest_phone LIKE %s OR hr.group_name LIKE %s)
+            ORDER BY hr.from_date ASC
+            LIMIT 10
+            """,
+            (q, q, q, q),
+            as_dict=1,
+        )
+    else:
+        canonical_rows = frappe.db.sql(
+            f"""
+            SELECT hr.name, hr.primary_guest_name AS guest_name,
+                   hr.primary_guest_phone AS guest_phone,
+                   hr.primary_guest_email AS guest_email,
+                   NULL AS room_number,
+                   hr.from_date, hr.to_date,
+                   hr.reservation_status AS status,
+                   hr.number_of_nights,
+                   NULL AS rate,
+                   hr.reservation_type,
+                   hr.group_name,
+                   'canonical' AS source_type
+            FROM `tabHotel Reservation` hr
+            WHERE {canonical_base}
+            ORDER BY hr.from_date ASC
+            LIMIT 10
+            """,
+            as_dict=1,
+        )
+
+    # -----------------------------------------------------------------------
+    # 3. Merge, sort by from_date, cap at 15
+    # -----------------------------------------------------------------------
+    all_rows = list(legacy_rows) + list(canonical_rows)
+    all_rows.sort(key=lambda r: str(r.get("from_date") or ""))
+    return all_rows[:15]
 
 
 @frappe.whitelist()
@@ -328,6 +392,7 @@ def create_checkin(
     check_in_datetime=None,
     rate_type="",
     reservation="",
+    canonical_reservation="",
     reservation_source="",
     discount_type="",
     discount=0,
@@ -357,6 +422,7 @@ def create_checkin(
     doc.check_in_datetime = ci_dt
     doc.expected_check_out_datetime = expected_out
     doc.reservation = reservation or ""
+    doc.canonical_reservation = canonical_reservation or ""
     doc.reservation_source = reservation_source or ""
     doc.discount_type = discount_type or "None"
     doc.discount = flt(discount)
@@ -378,6 +444,31 @@ def create_checkin(
 
     doc.insert(ignore_permissions=True)
     doc.submit()
+
+    # If a canonical reservation was linked, update its status to Checked In
+    # and back-link this check-in to the matching room row
+    if canonical_reservation and frappe.db.exists("Hotel Reservation", canonical_reservation):
+        try:
+            res_doc = frappe.get_doc("Hotel Reservation", canonical_reservation)
+            if res_doc.reservation_status in ("Confirmed", "Hold"):
+                res_doc.flags.ignore_validate_update_after_submit = True
+                res_doc.reservation_status = "Checked In"
+                res_doc.check_in_time = ci_dt
+                res_doc.save(ignore_permissions=True)
+
+            # Link check-in reference to the matching room row
+            for row in res_doc.rooms:
+                if row.room_number == room_number and not row.check_in_reference:
+                    frappe.db.set_value(
+                        "Hotel Reservation Room",
+                        row.name,
+                        "check_in_reference",
+                        doc.name,
+                        update_modified=False,
+                    )
+                    break
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Canonical reservation update failed at check-in")
 
     return {"name": doc.name, "status": doc.status}
 
