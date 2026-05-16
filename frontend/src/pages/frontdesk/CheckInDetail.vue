@@ -217,7 +217,118 @@
               <tr class="border-t border-gray-200">
                 <td colspan="3" class="px-4 py-3 text-xs font-bold text-gray-900">Invoice Total</td>
                 <td class="px-4 py-3 text-xs font-bold text-right text-gray-900">{{ formatCurrency(invoiceTotal) }}</td>
-                <td class="px-4 py-3 text-xs font-bold text-right text-red-500">{{ formatCurrency(outstandingTotal) }}</td>
+                <td class="px-4 py-3 text-xs font-bold text-right"
+                  :class="outstandingTotal > 0 ? 'text-red-500' : outstandingTotal < 0 ? 'text-teal-600' : 'text-gray-400'">{{ formatCurrency(Math.abs(outstandingTotal)) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Acquired Bills (Transferred In) -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-5">
+          <div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <h4 class="text-xs font-bold text-gray-700">Acquired Bills <span class="text-gray-400 font-normal">(transferred in)</span></h4>
+          </div>
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-gray-100">
+                <th class="text-left text-xs font-medium text-gray-500 px-4 py-2.5">Transfer Ref</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">From Guest</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Source Invoice</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Date</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Status</th>
+                <th class="text-right text-xs font-medium text-gray-500 px-4 py-2.5">Amount</th>
+                <th class="text-right text-xs font-medium text-gray-500 px-4 py-2.5">Outstanding</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="acquiredBills.length === 0">
+                <td colspan="7" class="py-6 text-center text-xs text-gray-400">No acquired bills</td>
+              </tr>
+              <tr v-for="bill in acquiredBills" :key="bill.name"
+                class="border-b border-gray-50 last:border-0">
+                <td class="px-4 py-2.5 text-xs font-medium text-blue-600">{{ bill.name }}</td>
+                <td class="px-3 py-2.5 text-xs text-gray-700">{{ bill.from_guest || '—' }}</td>
+                <td class="px-3 py-2.5 text-xs text-gray-600">{{ bill.source_invoice || '—' }}</td>
+                <td class="px-3 py-2.5 text-xs text-gray-500">{{ formatDate(bill.transfer_date) }}</td>
+                <td class="px-3 py-2.5">
+                  <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                    :class="bill.status === 'Approved' ? 'bg-green-100 text-green-600' : bill.status === 'Pending Approval' ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-500'">
+                    {{ bill.status }}
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-xs text-right text-gray-700">{{ formatCurrency(bill.total_amount) }}</td>
+                <td class="px-4 py-2.5 text-xs text-right font-semibold"
+                  :class="bill.status === 'Approved' ? ((bill.outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-gray-400') : 'text-gray-300'">
+                  {{ bill.status === 'Approved' ? formatCurrency(bill.outstanding_amount) : '—' }}
+                </td>
+              </tr>
+            </tbody>
+            <tfoot v-if="acquiredBills.length > 0">
+              <tr class="border-t border-gray-200">
+                <td colspan="5" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Acquired</td>
+                <td class="px-4 py-2.5 text-xs font-bold text-right text-gray-900">
+                  {{ formatCurrency(acquiredTotal) }}
+                </td>
+                <td class="px-4 py-2.5 text-xs font-bold text-right text-red-500">
+                  {{ formatCurrency(acquiredOutstanding) }}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Payment / Refund Entries -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-5">
+          <div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <h4 class="text-xs font-bold text-gray-700">Payment / Refund Entries</h4>
+          </div>
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-gray-100">
+                <th class="text-left text-xs font-medium text-gray-500 px-4 py-2.5">Payment ID</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Type</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Status</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Mode</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Date</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Remarks</th>
+                <th class="text-right text-xs font-medium text-gray-500 px-4 py-2.5">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="payments.length === 0">
+                <td colspan="7" class="py-6 text-center text-xs text-gray-400">No payment or refund entries</td>
+              </tr>
+              <tr v-for="pmt in payments" :key="pmt.payment_id"
+                class="border-b border-gray-50 last:border-0">
+                <td class="px-4 py-2.5 text-xs font-medium text-blue-600">{{ pmt.payment_id }}</td>
+                <td class="px-3 py-2.5">
+                  <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                    :class="pmt.payment_type === 'Receive' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'">
+                    {{ pmt.payment_type === 'Receive' ? 'Receipt' : (pmt.payment_type || '—') }}
+                  </span>
+                </td>
+                <td class="px-3 py-2.5">
+                  <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                    :class="pmt.docstatus === 1 ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'">
+                    {{ pmt.docstatus === 1 ? 'Submitted' : 'Draft' }}
+                  </span>
+                </td>
+                <td class="px-3 py-2.5 text-xs text-gray-600">{{ pmt.mode_of_payment || '—' }}</td>
+                <td class="px-3 py-2.5 text-xs text-gray-500">{{ formatDate(pmt.posting_date) }}</td>
+                <td class="px-3 py-2.5 text-xs text-gray-400 max-w-xs truncate" :title="pmt.remarks">{{ pmt.remarks || '—' }}</td>
+                <td class="px-4 py-2.5 text-xs text-right font-semibold"
+                  :class="pmt.payment_type === 'Receive' ? 'text-green-600' : 'text-orange-500'">
+                  {{ formatCurrency(pmt.paid_amount) }}
+                </td>
+              </tr>
+            </tbody>
+            <tfoot v-if="payments.length > 0">
+              <tr class="border-t border-gray-200">
+                <td colspan="6" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Received</td>
+                <td class="px-4 py-2.5 text-xs font-bold text-right text-green-600">
+                  {{ formatCurrency(payments.filter(p => p.payment_type === 'Receive' && p.docstatus === 1).reduce((s, p) => s + (p.paid_amount || 0), 0)) }}
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -227,27 +338,39 @@
           <h4 class="text-sm font-bold text-gray-900 mb-3">Billing Summary</h4>
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-gray-700">Total Bill</span>
-              <span class="text-xs font-bold text-gray-900">{{ formatCurrency(invoiceTotal || checkIn.total_charges) }}</span>
+              <span class="text-xs text-gray-500">Gross Charges</span>
+              <span class="text-xs text-gray-700">{{ formatCurrency(grandCharges) }}</span>
+            </div>
+            <div v-if="grandCredits > 0" class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">Credits / Returns</span>
+              <span class="text-xs text-teal-600">− {{ formatCurrency(grandCredits) }}</span>
+            </div>
+            <div v-if="acquiredTotal > 0" class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">Acquired Bills</span>
+              <span class="text-xs text-gray-700">{{ formatCurrency(acquiredTotal) }}</span>
+            </div>
+            <div class="flex items-center justify-between pt-1 border-t border-gray-200">
+              <span class="text-xs font-semibold text-gray-700">Net Bill</span>
+              <span class="text-xs font-bold text-gray-900">{{ formatCurrency(grandNetBill) }}</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-gray-700">Total Payment</span>
-              <span class="text-xs font-bold text-green-600">
-                {{ formatCurrency((invoiceTotal || checkIn.total_charges || 0) - (outstandingTotal || checkIn.total_outstanding_amount || 0)) }}
-              </span>
+              <span class="text-xs font-bold text-green-600">{{ formatCurrency(grandNetBill - grandNetOutstanding) }}</span>
             </div>
             <div class="flex items-center justify-between pt-2 border-t border-gray-200">
-              <span class="text-xs font-bold text-gray-900">Outstanding</span>
+              <span class="text-xs font-bold text-gray-900">
+                {{ grandNetOutstanding > 0 ? 'Outstanding' : grandNetOutstanding < 0 ? 'Credit Balance' : 'Outstanding' }}
+              </span>
               <span class="text-xs font-bold"
-                :class="(outstandingTotal || checkIn.total_outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-green-500'">
-                {{ formatCurrency(outstandingTotal || checkIn.total_outstanding_amount) }}
+                :class="grandNetOutstanding > 0 ? 'text-red-500' : grandNetOutstanding < 0 ? 'text-teal-600' : 'text-green-500'">
+                {{ formatCurrency(Math.abs(grandNetOutstanding)) }}
               </span>
             </div>
             <div class="flex items-center justify-between pt-1">
               <span class="text-xs text-gray-500">Payment Status</span>
               <span class="text-xs font-semibold"
-                :class="(outstandingTotal || checkIn.total_outstanding_amount || 0) > 0 ? 'text-orange-500' : 'text-green-600'">
-                {{ (outstandingTotal || checkIn.total_outstanding_amount || 0) > 0 ? 'Payment Pending' : 'Fully Paid' }}
+                :class="grandNetOutstanding > 0 ? 'text-orange-500' : grandNetOutstanding < 0 ? 'text-teal-600' : 'text-green-600'">
+                {{ grandNetOutstanding > 0 ? 'Payment Pending' : grandNetOutstanding < 0 ? 'Credit Balance' : 'Fully Paid' }}
               </span>
             </div>
           </div>
@@ -292,7 +415,7 @@
     <StayAdjustmentModal v-if="showStayAdjustment" :checkIn="checkIn" @close="showStayAdjustment = false" @done="onActionDone" />
     <RefundRequestModal v-if="showRefund" :checkIn="checkIn" @close="showRefund = false" @done="onActionDone" />
     <BillTransferModal v-if="showBillTransfer" :checkIn="checkIn" @close="showBillTransfer = false" @done="onActionDone" />
-    <ReceivePaymentModal v-if="showPayment" :checkIn="checkIn" @close="showPayment = false" @done="onActionDone" />
+    <ReceivePaymentModal v-if="showPayment" :checkIn="checkIn" @close="showPayment = false" @done="() => { showPayment = false; onActionDone() }" />
     <DiscountModal v-if="showDiscount" :checkIn="checkIn" @close="showDiscount = false" @done="onActionDone" />
     <InvoiceDetailModal v-if="showInvoiceDetail && selectedInvoice"
       :invoiceName="selectedInvoice.invoice"
@@ -329,6 +452,8 @@ const route = useRoute()
 const activeTab = ref('Details')
 const showCreateMenu = ref(false)
 const invoices = ref([])
+const acquiredBills = ref([])
+const payments = ref([])
 const loading = ref(true)
 const loadError = ref('')
 
@@ -351,6 +476,8 @@ async function loadCheckIn(silent = false) {
     if (data) {
       checkIn.value = data
       invoices.value = data.invoices || []
+      acquiredBills.value = data.acquired_bills || []
+      payments.value = data.payments || []
     }
   } catch (e) {
     loadError.value = 'Network error — please refresh.'
@@ -387,12 +514,41 @@ async function onActionDone() {
   await loadCheckIn(true)
 }
 
-const invoiceTotal = computed(() =>
-  invoices.value.reduce((sum, inv) => sum + (inv.amount || 0), 0)
+// Gross positive charges (room, restaurant, extensions)
+const chargesTotal = computed(() =>
+  invoices.value.filter(inv => (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
 )
-const outstandingTotal = computed(() =>
-  invoices.value.reduce((sum, inv) => sum + (inv.outstanding_amount || 0), 0)
+// Credit notes returned as absolute value
+const creditsTotal = computed(() =>
+  invoices.value.filter(inv => (inv.amount || 0) < 0).reduce((s, inv) => s + Math.abs(inv.amount), 0)
 )
+// Net for invoice table footer (can be negative)
+const invoiceTotal = computed(() => chargesTotal.value - creditsTotal.value)
+// Outstanding the guest still owes (positive rows only)
+const outstandingDue = computed(() =>
+  invoices.value.filter(inv => (inv.outstanding_amount || 0) > 0).reduce((s, inv) => s + inv.outstanding_amount, 0)
+)
+// Credit balance the hotel owes back (negative outstanding rows, as absolute value)
+const creditBalance = computed(() =>
+  invoices.value.filter(inv => (inv.outstanding_amount || 0) < 0).reduce((s, inv) => s + Math.abs(inv.outstanding_amount), 0)
+)
+// Net for invoice table footer
+const outstandingTotal = computed(() => outstandingDue.value - creditBalance.value)
+const acquiredTotal = computed(() =>
+  acquiredBills.value
+    .filter(b => b.status === 'Approved')
+    .reduce((s, b) => s + (b.total_amount || 0), 0)
+)
+const acquiredOutstanding = computed(() =>
+  acquiredBills.value
+    .filter(b => b.status === 'Approved')
+    .reduce((s, b) => s + (b.outstanding_amount || 0), 0)
+)
+// Grand billing summary values
+const grandCharges = computed(() => chargesTotal.value + acquiredTotal.value)
+const grandCredits = computed(() => creditsTotal.value)
+const grandNetBill = computed(() => grandCharges.value - grandCredits.value)
+const grandNetOutstanding = computed(() => outstandingDue.value + acquiredOutstanding.value - creditBalance.value)
 const isOverdue = computed(() => {
   if (!checkIn.value?.expected_check_out_datetime) return false
   return new Date(checkIn.value.expected_check_out_datetime) < new Date()
@@ -424,6 +580,7 @@ function formatDate(dt) {
 function formatInvoiceType(type) {
   if (type === 'Sales Invoice') return 'Room Charge'
   if (type === 'POS Invoice') return 'Restaurant'
+  if (type === 'Restaurant') return 'Restaurant'
   return type || 'Room Charge'
 }
 function openInvoiceDetail(inv) {

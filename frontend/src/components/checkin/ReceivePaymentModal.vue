@@ -46,15 +46,20 @@
                   <table class="w-full">
                     <thead>
                       <tr class="border-b border-gray-100 bg-gray-50">
-                        <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Invoice</th>
+                        <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Reference</th>
                         <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Date</th>
-                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Grand Total</th>
+                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Amount</th>
                         <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Outstanding</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-for="inv in invoices" :key="inv.name" class="border-b border-gray-50 last:border-0">
-                        <td class="px-4 py-3 text-xs text-blue-600 font-medium">{{ inv.name }}</td>
+                        <td class="px-4 py-3 text-xs text-blue-600 font-medium">
+                          {{ inv.name }}
+                          <span v-if="inv.doctype === 'Journal Entry'"
+                            class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-purple-50 text-purple-600 rounded border border-purple-200"
+                            :title="inv.from_guest ? 'Transferred from ' + inv.from_guest : 'Bill Transfer'">Transfer</span>
+                        </td>
                         <td class="px-3 py-3 text-xs text-gray-500">{{ inv.posting_date || '—' }}</td>
                         <td class="px-4 py-3 text-xs text-right text-gray-700">{{ fmt(inv.grand_total) }}</td>
                         <td class="px-4 py-3 text-xs text-right font-semibold text-red-500">{{ fmt(inv.outstanding_amount) }}</td>
@@ -217,9 +222,9 @@ async function submit() {
     const allocations = []
     for (const inv of invoices.value) {
       if (remaining <= 0) break
-      const allocated = Math.min(remaining, inv.outstanding_amount || 0)
+      const allocated = Math.min(remaining, Number(inv.outstanding_amount) || 0)
       if (allocated > 0) {
-        allocations.push({ invoice: inv.name, amount: allocated })
+        allocations.push({ invoice: inv.name, doctype: inv.doctype || 'Sales Invoice', amount: allocated })
         remaining -= allocated
       }
     }

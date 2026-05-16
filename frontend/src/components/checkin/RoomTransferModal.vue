@@ -14,6 +14,11 @@
         </div>
 
         <div class="px-8 py-6 space-y-5">
+          <div v-if="invoiceInfo" class="bg-green-50 border border-green-200 rounded-xl px-5 py-4">
+            <p class="text-xs font-bold text-green-700 mb-1">Rate Adjustment Invoice Created</p>
+            <p class="text-xs text-green-600">{{ invoiceInfo }}</p>
+          </div>
+
           <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
             <p class="text-xs font-bold text-red-600 mb-1">Transfer Failed</p>
             <p class="text-xs text-red-500">{{ error }}</p>
@@ -106,6 +111,7 @@ const note = ref('')
 const loadingRooms = ref(true)
 const submitting = ref(false)
 const error = ref('')
+const invoiceInfo = ref('')
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
 async function apiPost(m, p) {
   const r = await fetch(`/api/method/${m}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' }, body: new URLSearchParams(p) })
@@ -136,7 +142,14 @@ async function submit() {
       check_in_name: props.checkIn.name, new_room_number: selectedRoom.value.name, note: note.value
     })
     if (data.exc) { error.value = parseErr(data); return }
-    emit('done', data.message); emit('close')
+    const result = data.message || {}
+    if (result.rate_invoice) {
+      invoiceInfo.value = `Invoice ${result.rate_invoice} created for the rate difference.`
+      // Give user a moment to see it, then close
+      setTimeout(() => { emit('done', result); emit('close') }, 2500)
+    } else {
+      emit('done', result); emit('close')
+    }
   } catch { error.value = 'Network error.' } finally { submitting.value = false }
 }
 </script>

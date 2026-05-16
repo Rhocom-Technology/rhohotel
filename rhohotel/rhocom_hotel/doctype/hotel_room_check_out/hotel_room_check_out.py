@@ -42,8 +42,8 @@ class HotelRoomCheckOut(Document):
         self.late_checkout = check_in.late_checkout
         if self.late_checkout:
             hotel_settings = frappe.get_single("Hotel Settings")
-            if hotel_settings.enable_late_check_out:
-                self.late_checkout_charges = hotel_settings.late_check_out_charges
+            if hotel_settings.get("enable_late_checkout_charges"):
+                self.late_checkout_charges = hotel_settings.get("late_checkout_grace_hours") or 0
             else:
                 self.late_checkout_charges = 0
         else:

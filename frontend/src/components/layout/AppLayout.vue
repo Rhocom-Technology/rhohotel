@@ -7,6 +7,7 @@
         <router-view />
       </main>
     </div>
+    <AIChatbot v-if="showChrome" />
   </div>
 </template>
 
@@ -15,6 +16,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopHeader from './TopHeader.vue'
+import AIChatbot from '@/components/ai/AIChatbot.vue'
 
 const route = useRoute()
 

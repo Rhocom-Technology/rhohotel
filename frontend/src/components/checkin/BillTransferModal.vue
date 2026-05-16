@@ -55,7 +55,7 @@
                   <div class="relative">
                     <input type="text" v-model="targetSearch"
                       @input="searchTargets" @focus="showTargetDropdown = true" @blur="hideTargetDropdown"
-                      :placeholder="targetPartyType === 'Corporate' ? 'Search corporate account...' : 'Search guest by name or phone...'"
+                      :placeholder="targetPartyType === 'Corporate' ? 'Search corporate account...' : 'Search in-house guest by name or phone...'"
                       class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       :class="selectedTarget ? 'border-green-300 bg-green-50' : 'border-gray-200'" />
                     <div v-if="showTargetDropdown && targetResults.length > 0"
@@ -64,7 +64,12 @@
                         class="block w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 border-b border-gray-50 last:border-0">
                         <span class="font-semibold text-gray-900">{{ t.hotel_guest_name || t.name }}</span>
                         <span v-if="t.phone_number" class="text-gray-400 ml-2">{{ t.phone_number }}</span>
+                        <span v-if="t.room_number" class="text-blue-500 ml-2">· Room {{ t.room_number }}</span>
                       </button>
+                    </div>
+                    <div v-if="showTargetDropdown && targetSearch.length >= 2 && targetResults.length === 0"
+                      class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 px-4 py-3">
+                      <p class="text-xs text-gray-400">{{ targetPartyType === 'Individual Guest' ? 'No in-house guests found matching your search.' : 'No results found.' }}</p>
                     </div>
                     <p v-if="selectedTarget" class="mt-1 text-xs text-green-600 font-medium">✓ {{ selectedTarget.hotel_guest_name || selectedTarget.name }} selected</p>
                   </div>
@@ -288,9 +293,11 @@ function searchTargets() {
   searchTimeout = setTimeout(async () => {
     try {
       const guestType = targetPartyType.value === 'Corporate' ? 'Corporate' : 'Individual'
+      const isIndividual = targetPartyType.value === 'Individual Guest'
       const data = await apiPost('rhohotel.rhocom_hotel.api.checkin.search_guests', {
         query: targetSearch.value,
         guest_type: guestType,
+        in_house_only: isIndividual ? '1' : '0',
       })
       targetResults.value = (data.message || []).filter(g => g.name !== props.checkIn.guest)
     } catch {

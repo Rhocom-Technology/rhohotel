@@ -78,9 +78,15 @@
                 <input type="date" v-model="form.date_of_birth" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
-            <div class="mb-4">
-              <p class="text-xs text-gray-500 mb-1.5">Full Name <span class="text-red-500">*</span></p>
-              <input type="text" v-model="form.hotel_guest_name" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div class="mb-4" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">First Name <span class="text-red-500">*</span></p>
+                <input type="text" v-model="form.first_name" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Last Name <span class="text-red-500">*</span></p>
+                <input type="text" v-model="form.last_name" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
               <div>
@@ -194,7 +200,7 @@
           <div>
             <p class="text-xs text-gray-500 mb-2">Guest Preview</p>
             <div class="bg-blue-50 rounded-xl border border-blue-200 px-4 py-4">
-              <p class="text-sm font-bold text-blue-700 mb-1">{{ form.hotel_guest_name || 'Guest Name' }}</p>
+              <p class="text-sm font-bold text-blue-700 mb-1">{{ form.first_name || form.last_name ? `${form.first_name} ${form.last_name}`.trim() : form.hotel_guest_name || 'Guest Name' }}</p>
               <p class="text-xs text-blue-600">Type: {{ form.guest_type }}</p>
               <p class="text-xs text-blue-600">Nationality: {{ form.nationality || '—' }}</p>
               <p class="text-xs text-blue-600">Preference: {{ form.preferences.length ? form.preferences.join(', ') : '—' }}</p>
@@ -263,6 +269,8 @@ const allPreferences = [
 const originalName = ref('')
 
 const form = reactive({
+  first_name: '',
+  last_name: '',
   hotel_guest_name: '',
   guest_type: 'Individual',
   title: '',
@@ -329,7 +337,12 @@ async function loadGuest() {
   try {
     const g = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guest', { name: guestId })
     originalName.value = g.name
+    const nameParts = (g.hotel_guest_name || '').trim().split(/\s+/)
+    const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
     Object.assign(form, {
+      first_name: firstName,
+      last_name: lastName,
       hotel_guest_name: g.hotel_guest_name || '',
       guest_type: g.guest_type || 'Individual',
       title: g.title || '',
@@ -365,20 +378,22 @@ async function saveGuest() {
   saveError.value = null
   saveSuccess.value = false
 
-  if (!form.hotel_guest_name.trim()) {
+  if (!form.first_name.trim() && !form.last_name.trim() && !form.hotel_guest_name.trim()) {
     saveError.value = 'Guest name is required.'
     return
   }
-  if (form.id_type && !form.id_document_scan && !idDocumentFile.value) {
-    saveError.value = 'ID document is required when an ID type is selected.'
+  const fullName = form.first_name || form.last_name
+    ? `${form.first_name.trim()} ${form.last_name.trim()}`.trim()
+    : form.hotel_guest_name.trim()
+  if (!fullName) {
+    saveError.value = 'Guest name is required.'
     return
   }
-
   saving.value = true
   try {
     const body = new URLSearchParams()
     body.append('name', originalName.value)
-    body.append('hotel_guest_name', form.hotel_guest_name)
+    body.append('hotel_guest_name', fullName)
     body.append('guest_type', form.guest_type)
     body.append('title', form.title || '')
     body.append('gender', form.gender || '')

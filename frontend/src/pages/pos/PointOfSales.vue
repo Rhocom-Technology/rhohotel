@@ -147,7 +147,7 @@
 
           <div v-else class="flex items-center gap-3 px-3 py-2.5 bg-blue-50 rounded-xl border border-blue-100 transition-all">
             <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm">
-              {{ selectedBillTo.name[0] }}
+              {{ selectedBillTo.name?.[0] || '?' }}
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-xs font-semibold text-gray-900">{{ selectedBillTo.name }}</p>
@@ -340,6 +340,7 @@
       :grand-total="grandTotal"
       :cart-items="cart"
       :service-charge="serviceCharge"
+      :discount-amount="discountAmount"
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
@@ -1183,7 +1184,7 @@ function onChargeNow() {
 
 function onRoomSelected(room) {
   if (room) {
-    selectedBillTo.value = { id: room.check_in, name: room.guest, room: room.room, type: 'Direct Guest' }
+    selectedBillTo.value = { id: room.id, name: room.name, room: room.room, type: room.type || 'Direct Guest' }
     roomNumber.value = room.room
   }
 }

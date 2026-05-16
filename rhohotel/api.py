@@ -774,15 +774,76 @@ def moniepoint_webhook():
 
 @frappe.whitelist()
 def get_outstanding_invoices(check_in):
-	"""Get all outstanding invoices for a check-in with details."""
+	"""Get all outstanding invoices and transferred-in JEs for a check-in."""
 	if not check_in:
 		frappe.throw(_("Check in not supplied."))
 
+	# 1. Direct Sales Invoices linked to this check-in
 	invoices = frappe.db.get_all(
 		"Sales Invoice",
 		filters={"custom_hotel_room_check_in": check_in, "outstanding_amount": [">", 0], "docstatus": 1},
 		fields=["name", "customer", "posting_date", "grand_total", "outstanding_amount"],
 	)
+	for inv in invoices:
+		inv["doctype"] = "Sales Invoice"
+		inv["acquired"] = 0
+
+	# 2. Journal Entries from approved Bill Transfers received by this check-in
+	transferred_jes = frappe.db.sql(
+		"""
+		SELECT je.name, je.posting_date, bt.from_guest, bt.total_amount, bt.name AS transfer_name
+		FROM `tabJournal Entry` je
+		JOIN `tabBill Transfer` bt ON bt.journal_entry = je.name
+		WHERE je.custom_hotel_room_check_in = %s
+		AND je.docstatus = 1
+		AND bt.status = 'Approved'
+		""",
+		check_in,
+		as_dict=True,
+	)
+
+	for row in transferred_jes:
+		je_name = row["name"]
+
+		# Total debit amount on the JE for any Customer party (the receiving guest's debit line)
+		debit_total = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(debit_in_account_currency), 0)
+			FROM `tabJournal Entry Account`
+			WHERE parent = %s AND debit_in_account_currency > 0 AND party_type = 'Customer'
+			""",
+			je_name,
+		)[0][0] or 0
+
+		# Amount already paid against this JE via Payment Entries
+		paid = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(per.allocated_amount), 0)
+			FROM `tabPayment Entry Reference` per
+			JOIN `tabPayment Entry` pe ON per.parent = pe.name
+			WHERE per.reference_doctype = 'Journal Entry'
+			AND per.reference_name = %s
+			AND pe.docstatus = 1
+			AND pe.payment_type = 'Receive'
+			""",
+			je_name,
+		)[0][0] or 0
+
+		outstanding = round(float(debit_total) - float(paid), 2)
+		if outstanding <= 0:
+			continue
+
+		invoices.append({
+			"name": je_name,
+			"doctype": "Journal Entry",
+			"customer": "",
+			"posting_date": row["posting_date"],
+			"grand_total": float(debit_total),
+			"outstanding_amount": outstanding,
+			"acquired": 1,
+			"from_guest": row["from_guest"],
+			"transfer_name": row["transfer_name"],
+		})
 
 	return invoices
 

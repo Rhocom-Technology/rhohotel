@@ -161,7 +161,8 @@
               </td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-700">{{ item.room }}</td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ item.source }}</td>
-              <td class="px-4 py-4 text-xs font-semibold" :class="item.payment === 'Balance Due' ? 'text-red-500' : 'text-green-500'">
+              <td class="px-4 py-4 text-xs font-semibold"
+                :class="item.payment === 'Balance Due' ? 'text-red-500' : item.payment === 'Not Invoiced' ? 'text-gray-400' : 'text-green-500'">
                 {{ item.payment }}
               </td>
               <td class="px-4 py-4">
@@ -232,6 +233,7 @@ const checkInResource = createResource({
       'status',
       'reservation_source',
       'total_outstanding_amount',
+      'total_charges',
       'number_of_nights',
     ],
     order_by: 'check_in_datetime desc',
@@ -243,7 +245,16 @@ const checkInResource = createResource({
 const checkins = computed(() => (checkInResource.data || []).map((row) => {
   const overdue = isOverdue(row)
   const stayStatus = mapStayStatus(row.status, overdue)
-  const payment = Number(row.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Paid'
+  const outstanding = Number(row.total_outstanding_amount || 0)
+  const charged = Number(row.total_charges || 0)
+  let payment
+  if (charged === 0) {
+    payment = 'Not Invoiced'
+  } else if (outstanding > 0) {
+    payment = 'Balance Due'
+  } else {
+    payment = 'Paid'
+  }
   return {
     ...row,
     guest: row.guest || '—',
@@ -282,7 +293,7 @@ const filteredList = computed(() => {
     )
   }
   if (filterStatus.value) list = list.filter(r => r.stayStatus === filterStatus.value)
-  if (filterPayment.value === 'paid') list = list.filter(r => r.payment === 'Paid' || r.payment === 'Company Bill')
+  if (filterPayment.value === 'paid') list = list.filter(r => r.payment === 'Paid')
   if (filterPayment.value === 'outstanding') list = list.filter(r => r.payment === 'Balance Due')
   list = list.filter(r => inDateRange(r.check_in_datetime, filterDateRange.value))
   return list

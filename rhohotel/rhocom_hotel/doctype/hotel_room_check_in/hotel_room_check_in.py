@@ -315,11 +315,13 @@ def get_linked_documents(check_in):
 	# -----------------------------
 	# Get Journal Entries
 	# -----------------------------
-	journal_entries = frappe.get_all(
-		"Journal Entry",
-		filters={"custom_hotel_room_check_in": check_in_doc.name},
-		fields=["name", "voucher_type", "posting_date", "remark as remarks"],
-	)
+	journal_entries = []
+	if frappe.db.has_column("Journal Entry", "custom_hotel_room_check_in"):
+		journal_entries = frappe.get_all(
+			"Journal Entry",
+			filters={"custom_hotel_room_check_in": check_in_doc.name},
+			fields=["name", "voucher_type", "posting_date", "remark as remarks"],
+		)
 
 	# For totals we need debit/credit → lookup child table
 	for je in journal_entries:
@@ -758,27 +760,19 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 				}
 			)
 
-			# Permission bypass
 			invoice.flags.ignore_permissions = True
 			invoice.flags.ignore_mandatory = True
 			invoice.flags.ignore_links = True
 
 			if new_discount and flt(new_discount) > 0:
-				# check discount type
 				if discount_type == "Percentage":
+					if flt(new_discount) >= 100:
+						frappe.throw("Discount percentage cannot be 100% or more.")
 					invoice.additional_discount_percentage = flt(new_discount)
 				elif discount_type == "Fixed Amount":
 					invoice.discount_amount = flt(new_discount)
 
-			# if invoice.discount_amount and invoice.discount_amount >= invoice.net_total:
-			# 	frappe.throw(
-			# 		"Discount cannot be greater than or equal to invoice amount."
-			# 	)
-
-			if invoice.additional_discount_percentage and invoice.additional_discount_percentage >= 100:
-				frappe.throw("Discount percentage cannot be 100% or more.")
 			invoice.insert(ignore_permissions=True)
-			invoice.calculate_taxes_and_totals()
 			invoice.submit()
 			adjustment_invoice_name = invoice.name
 
@@ -802,13 +796,19 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 				}
 			)
 
-			# Permission bypass
 			credit_note.flags.ignore_permissions = True
 			credit_note.flags.ignore_mandatory = True
 			credit_note.flags.ignore_links = True
 
+			if new_discount and flt(new_discount) > 0:
+				if discount_type == "Percentage":
+					if flt(new_discount) >= 100:
+						frappe.throw("Discount percentage cannot be 100% or more.")
+					credit_note.additional_discount_percentage = flt(new_discount)
+				elif discount_type == "Fixed Amount":
+					credit_note.discount_amount = flt(new_discount)
+
 			credit_note.insert()
-			credit_note.calculate_taxes_and_totals()
 			credit_note.submit()
 			adjustment_invoice_name = credit_note.name
 
@@ -898,6 +898,7 @@ def transfer_room(check_in_name, new_room_number, note=None):
 	# Update check-in document (fixed: also update room_type)
 	old_room_number = check_in_doc.room_number
 	old_room_type = check_in_doc.room_type
+	old_rate = flt(check_in_doc.rate_amount)  # capture before updating
 	check_in_doc.room_number = new_room_number
 	check_in_doc.room_type = new_room_doc.room_type  # Fixed: Update room type
 	check_in_doc.db_set("room_number", new_room_number)
@@ -921,8 +922,8 @@ def transfer_room(check_in_name, new_room_number, note=None):
 	)
 	check_in_doc.save(ignore_permissions=True)
 
-	# Adjust rate if new room type has different tariff
-	adjust_room_rate(check_in_doc, old_room_number, new_room_number, note)
+	# Create rate-difference invoice for remaining nights
+	rate_invoice = adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, note)
 
 	frappe.db.commit()
 	frappe.publish_realtime("rhohotel_front_desk_update")
@@ -930,97 +931,116 @@ def transfer_room(check_in_name, new_room_number, note=None):
 	return {
 		"success": True,
 		"message": _("Guest transferred successfully to Room {0}").format(new_room_number),
+		"rate_invoice": rate_invoice,
 	}
 
 
-def adjust_room_rate(check_in_doc, old_room_number, new_room_number, note=None):
-	"""Adjust room rate after transfer based on remaining nights, and auto-create rate difference invoice."""
+def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, note=None):
+	"""Create a rate-difference invoice (positive or negative) for the remaining nights after a room transfer.
 
-	old_room = frappe.get_doc("Hotel Room", old_room_number)
+	- new room rate > old rate  → positive Sales Invoice (guest owes the difference)
+	- new room rate < old rate  → credit note / return SI (guest is owed the difference)
+	- same rate                 → no invoice
+	"""
+
 	new_room = frappe.get_doc("Hotel Room", new_room_number)
 
-	# Extract only the date (YYYY-MM-DD)
-	check_in_date = str(getdate(check_in_doc.check_in_datetime))
-
-	old_rate_data = get_room_rate(old_room.room_type, "", check_in_date)
-	new_rate_data = get_room_rate(new_room.room_type, "", check_in_date)
-
-	old_rate = flt(old_rate_data)
-	new_rate = flt(new_rate_data)
-
-	# Determine remaining nights
+	# Get new room's current nightly rate (use today so day-type is evaluated correctly)
 	today = getdate(nowdate())
+	new_rate = flt(get_room_rate(new_room.room_type, "", str(today)))
+	if new_rate <= 0:
+		# fallback: active tariff without day-type filter
+		new_rate = flt(
+			frappe.db.get_value(
+				"Hotel Room Tariff",
+				{"room_type": new_room.room_type, "is_active": 1},
+				"rate_amount",
+			)
+		)
+
+	# Remaining nights: from today (transfer day) to expected checkout
 	expected_checkout = getdate(check_in_doc.expected_check_out_datetime)
 	remaining_nights = max(date_diff(expected_checkout, today), 0)
 
 	if remaining_nights <= 0:
-		frappe.logger().info(f"No remaining nights to adjust for {check_in_doc.name}")
 		check_in_doc.add_comment(
 			"Comment",
-			text=_("No remaining nights to adjust for transfer {0}").format(new_room_number, note or ""),
+			text=_("Room transfer to {0}: no remaining nights to adjust.").format(new_room_number),
 		)
-		return
+		return None
 
-	# Calculate total difference for remaining nights
-	nightly_difference = new_rate - old_rate
-	total_difference = nightly_difference * remaining_nights
+	nightly_diff = new_rate - flt(old_rate)
+	total_diff = nightly_diff * remaining_nights
 
-	if total_difference == 0:
-		frappe.logger().info(f"No rate change detected for transfer {check_in_doc.name}")
-		return
+	if total_diff == 0:
+		# Identical rate – nothing to invoice
+		check_in_doc.add_comment(
+			"Comment",
+			text=_("Room transfer to {0}: no rate change ({1}/night). No adjustment invoice needed.").format(
+				new_room_number, fmt_money(new_rate, 2)
+			),
+		)
+		return None
 
-	guest = check_in_doc.guest
-	customer = frappe.get_value("Hotel Guest", guest, "customer")
+	# Resolve customer
+	customer = frappe.db.get_value("Hotel Guest", check_in_doc.guest, "customer")
 	if not customer:
-		frappe.throw(_("No customer linked to guest {0}").format(guest))
-	company = frappe.defaults.get_user_default("Company")
+		frappe.throw(_("No customer linked to guest {0}").format(check_in_doc.guest))
 
+	# Resolve company with proper fallback
+	company = (
+		frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+	)
 	if not company:
-		frappe.throw(_("No default Company set for user. Cannot create invoice."))
+		frappe.throw(_("No default Company configured. Cannot create rate-difference invoice."))
 
-	posting_date = nowdate()
 	default_income = frappe.db.get_value("Company", company, "default_income_account")
-
 	if not default_income:
-		frappe.throw(_("No default_income_account set for Company {0}.").format(company))
+		frappe.throw(_("No default income account set for Company {0}.").format(company))
 
-	# Determine invoice type and direction
-	if total_difference > 0:
-		# Guest owes extra
-		invoice_title = "Room Transfer Upgrade"
-		is_refund = 0
-		qty = 1
-		difference_text = _("Charged extra")
-	else:
-		# Refund guest
-		invoice_title = "Room Transfer Downgrade"
-		is_refund = 1
-		qty = -1
-		difference_text = _("Refunded")
+	# Resolve item code (try new room first, fall back to old room)
+	item_code = new_room.erpnext_item
+	if not item_code:
+		item_code = frappe.db.get_value("Hotel Room", old_room_number, "erpnext_item")
+	if not item_code:
+		frappe.throw(
+			_("No ERPNext item linked to rooms {0} or {1}. Cannot create invoice.").format(
+				old_room_number, new_room_number
+			)
+		)
 
-	# -----------------------------------------------------
-	# Create Sales Invoice
-	# -----------------------------------------------------
+	is_upgrade = total_diff > 0
+	invoice_title = "Room Transfer Upgrade" if is_upgrade else "Room Transfer Downgrade"
+	# qty is positive for upgrade (charge), negative for downgrade (credit note)
+	qty = remaining_nights if is_upgrade else -remaining_nights
+
 	invoice = frappe.new_doc("Sales Invoice")
 	invoice.customer = customer
 	invoice.company = company
-	invoice.posting_date = posting_date
-	invoice.is_return = bool(is_refund)
-	invoice.remarks = _("Room transfer from {0} to {1}. Rate adjusted for {2} remaining night(s).").format(
-		old_room_number, new_room_number, remaining_nights
-	)
+	invoice.posting_date = nowdate()
+	invoice.is_return = 0 if is_upgrade else 1
 	invoice.custom_hotel_room_check_in = check_in_doc.name
-	invoice.update_outstanding_for_self = 0
+	invoice.remarks = _(
+		"Room transfer from {0} to {1}: rate adjustment for {2} remaining night(s)."
+	).format(old_room_number, new_room_number, remaining_nights)
 
-	# Add line item
 	invoice.append(
 		"items",
 		{
-			"item_code": new_room.erpnext_item,
+			"item_code": item_code,
 			"item_name": invoice_title,
-			"description": f"{invoice_title} for {remaining_nights} night(s)",
+			"description": _(
+				"{0}: {1} night(s) × {2}/night rate difference ({3} → {4})"
+			).format(
+				invoice_title,
+				remaining_nights,
+				fmt_money(abs(nightly_diff), 2),
+				fmt_money(flt(old_rate), 2),
+				fmt_money(new_rate, 2),
+			),
 			"qty": qty,
-			"rate": abs(total_difference),
+			"rate": abs(nightly_diff),
 			"income_account": default_income,
 		},
 	)
@@ -1028,38 +1048,28 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, note=None):
 	invoice.save(ignore_permissions=True)
 	invoice.submit()
 
-	# -----------------------------------------------------
-	# Create Hotel Refund (only for downgrades)
-	# -----------------------------------------------------
-	if is_refund:
-		refund = frappe.new_doc("Hotel Refund")
-		refund.guest = guest
-		refund.check_in = check_in_doc.name
-		refund.refund_amount = abs(total_difference)
-		refund.reason = f"Refund for Room Transfer from {old_room_number} to {new_room_number}"
-		refund.credit_note = invoice.name
-		refund.status = "Approved"
-
-		refund.insert(ignore_permissions=True)
-		refund.submit()
-
-	# -----------------------------------------------------
-	# Log comment on check-in document
-	# -----------------------------------------------------
+	action = _("Charged") if is_upgrade else _("Credited")
 	check_in_doc.add_comment(
 		"Comment",
 		text=_(
-			"Room rate adjusted due to transfer. {0} {1} for rate difference of {2} ({3} nights remaining)."
-		).format(difference_text, invoice.name, fmt_money(total_difference, 2), remaining_nights),
+			"Room transfer adjustment: {0} {1} ({2} night(s) × {3}/night). Invoice {4} created."
+		).format(
+			action,
+			fmt_money(abs(total_diff), 2),
+			remaining_nights,
+			fmt_money(abs(nightly_diff), 2),
+			invoice.name,
+		),
 	)
 
-	# User alert
 	frappe.msgprint(
-		_("{0} rate difference of {1} applied for {2} remaining night(s). Invoice {3} created.").format(
-			difference_text, fmt_money(total_difference, 2), remaining_nights, invoice.name
+		_("{0} rate adjustment of {1} applied for {2} remaining night(s). Invoice {3} created.").format(
+			action, fmt_money(abs(total_diff), 2), remaining_nights, invoice.name
 		),
 		alert=True,
 	)
+
+	return invoice.name
 
 
 @frappe.whitelist()
