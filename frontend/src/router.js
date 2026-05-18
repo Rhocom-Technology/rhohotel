@@ -94,8 +94,8 @@ const router = createRouter({
     { path: '/reports/night-audit-summary-report', name: 'NightAuditSummaryReport', component: () => import('@/pages/reports/NightAuditSummaryReport.vue') },
     { path: '/reports/corporate-billing-statement', name: 'CorporateBillingStatementReport', component: () => import('@/pages/reports/CorporateBillingStatementReport.vue') },
     { path: '/reports/pos-sales-report', name: 'PosSalesReport', component: () => import('@/pages/reports/POSSalesPerformance.vue') },
-    { path: '/reports/house-keeping-productivity-report', name: 'HouseKeepingProductivityReport', component: () => import('@/pages/reports/HouseKeepingProductivityReport.vue') },
-    
+    { path: '/reports/house-keeping-productivity-report', name: 'HousekeepingProductivityReport', component: () => import('@/pages/reports/HousekeepingProductivityReport.vue') },
+
   ],
 })
 
