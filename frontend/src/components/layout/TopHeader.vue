@@ -99,8 +99,14 @@ const pageMeta = {
 
 
   // Others
-  'Reports':              { title: 'Reports', subtitle: 'Hotel performance and occupancy overview' },
+  'ReportList': { title: 'Report List', subtitle: 'Central report library for hotel operations, billing, housekeeping, POS, and management analysis' },
+  'DailyOccupancyReport': { title: 'Daily Occupancy Report', subtitle: 'Hotel performance and occupancy overview' },
+  'GuestStayHistoryReport': { title: 'Guest Stay History Report', subtitle: 'Hotel performance and occupancy overview' },
+  'NightAuditSummaryReport': { title: 'Night Audit Summary Report', subtitle: 'Operations, finance, and control overview for end-of-day review' },
   'CorporateAccountStatement':              { title: 'Corporate Account Statement', subtitle: 'Hotel performance and occupancy overview' },
+  'CorporateBillingStatementReport':              { title: 'Corporate Billing Statement', subtitle: 'Corporate account ledger with running balance, payments, outstanding exposure, and date filter controls' },
+  'PosSalesReport':              { title: 'POS Sales Report', subtitle: 'Point of Sales performance and sales overview' },
+  'HouseKeepingProductivityReport':              { title: 'Housekeeping Productivity Report', subtitle: 'Housekeeping performance and productivity overview' },
 }
 
 const pageTitle = computed(() => pageMeta[route.name]?.title || 'Dashboard')

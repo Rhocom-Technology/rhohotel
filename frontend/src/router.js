@@ -87,8 +87,15 @@ const router = createRouter({
     { path: '/rooms/:id', name: 'SavedRoom', component: () => import('@/pages/frontdesk/SavedRoom.vue') },
 
     // Others
-    { path: '/reports', name: 'Reports', component: () => import('@/pages/reports/Reports.vue') },
+    { path: '/reports', name: 'ReportList', component: () => import('@/pages/reports/ReportList.vue') },
     { path: '/reports/corporate-account-statement', name: 'CorporateAccountStatement', component: () => import('@/pages/reports/CorporateAccountStatement.vue') },
+    { path: '/reports/daily-occupancy-report', name: 'DailyOccupancyReport', component: () => import('@/pages/reports/DailyOccupancyReport.vue') },
+    { path: '/reports/guest-stay-history-report', name: 'GuestStayHistoryReport', component: () => import('@/pages/reports/GuestStayHistory.vue') },
+    { path: '/reports/night-audit-summary-report', name: 'NightAuditSummaryReport', component: () => import('@/pages/reports/NightAuditSummaryReport.vue') },
+    { path: '/reports/corporate-billing-statement', name: 'CorporateBillingStatementReport', component: () => import('@/pages/reports/CorporateBillingStatementReport.vue') },
+    { path: '/reports/pos-sales-report', name: 'PosSalesReport', component: () => import('@/pages/reports/POSSalesPerformance.vue') },
+    { path: '/reports/house-keeping-productivity-report', name: 'HouseKeepingProductivityReport', component: () => import('@/pages/reports/HouseKeepingProductivityReport.vue') },
+    
   ],
 })
 
