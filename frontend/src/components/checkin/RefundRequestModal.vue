@@ -34,10 +34,14 @@
               <span class="text-xs text-gray-500">Total Payments Received</span>
               <span class="text-xs font-semibold text-gray-800">{{ fmt(totalPaid) }}</span>
             </div>
+            <div v-if="totalAlreadyRefunded > 0" class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">Previously Refunded</span>
+              <span class="text-xs font-semibold text-orange-600">− {{ fmt(totalAlreadyRefunded) }}</span>
+            </div>
             <div class="flex items-center justify-between pt-1 border-t border-gray-200">
-              <span class="text-xs font-bold text-gray-700">Overpayment</span>
-              <span class="text-xs font-bold" :class="overpayment > 0 ? 'text-green-600' : 'text-gray-400'">
-                {{ overpayment > 0 ? fmt(overpayment) : '—' }}
+              <span class="text-xs font-bold text-gray-700">Net Overpayment</span>
+              <span class="text-xs font-bold" :class="overpayment > 0 ? 'text-green-600' : 'text-red-500'">
+                {{ overpayment > 0 ? fmt(overpayment) : '₦ 0.00 — No refundable balance' }}
               </span>
             </div>
           </div>
@@ -50,17 +54,17 @@
                 type="number"
                 v-model.number="refundAmount"
                 min="0.01"
-                :max="totalPaid"
+                :max="overpayment"
                 step="0.01"
+                :disabled="overpayment <= 0"
                 placeholder="Enter refund amount"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
               <p class="text-xs text-gray-400 mt-1">
-                Max: {{ fmt(totalPaid) }} (total payments received)
-                <span v-if="overpayment > 0" class="text-green-600"> · Suggested overpayment: {{ fmt(overpayment) }}</span>
+                Max: {{ fmt(overpayment) }} (net overpayment)
               </p>
-              <p v-if="refundAmount > totalPaid" class="text-xs text-red-500 mt-1">
-                Cannot exceed total payments received.
+              <p v-if="refundAmount > overpayment && overpayment > 0" class="text-xs text-red-500 mt-1">
+                Cannot exceed net overpayment.
               </p>
             </template>
           </div>
@@ -79,7 +83,7 @@
           <div class="flex items-center justify-end gap-2 pt-2">
             <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50" @click="$emit('close')">Cancel</button>
             <button
-              :disabled="submitting || loadingAmount || !(refundAmount > 0) || refundAmount > totalPaid || !reason.trim()"
+              :disabled="submitting || loadingAmount || overpayment <= 0 || !(refundAmount > 0) || refundAmount > overpayment || !reason.trim()"
               @click="submit"
               class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
               {{ submitting ? 'Submitting…' : 'Submit Refund Request' }}
@@ -98,12 +102,13 @@ const emit = defineEmits(['close', 'done'])
 const reason = ref('')
 const totalPaid = ref(0)
 const totalCharged = ref(0)
+const totalAlreadyRefunded = ref(0)
 const refundAmount = ref(0)
 const loadingAmount = ref(true)
 const submitting = ref(false)
 const error = ref('')
 
-const overpayment = computed(() => Math.max(0, totalPaid.value - totalCharged.value))
+const overpayment = computed(() => Math.max(0, totalPaid.value - totalCharged.value - totalAlreadyRefunded.value))
 
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
 async function apiPost(m, p) {
@@ -113,7 +118,7 @@ async function apiPost(m, p) {
 
 onMounted(async () => {
   try {
-    const [pData, sData] = await Promise.all([
+    const [pData, sData, rData] = await Promise.all([
       // Total Receive payments
       apiPost('frappe.client.get_list', {
         doctype: 'Payment Entry',
@@ -136,10 +141,21 @@ onMounted(async () => {
         fields: JSON.stringify(['grand_total']),
         limit: 100,
       }),
+      // Previously submitted Hotel Refunds for this check-in
+      apiPost('frappe.client.get_list', {
+        doctype: 'Hotel Refund',
+        filters: JSON.stringify([
+          ['check_in', '=', props.checkIn.name],
+          ['docstatus', '=', 1],
+        ]),
+        fields: JSON.stringify(['refund_amount']),
+        limit: 100,
+      }),
     ])
     totalPaid.value = (pData.message || []).reduce((s, p) => s + (p.paid_amount || 0), 0)
     totalCharged.value = (sData.message || []).reduce((s, i) => s + (i.grand_total || 0), 0)
-    // Default to overpayment; leave at 0 if none so staff can enter custom amount
+    totalAlreadyRefunded.value = (rData.message || []).reduce((s, r) => s + (r.refund_amount || 0), 0)
+    // Default to net overpayment; leave at 0 if none
     refundAmount.value = overpayment.value
   } catch {
     error.value = 'Failed to load billing data.'
@@ -149,7 +165,7 @@ onMounted(async () => {
 })
 
 async function submit() {
-  if (!reason.value.trim() || !(refundAmount.value > 0) || refundAmount.value > totalPaid.value) return
+  if (!reason.value.trim() || !(refundAmount.value > 0) || refundAmount.value > overpayment.value || overpayment.value <= 0) return
   submitting.value = true; error.value = ''
   try {
     const data = await apiPost('rhohotel.rhocom_hotel.api.checkin.create_refund', {

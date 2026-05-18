@@ -82,9 +82,19 @@ class HotelRoomCheckOut(Document):
         frappe.publish_realtime('rhohotel_front_desk_update')
 
     def update_check_in(self):
-        """Update check-in status"""
+        """Update check-in status, lock actual checkout datetime, and recalculate outstanding."""
+        # Recalculate outstanding from actual Sales Invoices at checkout time
+        result = frappe.db.sql("""
+            SELECT COALESCE(SUM(outstanding_amount), 0)
+            FROM `tabSales Invoice`
+            WHERE custom_hotel_room_check_in = %s AND docstatus = 1
+        """, self.check_in)
+        outstanding_at_checkout = result[0][0] if result else 0
+
         frappe.db.set_value("Hotel Room Check In", self.check_in, {
-            "status": "Checked Out"        
+            "status": "Checked Out",
+            "actual_check_out_datetime": self.check_out_datetime,
+            "total_outstanding_amount": outstanding_at_checkout,
         })
         
     def update_reservation(self):

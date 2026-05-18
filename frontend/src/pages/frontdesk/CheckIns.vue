@@ -220,35 +220,18 @@ const pageSize = 25
 
 
 const checkInResource = createResource({
-  url: 'frappe.client.get_list',
-  params: {
-    doctype: 'Hotel Room Check In',
-    fields: [
-      'name',
-      'guest',
-      'room_number',
-      'check_in_datetime',
-      'expected_check_out_datetime',
-      'actual_check_out_datetime',
-      'status',
-      'reservation_source',
-      'total_outstanding_amount',
-      'total_charges',
-      'number_of_nights',
-    ],
-    order_by: 'check_in_datetime desc',
-    limit_page_length: 500,
-  },
+  url: 'rhohotel.rhocom_hotel.api.checkin.get_checkin_list',
+  params: { limit: 500 },
   auto: true,
 })
 
 const checkins = computed(() => (checkInResource.data || []).map((row) => {
   const overdue = isOverdue(row)
   const stayStatus = mapStayStatus(row.status, overdue)
-  const outstanding = Number(row.total_outstanding_amount || 0)
-  const charged = Number(row.total_charges || 0)
+  const outstanding = Number(row.total_outstanding || 0)
+  const invoiced = Number(row.total_invoiced || 0)
   let payment
-  if (charged === 0) {
+  if (invoiced === 0) {
     payment = 'Not Invoiced'
   } else if (outstanding > 0) {
     payment = 'Balance Due'
@@ -277,7 +260,7 @@ const stats = computed(() => {
     inHouse,
     checkedOut: list.filter((r) => r.stayStatus === 'Checked Out').length,
     extended,
-    paymentFollowUp: list.filter((r) => Number(r.total_outstanding_amount || 0) > 0).length,
+    paymentFollowUp: list.filter((r) => Number(r.total_outstanding || 0) > 0).length,
   }
 })
 

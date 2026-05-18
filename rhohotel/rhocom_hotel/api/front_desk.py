@@ -470,6 +470,20 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 				frappe.get_traceback(), "Payment Entry submit failed from collect_payment_for_checkin"
 			)
 
+		# Sync total_outstanding_amount on the check-in so the list view reflects correct status
+		try:
+			new_outstanding = frappe.db.sql("""
+				SELECT COALESCE(SUM(outstanding_amount), 0)
+				FROM `tabSales Invoice`
+				WHERE custom_hotel_room_check_in = %s AND docstatus = 1
+			""", check_in)[0][0] or 0
+			frappe.db.set_value(
+				"Hotel Room Check In", check_in, "total_outstanding_amount", new_outstanding,
+				update_modified=False
+			)
+		except Exception:
+			pass  # non-critical — list will still refresh via get_checkin_detail
+
 		frappe.db.commit()
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Failed to create Payment Entry from front desk")

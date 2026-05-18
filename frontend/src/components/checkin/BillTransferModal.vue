@@ -113,10 +113,10 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-if="!checkIn.invoices || checkIn.invoices.length === 0">
+                    <tr v-if="!transferableInvoices || transferableInvoices.length === 0">
                       <td colspan="5" class="px-4 py-6 text-center text-xs text-gray-400">No invoices found for this check-in</td>
                     </tr>
-                    <tr v-for="c in checkIn.invoices || []" :key="c.invoice"
+                    <tr v-for="c in transferableInvoices" :key="c.invoice"
                       class="border-b border-gray-50 last:border-0"
                       :class="c.invoice_type === 'POS Invoice' ? 'opacity-40' : 'cursor-pointer hover:bg-gray-50'"
                       @click="c.invoice_type !== 'POS Invoice' && (c.selected = !c.selected)">
@@ -317,14 +317,19 @@ function hideTargetDropdown() {
   setTimeout(() => { showTargetDropdown.value = false }, 150)
 }
 
+// Credit notes (amount < 0 / is_return) must not be transferable
+const transferableInvoices = computed(() =>
+  (props.checkIn.invoices || []).filter(c => (c.amount || 0) >= 0)
+)
+
 const selectedInvoices = computed(() =>
-  (props.checkIn.invoices || [])
+  transferableInvoices.value
     .filter(c => c.selected && c.invoice_type !== 'POS Invoice')
     .map(c => c.invoice)
 )
 
 const transferTotal = computed(() =>
-  (props.checkIn.invoices || [])
+  transferableInvoices.value
     .filter(c => c.selected && c.invoice_type !== 'POS Invoice')
     .reduce((sum, c) => sum + (c.outstanding_amount || 0), 0)
 )

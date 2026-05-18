@@ -69,6 +69,10 @@
       <button @click="showPayment = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
         Receive Payment
       </button>
+      <button @click="printFolio"
+        class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        Print
+      </button>
       <button 
       class="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
       @click="$router.push('/check-outs/' + checkIn.name)">
@@ -169,7 +173,7 @@
           </div>
           <div style="grid-column:span 2;">
             <p class="text-xs text-gray-400 mb-1">Total Charges</p>
-            <div class="px-3 py-2.5 text-xs font-bold text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ formatCurrency(checkIn.total_charges) }}</div>
+            <div class="px-3 py-2.5 text-xs font-bold text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ formatCurrency(grandCharges) }}</div>
           </div>
         </div>
       </div>
@@ -291,7 +295,6 @@
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Status</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Mode</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Date</th>
-                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Remarks</th>
                 <th class="text-right text-xs font-medium text-gray-500 px-4 py-2.5">Amount</th>
               </tr>
             </thead>
@@ -300,8 +303,9 @@
                 <td colspan="7" class="py-6 text-center text-xs text-gray-400">No payment or refund entries</td>
               </tr>
               <tr v-for="pmt in payments" :key="pmt.payment_id"
-                class="border-b border-gray-50 last:border-0">
-                <td class="px-4 py-2.5 text-xs font-medium text-blue-600">{{ pmt.payment_id }}</td>
+                class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer"
+                @click="openPaymentDetail(pmt)">
+                <td class="px-4 py-2.5 text-xs font-medium text-blue-600 underline-offset-2 hover:underline">{{ pmt.payment_id }}</td>
                 <td class="px-3 py-2.5">
                   <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
                     :class="pmt.payment_type === 'Receive' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'">
@@ -316,7 +320,6 @@
                 </td>
                 <td class="px-3 py-2.5 text-xs text-gray-600">{{ pmt.mode_of_payment || '—' }}</td>
                 <td class="px-3 py-2.5 text-xs text-gray-500">{{ formatDate(pmt.posting_date) }}</td>
-                <td class="px-3 py-2.5 text-xs text-gray-400 max-w-xs truncate" :title="pmt.remarks">{{ pmt.remarks || '—' }}</td>
                 <td class="px-4 py-2.5 text-xs text-right font-semibold"
                   :class="pmt.payment_type === 'Receive' ? 'text-green-600' : 'text-orange-500'">
                   {{ formatCurrency(pmt.paid_amount) }}
@@ -327,7 +330,7 @@
               <tr class="border-t border-gray-200">
                 <td colspan="6" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Received</td>
                 <td class="px-4 py-2.5 text-xs font-bold text-right text-green-600">
-                  {{ formatCurrency(payments.filter(p => p.payment_type === 'Receive' && p.docstatus === 1).reduce((s, p) => s + (p.paid_amount || 0), 0)) }}
+                  {{ formatCurrency(totalPaid) }}
                 </td>
               </tr>
             </tfoot>
@@ -354,16 +357,18 @@
               <span class="text-xs font-bold text-gray-900">{{ formatCurrency(grandNetBill) }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-gray-700">Total Payment</span>
-              <span class="text-xs font-bold text-green-600">{{ formatCurrency(grandNetBill - grandNetOutstanding) }}</span>
+              <span class="text-xs font-semibold text-gray-700">Total Received</span>
+              <span class="text-xs font-bold text-green-600">{{ formatCurrency(totalPaid) }}</span>
+            </div>
+            <div v-if="totalRefunded > 0" class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-gray-700">Total Refunds</span>
+              <span class="text-xs font-bold text-orange-500">− {{ formatCurrency(totalRefunded) }}</span>
             </div>
             <div class="flex items-center justify-between pt-2 border-t border-gray-200">
-              <span class="text-xs font-bold text-gray-900">
-                {{ grandNetOutstanding > 0 ? 'Outstanding' : grandNetOutstanding < 0 ? 'Credit Balance' : 'Outstanding' }}
-              </span>
+              <span class="text-xs font-bold text-gray-900">Outstanding</span>
               <span class="text-xs font-bold"
                 :class="grandNetOutstanding > 0 ? 'text-red-500' : grandNetOutstanding < 0 ? 'text-teal-600' : 'text-green-500'">
-                {{ formatCurrency(Math.abs(grandNetOutstanding)) }}
+                {{ grandNetOutstanding < 0 ? '− ' + formatCurrency(Math.abs(grandNetOutstanding)) : formatCurrency(grandNetOutstanding) }}
               </span>
             </div>
             <div class="flex items-center justify-between pt-1">
@@ -421,6 +426,10 @@
       :invoiceName="selectedInvoice.invoice"
       :invoiceType="selectedInvoice.invoice_type"
       @close="showInvoiceDetail = false; selectedInvoice = null" />
+    <PaymentDetailModal v-if="showPaymentDetail && selectedPayment"
+      :paymentId="selectedPayment.payment_id"
+      :paymentType="selectedPayment.payment_type"
+      @close="showPaymentDetail = false; selectedPayment = null" />
 
     </template>
   </div>
@@ -436,6 +445,7 @@ import BillTransferModal from '@/components/checkin/BillTransferModal.vue'
 import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import DiscountModal from '@/components/checkin/DiscountModal.vue'
 import InvoiceDetailModal from '@/components/checkin/InvoiceDetailModal.vue'
+import PaymentDetailModal from '@/components/checkin/PaymentDetailModal.vue'
 import { callMethodForm } from '@/lib/api'
 
 const showRoomTransfer = ref(false)
@@ -446,6 +456,8 @@ const showPayment = ref(false)
 const showDiscount = ref(false)
 const showInvoiceDetail = ref(false)
 const selectedInvoice = ref(null)
+const showPaymentDetail = ref(false)
+const selectedPayment = ref(null)
 
 
 const route = useRoute()
@@ -548,7 +560,17 @@ const acquiredOutstanding = computed(() =>
 const grandCharges = computed(() => chargesTotal.value + acquiredTotal.value)
 const grandCredits = computed(() => creditsTotal.value)
 const grandNetBill = computed(() => grandCharges.value - grandCredits.value)
-const grandNetOutstanding = computed(() => outstandingDue.value + acquiredOutstanding.value - creditBalance.value)
+const totalPaid = computed(() =>
+  payments.value
+    .filter(p => p.payment_type === 'Receive' && p.docstatus === 1)
+    .reduce((s, p) => s + (p.paid_amount || 0), 0)
+)
+const totalRefunded = computed(() =>
+  payments.value
+    .filter(p => p.payment_type === 'Pay' && p.docstatus === 1)
+    .reduce((s, p) => s + (p.paid_amount || 0), 0)
+)
+const grandNetOutstanding = computed(() => grandNetBill.value - totalPaid.value + totalRefunded.value)
 const isOverdue = computed(() => {
   if (!checkIn.value?.expected_check_out_datetime) return false
   return new Date(checkIn.value.expected_check_out_datetime) < new Date()
@@ -586,6 +608,18 @@ function formatInvoiceType(type) {
 function openInvoiceDetail(inv) {
   selectedInvoice.value = inv
   showInvoiceDetail.value = true
+}
+function openPaymentDetail(pmt) {
+  selectedPayment.value = pmt
+  showPaymentDetail.value = true
+}
+function printFolio() {
+  const name = checkIn.value?.name
+  if (!name) return
+  window.open(
+    `/printview?doctype=Hotel%20Room%20Check%20In&name=${encodeURIComponent(name)}&format=Standard&no_letterhead=0`,
+    '_blank'
+  )
 }
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦ 0.00'

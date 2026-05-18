@@ -409,7 +409,16 @@ async function createGuest() {
 
     // Issue #15: If we came from check-in page, route back there
     if (route.query.return_to === 'checkin') {
-      router.push({ path: '/check-ins/new', query: { guest: created.name } })
+      router.push({
+        path: '/check-ins/new',
+        query: {
+          guest: created.name,
+          room: route.query.room || '',
+          room_type: route.query.room_type || '',
+          nights: route.query.nights || '',
+          check_in_dt: route.query.check_in_dt || '',
+        },
+      })
     } else {
       router.push({ name: 'GuestProfile', params: { id: created.name } })
     }

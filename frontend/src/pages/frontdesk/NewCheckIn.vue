@@ -119,7 +119,7 @@
                   <p class="text-xs text-gray-400">No guests found. Create a new one.</p>
                 </div>
               </div>
-              <button @click="$router.push({ path: '/guests/new', query: { return_to: 'checkin' } })"
+              <button @click="goToNewGuest"
                 class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0">
                 New Guest
               </button>
@@ -429,7 +429,7 @@ async function selectReservation(r) {
     form.reservation_source = 'Reservation'
   }
 
-  if (r.guest_phone && !form.contact_number) {
+  if (r.guest_phone) {
     form.contact_number = r.guest_phone
   }
 
@@ -461,7 +461,7 @@ async function selectReservation(r) {
         selectedGuest.value = matchedGuest
         applyPreferenceTagsFromGuest(matchedGuest)
         if (matchedGuest.id_type) form.id_type = matchedGuest.id_type
-        if (!form.contact_number && matchedGuest.phone_number) {
+        if (matchedGuest.phone_number) {
           form.contact_number = matchedGuest.phone_number
         }
       }
@@ -528,7 +528,7 @@ async function selectGuest(g) {
   selectedGuest.value = g
   resetPreferenceTags()
   applyPreferenceTagsFromGuest(g)
-  if (!form.contact_number && g.phone_number) form.contact_number = g.phone_number
+  if (g.phone_number) form.contact_number = g.phone_number
   if (g.id_type) form.id_type = g.id_type
   showGuestDropdown.value = false
   guestResults.value = []
@@ -544,6 +544,19 @@ async function selectGuest(g) {
       if (fullDoc.id_type && !form.id_type) form.id_type = fullDoc.id_type
     }
   } catch { /* keep partial data from search */ }
+}
+
+function goToNewGuest() {
+  router.push({
+    path: '/guests/new',
+    query: {
+      return_to: 'checkin',
+      room: form.room_number || '',
+      room_type: form.room_type || '',
+      nights: form.number_of_nights || 1,
+      check_in_dt: form.check_in_datetime || '',
+    },
+  })
 }
 
 function onGuestBlur() {
@@ -900,6 +913,18 @@ onMounted(() => {
 
   if (preGuest) {
     form.guest = preGuest
+    // Fetch full guest doc to populate name display and phone
+    callMethodForm('frappe.client.get', { doctype: 'Hotel Guest', name: preGuest })
+      .then((doc) => {
+        if (doc) {
+          selectedGuest.value = doc
+          guestQuery.value = doc.hotel_guest_name || preGuest
+          if (doc.phone_number) form.contact_number = doc.phone_number
+          if (doc.id_type && !form.id_type) form.id_type = doc.id_type
+          applyPreferenceTagsFromGuest(doc)
+        }
+      })
+      .catch(() => { guestQuery.value = preGuest })
   }
   if (preGuestName) {
     guestQuery.value = preGuestName
@@ -921,7 +946,7 @@ onMounted(() => {
             selectedGuest.value = pick
             applyPreferenceTagsFromGuest(pick)
             if (pick.id_type) form.id_type = pick.id_type
-            if (!form.contact_number && pick.phone_number) {
+            if (pick.phone_number) {
               form.contact_number = pick.phone_number
             }
           }

@@ -4,6 +4,33 @@ import json
 
 
 @frappe.whitelist()
+def get_checkin_list(limit=500):
+    """Return check-in list with real-time payment status computed from linked Sales Invoices."""
+    checkins = frappe.db.sql("""
+        SELECT
+            ci.name,
+            ci.guest,
+            ci.room_number,
+            ci.check_in_datetime,
+            ci.expected_check_out_datetime,
+            ci.actual_check_out_datetime,
+            ci.status,
+            ci.reservation_source,
+            ci.number_of_nights,
+            COALESCE(SUM(si.grand_total), 0) AS total_invoiced,
+            COALESCE(SUM(si.outstanding_amount), 0) AS total_outstanding
+        FROM `tabHotel Room Check In` ci
+        LEFT JOIN `tabSales Invoice` si
+            ON si.custom_hotel_room_check_in = ci.name
+            AND si.docstatus = 1
+        GROUP BY ci.name
+        ORDER BY ci.check_in_datetime DESC
+        LIMIT %(limit)s
+    """, {"limit": cint(limit)}, as_dict=1)
+    return checkins
+
+
+@frappe.whitelist()
 def get_checkin_stats():
     """Header stat cards for check-in list and overview."""
     total = frappe.db.count("Hotel Room Check In")
@@ -543,7 +570,7 @@ def create_refund(check_in_name, reason="", amount=None):
     if total_paid <= 0:
         frappe.throw("No confirmed payments found for this check-in. Cannot create refund.")
 
-    # Total invoiced charges for this check-in
+    # Total invoiced charges for this check-in (excluding credit notes)
     charged_result = frappe.db.sql("""
         SELECT COALESCE(SUM(grand_total), 0) AS total_charged
         FROM `tabSales Invoice`
@@ -551,23 +578,35 @@ def create_refund(check_in_name, reason="", amount=None):
     """, check_in_name, as_dict=1)
     total_charged = flt(charged_result[0].total_charged) if charged_result else 0
 
+    # Total already refunded via submitted Hotel Refund records
+    refunded_result = frappe.db.sql("""
+        SELECT COALESCE(SUM(refund_amount), 0) AS total_refunded
+        FROM `tabHotel Refund`
+        WHERE check_in = %s AND docstatus = 1
+    """, check_in_name, as_dict=1)
+    total_refunded = flt(refunded_result[0].total_refunded) if refunded_result else 0
+
+    # Net overpayment after accounting for previous refunds
+    net_overpayment = max(0.0, total_paid - total_charged - total_refunded)
+
+    if net_overpayment <= 0:
+        frappe.throw(
+            "No refundable overpayment remaining for this check-in. "
+            f"Total paid: ₦{total_paid:,.2f}, Total charged: ₦{total_charged:,.2f}, "
+            f"Already refunded: ₦{total_refunded:,.2f}."
+        )
+
     # Resolve refund amount
     requested = flt(amount) if amount else 0
     if requested > 0:
-        if requested > total_paid:
+        if requested > net_overpayment:
             frappe.throw(
-                f"Refund amount (₦{requested:,.2f}) cannot exceed total payments received (₦{total_paid:,.2f})."
+                f"Refund amount (₦{requested:,.2f}) exceeds remaining overpayment "
+                f"(₦{net_overpayment:,.2f})."
             )
         refund_amount = requested
     else:
-        # Default to overpayment (guest paid more than they were charged)
-        overpayment = max(0.0, total_paid - total_charged)
-        if overpayment <= 0:
-            frappe.throw(
-                "No overpayment found for this check-in. "
-                "Please specify an explicit refund amount for goodwill refunds."
-            )
-        refund_amount = overpayment
+        refund_amount = net_overpayment
 
     refund = frappe.new_doc("Hotel Refund")
     refund.guest = check_in.guest
@@ -577,7 +616,7 @@ def create_refund(check_in_name, reason="", amount=None):
     refund.insert(ignore_permissions=True)
     refund.submit()
 
-    return {"name": refund.name, "refund_amount": refund_amount, "total_paid": total_paid, "total_charged": total_charged}
+    return {"name": refund.name, "refund_amount": refund_amount, "total_paid": total_paid, "total_charged": total_charged, "total_refunded": total_refunded}
 
 
 @frappe.whitelist()
@@ -686,15 +725,35 @@ def create_bill_transfer(from_check_in, to_guest, invoices, reason="", note=""):
     if from_guest == to_guest:
         frappe.throw("Cannot transfer a bill to the same guest.")
 
-    # Validate recipient guest has an active check-in
-    to_check_in = frappe.db.get_value(
-        "Hotel Room Check In",
-        {"guest": to_guest, "status": "Checked In"},
-        "name"
-    )
-    if not to_check_in:
-        to_guest_name = frappe.db.get_value("Hotel Guest", to_guest, "hotel_guest_name") or to_guest
-        frappe.throw(f"{to_guest_name} is not currently checked in. Bill transfers can only be made to in-house guests.")
+    # Determine recipient guest type
+    to_guest_doc = frappe.db.get_value(
+        "Hotel Guest", to_guest, ["hotel_guest_name", "guest_type"], as_dict=True
+    ) or {}
+    to_guest_name = to_guest_doc.get("hotel_guest_name") or to_guest
+    to_guest_type = to_guest_doc.get("guest_type") or "Individual"
+
+    # Corporate guests are billed directly — no check-in required
+    if to_guest_type == "Corporate":
+        to_check_in = None
+        # Ensure corporate guest has a linked Customer for the JE
+        corporate_customer = frappe.db.get_value("Hotel Guest", to_guest, "customer")
+        if not corporate_customer:
+            frappe.throw(
+                f"Corporate account '{to_guest_name}' does not have a linked Customer record. "
+                "Please link a Customer before transferring bills."
+            )
+    else:
+        # Individual guests must be currently checked in
+        to_check_in = frappe.db.get_value(
+            "Hotel Room Check In",
+            {"guest": to_guest, "status": "Checked In"},
+            "name"
+        )
+        if not to_check_in:
+            frappe.throw(
+                f"{to_guest_name} is not currently checked in. "
+                "Bill transfers can only be made to in-house guests or corporate accounts."
+            )
 
     full_reason = reason
     if note:
