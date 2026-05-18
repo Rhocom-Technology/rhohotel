@@ -818,7 +818,8 @@ def update_task(task_name, task_data, inventory_items=None, checklist_items=None
                     "notes": item.get("notes") or "",
                 })
  
-        task.save()
+        task.flags.ignore_permissions = True
+        task.save(ignore_permissions=True)
         frappe.db.commit()
         return {"success": True, "message": "Task updated successfully"}
  
@@ -836,6 +837,7 @@ def submit_task(task_name):
     """
     try:
         task = frappe.get_doc("Housekeeping Task", task_name)
+        task.flags.ignore_permissions = True
         task.submit()
         frappe.db.commit()
         return {"success": True, "message": "Task submitted successfully"}
@@ -851,6 +853,7 @@ def cancel_task(task_name):
     """
     try:
         task = frappe.get_doc("Housekeeping Task", task_name)
+        task.flags.ignore_permissions = True
         task.cancel()
         frappe.db.commit()
         return {"success": True, "message": "Task cancelled successfully"}
@@ -948,7 +951,8 @@ def create_task(task_data, inventory_items=None, checklist_items=None):
                         "notes": item.get("notes") or "",
                     })
  
-        task.insert()
+        task.flags.ignore_permissions = True
+        task.insert(ignore_permissions=True)
         frappe.db.commit()
         return {"success": True, "task_name": task.name}
  

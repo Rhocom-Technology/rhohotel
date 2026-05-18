@@ -127,8 +127,12 @@ function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG',
 function fmtDt(dt) { if (!dt) return '—'; return new Date(dt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 const newNights = computed(() => {
   if (!newCheckout.value || !props.checkIn.check_in_datetime) return 0
-  const diff = new Date(newCheckout.value) - new Date(props.checkIn.check_in_datetime)
-  return Math.max(0, Math.floor(diff / 86400000))
+  // Use date-only diff (same as backend date_diff) to avoid time-of-day rounding errors
+  const ciDate = new Date(props.checkIn.check_in_datetime)
+  const coDate = new Date(newCheckout.value)
+  const ciDay = new Date(ciDate.getFullYear(), ciDate.getMonth(), ciDate.getDate())
+  const coDay = new Date(coDate.getFullYear(), coDate.getMonth(), coDate.getDate())
+  return Math.max(0, Math.round((coDay - ciDay) / 86400000))
 })
 const adjustmentType = computed(() => {
   if (!newNights.value) return 'Same'

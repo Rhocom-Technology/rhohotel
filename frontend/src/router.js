@@ -11,12 +11,12 @@ const router = createRouter({
     // Front Desk
     { path: '/room-view', name: 'RoomView', component: () => import('@/pages/frontdesk/RoomView.vue') },
     { path: '/check-ins', name: 'CheckIns', component: () => import('@/pages/frontdesk/CheckIns.vue') },
-    { path: '/check-ins/:id', name: 'CheckInDetail', component: () => import('@/pages/frontdesk/CheckInDetail.vue') },
     { path: '/check-ins/new', name: 'NewCheckIn', component: () => import('@/pages/frontdesk/NewCheckIn.vue') },
+    { path: '/check-ins/:id', name: 'CheckInDetail', component: () => import('@/pages/frontdesk/CheckInDetail.vue') },
 
     { path: '/check-outs', name: 'CheckOuts', component: () => import('@/pages/frontdesk/CheckOuts.vue') },
-    { path: '/check-outs/:id', name: 'CheckOut', component: () => import('@/pages/frontdesk/CheckoutDetail.vue') },
     { path: '/check-outs/overdue', name: 'CheckOutOverdue', component: () => import('@/pages/frontdesk/CheckOutOverdue.vue') },
+    { path: '/check-outs/:id', name: 'CheckOut', component: () => import('@/pages/frontdesk/CheckoutDetail.vue') },
     { path: '/reservations', name: 'Reservations', component: () => import('@/pages/frontdesk/Reservations.vue') },
     { path: '/reservations/new', name: 'NewReservation', component: () => import('@/pages/frontdesk/NewReservation.vue') },
     { path: '/reservations/:id', name: 'SavedReservation', component: () => import('@/pages/frontdesk/SavedReservation.vue') },

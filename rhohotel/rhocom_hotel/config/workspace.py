@@ -18,7 +18,7 @@ def get_data():
 			{
 				"label": _("Operations"),
 				"items": [
-					{"type": "doctype", "name": "Hotel Room Reservation", "label": _("Reservations")}
+					{"type": "doctype", "name": "Hotel Reservation", "label": _("Reservations")}
 				]
 			}
 		]

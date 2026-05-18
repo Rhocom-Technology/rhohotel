@@ -2,31 +2,24 @@
 Centralized room availability logic for the Rhohotel application.
 
 All room availability checks across the application (reservations, check-ins,
-corporate check-ins, front-desk reservations, online bookings) must use the
-functions in this module instead of duplicating overlap-query logic inline.
+corporate check-ins, online bookings) must use the functions in this module
+instead of duplicating overlap-query logic inline.
 
 This module is the *single source of truth* for overlap detection.  It covers
-three distinct booking surfaces:
+two booking surfaces:
 
-  1. Legacy Hotel Room Reservation
-       – Single-room reservation created per room by the front-desk flow.
-       – Queried directly: `tabHotel Room Reservation`.
-
-  2. Hotel Room Check In
+  1. Hotel Room Check In
        – Active stay record created when a guest physically checks in.
        – Queried directly: `tabHotel Room Check In`.
 
-  3. Canonical Hotel Reservation (new)
+  2. Canonical Hotel Reservation (current)
        – One parent per booking, rooms stored in child table Hotel Reservation Room.
        – Queried via a JOIN: `tabHotel Reservation Room` → `tabHotel Reservation`.
 
-A room must be free in *all three* surfaces before it is considered available.
+A room must be free in both surfaces before it is considered available.
 
 Public API
 ----------
-check_reservation_conflict(room_number, check_in_dt, check_out_dt, exclude_reservation=None)
-    Returns the first conflicting Hotel Room Reservation dict, or None.
-
 check_checkin_conflict(room_number, check_in_dt, check_out_dt, exclude_checkin=None)
     Returns the first conflicting Hotel Room Check In dict, or None.
 
@@ -34,8 +27,8 @@ check_canonical_reservation_conflict(room_number, check_in_dt, check_out_dt, exc
     Returns the first conflicting canonical Hotel Reservation (via its room allocation
     child rows) dict, or None.
 
-assert_room_available(room_number, check_in_dt, check_out_dt, *, exclude_reservation=None,
-                      exclude_checkin=None, exclude_canonical=None)
+assert_room_available(room_number, check_in_dt, check_out_dt, *, exclude_checkin=None,
+                      exclude_canonical=None)
     Raises frappe.ValidationError (via frappe.throw) if a conflict is found in any surface.
 
 get_available_rooms(check_in_dt, check_out_dt, room_type=None, require_clean=False,
@@ -79,49 +72,6 @@ def _normalize_dt(value):
 # ---------------------------------------------------------------------------
 # Core conflict-detection functions
 # ---------------------------------------------------------------------------
-
-
-def check_reservation_conflict(room_number, check_in_dt, check_out_dt, exclude_reservation=None):
-    """
-    Check for a conflicting Hotel Room Reservation in the given period.
-
-    Overlap formula: existing.from_date < check_out_dt AND existing.to_date > check_in_dt
-
-    When from_date / to_date are DATE fields, MySQL compares them as
-    '2024-01-05 00:00:00', so passing 12:00 datetimes correctly handles
-    same-day check-out/check-in transitions (no false conflicts).
-
-    Args:
-        room_number       : Hotel Room name.
-        check_in_dt       : Period start – datetime or date/str (normalized to 12:00).
-        check_out_dt      : Period end   – datetime or date/str (normalized to 12:00).
-        exclude_reservation: Reservation name to exclude (e.g. the one being validated).
-
-    Returns:
-        dict with keys (name, from_date, to_date, guest_name), or None.
-    """
-    check_in_dt = _normalize_dt(check_in_dt)
-    check_out_dt = _normalize_dt(check_out_dt)
-
-    filters = {
-        "room_number": room_number,
-        "docstatus": ["!=", 2],
-        "status": ["not in", ["Cancelled", "Completed", "No Show"]],
-        "from_date": ["<", check_out_dt],
-        "to_date": [">", check_in_dt],
-    }
-
-    if exclude_reservation:
-        filters["name"] = ["!=", exclude_reservation]
-
-    results = frappe.get_all(
-        "Hotel Room Reservation",
-        filters=filters,
-        fields=["name", "from_date", "to_date", "guest_name"],
-        limit=1,
-    )
-    return results[0] if results else None
-
 
 def check_checkin_conflict(room_number, check_in_dt, check_out_dt, exclude_checkin=None):
     """
@@ -241,6 +191,7 @@ def assert_room_available(
     exclude_reservation=None,
     exclude_checkin=None,
     exclude_canonical=None,
+    reservation_type=None,
 ):
     """
     Assert that *room_number* has no conflicting booking in any active surface
@@ -248,38 +199,30 @@ def assert_room_available(
 
     Raises frappe.ValidationError (via frappe.throw) on the first conflict found.
 
-    Three surfaces are checked in order:
-      1. Legacy Hotel Room Reservation  – via check_reservation_conflict()
-      2. Hotel Room Check In            – via check_checkin_conflict()
-      3. Canonical Hotel Reservation    – via check_canonical_reservation_conflict()
+    Two booking surfaces are checked in order:
+      1. Hotel Room Check In            – via check_checkin_conflict()
+      2. Canonical Hotel Reservation    – via check_canonical_reservation_conflict()
+
+    Additionally, for non-Group reservation types, a room block protection guard
+    checks whether the room's type is fully blocked by a Group reservation block
+    for the requested period.
 
     Args:
         room_number        : Hotel Room name.
         check_in_dt        : Period start – datetime or date/str.
         check_out_dt       : Period end   – datetime or date/str.
-        exclude_reservation: Legacy Hotel Room Reservation name to ignore.
+        exclude_reservation: Ignored (kept for backward compatibility).
         exclude_checkin    : Hotel Room Check In name to ignore.
         exclude_canonical  : Canonical Hotel Reservation name to ignore
                              (pass self.name when validating the reservation being saved).
+        reservation_type   : The type of the reservation being validated. When set to
+                             'Group', the block protection guard is bypassed so the group
+                             can pick up its own blocked rooms freely.
     """
     check_in_dt = _normalize_dt(check_in_dt)
     check_out_dt = _normalize_dt(check_out_dt)
 
-    # --- Surface 1: legacy Hotel Room Reservation ---
-    res_conflict = check_reservation_conflict(
-        room_number, check_in_dt, check_out_dt, exclude_reservation
-    )
-    if res_conflict:
-        frappe.throw(
-            _("{0} is already reserved from {1} to {2} (Reservation: {3}).").format(
-                room_number,
-                res_conflict.from_date,
-                res_conflict.to_date,
-                res_conflict.name,
-            )
-        )
-
-    # --- Surface 2: Hotel Room Check In ---
+    # --- Surface 1: Hotel Room Check In ---
     ci_conflict = check_checkin_conflict(
         room_number, check_in_dt, check_out_dt, exclude_checkin
     )
@@ -293,7 +236,7 @@ def assert_room_available(
             )
         )
 
-    # --- Surface 3: canonical Hotel Reservation (room allocation child table) ---
+    # --- Surface 2: canonical Hotel Reservation (room allocation child table) ---
     canonical_conflict = check_canonical_reservation_conflict(
         room_number, check_in_dt, check_out_dt, exclude_canonical
     )
@@ -308,6 +251,24 @@ def assert_room_available(
                 canonical_conflict.name,
             )
         )
+
+    # --- Surface 4: Room block protection guard (non-Group bookings only) ---
+    if reservation_type != "Group":
+        room_type = frappe.db.get_value("Hotel Room", room_number, "room_type")
+        if room_type and is_room_type_blocked_for_period(
+            room_type, check_in_dt, check_out_dt, context_reservation=exclude_canonical
+        ):
+            frappe.throw(
+                _(
+                    "{0} ({1}) is fully allocated to a group block for {2} to {3} "
+                    "and cannot be added to individual or non-group reservations."
+                ).format(
+                    room_number,
+                    room_type,
+                    check_in_dt.strftime("%Y-%m-%d"),
+                    check_out_dt.strftime("%Y-%m-%d"),
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -324,8 +285,6 @@ def get_available_rooms(
 
     Excludes rooms that are:
     - Not in service / flagged for maintenance
-    - Under an active Temporary Booking hold
-    - Overlapping an active Hotel Room Reservation (legacy)
     - Overlapping an active Hotel Room Check In
     - Allocated in an active canonical Hotel Reservation (via Hotel Reservation Room child table)
 
@@ -376,38 +335,6 @@ def get_available_rooms(
     # ------------------------------------------------------------------
     check_in_str = check_in_dt.strftime("%Y-%m-%d %H:%M:%S")
     check_out_str = check_out_dt.strftime("%Y-%m-%d %H:%M:%S")
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Active Temporary Booking holds
-    held_rows = frappe.db.sql(
-        f"""
-        SELECT DISTINCT tbr.room_number
-        FROM `tabTemporary Booking` tb
-        INNER JOIN `tabTemporary Booking Room` tbr ON tb.name = tbr.parent
-        WHERE tbr.room_number IN ({placeholders})
-          AND tb.status IN ('Hold', 'Payment Link Generated')
-          AND tb.payment_status = 'Pending'
-          AND tb.booking_status = 'Held'
-          AND tb.hold_expires_at > %s
-        """,
-        tuple(room_numbers) + (now_str,),
-        as_dict=True,
-    )
-
-    # Overlapping confirmed reservations
-    booked_rows = frappe.db.sql(
-        f"""
-        SELECT DISTINCT room_number
-        FROM `tabHotel Room Reservation`
-        WHERE room_number IN ({placeholders})
-          AND docstatus != 2
-          AND status NOT IN ('Cancelled', 'Completed', 'No Show')
-          AND from_date < %s
-          AND to_date > %s
-        """,
-        tuple(room_numbers) + (check_out_str, check_in_str),
-        as_dict=True,
-    )
 
     # Overlapping active check-ins
     checkin_rows = frappe.db.sql(
@@ -443,9 +370,7 @@ def get_available_rooms(
     )
 
     unavailable = set(
-        [r.room_number for r in held_rows]
-        + [r.room_number for r in booked_rows]
-        + [r.room_number for r in checkin_rows]
+        [r.room_number for r in checkin_rows]
         + [r.room_number for r in canonical_rows]   # canonical reservation allocations
     )
 
@@ -463,3 +388,112 @@ def get_available_rooms(
         room["total_amount"] = rate * nights
 
     return available
+
+
+# ---------------------------------------------------------------------------
+# Room block protection helpers
+# ---------------------------------------------------------------------------
+
+
+def get_protected_block_count(room_type, check_in_dt, check_out_dt, context_reservation=None):
+    """
+    Return the total number of rooms of *room_type* that are currently protected
+    by active Group reservation room blocks for the given period.
+
+    A room block on a Group reservation withholds inventory from all non-group
+    bookings so that the group can pick up rooms without encountering conflicts.
+
+    Args:
+        room_type            : Hotel Room Type name.
+        check_in_dt          : Period start (datetime / date / str).
+        check_out_dt         : Period end   (datetime / date / str).
+        context_reservation  : When set (a Group reservation name), the protected
+                               count for THAT reservation's own blocks is excluded so
+                               that pickup into the same group doesn't count against
+                               itself.
+
+    Returns:
+        int – total protected (blocked) room count from other active Group reservations.
+    """
+    check_in_dt = _normalize_dt(check_in_dt)
+    check_out_dt = _normalize_dt(check_out_dt)
+
+    check_in_str = check_in_dt.strftime("%Y-%m-%d %H:%M:%S")
+    check_out_str = check_out_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    exclude_clause = ""
+    params: tuple = (room_type, check_out_str, check_in_str)
+    if context_reservation:
+        exclude_clause = "AND hr.name != %s"
+        params = (room_type, check_out_str, check_in_str, context_reservation)
+
+    result = frappe.db.sql(
+        f"""
+        SELECT COALESCE(SUM(rb.quantity), 0) AS protected_count
+        FROM `tabHotel Reservation Room Block` rb
+        INNER JOIN `tabHotel Reservation` hr ON hr.name = rb.parent
+        WHERE rb.room_type = %s
+          AND hr.docstatus != 2
+          AND hr.reservation_type = 'Group'
+          AND hr.reservation_status NOT IN
+              ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND hr.from_date < %s
+          AND hr.to_date   > %s
+          {exclude_clause}
+        """,
+        params,
+        as_dict=True,
+    )
+    return int((result[0].protected_count) if result else 0)
+
+
+def get_total_room_count(room_type):
+    """Return the total count of in-service rooms of the given room type."""
+    return frappe.db.count(
+        "Hotel Room",
+        {"room_type": room_type, "operational_status": "In Service", "maintenance_flag": 0},
+    )
+
+
+def is_room_type_blocked_for_period(
+    room_type, check_in_dt, check_out_dt, context_reservation=None
+):
+    """
+    Return True if protected block count >= available room count for *room_type*,
+    meaning individual/non-group bookings should not be able to take any more
+    rooms of this type.
+
+    This is a soft guard – it checks type-level protection, not specific rooms.
+    assert_room_type_unblocked() raises the actual error.
+    """
+    protected = get_protected_block_count(
+        room_type, check_in_dt, check_out_dt, context_reservation
+    )
+    if protected <= 0:
+        return False
+
+    # Count already-booked rooms of this type for the period (non-group bookings)
+    check_in_str = _normalize_dt(check_in_dt).strftime("%Y-%m-%d %H:%M:%S")
+    check_out_str = _normalize_dt(check_out_dt).strftime("%Y-%m-%d %H:%M:%S")
+
+    booked = frappe.db.sql(
+        """
+        SELECT COUNT(DISTINCT rr.room_number) AS booked_count
+        FROM `tabHotel Reservation Room` rr
+        INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
+        INNER JOIN `tabHotel Room` room ON room.name = rr.room_number
+        WHERE room.room_type = %s
+          AND hr.docstatus != 2
+          AND hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND hr.from_date < %s
+          AND hr.to_date   > %s
+        """,
+        (room_type, check_out_str, check_in_str),
+        as_dict=True,
+    )
+    already_booked = int((booked[0].booked_count) if booked else 0)
+    total = get_total_room_count(room_type)
+
+    # Available to non-group = total - protected - already_booked
+    return (total - protected - already_booked) <= 0
+

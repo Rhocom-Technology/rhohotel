@@ -4,6 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent layout shift when modals appear/disappear (scrollbar gutter) */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
 
 #app,
 #app * {

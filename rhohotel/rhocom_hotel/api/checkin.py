@@ -4,6 +4,33 @@ import json
 
 
 @frappe.whitelist()
+def get_checkin_list(limit=500):
+    """Return check-in list with real-time payment status computed from linked Sales Invoices."""
+    checkins = frappe.db.sql("""
+        SELECT
+            ci.name,
+            ci.guest,
+            ci.room_number,
+            ci.check_in_datetime,
+            ci.expected_check_out_datetime,
+            ci.actual_check_out_datetime,
+            ci.status,
+            ci.reservation_source,
+            ci.number_of_nights,
+            COALESCE(SUM(si.grand_total), 0) AS total_invoiced,
+            COALESCE(SUM(si.outstanding_amount), 0) AS total_outstanding
+        FROM `tabHotel Room Check In` ci
+        LEFT JOIN `tabSales Invoice` si
+            ON si.custom_hotel_room_check_in = ci.name
+            AND si.docstatus = 1
+        GROUP BY ci.name
+        ORDER BY ci.check_in_datetime DESC
+        LIMIT %(limit)s
+    """, {"limit": cint(limit)}, as_dict=1)
+    return checkins
+
+
+@frappe.whitelist()
 def get_checkin_stats():
     """Header stat cards for check-in list and overview."""
     total = frappe.db.count("Hotel Room Check In")
@@ -30,7 +57,7 @@ def get_checkin_stats():
 
 @frappe.whitelist()
 def get_checkin_detail(name):
-    """Load single check-in with invoices."""
+    """Load single check-in with invoices, acquired bills, and payment entries."""
     if not frappe.db.exists("Hotel Room Check In", name):
         frappe.throw(f"Check-in {name} not found")
 
@@ -54,7 +81,8 @@ def get_checkin_detail(name):
     try:
         pos_invoices = frappe.db.sql("""
             SELECT name AS invoice, grand_total AS amount, outstanding_amount,
-                   posting_date, status, 'POS Invoice' AS invoice_type
+                   posting_date, status, 'POS Invoice' AS invoice_type,
+                   consolidated_invoice
             FROM `tabPOS Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
@@ -62,76 +90,200 @@ def get_checkin_detail(name):
     except Exception:
         pass
 
-    checkin["invoices"] = list(invoices) + list(pos_invoices)
+    # ── Room-posting detection ────────────────────────────────────────────
+    # POS Invoices posted to a room have `consolidated_invoice` pointing to
+    # the Sales Invoice created by post_bill_to_room.  Use this link to:
+    #  1. Re-label the Sales Invoice as 'Restaurant' (it's an F&B folio charge).
+    #  2. Exclude the consolidated POS Invoice from the list — the Sales Invoice
+    #     already carries the correct outstanding balance; showing both would
+    #     create a duplicate row.
+
+    si_names = [inv["invoice"] for inv in invoices]
+    room_posting_pos_names = set()  # POS Invoice names that are room-posting refs
+
+    if si_names:
+        try:
+            room_pi_rows = frappe.db.sql("""
+                SELECT name AS invoice, consolidated_invoice
+                FROM `tabPOS Invoice`
+                WHERE consolidated_invoice IN %s AND docstatus = 1
+            """, (tuple(si_names),), as_dict=1) or []
+
+            for row in room_pi_rows:
+                room_posting_pos_names.add(row["invoice"])
+                # Mark matching Sales Invoice as a restaurant/F&B charge
+                for inv in invoices:
+                    if inv["invoice"] == row["consolidated_invoice"]:
+                        inv["invoice_type"] = "Restaurant"
+        except Exception:
+            pass
+
+    # Exclude consolidated room-posting POS Invoices — already represented
+    # by their corresponding Sales Invoice on the folio.
+    filtered_pos_invoices = [
+        inv for inv in pos_invoices
+        if inv["invoice"] not in room_posting_pos_names
+    ]
+
+    checkin["invoices"] = list(invoices) + list(filtered_pos_invoices)
+
+    # Acquired bills — Bill Transfer records where this check-in is the recipient
+    acquired_bills = []
+    try:
+        acquired_bills = frappe.db.sql("""
+            SELECT name, from_guest, source_invoice, total_amount, status,
+                   creation AS transfer_date, reason, journal_entry
+            FROM `tabBill Transfer`
+            WHERE to_check_in = %s AND status != 'Cancelled'
+            ORDER BY creation DESC
+        """, name, as_dict=1) or []
+    except Exception:
+        pass
+
+    # Compute outstanding amount for each approved acquired bill from its JE
+    for bill in acquired_bills:
+        outstanding = 0.0
+        je_name = bill.get("journal_entry")
+        if je_name and bill.get("status") == "Approved":
+            try:
+                debit_total = frappe.db.sql("""
+                    SELECT COALESCE(SUM(debit_in_account_currency), 0)
+                    FROM `tabJournal Entry Account`
+                    WHERE parent = %s AND debit_in_account_currency > 0 AND party_type = 'Customer'
+                """, je_name)[0][0] or 0
+
+                paid = frappe.db.sql("""
+                    SELECT COALESCE(SUM(per.allocated_amount), 0)
+                    FROM `tabPayment Entry Reference` per
+                    JOIN `tabPayment Entry` pe ON per.parent = pe.name
+                    WHERE per.reference_doctype = 'Journal Entry'
+                    AND per.reference_name = %s
+                    AND pe.docstatus = 1
+                    AND pe.payment_type = 'Receive'
+                """, je_name)[0][0] or 0
+
+                outstanding = max(0.0, float(debit_total) - float(paid))
+            except Exception:
+                outstanding = float(bill.get("total_amount") or 0)
+        bill["outstanding_amount"] = outstanding
+
+    checkin["acquired_bills"] = list(acquired_bills)
+
+    # Payment entries linked to this check-in (include draft=0 in case submit failed)
+    payments = []
+    try:
+        payments = frappe.db.sql("""
+            SELECT name AS payment_id, paid_amount, payment_type,
+                   posting_date, mode_of_payment, remarks, docstatus
+            FROM `tabPayment Entry`
+            WHERE custom_hotel_room_check_in = %s AND docstatus IN (0, 1)
+            ORDER BY posting_date DESC
+        """, name, as_dict=1) or []
+    except Exception:
+        pass
+
+    checkin["payments"] = list(payments)
+
     return checkin
 
 
 @frappe.whitelist()
-def search_guests(query=""):
+def search_guests(query="", guest_type="", in_house_only=""):
     """Search Hotel Guest by name/phone/email for autocomplete."""
     if not query or len(query.strip()) < 2:
         return []
 
     q = f"%{query.strip()}%"
-    guests = frappe.db.sql("""
-        SELECT name, hotel_guest_name, phone_number, email, guest_type, preference, id_type
-        FROM `tabHotel Guest`
-        WHERE hotel_guest_name LIKE %s
-            OR phone_number LIKE %s
-            OR email LIKE %s
-            OR name LIKE %s
-        ORDER BY hotel_guest_name
+    type_clause = "AND hg.guest_type = %s" if guest_type else ""
+    params = (q, q, q, q, guest_type) if guest_type else (q, q, q, q)
+
+    # When in_house_only is set, restrict to guests with an active check-in
+    in_house_clause = ""
+    if in_house_only and str(in_house_only) not in ("0", "false", "False", ""):
+        in_house_clause = "AND EXISTS (SELECT 1 FROM `tabHotel Room Check In` ci WHERE ci.guest = hg.name AND ci.status = 'Checked In')"
+
+    guests = frappe.db.sql(f"""
+        SELECT hg.name, hg.hotel_guest_name, hg.phone_number, hg.email, hg.guest_type,
+               hg.preference, hg.id_type, hg.id_number,
+               (SELECT ci.room_number FROM `tabHotel Room Check In` ci
+                WHERE ci.guest = hg.name AND ci.status = 'Checked In'
+                ORDER BY ci.check_in_datetime DESC LIMIT 1) AS room_number
+        FROM `tabHotel Guest` hg
+        WHERE (hg.hotel_guest_name LIKE %s
+            OR hg.phone_number LIKE %s
+            OR hg.email LIKE %s
+            OR hg.name LIKE %s)
+        {type_clause}
+        {in_house_clause}
+        ORDER BY hg.hotel_guest_name
         LIMIT 10
-    """, (q, q, q, q), as_dict=1)
+    """, params, as_dict=1)
 
     return guests
 
 
 @frappe.whitelist()
 def search_reservations(query=""):
-    """Search Hotel Room Reservation by name, guest name, or phone for autocomplete.
+    """Search canonical Hotel Reservation by name, guest name, or phone for autocomplete.
 
-    Returns active reservations not yet checked in. When query is empty,
-    returns the next 10 reservations by from_date.
+    Returns active reservations not yet fully checked in.
     """
-    # Status labels vary by deployment; exclude only terminal states.
-    base_conditions = """
-        IFNULL(r.status, '') NOT IN ('Cancelled', 'Completed', 'Checked-In', 'Checked In')
-        AND NOT EXISTS (
-            SELECT 1 FROM `tabHotel Room Check In` ci
-            WHERE ci.reservation = r.name AND ci.docstatus != 2
-        )
+    # -----------------------------------------------------------------------
+    # Canonical: Hotel Reservation
+    # -----------------------------------------------------------------------
+    canonical_base = """
+        hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+        AND hr.docstatus != 2
     """
 
     if query and len(query.strip()) >= 1:
         q = f"%{query.strip()}%"
-        rows = frappe.db.sql(
+        canonical_rows = frappe.db.sql(
             f"""
-            SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
-                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate
-            FROM `tabHotel Room Reservation` r
-            WHERE {base_conditions}
-              AND (r.name LIKE %s OR r.guest_name LIKE %s OR r.guest_phone LIKE %s)
-            ORDER BY r.from_date ASC
+            SELECT hr.name, hr.primary_guest_name AS guest_name,
+                   hr.primary_guest_phone AS guest_phone,
+                   hr.primary_guest_email AS guest_email,
+                   NULL AS room_number,
+                   hr.from_date, hr.to_date,
+                   hr.reservation_status AS status,
+                   hr.number_of_nights,
+                   NULL AS rate,
+                   hr.reservation_type,
+                   hr.group_name,
+                   'canonical' AS source_type
+            FROM `tabHotel Reservation` hr
+            WHERE {canonical_base}
+              AND (hr.name LIKE %s OR hr.primary_guest_name LIKE %s OR hr.primary_guest_phone LIKE %s OR hr.group_name LIKE %s)
+            ORDER BY hr.from_date ASC
             LIMIT 10
             """,
-            (q, q, q),
+            (q, q, q, q),
             as_dict=1,
         )
     else:
-        rows = frappe.db.sql(
+        canonical_rows = frappe.db.sql(
             f"""
-            SELECT r.name, r.guest_name, r.guest_phone, r.guest_email, r.room_number,
-                   r.from_date, r.to_date, r.status, r.number_of_nights, r.rate
-            FROM `tabHotel Room Reservation` r
-            WHERE {base_conditions}
-            ORDER BY r.from_date ASC
+            SELECT hr.name, hr.primary_guest_name AS guest_name,
+                   hr.primary_guest_phone AS guest_phone,
+                   hr.primary_guest_email AS guest_email,
+                   NULL AS room_number,
+                   hr.from_date, hr.to_date,
+                   hr.reservation_status AS status,
+                   hr.number_of_nights,
+                   NULL AS rate,
+                   hr.reservation_type,
+                   hr.group_name,
+                   'canonical' AS source_type
+            FROM `tabHotel Reservation` hr
+            WHERE {canonical_base}
+            ORDER BY hr.from_date ASC
             LIMIT 10
             """,
             as_dict=1,
         )
 
-    return rows
+    canonical_rows.sort(key=lambda r: str(r.get("from_date") or ""))
+    return canonical_rows[:15]
 
 
 @frappe.whitelist()
@@ -261,21 +413,6 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
             as_dict=True,
         )
 
-        # Legacy reservations overlapping the period
-        reservation_rows = frappe.db.sql(
-            f"""
-            SELECT DISTINCT room_number
-            FROM `tabHotel Room Reservation`
-            WHERE room_number IN ({placeholders})
-              AND docstatus != 2
-              AND status NOT IN ('Cancelled', 'Completed', 'No Show')
-              AND from_date < %s
-              AND to_date > %s
-            """,
-            tuple(room_names) + (co_str, ci_str),
-            as_dict=True,
-        )
-
         # Canonical Hotel Reservation allocations overlapping the period
         canonical_rows = frappe.db.sql(
             f"""
@@ -296,7 +433,6 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
 
         unavailable = set(
             [r.room_number for r in checkin_rows]
-            + [r.room_number for r in reservation_rows]
             + [r.room_number for r in canonical_rows]
         )
         rooms = [r for r in rooms if r.name not in unavailable]
@@ -328,6 +464,7 @@ def create_checkin(
     check_in_datetime=None,
     rate_type="",
     reservation="",
+    canonical_reservation="",
     reservation_source="",
     discount_type="",
     discount=0,
@@ -357,6 +494,7 @@ def create_checkin(
     doc.check_in_datetime = ci_dt
     doc.expected_check_out_datetime = expected_out
     doc.reservation = reservation or ""
+    doc.canonical_reservation = canonical_reservation or ""
     doc.reservation_source = reservation_source or ""
     doc.discount_type = discount_type or "None"
     doc.discount = flt(discount)
@@ -379,12 +517,41 @@ def create_checkin(
     doc.insert(ignore_permissions=True)
     doc.submit()
 
+    # If a canonical reservation was linked, update its status to Checked In
+    # and back-link this check-in to the matching room row
+    if canonical_reservation and frappe.db.exists("Hotel Reservation", canonical_reservation):
+        try:
+            res_doc = frappe.get_doc("Hotel Reservation", canonical_reservation)
+            if res_doc.reservation_status in ("Confirmed", "Hold"):
+                res_doc.flags.ignore_validate_update_after_submit = True
+                res_doc.reservation_status = "Checked In"
+                res_doc.check_in_time = ci_dt
+                res_doc.save(ignore_permissions=True)
+
+            # Link check-in reference to the matching room row
+            for row in res_doc.rooms:
+                if row.room_number == room_number and not row.check_in_reference:
+                    frappe.db.set_value(
+                        "Hotel Reservation Room",
+                        row.name,
+                        "check_in_reference",
+                        doc.name,
+                        update_modified=False,
+                    )
+                    break
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Canonical reservation update failed at check-in")
+
     return {"name": doc.name, "status": doc.status}
 
 
 @frappe.whitelist()
-def create_refund(check_in_name, reason=""):
-    """Create and submit a Hotel Refund for a check-in based on total payments received."""
+def create_refund(check_in_name, reason="", amount=None):
+    """Create and submit a Hotel Refund for a check-in.
+
+    amount: explicit refund amount (optional). If omitted, defaults to overpayment
+            (total payments received − total invoiced charges).
+    """
     frappe.has_permission("Hotel Refund", "create", throw=True)
 
     if not frappe.db.exists("Hotel Room Check In", check_in_name):
@@ -392,25 +559,64 @@ def create_refund(check_in_name, reason=""):
 
     check_in = frappe.get_doc("Hotel Room Check In", check_in_name)
 
-    result = frappe.db.sql("""
+    # Total submitted payments received for this check-in
+    paid_result = frappe.db.sql("""
         SELECT COALESCE(SUM(paid_amount), 0) AS total_paid
         FROM `tabPayment Entry`
-        WHERE custom_hotel_room_check_in = %s AND docstatus = 1
+        WHERE custom_hotel_room_check_in = %s AND docstatus = 1 AND payment_type = 'Receive'
     """, check_in_name, as_dict=1)
-    total_paid = flt(result[0].total_paid) if result else 0
+    total_paid = flt(paid_result[0].total_paid) if paid_result else 0
 
     if total_paid <= 0:
         frappe.throw("No confirmed payments found for this check-in. Cannot create refund.")
 
+    # Total invoiced charges for this check-in (excluding credit notes)
+    charged_result = frappe.db.sql("""
+        SELECT COALESCE(SUM(grand_total), 0) AS total_charged
+        FROM `tabSales Invoice`
+        WHERE custom_hotel_room_check_in = %s AND docstatus = 1 AND is_return = 0
+    """, check_in_name, as_dict=1)
+    total_charged = flt(charged_result[0].total_charged) if charged_result else 0
+
+    # Total already refunded via submitted Hotel Refund records
+    refunded_result = frappe.db.sql("""
+        SELECT COALESCE(SUM(refund_amount), 0) AS total_refunded
+        FROM `tabHotel Refund`
+        WHERE check_in = %s AND docstatus = 1
+    """, check_in_name, as_dict=1)
+    total_refunded = flt(refunded_result[0].total_refunded) if refunded_result else 0
+
+    # Net overpayment after accounting for previous refunds
+    net_overpayment = max(0.0, total_paid - total_charged - total_refunded)
+
+    if net_overpayment <= 0:
+        frappe.throw(
+            "No refundable overpayment remaining for this check-in. "
+            f"Total paid: ₦{total_paid:,.2f}, Total charged: ₦{total_charged:,.2f}, "
+            f"Already refunded: ₦{total_refunded:,.2f}."
+        )
+
+    # Resolve refund amount
+    requested = flt(amount) if amount else 0
+    if requested > 0:
+        if requested > net_overpayment:
+            frappe.throw(
+                f"Refund amount (₦{requested:,.2f}) exceeds remaining overpayment "
+                f"(₦{net_overpayment:,.2f})."
+            )
+        refund_amount = requested
+    else:
+        refund_amount = net_overpayment
+
     refund = frappe.new_doc("Hotel Refund")
     refund.guest = check_in.guest
     refund.check_in = check_in.name
-    refund.refund_amount = total_paid
+    refund.refund_amount = refund_amount
     refund.reason = reason or f"Refund for Check In {check_in.name}"
     refund.insert(ignore_permissions=True)
     refund.submit()
 
-    return {"name": refund.name, "refund_amount": total_paid}
+    return {"name": refund.name, "refund_amount": refund_amount, "total_paid": total_paid, "total_charged": total_charged, "total_refunded": total_refunded}
 
 
 @frappe.whitelist()
@@ -519,6 +725,36 @@ def create_bill_transfer(from_check_in, to_guest, invoices, reason="", note=""):
     if from_guest == to_guest:
         frappe.throw("Cannot transfer a bill to the same guest.")
 
+    # Determine recipient guest type
+    to_guest_doc = frappe.db.get_value(
+        "Hotel Guest", to_guest, ["hotel_guest_name", "guest_type"], as_dict=True
+    ) or {}
+    to_guest_name = to_guest_doc.get("hotel_guest_name") or to_guest
+    to_guest_type = to_guest_doc.get("guest_type") or "Individual"
+
+    # Corporate guests are billed directly — no check-in required
+    if to_guest_type == "Corporate":
+        to_check_in = None
+        # Ensure corporate guest has a linked Customer for the JE
+        corporate_customer = frappe.db.get_value("Hotel Guest", to_guest, "customer")
+        if not corporate_customer:
+            frappe.throw(
+                f"Corporate account '{to_guest_name}' does not have a linked Customer record. "
+                "Please link a Customer before transferring bills."
+            )
+    else:
+        # Individual guests must be currently checked in
+        to_check_in = frappe.db.get_value(
+            "Hotel Room Check In",
+            {"guest": to_guest, "status": "Checked In"},
+            "name"
+        )
+        if not to_check_in:
+            frappe.throw(
+                f"{to_guest_name} is not currently checked in. "
+                "Bill transfers can only be made to in-house guests or corporate accounts."
+            )
+
     full_reason = reason
     if note:
         full_reason = f"{reason} — {note}" if reason else note
@@ -538,6 +774,7 @@ def create_bill_transfer(from_check_in, to_guest, invoices, reason="", note=""):
         bt.from_guest = from_guest
         bt.from_check_in = from_check_in
         bt.to_guest = to_guest
+        bt.to_check_in = to_check_in
         bt.source_invoice = inv_name
         bt.total_amount = total_amount
         bt.reason = full_reason

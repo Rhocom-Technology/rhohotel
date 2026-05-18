@@ -51,6 +51,17 @@
 
       <template v-else-if="data">
 
+        <!-- AI Night Audit Narrative -->
+        <AIInsightPanel
+          v-if="session.isHotelManager || session.isFrontDeskManager"
+          title="AI Night Audit Narrative"
+          context-type="night_audit_summary"
+          :context-data="nightAuditContext"
+          :auto-load="false"
+          panel-id="night-audit"
+          style="margin-bottom:2px;"
+        />
+
         <!-- ── Top Summary ──────────────────────────────────────────── -->
         <section class="na-section">
           <div class="na-section-header">
@@ -339,6 +350,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import { useSessionStore } from '@/stores/session'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const router = useRouter()
 const session = useSessionStore()
@@ -547,6 +559,25 @@ function closeDay() {
   if (!confirm('Are you sure you want to close the day? This action cannot be undone.')) return
   alert('Day close initiated…')
 }
+
+const nightAuditContext = computed(() => {
+  if (!data.value) return null
+  return {
+    date: auditDate.value,
+    total_revenue: data.value.revenue?.total_revenue,
+    room_revenue: data.value.revenue?.room_revenue,
+    fnb_revenue: data.value.revenue?.fnb_revenue,
+    occupancy_pct: data.value.occupancy?.occupancy_pct,
+    occupied: data.value.occupancy?.occupied,
+    total_rooms: data.value.occupancy?.total_rooms,
+    arrivals: data.value.occupancy?.arrivals,
+    departures: data.value.occupancy?.departures,
+    noshows: data.value.occupancy?.noshows ?? 0,
+    outstanding_total: data.value.outstanding?.total_outstanding,
+    outstanding_count: data.value.outstanding?.guest_count,
+    critical_items_count: criticalItems.value.length,
+  }
+})
 </script>
 
 <style scoped>

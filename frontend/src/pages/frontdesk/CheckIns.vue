@@ -161,7 +161,8 @@
               </td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-700">{{ item.room }}</td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ item.source }}</td>
-              <td class="px-4 py-4 text-xs font-semibold" :class="item.payment === 'Balance Due' ? 'text-red-500' : 'text-green-500'">
+              <td class="px-4 py-4 text-xs font-semibold"
+                :class="item.payment === 'Balance Due' ? 'text-red-500' : item.payment === 'Not Invoiced' ? 'text-gray-400' : 'text-green-500'">
                 {{ item.payment }}
               </td>
               <td class="px-4 py-4">
@@ -219,31 +220,24 @@ const pageSize = 25
 
 
 const checkInResource = createResource({
-  url: 'frappe.client.get_list',
-  params: {
-    doctype: 'Hotel Room Check In',
-    fields: [
-      'name',
-      'guest',
-      'room_number',
-      'check_in_datetime',
-      'expected_check_out_datetime',
-      'actual_check_out_datetime',
-      'status',
-      'reservation_source',
-      'total_outstanding_amount',
-      'number_of_nights',
-    ],
-    order_by: 'check_in_datetime desc',
-    limit_page_length: 500,
-  },
+  url: 'rhohotel.rhocom_hotel.api.checkin.get_checkin_list',
+  params: { limit: 500 },
   auto: true,
 })
 
 const checkins = computed(() => (checkInResource.data || []).map((row) => {
   const overdue = isOverdue(row)
   const stayStatus = mapStayStatus(row.status, overdue)
-  const payment = Number(row.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Paid'
+  const outstanding = Number(row.total_outstanding || 0)
+  const invoiced = Number(row.total_invoiced || 0)
+  let payment
+  if (invoiced === 0) {
+    payment = 'Not Invoiced'
+  } else if (outstanding > 0) {
+    payment = 'Balance Due'
+  } else {
+    payment = 'Paid'
+  }
   return {
     ...row,
     guest: row.guest || '—',
@@ -266,7 +260,7 @@ const stats = computed(() => {
     inHouse,
     checkedOut: list.filter((r) => r.stayStatus === 'Checked Out').length,
     extended,
-    paymentFollowUp: list.filter((r) => Number(r.total_outstanding_amount || 0) > 0).length,
+    paymentFollowUp: list.filter((r) => Number(r.total_outstanding || 0) > 0).length,
   }
 })
 
@@ -282,7 +276,7 @@ const filteredList = computed(() => {
     )
   }
   if (filterStatus.value) list = list.filter(r => r.stayStatus === filterStatus.value)
-  if (filterPayment.value === 'paid') list = list.filter(r => r.payment === 'Paid' || r.payment === 'Company Bill')
+  if (filterPayment.value === 'paid') list = list.filter(r => r.payment === 'Paid')
   if (filterPayment.value === 'outstanding') list = list.filter(r => r.payment === 'Balance Due')
   list = list.filter(r => inDateRange(r.check_in_datetime, filterDateRange.value))
   return list

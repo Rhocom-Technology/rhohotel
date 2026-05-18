@@ -178,6 +178,13 @@ scheduler_events = {
 	"cron": {"0 11 * * *": ["rhohotel.rhocom_hotel.auto_close_pos_shift.auto_close_pos_shifts"]}
 }
 
+# Website Route Rules
+# --------------------
+# Serve the front-desk SPA for all sub-paths so direct URL navigation works
+website_route_rules = [
+    {"from_route": "/frontdesk/<path:name>", "to_route": "front-desk"},
+]
+
 # Testing
 # -------
 

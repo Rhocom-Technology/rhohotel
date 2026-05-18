@@ -25,7 +25,7 @@ class HousekeepingTask(Document):
         if self.status == "Completed":
             room = frappe.get_doc("Hotel Room", self.room)
             room.housekeeping_status = "Clean"
-            room.save()
+            room.save(ignore_permissions=True)
             frappe.publish_realtime('rhohotel_front_desk_update')
 
             # if self.docstatus == 1:

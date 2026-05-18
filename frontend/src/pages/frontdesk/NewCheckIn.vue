@@ -119,7 +119,7 @@
                   <p class="text-xs text-gray-400">No guests found. Create a new one.</p>
                 </div>
               </div>
-              <button @click="$router.push({ path: '/guests/new', query: { return_to: 'checkin' } })"
+              <button @click="goToNewGuest"
                 class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0">
                 New Guest
               </button>
@@ -144,7 +144,9 @@
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">ID Type</p>
-              <select v-model="form.id_type"
+              <input v-if="selectedGuest.id_type" type="text" :value="selectedGuest.id_type" readonly
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg bg-gray-50" />
+              <select v-else v-model="form.id_type"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Select ID type</option>
                 <option>National ID</option>
@@ -153,6 +155,12 @@
                 <option>Voter's Card</option>
                 <option>Other</option>
               </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">ID Number</p>
+              <input type="text" :value="selectedGuest.id_number || ''" readonly
+                placeholder="Auto-filled from guest"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg bg-gray-50" />
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Contact Number</p>
@@ -243,11 +251,8 @@
             <p class="text-xs text-gray-500 mb-1.5">Reservation Source</p>
             <select v-model="form.reservation_source"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="Walk in">Walk-in</option>
-              <option value="Reservation">Reservation</option>
-              <option value="Online Booking">Online Booking</option>
-              <option value="Corporate">Corporate</option>
-              <option value="Referral">Referral</option>
+              <option value="">— Select source —</option>
+              <option v-for="mp in marketPlaces" :key="mp" :value="mp">{{ mp }}</option>
             </select>
           </div>
         </div>
@@ -266,7 +271,10 @@
 
         <!-- Guest Preferences -->
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-1">Guest Preferences</h3>
+          <div class="flex items-center justify-between mb-1">
+            <h3 class="text-sm font-bold text-gray-900">Guest Preferences</h3>
+            <span v-if="preferencesAutoFilled" class="text-xs text-green-600 font-medium">✓ Auto-filled from guest profile</span>
+          </div>
           <p class="text-xs text-gray-400 mb-4">Preference tags and special arrival options</p>
 
           <p class="text-xs text-gray-500 mb-2">Preference Tags</p>
@@ -406,7 +414,14 @@ function onReservationBlur() {
 }
 
 async function selectReservation(r) {
-  form.reservation = r.name
+  // Set canonical_reservation for canonical results so billing routing works
+  if (r.source_type === 'canonical') {
+    form.canonical_reservation = r.name
+    form.reservation = ''  // don't set legacy reservation field for canonical
+  } else {
+    form.reservation = r.name
+    form.canonical_reservation = ''
+  }
   reservationQuery.value = r.name
   showReservationDropdown.value = false
 
@@ -414,7 +429,7 @@ async function selectReservation(r) {
     form.reservation_source = 'Reservation'
   }
 
-  if (r.guest_phone && !form.contact_number) {
+  if (r.guest_phone) {
     form.contact_number = r.guest_phone
   }
 
@@ -446,7 +461,7 @@ async function selectReservation(r) {
         selectedGuest.value = matchedGuest
         applyPreferenceTagsFromGuest(matchedGuest)
         if (matchedGuest.id_type) form.id_type = matchedGuest.id_type
-        if (!form.contact_number && matchedGuest.phone_number) {
+        if (matchedGuest.phone_number) {
           form.contact_number = matchedGuest.phone_number
         }
       }
@@ -484,6 +499,7 @@ let guestDebounce = null
 function onGuestInput() {
   form.guest = ''
   selectedGuest.value = {}
+  resetPreferenceTags()
   clearTimeout(guestDebounce)
   if (guestQuery.value.length < 1) {
     guestResults.value = []
@@ -506,19 +522,59 @@ function onGuestInput() {
   }, 300)
 }
 
-function selectGuest(g) {
+async function selectGuest(g) {
   form.guest = g.name
   guestQuery.value = g.hotel_guest_name
   selectedGuest.value = g
+  resetPreferenceTags()
   applyPreferenceTagsFromGuest(g)
-  if (!form.contact_number && g.phone_number) form.contact_number = g.phone_number
+  if (g.phone_number) form.contact_number = g.phone_number
   if (g.id_type) form.id_type = g.id_type
   showGuestDropdown.value = false
   guestResults.value = []
+
+  // Fetch full guest doc to get id_number and any other fields not in search results
+  try {
+    const fullDoc = await callMethodForm('frappe.client.get', {
+      doctype: 'Hotel Guest',
+      name: g.name,
+    })
+    if (fullDoc) {
+      selectedGuest.value = { ...selectedGuest.value, ...fullDoc }
+      if (fullDoc.id_type && !form.id_type) form.id_type = fullDoc.id_type
+    }
+  } catch { /* keep partial data from search */ }
+}
+
+function goToNewGuest() {
+  router.push({
+    path: '/guests/new',
+    query: {
+      return_to: 'checkin',
+      room: form.room_number || '',
+      room_type: form.room_type || '',
+      nights: form.number_of_nights || 1,
+      check_in_dt: form.check_in_datetime || '',
+    },
+  })
 }
 
 function onGuestBlur() {
   setTimeout(() => { showGuestDropdown.value = false }, 150)
+}
+
+// ---- Market Places ----
+const marketPlaces = ref([])
+
+async function loadMarketPlaces() {
+  try {
+    const rows = await callMethodForm('frappe.client.get_list', {
+      doctype: 'Market Place',
+      fields: JSON.stringify(['name']),
+      limit_page_length: 100,
+    })
+    marketPlaces.value = Array.isArray(rows) ? rows.map(r => r.name) : []
+  } catch { /* ignore */ }
 }
 
 // ---- Room data ----
@@ -630,13 +686,20 @@ const form = reactive({
   contact_number: '',
 })
 
-const preferenceTags = reactive([
+const defaultPreferenceTags = [
   { label: 'High Floor',   active: false, activeClass: 'bg-blue-100 text-blue-600' },
   { label: 'Quiet Wing',   active: false, activeClass: 'bg-green-100 text-green-600' },
   { label: 'Late Arrival', active: false, activeClass: 'bg-yellow-100 text-yellow-600' },
   { label: 'VIP',          active: false, activeClass: 'bg-purple-100 text-purple-600' },
   { label: 'Extra Towels', active: false, activeClass: 'bg-gray-100 text-gray-600' },
-])
+]
+
+const preferenceTags = reactive([...defaultPreferenceTags.map(t => ({ ...t }))])
+
+function resetPreferenceTags() {
+  preferenceTags.splice(0, preferenceTags.length, ...defaultPreferenceTags.map(t => ({ ...t })))
+  preferencesAutoFilled.value = false
+}
 
 const selectedPreferenceLabels = computed(() =>
   preferenceTags.filter(tag => tag.active).map(tag => tag.label)
@@ -644,19 +707,47 @@ const selectedPreferenceLabels = computed(() =>
 
 const roomPreferencesPayload = computed(() => selectedPreferenceLabels.value.join(', '))
 
-function applyPreferenceString(raw) {
-  const normalized = String(raw || '')
-    .split(',')
-    .map(v => v.trim().toLowerCase())
-    .filter(Boolean)
+const activeClasses = [
+  'bg-blue-100 text-blue-600',
+  'bg-green-100 text-green-600',
+  'bg-yellow-100 text-yellow-600',
+  'bg-purple-100 text-purple-600',
+  'bg-gray-100 text-gray-600',
+  'bg-orange-100 text-orange-600',
+  'bg-pink-100 text-pink-600',
+  'bg-teal-100 text-teal-600',
+]
 
-  preferenceTags.forEach((tag) => {
-    tag.active = normalized.includes(tag.label.toLowerCase())
-  })
-}
+const preferencesAutoFilled = ref(false)
 
 function applyPreferenceTagsFromGuest(guest) {
-  applyPreferenceString(guest?.preference || '')
+  const raw = String(guest?.preference || '')
+  if (!raw.trim()) {
+    preferencesAutoFilled.value = false
+    return
+  }
+
+  const guestPrefs = raw.split(',').map(v => v.trim()).filter(Boolean)
+  const lowerPrefs = guestPrefs.map(v => v.toLowerCase())
+
+  // Activate existing tags that match
+  preferenceTags.forEach(tag => {
+    tag.active = lowerPrefs.includes(tag.label.toLowerCase())
+  })
+
+  // Add any guest preference that is not already in preferenceTags
+  guestPrefs.forEach((pref, idx) => {
+    const exists = preferenceTags.some(t => t.label.toLowerCase() === pref.toLowerCase())
+    if (!exists) {
+      preferenceTags.push({
+        label: pref,
+        active: true,
+        activeClass: activeClasses[preferenceTags.length % activeClasses.length],
+      })
+    }
+  })
+
+  preferencesAutoFilled.value = guestPrefs.length > 0
 }
 
 const expectedCheckoutDisplay = computed(() => {
@@ -690,7 +781,7 @@ const estimatedTotal = computed(() => {
   let total = nights * rate
   if (form.discount_type === 'Percentage' && form.discount > 0) {
     total = total * (1 - form.discount / 100)
-  } else if (form.discount_type === 'Amount' && form.discount > 0) {
+  } else if (form.discount_type === 'Fixed Amount' && form.discount > 0) {
     total = total - form.discount
   }
   return Math.max(0, total)
@@ -702,7 +793,7 @@ const discountDisplayAmount = computed(() => {
   const subtotal = nights * rate
   if (form.discount_type === 'Percentage' && form.discount > 0) {
     return subtotal * (form.discount / 100)
-  } else if (form.discount_type === 'Amount' && form.discount > 0) {
+  } else if (form.discount_type === 'Fixed Amount' && form.discount > 0) {
     return form.discount
   }
   return 0
@@ -745,6 +836,7 @@ async function submitCheckIn() {
       check_in_datetime: form.check_in_datetime,
       rate_type: form.rate_type || '',
       reservation: form.reservation || '',
+      canonical_reservation: form.canonical_reservation || '',
       reservation_source: form.reservation_source || '',
       discount_type: form.discount_type || 'None',
       discount: form.discount || 0,
@@ -771,6 +863,7 @@ async function submitCheckIn() {
 onMounted(() => {
   loadRoomTypes()
   loadAvailableRooms()
+  loadMarketPlaces()
 
   const preReservation = String(route.query.reservation || '').trim()
   const preGuest = String(route.query.guest || '').trim()
@@ -820,6 +913,18 @@ onMounted(() => {
 
   if (preGuest) {
     form.guest = preGuest
+    // Fetch full guest doc to populate name display and phone
+    callMethodForm('frappe.client.get', { doctype: 'Hotel Guest', name: preGuest })
+      .then((doc) => {
+        if (doc) {
+          selectedGuest.value = doc
+          guestQuery.value = doc.hotel_guest_name || preGuest
+          if (doc.phone_number) form.contact_number = doc.phone_number
+          if (doc.id_type && !form.id_type) form.id_type = doc.id_type
+          applyPreferenceTagsFromGuest(doc)
+        }
+      })
+      .catch(() => { guestQuery.value = preGuest })
   }
   if (preGuestName) {
     guestQuery.value = preGuestName
@@ -841,7 +946,7 @@ onMounted(() => {
             selectedGuest.value = pick
             applyPreferenceTagsFromGuest(pick)
             if (pick.id_type) form.id_type = pick.id_type
-            if (!form.contact_number && pick.phone_number) {
+            if (pick.phone_number) {
               form.contact_number = pick.phone_number
             }
           }

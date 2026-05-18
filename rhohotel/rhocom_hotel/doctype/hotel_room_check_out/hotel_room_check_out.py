@@ -42,8 +42,8 @@ class HotelRoomCheckOut(Document):
         self.late_checkout = check_in.late_checkout
         if self.late_checkout:
             hotel_settings = frappe.get_single("Hotel Settings")
-            if hotel_settings.enable_late_check_out:
-                self.late_checkout_charges = hotel_settings.late_check_out_charges
+            if hotel_settings.get("enable_late_checkout_charges"):
+                self.late_checkout_charges = hotel_settings.get("late_checkout_grace_hours") or 0
             else:
                 self.late_checkout_charges = 0
         else:
@@ -82,18 +82,24 @@ class HotelRoomCheckOut(Document):
         frappe.publish_realtime('rhohotel_front_desk_update')
 
     def update_check_in(self):
-        """Update check-in status"""
+        """Update check-in status, lock actual checkout datetime, and recalculate outstanding."""
+        # Recalculate outstanding from actual Sales Invoices at checkout time
+        result = frappe.db.sql("""
+            SELECT COALESCE(SUM(outstanding_amount), 0)
+            FROM `tabSales Invoice`
+            WHERE custom_hotel_room_check_in = %s AND docstatus = 1
+        """, self.check_in)
+        outstanding_at_checkout = result[0][0] if result else 0
+
         frappe.db.set_value("Hotel Room Check In", self.check_in, {
-            "status": "Checked Out"        
+            "status": "Checked Out",
+            "actual_check_out_datetime": self.check_out_datetime,
+            "total_outstanding_amount": outstanding_at_checkout,
         })
         
     def update_reservation(self):
         """Update reservation status if linked"""
-        check_in = frappe.get_doc("Hotel Room Check In", self.check_in)
-        if check_in.reservation:
-            reservation = frappe.get_doc("Hotel Room Reservation", check_in.reservation)
-            reservation.status = "Completed"
-            reservation.db_update()
+        pass
         
 
     # create house keeping task on checkout

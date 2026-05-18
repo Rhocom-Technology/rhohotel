@@ -1,27 +1,13 @@
 <template>
 	<div class="space-y-4">
 		<!-- AI Briefing Banner -->
-		<div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
-			<div class="flex items-center gap-2 mb-1.5">
-				<span class="text-xs text-gray-400">AI front desk briefing</span>
-				<span
-					class="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full"
-					>AI On</span
-				>
-				<span class="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full"
-					>Urgent</span
-				>
-			</div>
-			<h2 class="text-base font-bold text-gray-900 leading-snug">
-				{{ stats.overdue + stats.dirty }} rooms need immediate attention:
-				{{ stats.overdue }} overdue check-outs, {{ stats.unpaid }} unpaid folios, and
-				{{ stats.vip }} VIP arrival not yet pre-assigned.
-			</h2>
-			<p class="text-xs text-gray-400 mt-1">
-				Recommended action order: clear the longest overdue rooms first, isolate unpaid
-				departures, then release cleaned rooms back to sale.
-			</p>
-		</div>
+		<AIInsightPanel
+			title="AI Front Desk Briefing"
+			context-type="room_view_briefing"
+			:context-data="aiContext"
+			:auto-load="true"
+			panel-id="room-view"
+		/>
 
 		<!-- Stats Row -->
 		<div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px">
@@ -280,6 +266,7 @@ import { ref, computed } from "vue";
 import { Search } from "lucide-vue-next";
 import { createResource } from "frappe-ui";
 import RoomControlModal from "@/components/roomview/RoomControlModal.vue";
+import AIInsightPanel from "@/components/ai/AIInsightPanel.vue";
 const selectedRoom = ref(null);
 
 const search = ref("");
@@ -320,6 +307,18 @@ const stats = computed(() => {
 	};
 	return { ...fallback, ...(roomViewPayload.value.stats || {}) };
 });
+
+const aiContext = computed(() => ({
+	vacant: stats.value.vacant,
+	occupied: stats.value.occupied,
+	reserved: stats.value.reserved,
+	dirty_rooms: stats.value.dirty,
+	maintenance: stats.value.maintenance,
+	overdue_checkouts: stats.value.overdue,
+	unpaid_folios: stats.value.unpaid,
+	vip_arrivals: stats.value.vip,
+	total_rooms: stats.value.vacant + stats.value.occupied + stats.value.reserved + stats.value.maintenance,
+}));
 
 // const statCards = computed(() => [
 //   { label: 'Vacant Rooms', value: stats.value.vacant, subtitle: 'Ready for sale', hexColor: '#22c55e' },

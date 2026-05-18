@@ -67,17 +67,22 @@
             "fieldname": "id_type",
             "fieldtype": "Select",
             "label": "ID Type",
-            "options": "Passport\nInternational\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card"
+            "options": "\nPassport\nInternational\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card",
+            "reqd":1
+
         },
         {
             "fieldname": "id_number",
             "fieldtype": "Data",
-            "label": "ID Number"
+            "label": "ID Number",
+            "reqd": 1
         },
         {
             "fieldname": "phone_number",
             "fieldtype": "Data",
-            "label": "Phone Number"
+            "label": "Phone Number",
+            "description": "Primary contact number for the guest.",
+            "reqd": 1
         },
         {
             "fieldname": "contact_number",

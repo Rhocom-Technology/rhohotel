@@ -1703,11 +1703,11 @@ def get_occupancy_status(check_in_date=None):
         total_rooms = frappe.db.count("Hotel Room", filters={"operational_status": "In Service"})
         
         occupied = frappe.db.sql("""
-            SELECT COUNT(DISTINCT hr.room_number) 
-            FROM `tabHotel Room Reservation` hr
-            WHERE hr.status != 'Cancelled'
-            AND hr.from_date <= %s
-            AND hr.to_date > %s
+            SELECT COUNT(DISTINCT chkin.room_number)
+            FROM `tabHotel Room Check In` chkin
+            WHERE chkin.status IN ('Draft', 'Checked In')
+            AND DATE(chkin.check_in_datetime) <= %s
+            AND DATE(chkin.expected_check_out_datetime) > %s
         """, (check_date.strftime("%Y-%m-%d"), check_date.strftime("%Y-%m-%d")))
         
         occupied_count = occupied[0][0] if occupied else 0

@@ -23,7 +23,7 @@ def create_guest_profile(hotel_reservation, first_name, last_name, email=None, p
     This is called when guest details are collected for check-in.
     
     Args:
-        hotel_reservation (str): Hotel Room Reservation name/ID
+        hotel_reservation (str): Hotel Reservation name/ID
         first_name (str): Guest first name
         last_name (str): Guest last name
         email (str): Guest email
@@ -43,16 +43,10 @@ def create_guest_profile(hotel_reservation, first_name, last_name, email=None, p
     """
     
     try:
-        # Get reservation details
-        reservation = frappe.get_doc("Hotel Room Reservation", hotel_reservation)
-        
-        if not reservation:
-            raise frappe.ValidationError(f"Hotel Room Reservation {hotel_reservation} not found")
-        
         # Check if profile already exists for this reservation
         existing_profile = frappe.db.get_value(
             "Hotel Reservation Guest Profile",
-            {"hotel_reservation": hotel_reservation}
+            {"booking_number": hotel_reservation}
         )
         
         if existing_profile:
@@ -142,26 +136,19 @@ def auto_create_guest_profile(hotel_reservation):
     Called after reservation is created and before check-in.
     
     Args:
-        hotel_reservation (str): Hotel Room Reservation name/ID
+        hotel_reservation (str): Hotel Reservation name/ID
     
     Returns:
         dict: Created profile
     """
     
     try:
-        reservation = frappe.get_doc("Hotel Room Reservation", hotel_reservation)
-        
-        # Create profile with basic info from reservation
+        # Create a minimal profile
         profile = frappe.get_doc({
             "doctype": "Hotel Reservation Guest Profile",
-            "hotel_reservation": hotel_reservation,
-            "first_name": reservation.guest_name.split()[0] if reservation.guest_name else "Guest",
-            "last_name": reservation.guest_name.split()[1] if reservation.guest_name and len(reservation.guest_name.split()) > 1 else "",
-            "room_number": reservation.room_number,
-            "check_in_date": reservation.from_date,
-            "check_out_date": reservation.to_date,
-            "booking_number": reservation.booking_number or "",
-            "payment_status": reservation.payment_status or "Pending",
+            "booking_number": hotel_reservation,
+            "first_name": "Guest",
+            "last_name": "",
             "adults": 1,
             "children": 0,
             "created_at": datetime.now(),
@@ -267,7 +254,7 @@ def get_guest_profile_by_reservation(hotel_reservation):
     Get guest profile for a specific reservation.
     
     Args:
-        hotel_reservation (str): Hotel Room Reservation ID
+        hotel_reservation (str): Hotel Reservation ID
     
     Returns:
         dict: Guest profile data
@@ -442,52 +429,13 @@ def update_room_status_after_checkout(room_number):
 
 def auto_create_on_reservation_creation(doc, method=None):
     """
-    Automatically create guest profile when Hotel Room Reservation is created.
-    
-    Add this to Hotel Room Reservation DocType:
-    doc_events:
-        after_insert: rhohotel.rhohotel.hotel_reservation_guest_profile.auto_create_on_reservation_creation
+    Placeholder hook – Hotel Room Reservation is deprecated.
     """
-    
-    try:
-        if doc.doctype == "Hotel Room Reservation" and not doc.get("__islocal"):
-            # Auto-create guest profile
-            auto_create_guest_profile(doc.name)
-    
-    except Exception as e:
-        frappe.log_error(f"Error in auto_create_on_reservation_creation: {str(e)}")
+    pass
 
 
 def update_guest_profile_on_payment(doc, method=None):
     """
     Update guest profile when payment is confirmed.
-    
-    Add this to Hotel Booking DocType:
-    doc_events:
-        before_save: rhohotel.rhohotel.hotel_reservation_guest_profile.update_guest_profile_on_payment
     """
-    
-    try:
-        if doc.doctype == "Hotel Booking" and doc.payment_status == "Paid":
-            # Update all associated guest profiles with customer link
-            if doc.customer:
-                reservations = frappe.get_all(
-                    "Hotel Room Reservation",
-                    filters={"booking_number": doc.booking_number},
-                    fields=["name"]
-                )
-                
-                for res in reservations:
-                    profile = frappe.db.get_value(
-                        "Hotel Reservation Guest Profile",
-                        {"hotel_reservation": res.name}
-                    )
-                    
-                    if profile:
-                        profile_doc = frappe.get_doc("Hotel Reservation Guest Profile", profile)
-                        profile_doc.customer_link = doc.customer
-                        profile_doc.payment_status = "Paid"
-                        profile_doc.save()
-    
-    except Exception as e:
-        frappe.log_error(f"Error in update_guest_profile_on_payment: {str(e)}")
+    pass

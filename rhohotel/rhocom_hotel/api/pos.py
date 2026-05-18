@@ -146,6 +146,36 @@ def _has_pos_opening_entry_on_invoice():
     return bool(frappe.db.has_column("POS Invoice", "pos_opening_entry"))
 
 
+def _get_room_posting_mop(profile_doc, fallback_modes):
+    """Return the best Mode of Payment to use for a room-posting POS Invoice.
+
+    Room postings are charged to the room folio (Sales Invoice), not collected
+    as cash.  Using a non-cash MOP prevents the shift report from counting
+    these charges as cash received.
+
+    Priority:
+    1. A mode listed in the POS profile whose name contains 'room', 'folio',
+       or 'credit' (case-insensitive).
+    2. A system-wide Mode of Payment whose name starts with 'Room'.
+    3. First allowed mode from the POS profile (legacy fallback).
+    """
+    room_keywords = ["room", "folio", "credit"]
+    for row in (profile_doc.get("payments") or []):
+        mop = (row.mode_of_payment or "").lower()
+        if any(kw in mop for kw in room_keywords):
+            return row.mode_of_payment
+
+    system_mop = frappe.db.get_value(
+        "Mode of Payment",
+        {"name": ["like", "Room%"], "enabled": 1},
+        "name",
+    )
+    if system_mop:
+        return system_mop
+
+    return fallback_modes[0] if fallback_modes else "Cash"
+
+
 def _resolve_pos_customer(explicit_customer=None, profile_doc=None, allow_guest_fallback=False):
     """Resolve POS customer safely across ERPNext schema variants."""
     customer = explicit_customer
@@ -559,7 +589,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen_note=None, pos_profile=None):
+def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None):
     """Create a Sales Invoice linked to a Hotel Room Check In folio, then immediately
     create and consolidate a POS Invoice against the open shift so the transaction
     appears in shift reports without waiting for the end-of-shift consolidation job."""
@@ -578,14 +608,30 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
-    # Resolve customer from guest
+    # Resolve customer via billing routing engine if canonical reservation is linked
     customer = None
-    if ci.guest:
+    canonical_res_name = getattr(ci, "canonical_reservation", None)
+
+    if canonical_res_name and frappe.db.exists("Hotel Reservation", canonical_res_name):
         try:
-            guest_doc = frappe.get_doc("Hotel Guest", ci.guest)
-            customer = guest_doc.customer
+            from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
+            # Determine charge category from items (use first item's group or default)
+            charge_category = "Restaurant"  # POS bills are typically F&B
+            payer_info = resolve_payer(canonical_res_name, charge_category=charge_category)
+            payer_type = payer_info.get("payer_type", "Guest")
+            if payer_type != "Internal (Cost Centre)":
+                customer = payer_info.get("customer")
         except Exception:
-            pass
+            frappe.log_error(frappe.get_traceback(), "Billing routing failed in post_bill_to_room")
+
+    # Fallback: resolve from guest record
+    if not customer:
+        if ci.guest:
+            try:
+                guest_doc = frappe.get_doc("Hotel Guest", ci.guest)
+                customer = guest_doc.customer
+            except Exception:
+                pass
     if not customer:
         customer = ci.guest or "Guest"
 
@@ -617,6 +663,12 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
         if svc_item:
             si.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
 
+    # Discount
+    disc = flt(discount_amount)
+    if disc > 0:
+        si.discount_amount = disc
+        si.apply_discount_on = "Grand Total"
+
     try:
         si.flags.ignore_permissions = True
         si.set_missing_values()
@@ -641,7 +693,9 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
                     for row in (profile_doc.get("payments") or [])
                     if row.mode_of_payment
                 ]
-                mode_of_payment = allowed_modes[0] if allowed_modes else "Cash"
+                # Use a room-posting MOP so the POS shift does not count this
+                # as cash collected — the charge lives on the room folio.
+                mode_of_payment = _get_room_posting_mop(profile_doc, allowed_modes)
 
                 pi = frappe.new_doc("POS Invoice")
                 pi.customer = _resolve_pos_customer(
@@ -665,12 +719,18 @@ def post_bill_to_room(items, check_in, service_charge=0, narration=None, kitchen
                         "rate": flt(it.get("price", 0)),
                     })
 
-                total_amount = flt(sum(
+                items_total = flt(sum(
                     flt(it.get("price", 0)) * flt(it.get("qty", 1)) for it in items
-                ))
+                )) + flt(service_charge)
+                net_amount = max(0.0, items_total - flt(discount_amount))
+
+                if disc > 0:
+                    pi.discount_amount = disc
+                    pi.apply_discount_on = "Grand Total"
+
                 pi.append("payments", {
                     "mode_of_payment": mode_of_payment,
-                    "amount": total_amount,
+                    "amount": net_amount,
                 })
 
                 pi.flags.ignore_permissions = True

@@ -18,7 +18,7 @@ def get_data():
 				{"type": "doctype", "name": "Hotel Room Pricing Item", "description": _("Per-item pricing"), "icon": "octicon octicon-credit-card", "color": "#c0392b"},
 				{"type": "doctype", "name": "Hotel Floor", "description": _("Hotel floors and layout"), "icon": "octicon octicon-organization", "color": "#16a085"},
 				{"type": "doctype", "name": "Hotel Room", "description": _("Rooms and capacities"), "icon": "octicon octicon-device-mobile", "color": "#2c3e50"},
-				{"type": "doctype", "name": "Hotel Room Reservation", "description": _("Manage reservations"), "icon": "octicon octicon-calendar", "color": "#27ae60"},
+				{"type": "doctype", "name": "Hotel Reservation", "description": _("Manage reservations"), "icon": "octicon octicon-calendar", "color": "#27ae60"},
 			]
 		}
 	]

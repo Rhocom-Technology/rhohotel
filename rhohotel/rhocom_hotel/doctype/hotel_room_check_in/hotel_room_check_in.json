@@ -4,7 +4,7 @@
     "doctype": "DocType",
     "engine": "InnoDB",
     "field_order": [
-        "reservation",
+        "canonical_reservation",
         "guest_details_section",
         "guest",
         "id_type",
@@ -44,17 +44,19 @@
         "adjustments",
         "transfer_history_tab",
         "corporate_check_in",
-        "front_desk_reservation",
         "total_outstanding_amount",
         "transfer_history"
     ],
     "fields": [
         {
-            "fieldname": "reservation",
+            "fieldname": "canonical_reservation",
             "fieldtype": "Link",
-            "label": "Reservation",
-            "options": "Hotel Room Reservation",
-            "search_index": 1
+            "label": "Canonical Reservation",
+            "options": "Hotel Reservation",
+            "search_index": 1,
+            "allow_on_submit": 1,
+            "read_only": 1,
+            "description": "Link to the canonical Hotel Reservation document. Used for billing routing and reservation lifecycle management."
         },
         {
             "fieldname": "corporate_check_in",
@@ -62,15 +64,6 @@
             "hidden": 1,
             "label": "Corporate Check In",
             "options": "Corporate Check In",
-            "read_only": 1
-        },
-        {
-            "allow_on_submit": 1,
-            "description": "Linked front desk multi-room reservation",
-            "fieldname": "front_desk_reservation",
-            "fieldtype": "Link",
-            "label": "Front Desk Reservation",
-            "options": "Hotel Front Desk Reservation",
             "read_only": 1
         },
         {

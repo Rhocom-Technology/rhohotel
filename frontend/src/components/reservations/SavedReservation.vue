@@ -87,6 +87,7 @@
               <tr>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Room</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Type</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate / Plan</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Guest</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate/Night</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Total</th>
@@ -95,7 +96,7 @@
             </thead>
             <tbody>
               <tr v-if="rooms.length === 0">
-                <td colspan="6" class="px-3 py-4 text-center text-xs text-gray-300">No room rows found.</td>
+                <td colspan="7" class="px-3 py-4 text-center text-xs text-gray-300">No room rows found.</td>
               </tr>
               <tr v-for="row in rooms" :key="row.name || row.idx" class="border-t border-gray-100">
                 <td class="px-3 py-2 text-xs text-gray-700">
@@ -104,6 +105,10 @@
                   
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ row.room_type || '—' }}</td>
+                <td class="px-3 py-2 text-xs text-gray-500 text-right">
+                  <span v-if="row.rate_code" class="inline-flex items-center px-1.5 py-0.5 text-xs bg-blue-50 text-blue-600 rounded border border-blue-100">{{ row.rate_code }}</span>
+                  <span v-if="row.meal_plan_snapshot" class="ml-1 inline-flex items-center px-1.5 py-0.5 text-xs bg-green-50 text-green-600 rounded border border-green-100">{{ row.meal_plan_snapshot }}</span>
+                </td>
                 <td class="px-3 py-2 text-xs text-gray-700">
                   <GuestSelector
                     v-model="row.occupant_name"
@@ -124,6 +129,61 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Group Room Blocks -->
+      <div v-if="reservation.reservation_type === 'Group' && reservation.room_blocks && reservation.room_blocks.length > 0"
+        class="bg-white rounded-xl border border-amber-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">Room Blocks</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-xs text-gray-500">
+          <div>Group: <span class="font-semibold text-gray-900">{{ reservation.group_name || '—' }}</span></div>
+          <div>Billing: <span class="font-semibold text-gray-900">{{ reservation.group_billing_mode || '—' }}</span></div>
+          <div v-if="reservation.group_master_customer">Master Payer: <span class="font-semibold text-gray-900">{{ reservation.group_master_customer }}</span></div>
+        </div>
+        <div class="overflow-x-auto border border-gray-100 rounded-lg">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Room Type</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Blocked</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Picked Up</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Remaining</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate Code</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="block in reservation.room_blocks" :key="block.name || block.idx" class="border-t border-gray-100">
+                <td class="px-3 py-2 text-xs text-gray-700">{{ block.room_type }}</td>
+                <td class="px-3 py-2 text-xs text-gray-700">{{ block.quantity }}</td>
+                <td class="px-3 py-2 text-xs text-green-700 font-semibold">{{ block.picked_up || 0 }}</td>
+                <td class="px-3 py-2 text-xs" :class="(block.remaining || 0) > 0 ? 'text-amber-700 font-semibold' : 'text-gray-400'">{{ block.remaining || 0 }}</td>
+                <td class="px-3 py-2 text-xs text-gray-500">{{ block.rate_code || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- OTA Details -->
+      <div v-if="reservation.reservation_type === 'OTA'" class="bg-white rounded-xl border border-purple-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">OTA Details</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-500">
+          <div>Channel: <span class="font-semibold text-gray-900">{{ reservation.ota_channel || '—' }}</span></div>
+          <div>Collection: <span class="font-semibold text-gray-900">{{ reservation.ota_collection_model || '—' }}</span></div>
+          <div v-if="reservation.ota_commission_amount">Commission: <span class="font-semibold text-gray-900">{{ formatCurrency(reservation.ota_commission_amount) }}</span></div>
+          <div v-if="reservation.ota_virtual_card_ref">Virtual Card: <span class="font-semibold text-gray-900">{{ reservation.ota_virtual_card_ref }}</span></div>
+        </div>
+      </div>
+
+      <!-- House Use / Complimentary Details -->
+      <div v-if="reservation.reservation_type === 'House Use' || reservation.reservation_type === 'Complimentary'"
+        class="bg-white rounded-xl border border-green-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">{{ reservation.reservation_type }} Details</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-500">
+          <div class="md:col-span-2">Reason: <span class="font-semibold text-gray-900">{{ reservation.comp_reason || '—' }}</span></div>
+          <div>Cost Centre: <span class="font-semibold text-gray-900">{{ reservation.internal_cost_center || '—' }}</span></div>
+          <div v-if="reservation.theoretical_room_revenue">Theoretical Revenue: <span class="font-semibold text-amber-700">{{ formatCurrency(reservation.theoretical_room_revenue) }}</span></div>
         </div>
       </div>
 

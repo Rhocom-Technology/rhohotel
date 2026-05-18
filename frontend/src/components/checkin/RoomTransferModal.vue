@@ -14,6 +14,11 @@
         </div>
 
         <div class="px-8 py-6 space-y-5">
+          <div v-if="invoiceInfo" class="bg-green-50 border border-green-200 rounded-xl px-5 py-4">
+            <p class="text-xs font-bold text-green-700 mb-1">Rate Adjustment Invoice Created</p>
+            <p class="text-xs text-green-600">{{ invoiceInfo }}</p>
+          </div>
+
           <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
             <p class="text-xs font-bold text-red-600 mb-1">Transfer Failed</p>
             <p class="text-xs text-red-500">{{ error }}</p>
@@ -45,7 +50,7 @@
                 </div>
                 <div v-if="selectedRoom" class="bg-green-50 rounded-lg border border-green-200 px-4 py-3">
                   <p class="text-xs font-bold text-green-700">Selected: Room {{ selectedRoom.name }}</p>
-                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(selectedRoom.rate_per_night) }} / night</p>
+                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(selectedRoom.default_rate) }} / night</p>
                 </div>
                 <div v-else class="bg-gray-50 rounded-lg border border-gray-200 px-4 py-3">
                   <p class="text-xs text-gray-400">Select a room from the list →</p>
@@ -72,7 +77,7 @@
                   <div>
                     <p class="text-sm font-bold text-gray-900">{{ r.name }}</p>
                     <p class="text-xs text-gray-500 mt-0.5">{{ r.room_type }} • {{ r.floor || '' }}</p>
-                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(r.rate_per_night) }} / night</p>
+                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(r.default_rate) }} / night</p>
                   </div>
                   <button
                     class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
@@ -106,6 +111,7 @@ const note = ref('')
 const loadingRooms = ref(true)
 const submitting = ref(false)
 const error = ref('')
+const invoiceInfo = ref('')
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
 async function apiPost(m, p) {
   const r = await fetch(`/api/method/${m}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' }, body: new URLSearchParams(p) })
@@ -118,12 +124,13 @@ async function loadRooms() {
   loadingRooms.value = true
   error.value = ''
   try {
-    const data = await apiPost('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
+    const data = await apiPost('rhohotel.rhocom_hotel.api.checkin.get_rooms_for_transfer', {
+      current_room: props.checkIn.room_number || '',
       check_in_dt: props.checkIn.check_in_datetime || '',
       check_out_dt: props.checkIn.expected_check_out_datetime || '',
     })
     if (data.exc) { error.value = parseErr(data); return }
-    availableRooms.value = (data.message || []).filter(r => r.name !== props.checkIn.room_number)
+    availableRooms.value = data.message || []
   } catch { error.value = 'Failed to load rooms.' } finally { loadingRooms.value = false }
 }
 onMounted(loadRooms)
@@ -135,7 +142,14 @@ async function submit() {
       check_in_name: props.checkIn.name, new_room_number: selectedRoom.value.name, note: note.value
     })
     if (data.exc) { error.value = parseErr(data); return }
-    emit('done', data.message); emit('close')
+    const result = data.message || {}
+    if (result.rate_invoice) {
+      invoiceInfo.value = `Invoice ${result.rate_invoice} created for the rate difference.`
+      // Give user a moment to see it, then close
+      setTimeout(() => { emit('done', result); emit('close') }, 2500)
+    } else {
+      emit('done', result); emit('close')
+    }
   } catch { error.value = 'Network error.' } finally { submitting.value = false }
 }
 </script>

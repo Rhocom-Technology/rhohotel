@@ -151,7 +151,7 @@
               <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ item.guest }}</td>
               <td class="px-4 py-4 text-xs font-semibold text-gray-700">{{ item.room_number }}</td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ formatDate(item.check_in_datetime) }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ formatDate(item.actual_check_out_datetime) }}</td>
+              <td class="px-4 py-4 text-xs text-gray-600">{{ formatDate(item.actual_check_out_datetime || item.expected_check_out_datetime) }}</td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ item.reservation_source }}</td>
               <td class="px-4 py-4 text-xs font-semibold" :class="(item.total_outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-green-500'">
                 {{ (item.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Settled' }}

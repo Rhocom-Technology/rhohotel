@@ -297,11 +297,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { createResource } from 'frappe-ui'
 
 const router = useRouter()
+const route = useRoute()
 
 const creating = ref(false)
 const attempted = ref(false)
@@ -345,6 +346,14 @@ const roomsResource = createResource({
   auto: true
 })
 const roomsList = computed(() => roomsResource.data || [])
+
+// Preselect room from query param once rooms list is loaded
+watch(roomsList, (list) => {
+  if (list.length && !form.value.room && route.query.room) {
+    const match = list.find(r => r.name === route.query.room)
+    if (match) form.value.room = match.name
+  }
+}, { immediate: true })
 
 const checklistTemplatesResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.housekeeping.get_checklist_templates',

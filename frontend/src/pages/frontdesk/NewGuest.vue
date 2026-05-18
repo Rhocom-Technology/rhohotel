@@ -76,7 +76,7 @@
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Phone Number</p>
+              <p class="text-xs text-gray-500 mb-1.5">Phone Number <span class="text-red-500">*</span></p>
               <div class="flex items-center gap-1">
                 <select v-model="form.country_code" class="w-24 px-2 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
                   <option value="+234">+234 (NG)</option>
@@ -153,7 +153,7 @@
           <h3 class="text-sm font-bold text-gray-900 mb-4">Identification Details</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">ID Type</p>
+              <p class="text-xs text-gray-500 mb-1.5">ID Type <span class="text-red-500">*</span></p>
               <select v-model="form.id_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
                 <option value="">Select ID type</option>
                 <option>Passport</option>
@@ -165,7 +165,7 @@
               </select>
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">ID Number</p>
+              <p class="text-xs text-gray-500 mb-1.5">ID Number <span class="text-red-500">*</span></p>
               <input type="text" v-model="form.id_number" placeholder="Enter ID number"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
@@ -173,7 +173,7 @@
 
           <div v-if="requiresIdDocument" style="display:grid;grid-template-columns:1fr;gap:12px;">
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">ID Document Scan <span class="text-red-500">*</span></p>
+              <p class="text-xs text-gray-500 mb-1.5">ID Document Scan</p>
               <input
                 type="file"
                 accept=".pdf,image/*"
@@ -253,10 +253,7 @@
               <div class="w-2 h-2 rounded-full flex-shrink-0" :class="form.phone_number ? 'bg-green-500' : 'bg-gray-300'"></div>
               <span class="text-xs text-gray-600">Phone Number</span>
             </div>
-            <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full flex-shrink-0" :class="form.date_of_birth ? 'bg-green-500' : 'bg-gray-300'"></div>
-              <span class="text-xs text-gray-600">Date of Birth</span>
-            </div>
+
             <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full flex-shrink-0" :class="form.id_type ? 'bg-green-500' : 'bg-gray-300'"></div>
               <span class="text-xs text-gray-600">ID Type</span>
@@ -373,8 +370,16 @@ async function createGuest() {
     saveError.value = 'Guest type is required.'
     return
   }
-  if (requiresIdDocument.value && !idDocumentFile.value) {
-    saveError.value = 'ID document is required when an ID type is selected.'
+  if (!form.phone_number) {
+    saveError.value = 'Phone number is required.'
+    return
+  }
+  if (!form.id_type) {
+    saveError.value = 'ID type is required.'
+    return
+  }
+  if (!form.id_number) {
+    saveError.value = 'ID number is required.'
     return
   }
 
@@ -404,7 +409,16 @@ async function createGuest() {
 
     // Issue #15: If we came from check-in page, route back there
     if (route.query.return_to === 'checkin') {
-      router.push({ path: '/check-ins/new', query: { guest: created.name } })
+      router.push({
+        path: '/check-ins/new',
+        query: {
+          guest: created.name,
+          room: route.query.room || '',
+          room_type: route.query.room_type || '',
+          nights: route.query.nights || '',
+          check_in_dt: route.query.check_in_dt || '',
+        },
+      })
     } else {
       router.push({ name: 'GuestProfile', params: { id: created.name } })
     }

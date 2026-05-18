@@ -31,6 +31,10 @@
             class="px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200 rounded-full">
             Late Check-out
           </span>
+          <span v-if="isOverstay"
+            class="px-3 py-1 text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-200 rounded-full">
+            Over-stay
+          </span>
         </div>
         <button @click="$router.push('/check-ins/' + data.name)"
           class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -112,8 +116,8 @@
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Check-out Type</p>
               <div class="px-3 py-2.5 text-xs font-semibold rounded-lg border"
-                :class="data.late_checkout ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-gray-900 bg-gray-50 border-gray-200'">
-                {{ data.late_checkout ? 'Late Check-out' : 'Standard Check-out' }}
+                :class="isOverstay ? 'text-purple-700 bg-purple-50 border-purple-200' : data.late_checkout ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-gray-900 bg-gray-50 border-gray-200'">
+                {{ isOverstay ? 'Over-stay' : data.late_checkout ? 'Late Check-out' : 'Standard Check-out' }}
               </div>
             </div>
           </div>
@@ -171,6 +175,12 @@
       <div class="space-y-5">
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5 space-y-5">
           <h3 class="text-sm font-bold text-gray-900">Checkout Control Panel</h3>
+
+          <!-- Over-stay Alert -->
+          <div v-if="isOverstay" class="bg-purple-50 rounded-xl border border-purple-200 px-4 py-4">
+            <p class="text-xs font-bold text-purple-700 mb-1">Over-stay Detected</p>
+            <p class="text-xs text-purple-600 leading-relaxed">Guest has exceeded the expected check-out time. Verify whether additional night charges apply before finalizing.</p>
+          </div>
 
           <!-- Late Check-out Alert -->
           <div v-if="data.late_checkout" class="bg-amber-50 rounded-xl border border-amber-200 px-4 py-4">
@@ -247,7 +257,7 @@
           </div>
 
           <!-- Quick Actions -->
-          <div v-if="!checkoutDone">
+          <div v-if="!checkoutDone && data.status !== 'Checked Out'">
             <h4 class="text-xs font-bold text-gray-900 mb-3">Quick Actions</h4>
             <div class="flex items-center gap-2 flex-wrap">
               <button @click="finalizeCheckout"
@@ -257,6 +267,11 @@
                 {{ checkingOut ? 'Processing...' : 'Finalize Check-out' }}
               </button>
             </div>
+          </div>
+          <!-- Already checked out -->
+          <div v-if="!checkoutDone && data.status === 'Checked Out'" class="bg-blue-50 rounded-xl border border-blue-200 px-4 py-4">
+            <p class="text-xs font-bold text-blue-700 mb-1">Already Checked Out</p>
+            <p class="text-xs text-blue-600">This guest has already been checked out.</p>
           </div>
         </div>
       </div>
@@ -308,6 +323,14 @@ const computedOutstanding = computed(() => {
     return (data.value.invoices).reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
   }
   return data.value.total_outstanding || 0
+})
+
+const isOverstay = computed(() => {
+  if (!data.value.expected_check_out_datetime) return false
+  if (data.value.status === 'Checked Out') return false
+  const expected = parseServerDate(data.value.expected_check_out_datetime)
+  if (!expected) return false
+  return new Date() > expected
 })
 
 const remarks = ref('')

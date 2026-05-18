@@ -172,10 +172,11 @@ def get_room_view_data(filters=None):
 		room_rows.append(row)
 
 	reserved_today = frappe.db.count(
-		"Hotel Room Reservation",
+		"Hotel Reservation",
 		filters={
 			"from_date": frappe.utils.today(),
-			"status": ["not in", ["Cancelled", "Completed", "Checked-In"]],
+			"reservation_status": "Confirmed",
+			"docstatus": ["!=", 2],
 		},
 	)
 
@@ -250,7 +251,7 @@ def get_rooms_summary(filters=None):
 		left join
 			`tabHotel Room Check In` ci on ci.name = room.current_check_in
 		left join
-			`tabHotel Room Reservation` r on r.name = ci.reservation
+			`tabHotel Reservation` r on r.name = ci.reservation
 		where {" AND ".join(conds)}
 		order by room.floor, room.name
 	"""
@@ -337,6 +338,10 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 	if not mop_account:
 		frappe.throw(f"No account found for Mode of Payment in {company}")
 
+	receivable_account = frappe.db.get_value("Company", company, "default_receivable_account")
+	if not receivable_account:
+		frappe.throw("Default Receivable Account is not set for the company.")
+
 	# avoid duplicate reference numbers
 	if payment_info.get("reference_no"):
 		existing_pe = frappe.db.get_value("Payment Entry", {"reference_no": payment_info.get("reference_no")})
@@ -362,6 +367,8 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 	pe.payment_type = "Receive"
 	pe.party_type = "Customer"
 	pe.party = customer or ci.guest or ""
+	pe.paid_from = receivable_account
+	pe.paid_from_account_type = "Receivable"
 	pe.posting_date = payment_info.get("payment_date") or frappe.utils.today()
 	pe.paid_amount = total_paid
 	pe.paid_to = mop_account
@@ -382,29 +389,75 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 
 	# Append references
 	for alloc in allocations:
-		inv = alloc.get("invoice") or alloc.get("invoice_name") or alloc.get("name")
+		ref_name = alloc.get("invoice") or alloc.get("invoice_name") or alloc.get("name")
+		ref_doctype = alloc.get("doctype") or "Sales Invoice"
 		requested_amount = float(alloc.get("amount") or 0)
-		if not inv or requested_amount <= 0:
+		if not ref_name or requested_amount <= 0:
 			continue
 
-		invoice = frappe.get_doc("Sales Invoice", inv)
-		if invoice.docstatus != 1:
-			frappe.throw(_("Invoice {0} is not submitted.").format(inv))
-		if invoice.custom_hotel_room_check_in != check_in:
-			frappe.throw(_("Invoice {0} is not linked to Check In {1}.").format(inv, check_in))
+		if ref_doctype == "Journal Entry":
+			# Validate the JE belongs to this check-in
+			je_check_in = frappe.db.get_value("Journal Entry", ref_name, "custom_hotel_room_check_in")
+			if je_check_in != check_in:
+				frappe.throw(_("Journal Entry {0} is not linked to Check In {1}.").format(ref_name, check_in))
+			if frappe.db.get_value("Journal Entry", ref_name, "docstatus") != 1:
+				frappe.throw(_("Journal Entry {0} is not submitted.").format(ref_name))
 
-		allocated_amount = min(requested_amount, float(invoice.outstanding_amount or 0))
-		if allocated_amount <= 0:
-			continue
+			# Compute outstanding on the JE
+			debit_total = frappe.db.sql(
+				"""
+				SELECT COALESCE(SUM(debit_in_account_currency), 0)
+				FROM `tabJournal Entry Account`
+				WHERE parent = %s AND debit_in_account_currency > 0 AND party_type = 'Customer'
+				""",
+				ref_name,
+			)[0][0] or 0
 
-		pe.append(
-			"references",
-			{
-				"reference_doctype": "Sales Invoice",
-				"reference_name": inv,
-				"allocated_amount": allocated_amount,
-			},
-		)
+			paid_already = frappe.db.sql(
+				"""
+				SELECT COALESCE(SUM(per.allocated_amount), 0)
+				FROM `tabPayment Entry Reference` per
+				JOIN `tabPayment Entry` pe ON per.parent = pe.name
+				WHERE per.reference_doctype = 'Journal Entry'
+				AND per.reference_name = %s
+				AND pe.docstatus = 1
+				AND pe.payment_type = 'Receive'
+				""",
+				ref_name,
+			)[0][0] or 0
+
+			je_outstanding = max(0, float(debit_total) - float(paid_already))
+			allocated_amount = min(requested_amount, je_outstanding)
+			if allocated_amount <= 0:
+				continue
+
+			pe.append(
+				"references",
+				{
+					"reference_doctype": "Journal Entry",
+					"reference_name": ref_name,
+					"allocated_amount": allocated_amount,
+				},
+			)
+		else:
+			invoice = frappe.get_doc("Sales Invoice", ref_name)
+			if invoice.docstatus != 1:
+				frappe.throw(_("Invoice {0} is not submitted.").format(ref_name))
+			if invoice.custom_hotel_room_check_in != check_in:
+				frappe.throw(_("Invoice {0} is not linked to Check In {1}.").format(ref_name, check_in))
+
+			allocated_amount = min(requested_amount, float(invoice.outstanding_amount or 0))
+			if allocated_amount <= 0:
+				continue
+
+			pe.append(
+				"references",
+				{
+					"reference_doctype": "Sales Invoice",
+					"reference_name": ref_name,
+					"allocated_amount": allocated_amount,
+				},
+			)
 
 	try:
 		pe.insert(ignore_permissions=True)
@@ -416,6 +469,20 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 			frappe.log_error(
 				frappe.get_traceback(), "Payment Entry submit failed from collect_payment_for_checkin"
 			)
+
+		# Sync total_outstanding_amount on the check-in so the list view reflects correct status
+		try:
+			new_outstanding = frappe.db.sql("""
+				SELECT COALESCE(SUM(outstanding_amount), 0)
+				FROM `tabSales Invoice`
+				WHERE custom_hotel_room_check_in = %s AND docstatus = 1
+			""", check_in)[0][0] or 0
+			frappe.db.set_value(
+				"Hotel Room Check In", check_in, "total_outstanding_amount", new_outstanding,
+				update_modified=False
+			)
+		except Exception:
+			pass  # non-critical — list will still refresh via get_checkin_detail
 
 		frappe.db.commit()
 	except Exception:
@@ -697,9 +764,9 @@ def get_night_audit_data(audit_date=None):
 		noshows = int(
 			frappe.db.sql(
 				"""
-				SELECT COUNT(*) FROM `tabHotel Room Reservation`
-				WHERE DATE(check_in_date) = %s
-				  AND status NOT IN ('Checked In','Checked Out','Cancelled')
+				SELECT COUNT(*) FROM `tabHotel Reservation`
+				WHERE DATE(from_date) = %s
+				  AND reservation_status NOT IN ('Checked In','Checked Out','Cancelled')
 				""",
 				audit_date_str,
 			)[0][0]

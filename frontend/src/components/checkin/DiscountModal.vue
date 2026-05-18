@@ -25,14 +25,32 @@
           <!-- Context -->
           <div class="bg-blue-50 rounded-xl border border-blue-100 px-4 py-3">
             <p class="text-xs text-blue-700 font-semibold">{{ checkIn.guest }}</p>
-            <p class="text-xs text-blue-500 mt-0.5">Room {{ checkIn.room_number }} • Total Charges {{ fmt(checkIn.total_charges) }}</p>
+            <p class="text-xs text-blue-500 mt-0.5">Room {{ checkIn.room_number }} • Total Charges {{ fmt(effectiveTotalCharges) }}</p>
           </div>
 
+          <!-- Discount Type -->
           <div>
+            <p class="text-xs text-gray-500 mb-1.5">Discount Type <span class="text-red-400">*</span></p>
+            <select v-model="discountType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600">
+              <option value="fixed">Fixed Amount (₦)</option>
+              <option value="percentage">Percentage (%)</option>
+            </select>
+          </div>
+
+          <div v-if="discountType === 'fixed'">
             <p class="text-xs text-gray-500 mb-1.5">Discount Amount (₦) <span class="text-red-400">*</span></p>
             <input type="number" v-model.number="discountAmount" min="0.01" step="0.01"
               placeholder="Enter amount"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div v-else>
+            <p class="text-xs text-gray-500 mb-1.5">Discount Percentage (%) <span class="text-red-400">*</span></p>
+            <input type="number" v-model.number="discountPercent" min="0.01" max="100" step="0.01"
+              placeholder="e.g. 10"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <p v-if="discountPercent > 0 && effectiveTotalCharges > 0" class="text-xs text-blue-600 mt-1">
+              = {{ fmt(computedDiscountAmount) }}
+            </p>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Reason <span class="text-red-400">*</span></p>
@@ -44,7 +62,7 @@
           <div class="flex items-center justify-end gap-2 pt-2">
             <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               @click="$emit('close')">Cancel</button>
-            <button :disabled="submitting || !(discountAmount > 0) || !reason.trim()"
+            <button :disabled="submitting || !(computedDiscountAmount > 0) || !reason.trim()"
               @click="submit"
               class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {{ submitting ? 'Applying…' : 'Apply Discount' }}
@@ -57,15 +75,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 
+const discountType = ref('fixed')
 const discountAmount = ref(0)
+const discountPercent = ref(0)
 const reason = ref('')
 const submitting = ref(false)
 const error = ref('')
+
+// Compute total charges from actual invoices (excluding credit notes)
+const effectiveTotalCharges = computed(() => {
+  const invoices = props.checkIn.invoices || []
+  const fromInvoices = invoices
+    .filter(i => (i.amount || 0) > 0)
+    .reduce((sum, i) => sum + (i.amount || 0), 0)
+  return fromInvoices > 0 ? fromInvoices : (props.checkIn.total_charges || 0)
+})
+
+// The actual discount amount to apply, derived from type + input
+const computedDiscountAmount = computed(() => {
+  if (discountType.value === 'percentage') {
+    const pct = Number(discountPercent.value) || 0
+    return Math.round(((pct / 100) * effectiveTotalCharges.value) * 100) / 100
+  }
+  return Number(discountAmount.value) || 0
+})
 
 function fmt(v) {
   if (!v && v !== 0) return '₦ 0.00'
@@ -73,7 +111,7 @@ function fmt(v) {
 }
 
 async function submit() {
-  if (!(discountAmount.value > 0) || !reason.value.trim()) return
+  if (!(computedDiscountAmount.value > 0) || !reason.value.trim()) return
   submitting.value = true
   error.value = ''
   try {
@@ -82,7 +120,7 @@ async function submit() {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
       body: new URLSearchParams({
         check_in_name: props.checkIn.name,
-        discount_amount: discountAmount.value,
+        discount_amount: computedDiscountAmount.value,
         reason: reason.value,
       }),
     })

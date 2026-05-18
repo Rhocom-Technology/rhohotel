@@ -4,11 +4,8 @@
 frappe.ui.form.on('Hotel Reservation Guest Profile', {
     // Form Load Event
     onload: function(frm) {
-        // Load linked reservation details automatically
-        load_reservation_details(frm);
-        
         // Hide fields that are populated from reservation
-        if (frm.doc.hotel_reservation) {
+        if (frm.doc.room_number) {
             frm.set_df_property('room_number', 'read_only', 1);
             frm.set_df_property('check_in_date', 'read_only', 1);
             frm.set_df_property('check_out_date', 'read_only', 1);
@@ -27,13 +24,6 @@ frappe.ui.form.on('Hotel Reservation Guest Profile', {
             frm.page.set_indicator('Checked Out', 'orange');
         } else {
             frm.page.set_indicator('Pending Check-In', 'blue');
-        }
-    },
-
-    // When Hotel Reservation is selected
-    hotel_reservation: function(frm) {
-        if (frm.doc.hotel_reservation) {
-            load_reservation_details(frm);
         }
     },
 
@@ -89,55 +79,6 @@ frappe.ui.form.on('Hotel Reservation Guest Profile', {
 // ============================================================================
 
 /**
- * Load reservation details from Hotel Room Reservation
- */
-function load_reservation_details(frm) {
-    if (frm.doc.hotel_reservation) {
-        frappe.call({
-            method: 'frappe.client.get',
-            args: {
-                doctype: 'Hotel Room Reservation',
-                name: frm.doc.hotel_reservation
-            },
-            callback: function(r) {
-                if (r.message) {
-                    const reservation = r.message;
-                    
-                    // Set read-only fields from reservation
-                    frm.set_value('room_number', reservation.room_number);
-                    frm.set_value('check_in_date', reservation.from_date);
-                    frm.set_value('check_out_date', reservation.to_date);
-                    frm.set_value('booking_number', reservation.booking_number);
-                    frm.set_value('payment_status', reservation.payment_status || 'Pending');
-                    
-                    // Get booking details for guest count
-                    if (reservation.booking_number) {
-                        frappe.call({
-                            method: 'rhohotel.rhohotel.hotel_booking.get_booking_details',
-                            args: {
-                                booking_number: reservation.booking_number
-                            },
-                            callback: function(booking_response) {
-                                if (booking_response.message) {
-                                    frm.set_value('guest_count', booking_response.message.total_rooms);
-                                    frm.set_value('paid_amount', booking_response.message.total_price);
-                                }
-                            }
-                        });
-                    }
-                    
-                    frm.refresh_field('room_number');
-                    frm.refresh_field('check_in_date');
-                    frm.refresh_field('check_out_date');
-                    frm.refresh_field('booking_number');
-                    frm.refresh_field('payment_status');
-                }
-            }
-        });
-    }
-}
-
-/**
  * Update profile title based on first and last name
  */
 function update_profile_title(frm) {
@@ -175,13 +116,6 @@ function add_custom_buttons(frm) {
         frm.add_custom_button(__('Check-Out Guest'), function() {
             check_out_guest(frm);
         }, __('Actions'));
-    }
-    
-    // View Reservation
-    if (frm.doc.hotel_reservation) {
-        frm.add_custom_button(__('View Reservation'), function() {
-            frappe.set_route('Form', 'Hotel Room Reservation', frm.doc.hotel_reservation);
-        }, __('Links'));
     }
     
     // View Booking

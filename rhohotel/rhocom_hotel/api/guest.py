@@ -334,8 +334,7 @@ def update_guest(
 
 	doc = frappe.get_doc("Hotel Guest", name)
 
-	if hotel_guest_name is not None:
-		doc.hotel_guest_name = cstr(hotel_guest_name).strip()
+	# hotel_guest_name is handled separately below (rename logic)
 	if guest_type is not None:
 		doc.guest_type = guest_type
 	if title is not None:
@@ -368,6 +367,30 @@ def update_guest(
 		doc.notes = notes
 	if id_document_scan is not None:
 		doc.id_document_scan = id_document_scan
+
+	# If the guest name is changing, handle rename separately to avoid
+	# autoname conflict (name == hotel_guest_name in this doctype)
+	new_name = cstr(hotel_guest_name).strip() if hotel_guest_name is not None else None
+	name_is_changing = bool(new_name and new_name != name)
+
+	if name_is_changing:
+		# Save all other fields first, keeping the old hotel_guest_name so
+		# the autoname constraint is satisfied
+		doc.hotel_guest_name = name
+		doc.save(ignore_permissions=True)
+		# Now rename: this updates `name` and `hotel_guest_name` atomically
+		frappe.rename_doc("Hotel Guest", name, new_name, ignore_permissions=True, merge=False)
+		# Update the field on the renamed doc
+		frappe.db.set_value("Hotel Guest", new_name, "hotel_guest_name", new_name)
+		# Also update the linked Customer display name
+		customer = frappe.db.get_value("Hotel Guest", new_name, "customer")
+		if customer:
+			try:
+				frappe.db.set_value("Customer", customer, "customer_name", new_name)
+			except Exception:
+				pass
+		frappe.db.commit()
+		return {"name": new_name, "hotel_guest_name": new_name}
 
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()

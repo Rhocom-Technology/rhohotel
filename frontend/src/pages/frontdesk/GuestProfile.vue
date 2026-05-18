@@ -154,10 +154,34 @@
               </div>
               <div style="grid-column:span 2;" v-if="guest.id_document_scan">
                 <p class="text-xs text-gray-500 mb-1.5">Uploaded ID Document</p>
-                <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">
-                  <a :href="guest.id_document_scan" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
-                    View uploaded document
-                  </a>
+                <!-- Image preview -->
+                <div v-if="isIdImage" class="relative">
+                  <img
+                    :src="guest.id_document_scan"
+                    alt="ID Document"
+                    class="w-full max-h-64 object-contain rounded-xl border border-gray-200 bg-gray-50 cursor-pointer"
+                    @click="showDocPreview = true"
+                  />
+                  <button
+                    @click="showDocPreview = true"
+                    class="absolute bottom-2 right-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 bg-opacity-70 rounded-lg hover:bg-opacity-90">
+                    View Full Size
+                  </button>
+                </div>
+                <!-- PDF / other -->
+                <div v-else class="px-4 py-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-red-500 font-bold text-xs">PDF</div>
+                    <div>
+                      <p class="text-xs font-semibold text-gray-800">{{ idDocFileName }}</p>
+                      <p class="text-xs text-gray-400">Click to preview</p>
+                    </div>
+                  </div>
+                  <button
+                    @click="showDocPreview = true"
+                    class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                    Preview
+                  </button>
                 </div>
               </div>
             </div>
@@ -218,6 +242,14 @@
             <p class="text-xs text-purple-600">Tier: {{ guest.loyalty_tier || 'Base' }}</p>
           </div>
 
+          <AIInsightPanel
+            title="AI Guest Insight"
+            context-type="guest_profile_summary"
+            :context-data="aiContext"
+            :auto-load="true"
+            :panel-id="`guest-${guestId}`"
+          />
+
           <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
             <p class="text-xs font-bold text-gray-900 mb-3">Quick Actions</p>
             <div class="space-y-2">
@@ -257,6 +289,46 @@
       </div>
 
     </template>
+
+    <!-- Document Preview Modal -->
+    <Teleport to="body">
+      <div v-if="showDocPreview && guest?.id_document_scan"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background:rgba(15,23,42,0.75);backdrop-filter:blur(4px);"
+        @click.self="showDocPreview = false">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-width:900px;width:100%;max-height:92vh;">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+            <div>
+              <p class="text-sm font-bold text-gray-900">ID Document</p>
+              <p class="text-xs text-gray-400">{{ guest.id_type || '' }} {{ guest.id_number ? '• ' + guest.id_number : '' }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <a :href="guest.id_document_scan" download
+                class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Download
+              </a>
+              <button @click="showDocPreview = false"
+                class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-sm">✕</button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4" style="min-height:400px;">
+            <!-- Image -->
+            <img v-if="isIdImage"
+              :src="guest.id_document_scan"
+              alt="ID Document"
+              class="max-w-full max-h-full object-contain rounded-lg shadow" />
+            <!-- PDF / other in iframe -->
+            <iframe v-else
+              :src="guest.id_document_scan"
+              class="w-full rounded-lg"
+              style="height:70vh;border:none;"
+              title="ID Document Preview">
+            </iframe>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -264,6 +336,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -272,6 +345,17 @@ const guestId = route.params.id
 const loading = ref(true)
 const error = ref(null)
 const guest = ref(null)
+const showDocPreview = ref(false)
+
+const isIdImage = computed(() => {
+  const url = guest.value?.id_document_scan || ''
+  return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url.split('?')[0])
+})
+
+const idDocFileName = computed(() => {
+  const url = guest.value?.id_document_scan || ''
+  return url.split('/').pop().split('?')[0] || 'document'
+})
 
 const activeTab = ref('Profile')
 const tabs = ['Profile', 'Stay History', 'Spend', 'Loyalty', 'Messages']
@@ -330,4 +414,19 @@ function loyaltyClass(loyalty) {
     VIP: 'bg-orange-100 text-orange-600', Corporate: 'bg-blue-100 text-blue-600',
   }[loyalty] || 'bg-gray-100 text-gray-500'
 }
+
+const aiContext = computed(() => {
+  if (!guest.value) return null
+  return {
+    guest_name: guest.value.hotel_guest_name,
+    guest_type: guest.value.guest_type,
+    loyalty_tier: guest.value.loyalty_tier || 'Base',
+    total_stays: guest.value.total_stays,
+    lifetime_spend: guest.value.lifetime_spend,
+    nationality: guest.value.nationality,
+    current_status: guest.value.current_status,
+    current_room: guest.value.active_checkin?.room_number || null,
+    outstanding_balance: guest.value.active_checkin?.total_outstanding_amount || 0,
+  }
+})
 </script>

@@ -8,7 +8,6 @@ from frappe.utils import getdate, nowdate
 from datetime import datetime
 from .shared_utilities import parse_date
 from rhohotel.rhocom_hotel.utils.room_availability import (
-    check_reservation_conflict,
     check_checkin_conflict,
 )
 
@@ -93,18 +92,8 @@ def validate_rooms_still_available(
                         })
                         continue
             
-            # ----------------------------------------
-            # 3. Overlapping reservations (permanent)
-            # ----------------------------------------
-            if check_reservation_conflict(room_number, check_in_str, check_out_str):
-                unavailable_rooms.append({
-                    "room_number": room_number,
-                    "reason": "Room has conflicting reservation"
-                })
-                continue
-            
             # ----------------------------
-            # 4. Active Check-Ins (live)
+            # 3. Active Check-Ins (live)
             # ----------------------------
             if check_checkin_conflict(room_number, check_in_str, check_out_str):
                 unavailable_rooms.append({
@@ -126,90 +115,6 @@ def validate_rooms_still_available(
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Room Validation Error")
         frappe.throw(f"Error validating rooms: {str(e)}")
-
-
-@frappe.whitelist()
-def check_temporary_booking_still_valid(booking_number):
-    """
-    Check if temporary booking is still valid prior to generating payment link.
-    """
-    try:
-        # Get temporary booking
-        temp_booking = frappe.get_doc("Temporary Booking", {"booking_number": booking_number})
-        
-        # Lifecycle status checks
-        if temp_booking.status == "Expired":
-            raise frappe.ValidationError("Booking has expired. Please create a new booking.")
-        
-        if temp_booking.status == "Cancelled":
-            raise frappe.ValidationError("Booking has been cancelled.")
-        
-        if temp_booking.payment_status == "Paid":
-            raise frappe.ValidationError("Booking already paid.")
-        
-        # Hold expiration check
-        current_time = datetime.now()
-        if temp_booking.hold_expires_at and datetime.fromisoformat(str(temp_booking.hold_expires_at)) < current_time:
-            temp_booking.status = "Expired"
-            temp_booking.save(ignore_permissions=True)
-            frappe.db.commit()
-            
-            release_booking_holds(booking_number)
-            
-            raise frappe.ValidationError("Booking hold has expired. Please create a new booking.")
-        
-        # Revalidate rooms
-        room_numbers = [room.get("room_number") for room in temp_booking.rooms]
-
-        validation = validate_rooms_still_available(
-            room_numbers,
-            temp_booking.check_in_date,
-            temp_booking.check_out_date,
-            current_booking_number=temp_booking.booking_number   # <-- IMPORTANT FIX
-        )
-        
-        if not validation.get("success"):
-            unavailable = validation.get("unavailable_rooms", [])
-            room_info = ", ".join([f"{r['room_number']} ({r['reason']})" for r in unavailable])
-            raise frappe.ValidationError(f"Rooms no longer available: {room_info}")
-        
-        return {
-            "success": True,
-            "booking_number": booking_number,
-            "status": temp_booking.status,
-            "payment_status": temp_booking.payment_status,
-            "hold_expires_at": temp_booking.hold_expires_at.isoformat() if temp_booking.hold_expires_at else None,
-            "rooms_valid": True,
-            "message": "Booking is still valid for payment"
-        }
-    
-    except frappe.ValidationError as e:
-        frappe.throw(str(e))
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Booking Validity Check Error")
-        frappe.throw(f"Error: {str(e)}")
-
-
-def release_booking_holds(booking_number):
-    """
-    Release room holds for a specific booking.
-    Called when booking expires or payment fails.
-    """
-    try:
-        temp_booking = frappe.get_doc("Temporary Booking", {"booking_number": booking_number})
-        
-        for room in temp_booking.rooms:
-            room_number = room.get("room_number")
-            room_doc = frappe.get_doc("Hotel Room", room_number)
-            room_doc.booking_status = "Available"
-            room_doc.current_booking_number = None
-            room_doc.hold_expires_at = None
-            room_doc.save(ignore_permissions=True)
-            frappe.logger().info(f"Released hold on room {room_number}")
-        
-        frappe.db.commit()
-    except Exception as e:
-        frappe.logger().error(f"Error releasing holds for {booking_number}: {str(e)}")
 
 
 @frappe.whitelist()

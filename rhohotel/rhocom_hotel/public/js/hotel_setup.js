@@ -85,7 +85,7 @@
         footer.innerHTML = `
 			<div>
 				<button id="rhohotel-reset" class="btn btn-warning btn-sm">Reset progress</button>
-				<span class="ml-2 small text-muted">When you finish all steps, open <a href="#/desk#Form/Hotel Room Reservation/new">New Reservation</a>.</span>
+				<span class="ml-2 small text-muted">When you finish all steps, open <a href="#/desk#Form/Hotel Reservation/new">New Reservation</a>.</span>
 			</div>
 		`;
 

@@ -41,13 +41,15 @@ class BillTransfer(Document):
         # Load the source invoice
         inv = frappe.get_doc("Sales Invoice", self.source_invoice)
 
-        # The customer on the invoice
+        # The customer on the source invoice (Guest A)
         invoice_customer = inv.customer
 
-        # The receivable account used on invoice
-        receivable_account = inv.debit_to
+        # Resolve Guest B's ERPNext Customer
+        to_guest_customer = frappe.db.get_value("Hotel Guest", self.to_guest, "customer")
+        if not to_guest_customer:
+            frappe.throw(f"Guest '{self.to_guest}' does not have a linked Customer record.")
 
-        # Fetch the receivable account
+        # Fetch the company's default receivable account
         receivable_account = frappe.db.get_value(
             "Company",
             company,
@@ -86,7 +88,7 @@ class BillTransfer(Document):
         je.append("accounts", {
             "account": receivable_account,
             "party_type": "Customer",
-            "party": self.to_guest,
+            "party": to_guest_customer,
             "debit_in_account_currency": self.total_amount,
             "credit_in_account_currency": 0
         })

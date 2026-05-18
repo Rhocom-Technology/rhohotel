@@ -845,94 +845,11 @@ frappe.ui.form.on("Hotel Room Check In", {
                 }
             };
         });
-
-        frm.set_query("reservation", function () {
-            return {
-                filters: {
-                    "docstatus": 1,
-                    "status": ["in", ["Confirmed", "Booked"]]
-                }
-            };
-        });
     },
 
     market_source: function (frm) {
         frm.set_value('business_source', null);
         frm.fields_dict.business_source.get_query();
-    },
-
-    reservation(frm) {
-        if (frm.doc.reservation) {
-
-            frm.set_df_property("check_in_datetime", "read_only", 1);
-
-            frappe.call({
-                method: "frappe.client.get",
-                args: {
-                    doctype: "Hotel Room Reservation",
-                    name: frm.doc.reservation
-                },
-                callback: function (r) {
-                    if (r.message) {
-
-                        frappe.call({
-                            method: 'rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings.get_default_check_out_time',
-                            callback: function (res) {
-                                if (res.message) {
-                                    let time_part = res.message;
-
-                                    let expected_check_out_datetime = r.message.to_date + " " + time_part;
-                                    let formatted_checkout = frappe.datetime.str_to_obj(expected_check_out_datetime);
-                                    // new_checkout = date_str + " " + time_part;
-
-                                    ////////
-                                    let check_in_datetime = r.message.from_date;
-
-                                    // If append current time if not time on check_in_datetime
-                                    if (!check_in_datetime.includes(" ")) {
-                                        check_in_datetime += " " + frappe.datetime.now_datetime().split(" ")[1];
-                                    }
-
-
-                                    //frm.set_value('check_in_datetime', check_in_datetime);
-
-
-                                    let from = frappe.datetime.str_to_obj(check_in_datetime);
-                                    let to = frappe.datetime.str_to_obj(formatted_checkout);
-
-                                    from.setHours(0, 0, 0, 0);
-                                    to.setHours(0, 0, 0, 0);
-
-                                    let nights = frappe.datetime.get_day_diff(to, from);
-
-                                    //format expected_check_out_datetime and attach default check out time to the time part
-                                    frm.set_value('check_in_datetime', check_in_datetime)
-                                    frm.set_value('expected_check_out_datetime', formatted_checkout);
-                                    frm.set_value('room_number', r.message.room_number);
-                                    frm.set_value('rate_amount', r.message.rate);
-                                    frm.set_value('guest', r.message.guest_name);
-                                    frm.set_value('number_of_nights', nights);
-                                    frm.set_value('discount', r.message.discount);
-
-                                    frm.set_df_property('room_number', 'read_only', 1);
-                                    frm.set_df_property('number_of_nights', 'read_only', 1);
-                                    frm.set_df_property('discount', 'read_only', 1);
-                                    frm.set_df_property('rate_amount', 'read_only', 1);
-                                    frm.set_df_property('room_type', 'read_only', 1);
-
-                                }
-                            }
-                        });
-                    }
-                },
-            });
-        } else {
-            frm.set_df_property('room_number', 'read_only', 0);
-            frm.set_value('room_number', null);
-            frm.set_value('room_type', null);
-            frm.set_value('number_of_nights', null);
-            frm.set_value('discount', null);
-        }
     },
 
     expected_check_out_datetime: function (frm) {

@@ -24,6 +24,20 @@
     "primary_guest_phone",
     "corporate_guest",
     "customer",
+    "group_section",
+    "group_name",
+    "group_billing_mode",
+    "group_master_customer",
+    "ota_section",
+    "ota_channel",
+    "ota_collection_model",
+    "column_break_ota",
+    "ota_commission_amount",
+    "ota_virtual_card_ref",
+    "internal_section",
+    "internal_cost_center",
+    "comp_reason",
+    "theoretical_room_revenue",
     "dates_section",
     "from_date",
     "to_date",
@@ -34,6 +48,8 @@
     "check_out_time",
     "rooms_section",
     "rooms",
+    "room_blocks_section",
+    "room_blocks",
     "pricing_section",
     "subtotal",
     "discount_type",
@@ -80,9 +96,9 @@
       "in_list_view": 1,
       "in_standard_filter": 1,
       "label": "Reservation Type",
-      "options": "Individual\nCorporate",
+      "options": "Individual\nCorporate\nGroup\nHouse Use\nComplimentary\nOTA",
       "reqd": 1,
-      "description": "Individual: a private guest booking. Corporate: a reservation made on behalf of a corporate account (requires corporate_guest link)."
+      "description": "Individual: private guest. Corporate: corporate account booking. Group: multi-room group block. House Use: internal staff/operational use (no revenue). Complimentary: complimentary stay (theoretical revenue only). OTA: booking via Online Travel Agency channel."
     },
     {
       "fieldname": "reservation_status",
@@ -164,6 +180,110 @@
       "description": "ERPNext Customer document linked to this reservation. Auto-populated from corporate_guest.customer on corporate bookings, or auto-created for individual guests on confirmation."
     },
     {
+      "fieldname": "group_section",
+      "fieldtype": "Section Break",
+      "label": "Group Details",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Group-specific fields. Only visible when reservation_type = Group."
+    },
+    {
+      "fieldname": "group_name",
+      "fieldtype": "Data",
+      "label": "Group Name",
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Official name of the group (e.g. event name, company name, wedding party). Used in rooming list headers and billing documents."
+    },
+    {
+      "fieldname": "group_billing_mode",
+      "fieldtype": "Select",
+      "label": "Group Billing Mode",
+      "options": "\nCentral\nSplit",
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Central: all charges billed to the master group customer. Split: each room is billed individually to the occupant; only specified charges go to the master customer."
+    },
+    {
+      "fieldname": "group_master_customer",
+      "fieldtype": "Link",
+      "options": "Customer",
+      "label": "Master Payer (Customer)",
+      "depends_on": "eval:doc.reservation_type == 'Group' && doc.group_billing_mode == 'Central'",
+      "description": "The ERPNext Customer that receives the consolidated group invoice. Required when group_billing_mode = Central."
+    },
+    {
+      "fieldname": "ota_section",
+      "fieldtype": "Section Break",
+      "label": "OTA Details",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "Online Travel Agency booking details. Only visible when reservation_type = OTA."
+    },
+    {
+      "fieldname": "ota_channel",
+      "fieldtype": "Link",
+      "options": "Market Place",
+      "label": "OTA Channel",
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "The OTA platform through which this booking was received (e.g. Booking.com, Expedia)."
+    },
+    {
+      "fieldname": "ota_collection_model",
+      "fieldtype": "Select",
+      "label": "Collection Model",
+      "options": "\nHotel Collect\nOTA Collect / Prepaid",
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "Hotel Collect: guest pays hotel directly on check-in/out; hotel remits commission. OTA Collect/Prepaid: OTA collects payment from guest; hotel invoices OTA net of commission."
+    },
+    {
+      "fieldname": "column_break_ota",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "ota_commission_amount",
+      "fieldtype": "Currency",
+      "label": "OTA Commission Amount",
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "Commission amount payable to the OTA, in hotel currency. Used for net revenue reporting."
+    },
+    {
+      "fieldname": "ota_virtual_card_ref",
+      "fieldtype": "Data",
+      "label": "OTA Virtual Card Reference",
+      "depends_on": "eval:doc.reservation_type == 'OTA' && doc.ota_collection_model == 'OTA Collect / Prepaid'",
+      "description": "Virtual credit card reference provided by the OTA for prepaid bookings. Used to match payments against OTA invoices."
+    },
+    {
+      "fieldname": "internal_section",
+      "fieldtype": "Section Break",
+      "label": "Internal / Complimentary Details",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "Fields for internal House Use and Complimentary reservation types."
+    },
+    {
+      "fieldname": "internal_cost_center",
+      "fieldtype": "Link",
+      "options": "Cost Center",
+      "label": "Cost Centre",
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "Department or cost centre absorbing the room cost for internal allocations."
+    },
+    {
+      "fieldname": "comp_reason",
+      "fieldtype": "Small Text",
+      "label": "Reason / Authorisation",
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "Mandatory justification for House Use or Complimentary. Captures who authorised the comp/house use and the business reason."
+    },
+    {
+      "fieldname": "theoretical_room_revenue",
+      "fieldtype": "Currency",
+      "label": "Theoretical Room Revenue",
+      "read_only": 1,
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "What the rooms would have earned at the standard rack rate. Populated for reporting and RevPAR calculations. No actual revenue is recognised."
+    },
+    {
       "fieldname": "dates_section",
       "fieldtype": "Section Break",
       "label": "Stay Dates"
@@ -228,8 +348,23 @@
       "fieldtype": "Table",
       "options": "Hotel Reservation Room",
       "label": "Rooms",
-      "reqd": 1,
       "description": "One row per allocated room. Each row captures the specific room, pricing, and the occupant assigned to that room. Room availability is validated per row using the centralized room availability utility."
+    },
+    {
+      "fieldname": "room_blocks_section",
+      "fieldtype": "Section Break",
+      "label": "Room Blocks",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Inventory blocks by room type for group reservations. Each row reserves a quantity of rooms of a given type. Individual rooms are picked up into the Rooms table as guests are assigned."
+    },
+    {
+      "fieldname": "room_blocks",
+      "fieldtype": "Table",
+      "options": "Hotel Reservation Room Block",
+      "label": "Room Blocks",
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Room type inventory blocks for this group reservation. Protected rooms cannot be booked by individual or non-group reservations for the same period."
     },
     {
       "fieldname": "pricing_section",
