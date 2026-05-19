@@ -49,18 +49,14 @@
                 <p class="text-xs text-gray-500 mb-1.5">Service Point</p>
                 <select v-model="draftFilterPoint" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
                   <option value="">All Points</option>
-                  <option>Restaurant</option>
-                  <option>Bar</option>
-                  <option>Room Service</option>
+                  <option v-for="pt in availableServicePoints" :key="pt">{{ pt }}</option>
                 </select>
               </div>
               <div class="min-w-36">
                 <p class="text-xs text-gray-500 mb-1.5">Cashier</p>
                 <select v-model="draftFilterCashier" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
                   <option value="">All Cashiers</option>
-                  <option>Adaeze</option>
-                  <option>Boma</option>
-                  <option>Ifeoma</option>
+                  <option v-for="c in availableCashiers" :key="c">{{ c }}</option>
                 </select>
               </div>
               <button @click="draftSearch='';draftFilterPoint='';draftFilterCashier='';draftPage=1"
@@ -205,14 +201,14 @@ const allDrafts = computed(() => {
   return (draftsResource.data || []).map(d => ({
     id: d.invoice,
     invoice: d.invoice,
-    point: d.customer || '—',
+    point: d.service_point || d.pos_profile || d.customer || '—',
     cashier: d.cashier,
     items: d.item_count || 0,
     amount: Number(d.amount) || 0,
     age: d.age || '0m',
     ageMinutes: d.age_minutes || 0,
     savedAt: d.posting_date || '',
-    detailPoint: d.customer || '—',
+    detailPoint: d.service_point || d.pos_profile || d.customer || '—',
     draftItems: d.items || [],
     note: d.note || '',
   }))
@@ -232,6 +228,10 @@ const filteredDrafts = computed(() => {
   if (draftFilterCashier.value) data = data.filter(d => d.cashier === draftFilterCashier.value)
   return data
 })
+
+// Dynamic filter options derived from actual data
+const availableServicePoints = computed(() => [...new Set(allDrafts.value.map(d => d.point).filter(Boolean))])
+const availableCashiers = computed(() => [...new Set(allDrafts.value.map(d => d.cashier).filter(Boolean))])
 
 const draftStats = computed(() => {
   const s = statsResource.data || {}

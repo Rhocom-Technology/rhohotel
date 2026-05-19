@@ -4,128 +4,142 @@
       class="modal-enter fixed inset-0 z-50 flex items-center justify-center p-6"
       style="background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);"
       @click.self="$emit('update:modelValue', false)">
-      <div class="modal-panel bg-white rounded-2xl w-full shadow-2xl overflow-hidden flex flex-col" style="max-width:1100px;max-height:92vh;">
+      <div class="modal-panel bg-white rounded-2xl w-full shadow-2xl overflow-hidden flex flex-col" style="max-width:960px;max-height:92vh;">
 
+        <!-- Header -->
         <div class="px-8 pt-8 pb-6 border-b border-gray-100">
           <div class="flex items-start justify-between">
             <div>
               <h2 class="text-xl font-bold text-gray-900">Split Bill</h2>
-              <p class="text-xs text-gray-400 mt-1">Split this bill by amount, percentage, item selection, or payment type before final settlement.</p>
+              <p class="text-xs text-gray-400 mt-1">Split this bill across multiple payment methods or rooms.</p>
             </div>
             <div class="flex items-center gap-2 ml-4">
               <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button @click="applySplit" :disabled="applying"
-                  class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                  {{ applying ? 'Processing…' : 'Apply Split' }}
-                </button>
+              <button @click="applySplit" :disabled="applying || portionTotal !== grandTotal"
+                class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {{ applying ? 'Processing…' : 'Apply Split' }}
+              </button>
             </div>
           </div>
         </div>
 
         <div class="overflow-y-auto flex-1 px-8 py-6 space-y-6">
-          <!-- Snapshot -->
-          <div class="bg-gray-50 rounded-xl border border-gray-200 p-6">
-            <h4 class="text-xs font-bold text-gray-700 mb-4">Bill Snapshot</h4>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;">
-              <div><p class="text-xs text-gray-400 mb-1.5">Bill No.</p><p class="text-sm font-bold text-gray-900">POS-2026-00184</p></div>
-              <div><p class="text-xs text-gray-400 mb-1.5">Service Point</p><p class="text-sm font-bold text-gray-900">Table 03</p></div>
-              <div><p class="text-xs text-gray-400 mb-1.5">Cashier</p><p class="text-sm font-bold text-gray-900">Adaeze</p></div>
-              <div><p class="text-xs text-gray-400 mb-1.5">Grand Total</p><p class="text-sm font-bold text-blue-600">₦{{ grandTotal.toLocaleString() }}</p></div>
+
+          <!-- Bill Snapshot -->
+          <div class="bg-gray-50 rounded-xl border border-gray-200 p-5">
+            <h4 class="text-xs font-bold text-gray-700 mb-3">Bill Snapshot</h4>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+              <div><p class="text-xs text-gray-400 mb-1">Cashier</p><p class="text-sm font-bold text-gray-900">{{ cashier || '—' }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-1">Items</p><p class="text-sm font-bold text-gray-900">{{ cartItems.length }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-1">Sub Total</p><p class="text-sm font-bold text-gray-900">₦{{ subTotal.toLocaleString() }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-1">Grand Total</p><p class="text-sm font-bold text-blue-600">₦{{ grandTotal.toLocaleString() }}</p></div>
             </div>
           </div>
 
-          <!-- Config -->
-          <div class="bg-gray-50 rounded-xl border border-gray-200 p-6">
-            <h4 class="text-xs font-bold text-gray-700 mb-4">Split Configuration</h4>
-            <div class="flex items-end gap-4 flex-wrap">
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Split Method</p>
-                  <select v-model="splitMethod" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700 pr-8">
-                  <option>By Payment Portion</option>
-                  <option>Equal Split</option>
-                  <option>By Item</option>
-                </select>
-              </div>
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">No. of Splits</p>
-                  <input v-model.number="splitCount" type="number" min="2" max="5" class="w-24 px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-center" />
-              </div>
-              <button class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Equal Split</button>
-              <button class="btn-hover px-4 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 bg-white">Split by Items</button>
+          <!-- Bill Items -->
+          <div>
+            <h4 class="text-sm font-bold text-gray-900 mb-3">Bill Items</h4>
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b border-gray-100 bg-gray-50">
+                    <th class="text-left text-xs font-medium text-gray-500 px-5 py-3">Item</th>
+                    <th class="text-center text-xs font-medium text-gray-500 px-4 py-3">Qty</th>
+                    <th class="text-right text-xs font-medium text-gray-500 px-5 py-3">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in cartItems" :key="item.id || item.item_code" class="border-b border-gray-50 last:border-0">
+                    <td class="px-5 py-3 text-xs font-medium text-gray-900">{{ item.name }}</td>
+                    <td class="px-4 py-3 text-center text-xs text-gray-600">{{ item.qty }}</td>
+                    <td class="px-5 py-3 text-right text-xs font-bold text-gray-900">₦{{ (item.price * item.qty).toLocaleString() }}</td>
+                  </tr>
+                  <tr v-if="discountAmount > 0" class="border-t border-gray-100">
+                    <td class="px-5 py-2 text-xs text-green-600" colspan="2">Discount</td>
+                    <td class="px-5 py-2 text-right text-xs font-bold text-green-600">−₦{{ discountAmount.toLocaleString() }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Items + portions -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-            <div>
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="text-sm font-bold text-gray-900">Bill Items</h4>
-                <p class="text-xs text-gray-400">Select items for specific split if needed</p>
+          <!-- Split Configuration -->
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-bold text-gray-900">Payment Portions</h4>
+              <div class="flex items-center gap-2">
+                <button @click="equalSplit" class="btn-hover px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Equal Split</button>
+                <button v-if="portions.length < 4" @click="addPortion" class="btn-hover px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">+ Add Portion</button>
               </div>
-              <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table class="w-full">
-                  <thead>
-                    <tr class="border-b border-gray-100">
-                      <th class="text-left text-xs font-medium text-gray-500 px-6 py-4">Item</th>
-                      <th class="text-left text-xs font-medium text-gray-500 px-4 py-4">Qty</th>
-                      <th class="text-left text-xs font-medium text-gray-500 px-4 py-4">Amount</th>
-                      <th class="text-left text-xs font-medium text-gray-500 px-4 py-4">Split</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(item, idx) in splitItems" :key="item.name"
-                      @click="selectedSplitItem = idx"
-                      class="table-row cursor-pointer border-b border-gray-50 last:border-0"
-                      :class="selectedSplitItem === idx ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50'">
-                      <td class="px-6 py-4">
-                        <div class="flex items-center gap-3">
-                          <div class="w-4 h-4 rounded bg-blue-600 flex-shrink-0"></div>
-                          <span class="text-xs font-semibold text-gray-900">{{ item.name }}</span>
+            </div>
+
+            <div class="space-y-4">
+              <div v-for="(portion, idx) in portions" :key="idx" class="bg-gray-50 rounded-xl border border-gray-200 p-5">
+                <div class="flex items-center justify-between mb-4">
+                  <h5 class="text-sm font-bold text-gray-900">Portion {{ String.fromCharCode(65 + idx) }}</h5>
+                  <button v-if="portions.length > 2" @click="removePortion(idx)"
+                    class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+                  <div>
+                    <p class="text-xs text-gray-500 mb-1.5">Amount (₦)</p>
+                    <input v-model.number="portion.amount" type="number" min="0"
+                      class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500 mb-1.5">Payment Type</p>
+                    <select v-model="portion.paymentType"
+                      class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
+                      <option value="Cash">Cash</option>
+                      <option value="POS">POS</option>
+                      <option value="Post to Room">Post to Room</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500 mb-1.5">{{ portion.paymentType === 'Post to Room' ? 'Room / Guest' : 'Customer (optional)' }}</p>
+                    <div v-if="portion.paymentType === 'Post to Room'" class="relative">
+                      <input v-model="portion.roomSearch"
+                        @focus="loadRooms"
+                        type="text"
+                        :placeholder="portion.selectedRoom ? `Room ${portion.selectedRoom.room}` : 'Type room no. or guest…'"
+                        class="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none bg-white focus:ring-2 focus:ring-blue-500"
+                        :class="portion.selectedRoom ? 'border-blue-300 bg-blue-50' : 'border-gray-200'" />
+                      <div v-if="portion.roomResults && portion.roomResults.length > 0 && !portion.selectedRoom"
+                        class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+                        <div v-for="r in portion.roomResults" :key="r.check_in"
+                          @mousedown.prevent="selectRoomForPortion(idx, r)"
+                          class="px-3 py-2.5 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0">
+                          <span class="font-bold text-gray-900">Room {{ r.room }}</span>
+                          <span class="text-gray-400 ml-2">{{ r.guest }}</span>
                         </div>
-                      </td>
-                      <td class="px-4 py-4 text-xs text-gray-600">{{ item.qty }}</td>
-                      <td class="px-4 py-4 text-xs font-bold text-gray-900">₦{{ item.amount.toLocaleString() }}</td>
-                      <td class="px-4 py-4 text-xs font-semibold text-blue-600">{{ item.split }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div>
-              <h4 class="text-sm font-bold text-gray-900 mb-3">Split Portions</h4>
-              <div class="space-y-4">
-                <div v-for="portion in splitPortions" :key="portion.label"
-                  class="bg-gray-50 rounded-xl border border-gray-200 p-5">
-                  <div class="flex items-center justify-between mb-4">
-                    <h5 class="text-sm font-bold text-gray-900">{{ portion.label }}</h5>
-                    <span v-if="portion.primary" class="px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-600 rounded-full">Primary</span>
+                      </div>
+                    </div>
+                    <input v-else v-model="portion.target" type="text" placeholder="Walk In"
+                      class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white" />
                   </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-                    <div>
-                      <p class="text-xs text-gray-400 mb-1.5">Payment Type</p>
-                      <div class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700">{{ portion.paymentType }}</div>
-                    </div>
-                    <div>
-                      <p class="text-xs text-gray-400 mb-1.5">Target</p>
-                      <div class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700">{{ portion.target }}</div>
-                    </div>
-                    <div>
-                      <p class="text-xs text-gray-400 mb-1.5">Amount</p>
-                      <div class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-900">₦{{ portion.amount.toLocaleString() }}</div>
-                    </div>
-                  </div>
+                </div>
+                <div v-if="portion.selectedRoom" class="mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center justify-between">
+                  <span>Posting to Room {{ portion.selectedRoom.room }} — {{ portion.selectedRoom.guest }}</span>
+                  <button @click="clearRoomForPortion(idx)" class="text-blue-400 hover:text-blue-700 ml-2">✕</button>
                 </div>
               </div>
             </div>
+
+            <!-- Total validation -->
+            <div class="mt-4 flex items-center gap-3 py-3 px-5 rounded-xl border"
+              :class="portionTotal === grandTotal ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'">
+              <svg v-if="portionTotal === grandTotal" class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <svg v-else class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <p class="text-xs" :class="portionTotal === grandTotal ? 'text-green-700' : 'text-amber-700'">
+                <span v-if="portionTotal === grandTotal">Split total: ₦{{ grandTotal.toLocaleString() }} — All amounts allocated correctly.</span>
+                <span v-else>Portions total ₦{{ portionTotal.toLocaleString() }} of ₦{{ grandTotal.toLocaleString() }}
+                  ({{ portionTotal < grandTotal ? 'short ₦' + (grandTotal - portionTotal).toLocaleString() : 'over ₦' + (portionTotal - grandTotal).toLocaleString() }})
+                </span>
+              </p>
+            </div>
           </div>
 
-          <!-- Check -->
-          <div class="flex items-center gap-3 py-4 px-6 bg-green-50 rounded-xl border border-green-100">
-            <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-            <p class="text-xs text-gray-600">Split total check: <span class="font-bold text-green-600">₦{{ grandTotal.toLocaleString() }} allocated successfully</span></p>
-          </div>
-            <div v-if="splitError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-600">{{ splitError }}</div>
+          <div v-if="splitError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-600">{{ splitError }}</div>
         </div>
       </div>
     </div>
@@ -133,7 +147,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
 
 const props = defineProps({
@@ -141,76 +155,165 @@ const props = defineProps({
   grandTotal: { type: Number, default: 0 },
   cartItems: { type: Array, default: () => [] },
   serviceCharge: { type: Number, default: 0 },
+  discountAmount: { type: Number, default: 0 },
+  kitchenNote: { type: String, default: '' },
+  cashier: { type: String, default: '' },
+  posProfile: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirmed'])
 
-const selectedSplitItem = ref(0)
 const applying = ref(false)
 const splitError = ref('')
 
-// Split method and count
-const splitMethod = ref('By Payment Portion')
-const splitCount = ref(2)
+const subTotal = computed(() => props.cartItems.reduce((s, i) => s + i.price * i.qty, 0))
 
-const splitItems = computed(() => [
-  ...props.cartItems.map((i, idx) => ({
-    name: i.name, qty: i.qty, amount: i.price * i.qty,
-    split: idx % splitCount.value === 0 ? 'Split A' : 'Split B',
-  })),
-  { name: 'Service Charge + VAT', qty: 1, amount: props.serviceCharge, split: 'Split C' },
-])
-
-const splitPortions = computed(() => {
-  const perSplit = Math.floor(props.grandTotal / splitCount.value)
-  const remainder = props.grandTotal - perSplit * (splitCount.value - 1)
-  return Array.from({ length: splitCount.value }, (_, i) => ({
-    label: `Split ${String.fromCharCode(65 + i)}`,
-    primary: i === 0,
-    paymentType: i === 0 ? 'Cash' : 'POS',
-    target: i === 0 ? 'Walk In' : `Guest ${i + 1}`,
-    amount: i === splitCount.value - 1 ? remainder : perSplit,
-  }))
+// ── Portions ───────────────────────────────────────────────────────────────
+const makePortion = () => ({
+  amount: 0,
+  paymentType: 'Cash',
+  target: '',
+  roomSearch: '',
+  roomResults: [],
+  selectedRoom: null,
+  checkIn: null,
 })
 
-const chargeResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
-  onSuccess() {
-    applying.value = false
-    emit('confirmed')
-    emit('update:modelValue', false)
-  },
-  onError(err) {
-    applying.value = false
-    splitError.value = err?.message || 'Failed to process split payment'
-    setTimeout(() => { splitError.value = '' }, 5000)
-  },
-})
+const portions = ref([makePortion(), makePortion()])
+const portionTotal = computed(() => portions.value.reduce((s, p) => s + (Number(p.amount) || 0), 0))
 
-function applySplit() {
-  if (props.cartItems.length === 0) {
-    splitError.value = 'Cart is empty.'
-    return
+function equalSplit() {
+  const n = portions.value.length
+  const per = Math.floor(props.grandTotal / n)
+  const remainder = props.grandTotal - per * (n - 1)
+  portions.value.forEach((p, i) => { p.amount = i === n - 1 ? remainder : per })
+}
+
+function addPortion() {
+  portions.value.push(makePortion())
+  equalSplit()
+}
+
+function removePortion(idx) {
+  portions.value.splice(idx, 1)
+  equalSplit()
+}
+
+// Reset when modal opens
+watch(() => props.modelValue, (open) => {
+  if (open) {
+    portions.value = [makePortion(), makePortion()]
+    splitError.value = ''
+    equalSplit()
   }
+})
+
+// ── Rooms resource ─────────────────────────────────────────────────────────
+const roomsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_occupied_rooms_for_pos',
+  auto: false,
+})
+
+function loadRooms() {
+  if (!roomsResource.data && !roomsResource.loading) roomsResource.reload()
+}
+
+function filterRoomsForPortion(p) {
+  const allRooms = roomsResource.data || []
+  if (!p.roomSearch || p.selectedRoom) { p.roomResults = []; return }
+  const q = p.roomSearch.toLowerCase()
+  p.roomResults = allRooms.filter(r =>
+    (r.room || '').toLowerCase().includes(q) || (r.guest || '').toLowerCase().includes(q)
+  ).slice(0, 6)
+}
+
+watch(portions, () => { portions.value.forEach(filterRoomsForPortion) }, { deep: true })
+watch(() => roomsResource.data, () => { portions.value.forEach(filterRoomsForPortion) })
+
+function selectRoomForPortion(idx, room) {
+  const p = portions.value[idx]
+  p.selectedRoom = room
+  p.checkIn = room.check_in
+  p.roomSearch = `Room ${room.room} — ${room.guest}`
+  p.roomResults = []
+}
+
+function clearRoomForPortion(idx) {
+  const p = portions.value[idx]
+  p.selectedRoom = null
+  p.checkIn = null
+  p.roomSearch = ''
+  p.roomResults = []
+}
+
+// ── Apply split ────────────────────────────────────────────────────────────
+function callFrappeApi(url, params) {
+  return new Promise((resolve, reject) => {
+    const r = createResource({
+      url,
+      onSuccess: resolve,
+      onError: (err) => reject(new Error(err?.message || 'Request failed')),
+    })
+    r.submit(params)
+  })
+}
+
+async function applySplit() {
+  if (props.cartItems.length === 0) { splitError.value = 'Cart is empty.'; return }
+  if (portionTotal.value !== props.grandTotal) {
+    splitError.value = `Portions must total ₦${props.grandTotal.toLocaleString()}.`; return
+  }
+  for (const p of portions.value) {
+    if (p.paymentType === 'Post to Room' && !p.checkIn) {
+      splitError.value = 'Select a room for all "Post to Room" portions.'; return
+    }
+  }
+
   applying.value = true
   splitError.value = ''
-  // For now, process the entire bill as a single invoice (split logic complex —
-  // requires per-portion invoice creation which depends on POS profile config)
-  chargeResource.submit({
-    items: JSON.stringify(props.cartItems.map(i => ({
-      item_code: i.item_code || i.id,
-      qty: i.qty,
-      price: i.price,
-    }))),
-    mode_of_payment: 'Cash',
-    customer: null,
-    service_charge: props.serviceCharge,
-    kitchen_note: null,
-  })
+
+  try {
+    for (const portion of portions.value) {
+      if (Number(portion.amount) <= 0) continue
+      const ratio = Number(portion.amount) / props.grandTotal
+      const portionItems = JSON.stringify(props.cartItems.map(i => ({
+        item_code: i.item_code || i.id,
+        qty: i.qty,
+        price: Math.round(i.price * ratio * 100) / 100,
+      })))
+
+      if (portion.paymentType === 'Post to Room') {
+        await callFrappeApi('rhohotel.rhocom_hotel.api.pos.post_bill_to_room', {
+          items: portionItems,
+          check_in: portion.checkIn,
+          service_charge: 0,
+          discount_amount: 0,
+          kitchen_note: props.kitchenNote || null,
+          pos_profile: props.posProfile || null,
+        })
+      } else {
+        await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_pos_invoice', {
+          items: portionItems,
+          mode_of_payment: portion.paymentType === 'POS' ? 'POS' : 'Cash',
+          customer: portion.target || null,
+          service_charge: 0,
+          discount_amount: 0,
+          kitchen_note: props.kitchenNote || null,
+          pos_profile: props.posProfile || null,
+        })
+      }
+    }
+    emit('confirmed', { split: true })
+    emit('update:modelValue', false)
+  } catch (err) {
+    splitError.value = err.message || 'Failed to process split bill'
+  } finally {
+    applying.value = false
+  }
 }
 </script>
 
-<style>
+<style scoped>
 @keyframes modalIn {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -224,5 +327,4 @@ function applySplit() {
 .btn-hover { transition: all 0.15s ease; }
 .btn-hover:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .btn-hover:active { transform: translateY(0); }
-.table-row { transition: background 0.15s ease; }
 </style>

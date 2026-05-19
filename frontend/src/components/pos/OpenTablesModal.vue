@@ -34,24 +34,19 @@
                 <p class="text-xs text-gray-500 mb-1.5">Area</p>
                 <select v-model="tableFilterArea" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
                   <option value="">All Areas</option>
-                  <option>Restaurant</option>
-                  <option>Bar Lounge</option>
-                  <option>Poolside</option>
+                  <option v-for="a in availableAreas" :key="a">{{ a }}</option>
                 </select>
               </div>
               <div class="min-w-36">
                 <p class="text-xs text-gray-500 mb-1.5">Waiter</p>
                 <select v-model="tableFilterWaiter" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
                   <option value="">All Waiters</option>
-                  <option>Boma</option>
-                  <option>Adaeze</option>
-                  <option>Ifeoma</option>
-                  <option>Ngozi</option>
+                  <option v-for="w in availableWaiters" :key="w">{{ w }}</option>
                 </select>
               </div>
               <button @click="tableSearch='';tableFilterArea='';tableFilterWaiter='';tablePage=1"
                 class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Reset</button>
-              <button class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create New Table Order</button>
+              <button @click="tablesResource.reload()" class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Refresh Tables</button>
             </div>
           </div>
 
@@ -70,7 +65,11 @@
                 <h4 class="text-sm font-bold text-gray-900">Active Tables</h4>
                 <p class="text-xs text-gray-400">Showing {{ tablePageStart + 1 }}–{{ tablePageEnd }} of {{ filteredTables.length }} open tables</p>
               </div>
-              <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div v-if="tablesResource.loading" class="py-12 text-center text-xs text-gray-400">Loading tables…</div>
+              <div v-else-if="filteredTables.length === 0" class="py-12 text-center text-xs text-gray-400 bg-white rounded-xl border border-gray-200">
+                No open table orders found. Tables appear here when a draft order is created with a table name (e.g. &ldquo;Table 01&rdquo;) as the customer.
+              </div>
+              <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <table class="w-full">
                   <thead>
                     <tr class="border-b border-gray-100">
@@ -116,7 +115,7 @@
                       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed bg-white transition-colors">Next →</button>
                   </div>
                 </div>
-              </div>
+              </div><!-- end v-else table wrapper -->
             </div>
 
             <div v-if="selectedTable" class="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
@@ -159,46 +158,54 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 
-defineProps({ modelValue: Boolean })
-defineEmits(['update:modelValue', 'resume'])
+const props = defineProps({ modelValue: Boolean })
+const emit = defineEmits(['update:modelValue', 'resume'])
 
 const tableSearch = ref('')
 const tableFilterArea = ref('')
 const tableFilterWaiter = ref('')
 const tablePage = ref(1)
 const perPage = 10
+const selectedTable = ref(null)
 
-const tableStats = [
-  { label: 'Open Tables', value: '14' },
-  { label: 'Kitchen Pending', value: '6' },
-  { label: 'Ready to Bill', value: '5' },
-  { label: 'Longest Open Table', value: '1h 42m' },
-]
+// ── API: Open Tables ───────────────────────────────────────────────────────
+const tablesResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_open_pos_tables',
+  auto: false,
+})
 
-const openTables = [
-  { id: 1, name: 'Table 01', area: 'Restaurant', waiter: 'Boma', guests: 4, bill: 48500, status: 'Ordering', openTime: '10:05 AM', items: [{ name: 'Club Sandwich', qty: 2, amount: 24000 }, { name: 'Fresh Orange Juice', qty: 1, amount: 6500 }, { name: 'Grilled Chicken Meal', qty: 1, amount: 18000 }] },
-  { id: 2, name: 'Table 02', area: 'Restaurant', waiter: 'Adaeze', guests: 2, bill: 26000, status: 'Kitchen', openTime: '10:15 AM', items: [{ name: 'Caesar Salad', qty: 2, amount: 19000 }, { name: 'Sparkling Water', qty: 2, amount: 6000 }] },
-  { id: 3, name: 'Table 04', area: 'Bar Lounge', waiter: 'Ifeoma', guests: 3, bill: 18000, status: 'Ready', openTime: '10:30 AM', items: [{ name: 'Heineken Beer', qty: 3, amount: 15000 }, { name: 'Bottled Water', qty: 2, amount: 3000 }] },
-  { id: 4, name: 'Table 06', area: 'Poolside', waiter: 'Ngozi', guests: 5, bill: 72500, status: 'Ordering', openTime: '9:45 AM', items: [{ name: 'Grilled Chicken Meal', qty: 3, amount: 55500 }, { name: 'Fresh Orange Juice', qty: 2, amount: 13000 }] },
-  { id: 5, name: 'Table 08', area: 'Bar Lounge', waiter: 'Adaeze', guests: 2, bill: 15500, status: 'Kitchen', openTime: '10:48 AM', items: [{ name: 'Red Wine Glass', qty: 1, amount: 8500 }, { name: 'Club Sandwich', qty: 1, amount: 12000 }] },
-  { id: 6, name: 'Table 09', area: 'Restaurant', waiter: 'Boma', guests: 6, bill: 91000, status: 'Ready', openTime: '9:30 AM', items: [{ name: 'Grilled Chicken Meal', qty: 4, amount: 74000 }, { name: 'Sparkling Water', qty: 3, amount: 9000 }] },
-  { id: 7, name: 'Table 11', area: 'Poolside', waiter: 'Ngozi', guests: 2, bill: 23000, status: 'Ordering', openTime: '10:55 AM', items: [{ name: 'Caesar Salad', qty: 1, amount: 9500 }, { name: 'Cappuccino', qty: 2, amount: 11000 }] },
-  { id: 8, name: 'Bar 01', area: 'Bar Lounge', waiter: 'Ifeoma', guests: 3, bill: 34500, status: 'Kitchen', openTime: '11:10 AM', items: [{ name: 'Heineken Beer', qty: 4, amount: 20000 }, { name: 'Burger Combo', qty: 1, amount: 14000 }] },
-  { id: 9, name: 'Bar 03', area: 'Bar Lounge', waiter: 'Adaeze', guests: 1, bill: 17000, status: 'Ready', openTime: '11:20 AM', items: [{ name: 'Red Wine Glass', qty: 2, amount: 17000 }] },
-  { id: 10, name: 'Table 13', area: 'Restaurant', waiter: 'Boma', guests: 4, bill: 52000, status: 'Ordering', openTime: '11:05 AM', items: [{ name: 'Club Sandwich', qty: 3, amount: 36000 }, { name: 'Fresh Orange Juice', qty: 2, amount: 13000 }] },
-  { id: 11, name: 'Table 15', area: 'Restaurant', waiter: 'Adaeze', guests: 2, bill: 29500, status: 'Kitchen', openTime: '11:35 AM', items: [{ name: 'Grilled Chicken Meal', qty: 1, amount: 18500 }, { name: 'Bottled Water', qty: 2, amount: 3000 }] },
-  { id: 12, name: 'Poolside 02', area: 'Poolside', waiter: 'Ngozi', guests: 5, bill: 67000, status: 'Ordering', openTime: '10:40 AM', items: [{ name: 'Grilled Chicken Meal', qty: 2, amount: 37000 }, { name: 'Heineken Beer', qty: 4, amount: 20000 }] },
-]
+watch(() => props.modelValue, (open) => {
+  if (open) tablesResource.reload()
+})
+
+const openTables = computed(() => tablesResource.data || [])
+
+const tableStats = computed(() => {
+  const all = openTables.value
+  const oldest = all.reduce((max, t) => Math.max(max, t.age_minutes || 0), 0)
+  const h = Math.floor(oldest / 60)
+  const m = oldest % 60
+  return [
+    { label: 'Open Tables', value: String(all.length) },
+    { label: 'Total Pending Bill', value: `₦${all.reduce((s, t) => s + t.bill, 0).toLocaleString()}` },
+    { label: 'Ready to Bill', value: String(all.filter(t => t.status === 'Ready').length) },
+    { label: 'Longest Open', value: h ? `${h}h ${m}m` : `${m}m` },
+  ]
+})
+
+const availableAreas = computed(() => [...new Set(openTables.value.map(t => t.area).filter(Boolean))])
+const availableWaiters = computed(() => [...new Set(openTables.value.map(t => t.waiter).filter(Boolean))])
 
 const filteredTables = computed(() => {
-  let data = openTables
+  let data = openTables.value
   if (tableSearch.value) {
     const q = tableSearch.value.toLowerCase()
     data = data.filter(t =>
       t.name.toLowerCase().includes(q) ||
-      t.waiter.toLowerCase().includes(q) ||
-      t.area.toLowerCase().includes(q) ||
+      (t.waiter || '').toLowerCase().includes(q) ||
+      (t.area || '').toLowerCase().includes(q) ||
       String(t.bill).includes(q)
     )
   }
@@ -211,7 +218,6 @@ const tableTotalPages = computed(() => Math.max(1, Math.ceil(filteredTables.valu
 const tablePageStart = computed(() => (tablePage.value - 1) * perPage)
 const tablePageEnd = computed(() => Math.min(tablePageStart.value + perPage, filteredTables.value.length))
 const pagedTables = computed(() => filteredTables.value.slice(tablePageStart.value, tablePageEnd.value))
-const selectedTable = ref(openTables[0])
 
 watch(filteredTables, () => { tablePage.value = 1 })
 </script>

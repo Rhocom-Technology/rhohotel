@@ -11,7 +11,7 @@
       <div>
         <h3 class="text-sm font-bold text-gray-900">Current Terminal</h3>
         <p class="text-xs text-gray-400 mt-0.5">
-          {{ terminalInfo.pos_profile || 'POS Terminal' }}<template v-if="terminalInfo.cashier"> • Cashier: {{ terminalInfo.cashier }}</template><template v-if="terminalInfo.shift_date"> • {{ terminalInfo.shift_date }}</template><template v-if="terminalInfo.pos_opening_entry"> • Entry: {{ terminalInfo.pos_opening_entry }}</template>
+          {{ terminalInfo.pos_profile || 'POS Terminal' }}<template v-if="terminalInfo.cashier"> • Cashier: {{ terminalInfo.cashier }}</template><template v-if="terminalInfo.shift_date"> • {{ terminalInfo.shift_date }}</template>
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -280,6 +280,7 @@
               Selected Items ({{ selectedKitchenCount }})
             </button>
           </div> -->
+
           <p class="text-[11px] text-gray-400 mt-1">Only items in configured kitchen item groups are sent.</p>
           <!-- Send to Kitchen Now -->
           <button @click="sendToKitchenNow"
@@ -302,7 +303,7 @@
 
         <!-- Actions -->
         <div class="flex gap-2">
-          <button @click="clearKitchenSelection" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Edit Selection</button>
+          <button @click="clearKitchenSelection" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Clear Selection</button>
           <button @click="printBill" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
           <button @click="onHoldSale"
             :disabled="holding || cart.length === 0"
@@ -353,6 +354,11 @@
       :grand-total="grandTotal"
       :cart-items="cart"
       :service-charge="serviceCharge"
+      :discount-amount="discountAmount"
+      :kitchen-note="kitchenNote"
+      :cashier="terminalInfo.cashier"
+      :pos-profile="terminalInfo.pos_profile"
+      @confirmed="onSplitConfirmed"
     />
 
     <!-- ── Open POS Shift — enforced blocking modal ─────────────────── -->
@@ -460,8 +466,6 @@ import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import PostToRoomModal from '@/components/pos/PostToRoomModal.vue'
 import SplitBillModal from '@/components/pos/SplitBillModal.vue'
 
-console.log('PointOfSales component loaded')
-
 const router = useRouter()
 const route = useRoute()
 
@@ -471,6 +475,9 @@ const showOpenTables = ref(false)
 const showPostToRoom = ref(false)
 const showSplitBill = ref(false)
 const draftOrdersKey = ref(0)
+
+// Track the draft invoice currently loaded in the cart (so re-holding replaces it)
+const resumedDraftInvoice = ref(null)
 const showOpenShiftModal = ref(false)
 const selectedOpeningProfile = ref('')
 const openingCash = ref('0')
@@ -642,6 +649,14 @@ watch(billToSearch, (q) => {
   }, 300)
 })
 
+// Load default results (including Walk In) when the Bill-To input gains focus
+watch(billToFocused, (focused) => {
+  if (focused && !billToSearch.value) {
+    billToResource.params = { query: '' }
+    billToResource.reload()
+  }
+})
+
 // ── Computed: categories ───────────────────────────────────────────
 const categories = computed(() => {
   const list = categoriesResource.data || []
@@ -763,6 +778,8 @@ function clearBillTo() {
   selectedBillTo.value = null
   billToSearch.value = ''
   roomNumber.value = ''
+  billToResource.params = { query: '' }
+  billToResource.reload()
 }
 
 function selectRoomFromNumber(r) {
@@ -795,11 +812,13 @@ const chargeResource = createResource({
     const context = { ...lastSubmittedContext.value }
 
     chargeSuccess.value = `Invoice ${data.pos_invoice} created — ₦${Number(data.grand_total).toLocaleString()}`
-      lastInvoiceName.value = data.pos_invoice
+    lastInvoiceName.value = data.pos_invoice
     playSuccessSound()
     clearCart()
     charging.value = false
     menuResource.reload()
+    // Auto-print receipt
+    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(data.pos_invoice)}&trigger_print=1`, '_blank')
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
@@ -817,13 +836,11 @@ const holdSaleResource = createResource({
     const context = { ...lastSubmittedContext.value }
 
     chargeSuccess.value = `Sale held as draft ${data.pos_invoice}`
-      lastInvoiceName.value = data.pos_invoice
+    lastInvoiceName.value = data.pos_invoice
     playSuccessSound()
     holding.value = false
     clearCart()
     menuResource.reload()
-    showDraftOrders.value = true
-    draftOrdersKey.value += 1
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
@@ -849,11 +866,38 @@ const sendKitchenResource = createResource({
   },
 })
 
+// ── API: Post to Room (direct — when room already selected) ──────────────
+const postToRoomDirectResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.post_bill_to_room',
+  onSuccess(data) {
+    const submitted = [...lastSubmittedItems.value]
+    const context = { ...lastSubmittedContext.value }
+    lastInvoiceName.value = data?.pos_invoice || data?.sales_invoice || ''
+    chargeSuccess.value = 'Bill posted to room folio successfully'
+    playSuccessSound()
+    const invoiceName = data?.pos_invoice || ''
+    clearCart()
+    charging.value = false
+    menuResource.reload()
+    if (invoiceName) {
+      window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(invoiceName)}&trigger_print=1`, '_blank')
+    }
+    triggerKitchenSend(data?.pos_invoice || null, submitted, context)
+    setTimeout(() => { chargeSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    chargeError.value = extractApiErrorMessage(err, 'Failed to post bill to room')
+    charging.value = false
+    setTimeout(() => { chargeError.value = '' }, 6000)
+  },
+})
+
 // Draft saved silently when user taps "Send to Kitchen" — keeps cart alive
 const kitchenDraftResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
   onSuccess(data) {
     lastInvoiceName.value = data.pos_invoice
+    resumedDraftInvoice.value = data.pos_invoice  // track so re-hold replaces it
     // Now fire the kitchen ticket linked to this draft
     const toSend = kitchenDraftResource._pendingKitchenItems
     if (toSend && toSend.length > 0) {
@@ -998,6 +1042,7 @@ function sendToKitchenNow() {
     discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
+    existing_draft: resumedDraftInvoice.value || null,
   })
 }
 
@@ -1054,7 +1099,20 @@ function isKitchenEligible(item) {
       qty: Number(i.qty) || 1,
     }))
     selectedKitchenItemMap.value = {}
+    kitchenSentMap.value = {}
     kitchenNote.value = data.remarks || ''
+    // Restore discount
+    const dAmt = Number(data.discount_amount || 0)
+    discountType.value = 'flat'
+    discountInput.value = dAmt > 0 ? String(dAmt) : ''
+    showDiscountPanel.value = dAmt > 0
+    // Restore bill-to from customer
+    if (data.customer) {
+      selectedBillTo.value = { id: data.customer, name: data.customer, room: null, type: 'Customer' }
+    }
+    // Track this draft so re-holding replaces it instead of creating a new one
+    resumedDraftInvoice.value = data.invoice
+    lastInvoiceName.value = data.invoice
     showDraftOrders.value = false
     chargeSuccess.value = `Draft ${data.invoice} resumed`
     setTimeout(() => { chargeSuccess.value = '' }, 3000)
@@ -1102,6 +1160,7 @@ function clearCart() {
   billToSearch.value = ''
   discountInput.value = ''
   showDiscountPanel.value = false
+  resumedDraftInvoice.value = null
 }
 
 function onHoldSale() {
@@ -1129,6 +1188,8 @@ function onHoldSale() {
     discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
+    // Replace existing draft when re-holding a resumed order
+    existing_draft: resumedDraftInvoice.value || null,
   })
 }
 
@@ -1154,6 +1215,24 @@ function onChargeNow() {
   chargeError.value = ''
 
   if (settlementMethod.value === 'Post to Room') {
+    // If a room is already selected, post directly without showing the modal
+    if (selectedBillTo.value?.room && selectedBillTo.value?.id) {
+      captureSubmissionSnapshot()
+      charging.value = true
+      postToRoomDirectResource.submit({
+        items: JSON.stringify(cart.value.map(i => ({
+          item_code: i.item_code || i.id,
+          qty: i.qty,
+          price: i.price,
+        }))),
+        check_in: selectedBillTo.value.id,
+        service_charge: serviceCharge.value,
+        discount_amount: discountAmount.value,
+        kitchen_note: kitchenNote.value || null,
+        pos_profile: terminalInfo.value?.pos_profile || null,
+      })
+      return
+    }
     captureSubmissionSnapshot()
     showPostToRoom.value = true
     return
@@ -1182,6 +1261,13 @@ function onChargeNow() {
   })
 }
 
+function onSplitConfirmed() {
+  clearCart()
+  menuResource.reload()
+  chargeSuccess.value = 'Split bill processed successfully'
+  setTimeout(() => { chargeSuccess.value = '' }, 4000)
+}
+
 function onRoomSelected(room) {
   if (room) {
     selectedBillTo.value = { id: room.id, name: room.name, room: room.room, type: room.type || 'Direct Guest' }
@@ -1195,8 +1281,13 @@ function onPostConfirmed(data) {
   lastInvoiceName.value = data?.pos_invoice || data?.sales_invoice || ''
   chargeSuccess.value = 'Bill posted to room folio successfully'
   playSuccessSound()
+  const invoiceName = data?.pos_invoice || ''
   clearCart()
   menuResource.reload()
+  // Auto-print the POS invoice if available
+  if (invoiceName) {
+    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(invoiceName)}&trigger_print=1`, '_blank')
+  }
   triggerKitchenSend(data?.pos_invoice || null, submitted, context)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
@@ -1204,18 +1295,27 @@ function onPostConfirmed(data) {
 function onResumeTable(table) {
   if (!table || !table.items || table.items.length === 0) return
   cart.value = table.items.map(i => ({
-    id: i.name,
-    item_code: i.name,
+    id: i.item_code || i.name,
+    item_code: i.item_code || i.name,
     name: i.name,
     category: '',
-    price: i.qty > 0 ? Math.round(i.amount / i.qty) : 0,
+    price: i.price || (i.qty > 0 ? Math.round(i.amount / i.qty) : 0),
     stock: 999,
     isStockItem: false,
     image: null,
     qty: i.qty,
   }))
   selectedKitchenItemMap.value = {}
-  kitchenNote.value = ''
+  kitchenSentMap.value = {}
+  kitchenNote.value = table.notes || ''
+  // Reset discount (table orders carry no discount info)
+  discountInput.value = ''
+  showDiscountPanel.value = false
+  // Restore table as the bill-to customer
+  selectedBillTo.value = { id: table.name, name: table.name, room: null, type: 'Table' }
+  // Track this draft so re-holding replaces it
+  resumedDraftInvoice.value = table.invoice || null
+  lastInvoiceName.value = table.invoice || ''
   showOpenTables.value = false
   chargeSuccess.value = `Table ${table.name} loaded — ₦${table.bill.toLocaleString()}`
   setTimeout(() => { chargeSuccess.value = '' }, 3000)

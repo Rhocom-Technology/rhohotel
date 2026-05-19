@@ -407,11 +407,26 @@ def get_pos_item_categories():
 
 @frappe.whitelist()
 def search_pos_bill_to(query=""):
-    """Search active check-in guests and generic table/bar entries for Bill To."""
+    """Search active check-in guests, walk-in customer, and table/bar entries for Bill To."""
     results = []
 
+    # Resolve the actual walk-in customer name that exists in the system
+    _walk_in_customer = None
+    for _candidate in ("Walk In", "Guest", "Walk-in Customer", "Walk In Customer", "POS Customer", "Cash Customer"):
+        if frappe.db.exists("Customer", _candidate):
+            _walk_in_customer = _candidate
+            break
+    walk_in_entry = {"id": _walk_in_customer or "Walk In", "name": "Walk In", "room": None, "type": "Walk In"}
+
     if query:
-        q = f"%{cstr(query).strip()}%"
+        q_raw = cstr(query).strip()
+        q = f"%{q_raw}%"
+        q_lower = q_raw.lower()
+
+        # Walk-in appears when query matches "walk" or "walk in"
+        if q_lower in "walk in" or "walk" in q_lower:
+            results.append(walk_in_entry)
+
         # Active check-in guests
         checkins = frappe.db.sql("""
             SELECT name AS id, guest AS name, room_number AS room, 'Direct Guest' AS type
@@ -427,10 +442,12 @@ def search_pos_bill_to(query=""):
         table_names = ["Table 01", "Table 02", "Table 03", "Table 04", "Table 05",
                        "Bar 01", "Bar 02", "Bar 03"]
         for t in table_names:
-            if query.lower() in t.lower():
+            if q_lower in t.lower():
                 typ = "Table" if t.startswith("Table") else "Bar"
                 results.append({"id": t, "name": t, "room": None, "type": typ})
     else:
+        # Walk-in always first in default results
+        results.append(walk_in_entry)
         # Return first 5 active guests
         checkins = frappe.db.sql("""
             SELECT name AS id, guest AS name, room_number AS room, 'Direct Guest' AS type
@@ -757,13 +774,23 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
 
 
 @frappe.whitelist()
-def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0):
+def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0, existing_draft=None):
     """Create a draft POS Invoice for suspended/held sales."""
     import json
 
     items = json.loads(items) if isinstance(items, str) else items
     if not items:
         frappe.throw(_("No items in cart"))
+
+    # When re-holding a resumed order, delete the previous draft to avoid duplicates
+    if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+        try:
+            old_pi = frappe.get_doc("POS Invoice", existing_draft)
+            if old_pi.docstatus == 0:
+                old_pi.flags.ignore_permissions = True
+                old_pi.delete()
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Failed to delete old draft on re-hold")
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
@@ -841,6 +868,7 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
         SELECT
             pi.name AS invoice,
             pi.customer,
+            pi.pos_profile,
             pi.grand_total AS amount,
             pi.posting_date,
             pi.owner AS cashier,
@@ -865,6 +893,7 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
         age = int(d.get("age_minutes") or 0)
         h, m = divmod(age, 60)
         d["age"] = f"{h}h {m}m" if h else f"{m}m"
+        d["service_point"] = d.get("pos_profile") or "—"
 
     return drafts
 
@@ -1150,6 +1179,24 @@ def get_pos_shift_stats(pos_opening_entry=None):
         t["counted"] = t["system_amount"]
         t["diff"] = 0
 
+    # Additional stats for the Shift Close summary panel
+    if _has_pos_opening_entry_on_invoice():
+        bills_processed = frappe.db.count("POS Invoice", {"pos_opening_entry": pos_opening_entry, "docstatus": 1})
+        voided_count = frappe.db.count("POS Invoice", {"pos_opening_entry": pos_opening_entry, "docstatus": 2})
+    else:
+        entry_start = getdate(entry_doc.period_start_date)
+        bills_processed = frappe.db.count("POS Invoice", {
+            "pos_profile": entry_doc.pos_profile, "owner": entry_doc.user,
+            "posting_date": [">=", entry_start], "docstatus": 1,
+        })
+        voided_count = 0
+
+    opening_cash = 0
+    for row in entry_doc.get("balance_details") or []:
+        if (row.mode_of_payment or "").lower() == "cash":
+            opening_cash = flt(row.opening_amount)
+            break
+
     return {
         "has_open_shift": True,
         "pos_opening_entry": pos_opening_entry,
@@ -1162,6 +1209,9 @@ def get_pos_shift_stats(pos_opening_entry=None):
         "shift_date": cstr(entry_doc.period_start_date),
         "opening_time": cstr(entry_doc.period_start_date),
         "tender_breakdown": tender,
+        "bills_processed": int(bills_processed),
+        "voided_count": int(voided_count),
+        "opening_cash": flt(opening_cash),
     }
 
 
@@ -1318,6 +1368,7 @@ def get_pos_draft_invoice_detail(invoice_name):
         "customer": pi.customer or "",
         "items": items,
         "remarks": pi.remarks or "",
+        "discount_amount": flt(pi.discount_amount or 0),
     }
 
 
@@ -1345,6 +1396,68 @@ def delete_pos_draft_invoice(invoice_name):
 # ─────────────────────────────────────────────────────────────────────────────
 # Active POS Terminals (for manager Close Terminal modal)
 # ─────────────────────────────────────────────────────────────────────────────
+
+@frappe.whitelist()
+def get_open_pos_tables():
+    """Return open table orders — draft POS Invoices whose customer is a table or bar name."""
+    drafts = frappe.db.sql("""
+        SELECT
+            pi.name AS invoice,
+            pi.customer,
+            pi.grand_total AS bill,
+            pi.owner AS cashier,
+            pi.remarks AS notes,
+            TIMESTAMPDIFF(MINUTE, pi.creation, NOW()) AS age_minutes,
+            DATE_FORMAT(pi.creation, '%%h:%%i %%p') AS open_time,
+            COUNT(pit.name) AS item_count
+        FROM `tabPOS Invoice` pi
+        LEFT JOIN `tabPOS Invoice Item` pit ON pit.parent = pi.name
+        WHERE pi.docstatus = 0
+          AND (
+            pi.customer LIKE 'Table %%'
+            OR pi.customer LIKE 'Bar %%'
+            OR pi.customer LIKE 'Pool%%'
+          )
+        GROUP BY pi.name
+        ORDER BY pi.creation DESC
+        LIMIT 50
+    """, as_dict=1)
+
+    result = []
+    for idx, d in enumerate(drafts):
+        items = frappe.db.sql("""
+            SELECT item_code, item_name AS name, qty,
+                   rate AS price, (qty * rate) AS amount
+            FROM `tabPOS Invoice Item`
+            WHERE parent = %s
+        """, d["invoice"], as_dict=1)
+        age = int(d.get("age_minutes") or 0)
+        h, m = divmod(age, 60)
+        customer = d["customer"] or ""
+        area = (
+            "Bar Lounge" if customer.upper().startswith("BAR")
+            else "Poolside" if customer.upper().startswith("POOL")
+            else "Restaurant"
+        )
+        result.append({
+            "id": idx + 1,
+            "invoice": d["invoice"],
+            "name": customer,
+            "cashier": d["cashier"],
+            "bill": float(d["bill"] or 0),
+            "age": f"{h}h {m}m" if h else f"{m}m",
+            "age_minutes": age,
+            "items": [dict(i) for i in items],
+            "status": "Ordering",
+            "area": area,
+            "waiter": d["cashier"],
+            "guests": 0,
+            "openTime": d["open_time"] or "",
+            "notes": d["notes"] or "",
+        })
+
+    return result
+
 
 @frappe.whitelist()
 def get_open_pos_terminals():

@@ -10,10 +10,10 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Active Terminal</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Main Restaurant POS • Cashier: Adaeze • Morning Shift • Opened 07:00 AM</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ shiftStats.pos_profile }} • Cashier: {{ shiftStats.cashier }} • {{ shiftStats.shift_date }}</p>
       </div>
       <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print Report</button>
+        <button @click="printShiftReport" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print Report</button>
         <button @click="showDraftOrders = true" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Open Drafts</button>
         <!-- <button @click="router.push('/pos')" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Open Drafts</button> -->
         <button @click="confirmClose" :disabled="closing"
@@ -103,7 +103,7 @@
                     class="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-36" />
                   <div v-else class="px-3 py-1.5 text-xs border border-gray-100 rounded-lg bg-gray-50 text-gray-400 w-36">Auto from system</div>
                 </td>
-                <td class="py-3 text-xs font-medium" :class="row.diff === '₦0.00' ? 'text-green-600' : 'text-red-500'">{{ row.diff }}</td>
+                <td class="py-3 text-xs font-medium" :class="getDiff(row) === 0 ? 'text-green-600' : 'text-red-500'">{{ getDiff(row) === 0 ? '₦0.00' : (getDiff(row) > 0 ? '+₦' : '-₦') + Math.abs(getDiff(row)).toLocaleString() }}</td>
               </tr>
             </tbody>
           </table>
@@ -133,11 +133,11 @@
             <h4 class="text-xs font-bold text-gray-900 mb-3">Sales Performance</h4>
             <div class="flex items-center justify-between text-xs mb-1.5">
               <span class="text-gray-500">Bills processed</span>
-              <span class="font-semibold text-gray-900">48</span>
+              <span class="font-semibold text-gray-900">{{ shiftResource.loading ? '…' : (shiftStats.bills_processed || 0) }}</span>
             </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Voids / cancellations</span>
-              <span class="font-semibold text-gray-900">2</span>
+              <span class="font-semibold text-gray-900">{{ shiftResource.loading ? '…' : (shiftStats.voided_count || 0) }}</span>
             </div>
           </div>
 
@@ -146,7 +146,7 @@
             <h4 class="text-xs font-bold text-gray-900 mb-3">Open Items Before Closing</h4>
             <div class="flex items-center justify-between text-xs mb-1.5">
               <span class="text-gray-500">Draft orders</span>
-              <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-600 rounded-full">2 pending</span>
+              <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-600 rounded-full">{{ shiftStats.open_drafts }} pending</span>
             </div>
             <div class="flex items-center justify-between text-xs mb-1.5">
               <span class="text-gray-500">Open tables</span>
@@ -163,11 +163,11 @@
             <h4 class="text-xs font-bold text-gray-900 mb-3">Cash Declaration</h4>
             <div class="flex items-center justify-between text-xs mb-1.5">
               <span class="text-gray-500">Opening float</span>
-              <span class="font-semibold text-gray-900">₦50,000</span>
+              <span class="font-semibold text-gray-900">₦{{ Number(shiftStats.opening_cash || 0).toLocaleString() }}</span>
             </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Expected cash in drawer</span>
-              <span class="font-semibold text-gray-900">₦236,500</span>
+              <span class="font-semibold text-gray-900">₦{{ Number((shiftStats.opening_cash || 0) + (shiftStats.gross_sales || 0)).toLocaleString() }}</span>
             </div>
           </div>
 
@@ -177,7 +177,7 @@
             <p class="text-xs text-gray-500">All counted amounts match the system values.</p>
           </div>
 
-          <button class="w-full py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
+          <button @click="printShiftReport" class="w-full py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
             Preview Report
           </button>
         </div>
@@ -190,7 +190,8 @@
     <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
       <div class="bg-white rounded-2xl p-6 w-full max-w-sm">
         <h3 class="text-sm font-bold text-gray-900 mb-2">Close Shift?</h3>
-        <p class="text-xs text-gray-500 mb-5">This will close the Morning shift for Adaeze. This action cannot be undone.</p>
+        <p class="text-xs text-gray-500 mb-5">This will close the {{ shiftStats.pos_profile }} shift for {{ shiftStats.cashier }}. This action cannot be undone.</p>
+        <p v-if="closeError" class="text-xs text-red-500 mt-2 mb-3 bg-red-50 border border-red-200 rounded px-3 py-2">{{ closeError }}</p>
         <div class="flex gap-2">
           <button @click="showConfirm = false" class="flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
           <button @click="doCloseShift" :disabled="closing"
@@ -205,7 +206,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
@@ -244,19 +245,28 @@ const shiftStats = computed(() => {
     shift_date: d.shift_date || '—',
     pos_opening_entry: d.pos_opening_entry || null,
     has_open_shift: d.has_open_shift || false,
+    bills_processed: d.bills_processed || 0,
+    voided_count: d.voided_count || 0,
+    opening_cash: Number(d.opening_cash || 0),
   }
 })
 
-// Tender rows - loaded from API, editable by cashier
-const tenderRows = computed(() => {
-  return (shiftResource.data?.tender_breakdown || []).map(t => ({
+// Tender rows - reactive ref so v-model changes persist
+const tenderRows = ref([])
+
+watch(() => shiftResource.data?.tender_breakdown, (breakdown) => {
+  if (!breakdown) return
+  tenderRows.value = breakdown.map(t => ({
     type: t.payment_type,
     system: Number(t.system_amount || 0),
-    counted: String(Number(t.system_amount || 0).toFixed(2)),
-    diff: '₦0.00',
+    counted: Number(t.system_amount || 0).toFixed(2),
     editable: t.editable !== false,
   }))
 })
+
+function getDiff(row) {
+  return (parseFloat(row.counted) || 0) - row.system
+}
 
 // ── API: Close Shift ───────────────────────────────────────────────
 const closeResource = createResource({
@@ -275,6 +285,19 @@ const closeResource = createResource({
 
 function confirmClose() {
   showConfirm.value = true
+}
+
+function printShiftReport() {
+  const entry = shiftStats.value.pos_opening_entry
+  if (!entry) {
+    closeError.value = 'No open shift found to print.'
+    setTimeout(() => { closeError.value = '' }, 3000)
+    return
+  }
+  window.open(
+    `/printview?doctype=POS%20Opening%20Entry&name=${encodeURIComponent(entry)}&trigger_print=1`,
+    '_blank'
+  )
 }
 
 function doCloseShift() {
