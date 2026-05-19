@@ -108,7 +108,7 @@
             "read_only": 1
         },
         {
-            "fetch_from": "guest.contact_number",
+            "fetch_from": "guest.phone_number",
             "fieldname": "contact_number",
             "fieldtype": "Data",
             "label": "Contact Number",

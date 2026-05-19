@@ -140,14 +140,19 @@
                   <td colspan="5" class="px-5 py-8 text-center text-xs text-gray-400">No invoices found for this stay</td>
                 </tr>
                 <tr v-for="inv in data.invoices" :key="inv.invoice_id"
-                  class="border-b border-gray-50 last:border-0">
+                  class="border-b border-gray-50 last:border-0 transition-colors"
+                  :class="inv.is_return ? 'bg-teal-50' : ''">
                   <td class="px-5 py-3 text-xs text-gray-700">{{ inv.invoice_id }}</td>
                   <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(inv.posting_date) }}</td>
-                  <td class="px-4 py-3 text-xs text-gray-500">{{ inv.invoice_type }}</td>
-                  <td class="px-5 py-3 text-xs text-right text-gray-700">{{ formatCurrency(inv.amount) }}</td>
+                  <td class="px-4 py-3 text-xs" :class="inv.is_return ? 'text-teal-600 font-medium' : 'text-gray-500'">
+                    {{ inv.is_return ? 'Credit Note' : inv.invoice_type }}
+                  </td>
+                  <td class="px-5 py-3 text-xs text-right" :class="inv.is_return ? 'text-teal-600 font-semibold' : 'text-gray-700'">
+                    {{ inv.is_return ? '− ' + formatCurrency(inv.amount) : formatCurrency(inv.amount) }}
+                  </td>
                   <td class="px-5 py-3 text-xs text-right font-semibold"
-                    :class="inv.outstanding_amount > 0 ? 'text-red-500' : 'text-gray-400'">
-                    {{ formatCurrency(inv.outstanding_amount) }}
+                    :class="inv.is_return ? 'text-teal-400' : inv.outstanding_amount > 0 ? 'text-red-500' : 'text-gray-400'">
+                    {{ inv.is_return ? (inv.outstanding_amount > 0 ? formatCurrency(inv.outstanding_amount) : '—') : formatCurrency(inv.outstanding_amount) }}
                   </td>
                 </tr>
               </tbody>
@@ -302,11 +307,13 @@ const data = ref({
 })
 
 // Computed values that correctly derive from invoice and payment data.
-// Use explicit length check so a fully-paid/zero-balance folio does not
-// accidentally fall through to a potentially stale doc-level field.
+// Credit notes (is_return=1) have positive grand_total in this Frappe version;
+// exclude them from charge/outstanding totals and show them separately.
 const computedTotalCharges = computed(() => {
   if (data.value.invoices && data.value.invoices.length > 0) {
-    return (data.value.invoices).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
+    return (data.value.invoices)
+      .filter(inv => !inv.is_return)
+      .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
   }
   return data.value.total_invoice || data.value.total_charges || 0
 })
@@ -320,7 +327,9 @@ const computedTotalPaid = computed(() => {
 
 const computedOutstanding = computed(() => {
   if (data.value.invoices && data.value.invoices.length > 0) {
-    return (data.value.invoices).reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
+    return (data.value.invoices)
+      .filter(inv => !inv.is_return)
+      .reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
   }
   return data.value.total_outstanding || 0
 })

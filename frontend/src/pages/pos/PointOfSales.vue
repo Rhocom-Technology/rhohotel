@@ -262,7 +262,7 @@
         <!-- Kitchen Send Mode -->
         <div class="mb-4">
           <p class="text-xs font-semibold text-orange-600 mb-2">Kitchen Send Mode</p>
-          <div class="flex items-center gap-1.5">
+          <!-- <div class="flex items-center gap-1.5">
             <button
               @click="kitchenSendScope = 'all'"
               class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-all"
@@ -279,7 +279,7 @@
                 : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'">
               Selected Items ({{ selectedKitchenCount }})
             </button>
-          </div>
+          </div> -->
           <p class="text-[11px] text-gray-400 mt-1">Only items in configured kitchen item groups are sent.</p>
           <!-- Send to Kitchen Now -->
           <button @click="sendToKitchenNow"

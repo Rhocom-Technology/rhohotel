@@ -317,9 +317,9 @@ function hideTargetDropdown() {
   setTimeout(() => { showTargetDropdown.value = false }, 150)
 }
 
-// Credit notes (amount < 0 / is_return) must not be transferable
+// Credit notes (is_return = 1) and zero/negative amounts must not be transferable
 const transferableInvoices = computed(() =>
-  (props.checkIn.invoices || []).filter(c => (c.amount || 0) >= 0)
+  (props.checkIn.invoices || []).filter(c => (c.amount || 0) > 0 && !c.is_return)
 )
 
 const selectedInvoices = computed(() =>

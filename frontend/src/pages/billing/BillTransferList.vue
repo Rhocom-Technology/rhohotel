@@ -106,7 +106,8 @@
             <td colspan="11" class="py-16 text-center text-xs text-gray-400">No bill transfers found</td>
           </tr>
           <tr v-for="t in transfers" :key="t.name"
-            class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+            class="border-b border-gray-50 last:border-0 hover:bg-blue-50/40 transition-colors cursor-pointer"
+            @click="openDetail(t)">
             <td class="px-5 py-3 text-xs font-medium text-blue-600">{{ t.name }}</td>
             <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ fmtDate(t.creation) }}</td>
             <td class="px-4 py-3 text-xs text-gray-700">{{ t.from_guest || '—' }}</td>
@@ -121,11 +122,11 @@
             </td>
             <td class="px-4 py-3 text-xs text-gray-500">{{ t.journal_entry || '—' }}</td>
             <td class="px-4 py-3 text-xs text-gray-500">{{ t.authorized_by || '—' }}</td>
-            <td class="px-4 py-3">
+            <td class="px-4 py-3" @click.stop>
               <button v-if="t.status === 'Pending Approval'"
-                @click="openApproval(t)"
+                @click="openDetail(t)"
                 class="px-3 py-1.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap">
-                Approve
+                Review
               </button>
             </td>
           </tr>
@@ -133,50 +134,196 @@
       </table>
     </div>
 
-    <!-- Approval Confirmation Modal -->
+    <!-- Approval Detail Panel -->
     <Teleport to="body">
-      <div v-if="approvalTarget" class="fixed inset-0 z-50 flex items-center justify-center p-6"
-        style="background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md px-8 py-7 space-y-4">
-          <h2 class="text-lg font-bold text-gray-900">Approve Bill Transfer</h2>
+      <Transition
+        enter-active-class="transition-all duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-all duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div v-if="detailTarget" class="fixed inset-0 z-50 flex"
+          style="background:rgba(15,23,42,0.55);backdrop-filter:blur(3px);"
+          @click.self="closePanel">
 
-          <div class="bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 space-y-2 text-xs">
-            <div class="flex justify-between">
-              <span class="text-gray-500">Transfer Ref</span>
-              <span class="font-semibold text-gray-900">{{ approvalTarget.name }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">From Guest</span>
-              <span class="text-gray-700">{{ approvalTarget.from_guest }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">To Guest</span>
-              <span class="text-gray-700">{{ approvalTarget.to_guest }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Source Invoice</span>
-              <span class="text-blue-600">{{ approvalTarget.source_invoice }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Amount</span>
-              <span class="font-bold text-gray-900">{{ fmt(approvalTarget.total_amount) }}</span>
-            </div>
-          </div>
+          <Transition
+            enter-active-class="transition-transform duration-300 ease-out"
+            enter-from-class="translate-x-full"
+            enter-to-class="translate-x-0"
+            leave-active-class="transition-transform duration-200 ease-in"
+            leave-from-class="translate-x-0"
+            leave-to-class="translate-x-full"
+          >
+            <div v-if="detailTarget" class="ml-auto w-full max-w-xl bg-white h-full flex flex-col shadow-2xl overflow-hidden">
 
-          <div v-if="approvalError" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-            <p class="text-xs text-red-700 whitespace-pre-line">{{ approvalError }}</p>
-          </div>
+              <!-- Panel Header -->
+              <div class="flex items-center justify-between px-7 py-5 border-b border-gray-100">
+                <div class="flex items-center gap-3">
+                  <div>
+                    <h2 class="text-base font-bold text-gray-900">{{ detailLoading ? '...' : detailTarget.name }}</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Bill Transfer Detail</p>
+                  </div>
+                  <span v-if="!detailLoading" class="px-2.5 py-1 text-xs font-semibold rounded-full"
+                    :class="statusClass(detailTarget.status)">
+                    {{ detailTarget.status || 'Draft' }}
+                  </span>
+                </div>
+                <button @click="closePanel" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
-          <div class="flex justify-end gap-2 pt-2">
-            <button @click="approvalTarget = null; approvalError = ''"
-              class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-            <button @click="executeApproval" :disabled="approving"
-              class="px-5 py-2.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-60">
-              {{ approving ? 'Processing...' : 'Confirm Approve & Execute' }}
-            </button>
-          </div>
+              <!-- Panel Body -->
+              <div class="flex-1 overflow-y-auto px-7 py-6 space-y-6">
+
+                <!-- Loading spinner -->
+                <div v-if="detailLoading" class="flex items-center justify-center py-20">
+                  <div class="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+
+                <template v-else>
+
+                  <!-- Parties -->
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-4">
+                      <p class="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-1">From Guest</p>
+                      <p class="text-sm font-bold text-gray-900">{{ detailTarget.from_guest || '—' }}</p>
+                      <p class="text-xs text-gray-400 mt-1">Check-in: <span class="text-gray-600">{{ detailTarget.from_check_in || '—' }}</span></p>
+                    </div>
+                    <div class="bg-green-50 border border-green-100 rounded-xl px-4 py-4">
+                      <p class="text-xs font-semibold text-green-400 uppercase tracking-wide mb-1">To Guest</p>
+                      <p class="text-sm font-bold text-gray-900">{{ detailTarget.to_guest || '—' }}</p>
+                      <p class="text-xs text-gray-400 mt-1">Check-in: <span class="text-gray-600">{{ detailTarget.to_check_in || '—' }}</span></p>
+                    </div>
+                  </div>
+
+                  <!-- Invoice + Amount -->
+                  <div class="bg-gray-50 border border-gray-200 rounded-xl px-5 py-4 space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-gray-500">Source Invoice</span>
+                      <span class="text-xs font-semibold text-blue-600">{{ detailTarget.source_invoice || '—' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-gray-500">Total Amount</span>
+                      <span class="text-sm font-bold text-gray-900">{{ fmt(detailTarget.total_amount) }}</span>
+                    </div>
+                    <div v-if="detailTarget.journal_entry" class="flex justify-between items-center">
+                      <span class="text-xs text-gray-500">Journal Entry</span>
+                      <span class="text-xs font-semibold text-purple-600">{{ detailTarget.journal_entry }}</span>
+                    </div>
+                    <div v-if="detailTarget.authorized_by" class="flex justify-between items-center">
+                      <span class="text-xs text-gray-500">Authorized By</span>
+                      <span class="text-xs text-gray-700">{{ detailTarget.authorized_by }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs text-gray-500">Created</span>
+                      <span class="text-xs text-gray-500">{{ fmtDate(detailTarget.creation) }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Reason / Notes -->
+                  <div v-if="detailTarget.reason">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Reason / Notes</p>
+                    <div class="bg-yellow-50 border border-yellow-100 rounded-xl px-4 py-3">
+                      <p class="text-xs text-gray-700 whitespace-pre-line">{{ detailTarget.reason }}</p>
+                    </div>
+                  </div>
+
+                  <!-- Line Items -->
+                  <div v-if="detailTarget.items && detailTarget.items.length">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Transfer Items</p>
+                    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <table class="w-full">
+                        <thead>
+                          <tr class="bg-gray-50 border-b border-gray-100">
+                            <th class="text-left text-xs font-medium text-gray-400 px-4 py-2.5">Description</th>
+                            <th class="text-left text-xs font-medium text-gray-400 px-4 py-2.5">Reference</th>
+                            <th class="text-right text-xs font-medium text-gray-400 px-4 py-2.5">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(item, idx) in detailTarget.items" :key="idx"
+                            class="border-b border-gray-50 last:border-0">
+                            <td class="px-4 py-2.5 text-xs text-gray-700">{{ item.description || '—' }}</td>
+                            <td class="px-4 py-2.5 text-xs text-gray-400">{{ item.reference_document || '—' }}</td>
+                            <td class="px-4 py-2.5 text-xs text-right font-semibold text-gray-900">{{ fmt(item.amount) }}</td>
+                          </tr>
+                        </tbody>
+                        <tfoot>
+                          <tr class="bg-gray-50 border-t border-gray-200">
+                            <td colspan="2" class="px-4 py-2.5 text-xs font-semibold text-gray-500">Total</td>
+                            <td class="px-4 py-2.5 text-xs text-right font-bold text-gray-900">{{ fmt(detailTarget.total_amount) }}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+
+                  <!-- Error Banner -->
+                  <div v-if="approvalError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <p class="text-xs text-red-700 whitespace-pre-line">{{ approvalError }}</p>
+                  </div>
+
+                  <!-- Rejection Reason -->
+                  <div v-if="showRejectForm">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Rejection Reason</p>
+                    <textarea v-model="rejectionReason" rows="3" placeholder="Enter reason for rejection..."
+                      class="w-full px-3 py-2.5 text-xs border border-red-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400 resize-none bg-red-50"></textarea>
+                  </div>
+
+                </template>
+              </div>
+
+              <!-- Panel Footer — Action Buttons -->
+              <div v-if="!detailLoading && detailTarget.status === 'Pending Approval'"
+                class="border-t border-gray-100 px-7 py-5 bg-white">
+
+                <div v-if="!showRejectForm" class="flex items-center gap-3">
+                  <button @click="showRejectForm = true"
+                    class="flex-1 px-4 py-2.5 text-xs font-semibold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors">
+                    Reject Transfer
+                  </button>
+                  <button @click="executeApproval" :disabled="approving"
+                    class="flex-1 px-4 py-2.5 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-60 transition-colors">
+                    {{ approving ? 'Processing...' : 'Approve & Execute' }}
+                  </button>
+                </div>
+
+                <div v-else class="space-y-3">
+                  <p class="text-xs text-red-600 font-medium">Confirm rejection of this transfer?</p>
+                  <div class="flex items-center gap-3">
+                    <button @click="showRejectForm = false; rejectionReason = ''"
+                      class="flex-1 px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">
+                      Back
+                    </button>
+                    <button @click="executeRejection" :disabled="approving"
+                      class="flex-1 px-4 py-2.5 text-xs font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-60 transition-colors">
+                      {{ approving ? 'Processing...' : 'Confirm Reject' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Read-only footer for non-pending states -->
+              <div v-else-if="!detailLoading && detailTarget.status !== 'Pending Approval'"
+                class="border-t border-gray-100 px-7 py-4 bg-gray-50 flex items-center justify-between">
+                <p class="text-xs text-gray-400">
+                  This transfer is <span class="font-semibold text-gray-600">{{ detailTarget.status }}</span> — no actions available.
+                </p>
+                <button @click="closePanel"
+                  class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors">
+                  Close
+                </button>
+              </div>
+
+            </div>
+          </Transition>
         </div>
-      </div>
+      </Transition>
     </Teleport>
 
   </div>
@@ -191,9 +338,15 @@ const search = ref('')
 const filterStatus = ref('')
 const filterFromDate = ref('')
 const filterToDate = ref('')
-const approvalTarget = ref(null)
+
+// Detail panel state
+const detailTarget = ref(null)
+const detailLoading = ref(false)
 const approvalError = ref('')
 const approving = ref(false)
+const showRejectForm = ref(false)
+const rejectionReason = ref('')
+
 let searchTimer = null
 
 async function apiPost(method, params = {}) {
@@ -276,24 +429,71 @@ function statusClass(status) {
   }
 }
 
-function openApproval(t) {
-  approvalTarget.value = t
+async function openDetail(row) {
+  // Seed with list-row data immediately so the panel opens fast
+  detailTarget.value = { ...row, items: [] }
+  detailLoading.value = true
   approvalError.value = ''
+  showRejectForm.value = false
+  rejectionReason.value = ''
+
+  try {
+    const data = await apiPost(
+      'rhohotel.rhocom_hotel.doctype.bill_transfer.bill_transfer.get_bill_transfer_detail',
+      { docname: row.name }
+    )
+    if (data.message) {
+      detailTarget.value = data.message
+    }
+  } catch {
+    // keep seeded data
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function closePanel() {
+  detailTarget.value = null
+  approvalError.value = ''
+  showRejectForm.value = false
+  rejectionReason.value = ''
 }
 
 async function executeApproval() {
-  if (!approvalTarget.value) return
+  if (!detailTarget.value) return
   approvalError.value = ''
   approving.value = true
   try {
     const data = await apiPost(
       'rhohotel.rhocom_hotel.doctype.bill_transfer.bill_transfer.approve_and_execute_transfer',
-      { docname: approvalTarget.value.name }
+      { docname: detailTarget.value.name }
     )
     if (data.exc) {
       approvalError.value = parseErr(data)
     } else {
-      approvalTarget.value = null
+      closePanel()
+      await loadTransfers()
+    }
+  } catch {
+    approvalError.value = 'Request failed. Please try again.'
+  } finally {
+    approving.value = false
+  }
+}
+
+async function executeRejection() {
+  if (!detailTarget.value) return
+  approvalError.value = ''
+  approving.value = true
+  try {
+    const data = await apiPost(
+      'rhohotel.rhocom_hotel.doctype.bill_transfer.bill_transfer.reject_transfer',
+      { docname: detailTarget.value.name, rejection_reason: rejectionReason.value }
+    )
+    if (data.exc) {
+      approvalError.value = parseErr(data)
+    } else {
+      closePanel()
       await loadTransfers()
     }
   } catch {

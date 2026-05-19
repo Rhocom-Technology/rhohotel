@@ -201,3 +201,60 @@ def approve_and_execute_transfer(docname):
     doc.submit()
 
     return {"name": doc.name, "journal_entry": doc.journal_entry}
+
+
+# ------------------------------------------
+#   GET SINGLE TRANSFER DETAIL (with items)
+# ------------------------------------------
+@frappe.whitelist()
+def get_bill_transfer_detail(docname):
+    """Return a single Bill Transfer with its child items for the approval panel."""
+    doc = frappe.get_doc("Bill Transfer", docname)
+    frappe.has_permission("Bill Transfer", "read", doc=doc, throw=True)
+
+    items = [
+        {
+            "description": row.description,
+            "amount": row.amount,
+            "reference_document": row.reference_document,
+        }
+        for row in (doc.items or [])
+    ]
+
+    return {
+        "name": doc.name,
+        "status": doc.status,
+        "from_guest": doc.from_guest,
+        "from_check_in": doc.from_check_in,
+        "to_guest": doc.to_guest,
+        "to_check_in": doc.to_check_in,
+        "source_invoice": doc.source_invoice,
+        "total_amount": doc.total_amount,
+        "reason": doc.reason,
+        "authorized_by": doc.authorized_by,
+        "journal_entry": doc.journal_entry,
+        "creation": str(doc.creation),
+        "modified": str(doc.modified),
+        "items": items,
+    }
+
+
+# ------------------------------------------
+#   REJECT TRANSFER
+# ------------------------------------------
+@frappe.whitelist()
+def reject_transfer(docname, rejection_reason=""):
+    """Cancel/reject a Pending Approval or Draft Bill Transfer."""
+    doc = frappe.get_doc("Bill Transfer", docname)
+
+    if doc.status not in ("Pending Approval", "Draft"):
+        frappe.throw(f"Bill Transfer {docname} cannot be rejected in its current state ({doc.status}).")
+
+    doc.status = "Cancelled"
+    doc.authorized_by = frappe.session.user
+    if rejection_reason:
+        doc.reason = (doc.reason or "") + f"\n[Rejected by {frappe.session.user}: {rejection_reason}]"
+    doc.flags.ignore_permissions = True
+    doc.save()
+
+    return {"name": doc.name, "status": doc.status}

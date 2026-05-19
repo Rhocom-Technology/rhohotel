@@ -202,15 +202,20 @@
                 </td>
               </tr>
               <tr v-for="inv in invoices" :key="inv.invoice"
-                class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer"
+                class="border-b border-gray-50 last:border-0 transition-colors cursor-pointer"
+                :class="inv.is_return ? 'bg-teal-50 hover:bg-teal-100' : 'hover:bg-gray-50'"
                 @click="openInvoiceDetail(inv)">
                 <td class="px-4 py-3 text-xs text-blue-600 font-medium underline-offset-2 hover:underline">{{ inv.invoice || '—' }}</td>
-                <td class="px-3 py-3 text-xs text-gray-500">{{ formatInvoiceType(inv.invoice_type) }}</td>
+                <td class="px-3 py-3 text-xs" :class="inv.is_return ? 'text-teal-600 font-medium' : 'text-gray-500'">
+                  {{ inv.is_return ? 'Credit Note' : formatInvoiceType(inv.invoice_type) }}
+                </td>
                 <td class="px-3 py-3 text-xs text-gray-500">{{ formatDate(inv.posting_date || checkIn.check_in_datetime) }}</td>
-                <td class="px-4 py-3 text-xs text-right text-gray-700">{{ formatCurrency(inv.amount) }}</td>
+                <td class="px-4 py-3 text-xs text-right" :class="inv.is_return ? 'text-teal-600 font-semibold' : 'text-gray-700'">
+                  {{ inv.is_return ? '− ' + formatCurrency(inv.amount) : formatCurrency(inv.amount) }}
+                </td>
                 <td class="px-4 py-3 text-xs text-right font-semibold"
-                  :class="(inv.outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-gray-400'">
-                  {{ formatCurrency(inv.outstanding_amount) }}
+                  :class="inv.is_return ? 'text-teal-400' : (inv.outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-gray-400'">
+                  {{ inv.is_return ? (inv.outstanding_amount > 0 ? formatCurrency(inv.outstanding_amount) : '—') : formatCurrency(inv.outstanding_amount) }}
                 </td>
               </tr>
               <tr v-if="!loading && invoices.length === 0">
@@ -526,19 +531,22 @@ async function onActionDone() {
   await loadCheckIn(true)
 }
 
-// Gross positive charges (room, restaurant, extensions)
+// Gross positive charges (room, restaurant, extensions) — exclude credit notes which
+// have positive grand_total in this Frappe version (is_return handles accounting reversal)
 const chargesTotal = computed(() =>
-  invoices.value.filter(inv => (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
+  invoices.value.filter(inv => !inv.is_return && (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
 )
-// Credit notes returned as absolute value
+// Credit notes — is_return=1 invoices with positive amounts
 const creditsTotal = computed(() =>
-  invoices.value.filter(inv => (inv.amount || 0) < 0).reduce((s, inv) => s + Math.abs(inv.amount), 0)
+  invoices.value.filter(inv => inv.is_return).reduce((s, inv) => s + Math.abs(inv.amount || 0), 0)
 )
-// Net for invoice table footer (can be negative)
+// Net for invoice table footer
 const invoiceTotal = computed(() => chargesTotal.value - creditsTotal.value)
-// Outstanding the guest still owes (positive rows only)
+// Outstanding the guest still owes — only regular (non-return) invoices
+// If Frappe reconciled the credit note via return_against, the original invoice's
+// outstanding_amount is already reduced; credit note outstanding = 0.
 const outstandingDue = computed(() =>
-  invoices.value.filter(inv => (inv.outstanding_amount || 0) > 0).reduce((s, inv) => s + inv.outstanding_amount, 0)
+  invoices.value.filter(inv => !inv.is_return && (inv.outstanding_amount || 0) > 0).reduce((s, inv) => s + inv.outstanding_amount, 0)
 )
 // Credit balance the hotel owes back (negative outstanding rows, as absolute value)
 const creditBalance = computed(() =>

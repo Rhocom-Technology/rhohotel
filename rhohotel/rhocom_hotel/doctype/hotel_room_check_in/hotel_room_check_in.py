@@ -422,9 +422,11 @@ def make_check_out(source_name, target_doc=None):
 
 
 @frappe.whitelist()
-def apply_discount(check_in_name, discount_amount, reason=None):
+def apply_discount(check_in_name, discount_amount, reason=None, source_invoice=None):
 	"""
 	Apply a discount to the Hotel Room Check In document by creating a credit note.
+	If source_invoice is provided the credit note is linked via return_against so
+	Frappe automatically reconciles and reduces the original invoice's outstanding.
 	"""
 	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in_name)
 
@@ -434,24 +436,52 @@ def apply_discount(check_in_name, discount_amount, reason=None):
 
 	room_doc = frappe.get_doc("Hotel Room", check_in_doc.room_number)
 
-	# Create credit note (Sales Invoice with is_return = 1)
-	credit_note = frappe.get_doc(
-		{
-			"doctype": "Sales Invoice",
-			"customer": customer,
-			"is_return": 1,
-			"update_stock": 0,
-			"custom_hotel_room_check_in": check_in_doc.name,
-			"items": [{"item_code": room_doc.erpnext_item, "qty": -1, "rate": discount_amount}],
-			"posting_date": frappe.utils.today(),
-			"remarks": reason or f"Discount applied to Check In {check_in_doc.name}",
-		}
-	)
+	credit_note_data = {
+		"doctype": "Sales Invoice",
+		"customer": customer,
+		"is_return": 1,
+		"update_stock": 0,
+		"custom_hotel_room_check_in": check_in_doc.name,
+		"items": [{"item_code": room_doc.erpnext_item, "qty": -1, "rate": discount_amount}],
+		"posting_date": frappe.utils.today(),
+		"remarks": reason or f"Discount applied to Check In {check_in_doc.name}",
+	}
+
+	if source_invoice:
+		credit_note_data["return_against"] = source_invoice
+		# Copy the receivable account and company from the original invoice so that
+		# Frappe creates GL entries with against_voucher = source_invoice, which
+		# triggers the automatic outstanding_amount reduction on the original invoice.
+		src_fields = frappe.db.get_value(
+			"Sales Invoice", source_invoice, ["debit_to", "company"], as_dict=1
+		)
+		if src_fields:
+			if src_fields.debit_to:
+				credit_note_data["debit_to"] = src_fields.debit_to
+			if src_fields.company:
+				credit_note_data["company"] = src_fields.company
+
+	credit_note = frappe.get_doc(credit_note_data)
 	credit_note.flags.ignore_permissions = True
 	credit_note.flags.ignore_mandatory = True
 	credit_note.flags.ignore_links = True
 	credit_note.insert()
 	credit_note.submit()
+
+	# Explicitly reduce the source invoice's outstanding_amount as a guaranteed
+	# fallback in case Frappe's automatic GL reconciliation has not yet updated
+	# the cached field (e.g. due to deferred GL processing).
+	if source_invoice:
+		current_outstanding = flt(
+			frappe.db.get_value("Sales Invoice", source_invoice, "outstanding_amount") or 0
+		)
+		frappe.db.set_value(
+			"Sales Invoice",
+			source_invoice,
+			"outstanding_amount",
+			max(0.0, current_outstanding - flt(discount_amount)),
+			update_modified=False,
+		)
 
 	return {"status": "success", "credit_note": credit_note.name}
 

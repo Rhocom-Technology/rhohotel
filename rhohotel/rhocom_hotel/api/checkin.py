@@ -68,7 +68,7 @@ def get_checkin_detail(name):
     invoices = []
     try:
         invoices = frappe.db.sql("""
-            SELECT name AS invoice, grand_total AS amount, outstanding_amount,
+            SELECT name AS invoice, grand_total AS amount, outstanding_amount, is_return,
                    posting_date, status, 'Sales Invoice' AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
@@ -510,7 +510,9 @@ def create_checkin(
             if doc.housekeeping_notes else pref_note
         )
     doc.id_type = id_type or ""
-    doc.contact_number = contact_number or ""
+    # Use the passed contact_number; fall back to the guest's phone_number (not contact_number
+    # which is the "Contact Person Number" — a different person's number).
+    doc.contact_number = contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
     # Skip room availability overlap check for direct front desk check-in
     doc.flags.skip_availability_check = True
 
@@ -632,7 +634,7 @@ def get_checkout_detail(check_in_name):
     invoices = []
     try:
         si_rows = frappe.db.sql("""
-            SELECT name AS invoice_id, grand_total AS amount, outstanding_amount,
+            SELECT name AS invoice_id, grand_total AS amount, outstanding_amount, is_return,
                    posting_date, status, 'Sales Invoice' AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
@@ -644,7 +646,7 @@ def get_checkout_detail(check_in_name):
 
     try:
         pos_rows = frappe.db.sql("""
-            SELECT name AS invoice_id, grand_total AS amount, outstanding_amount,
+            SELECT name AS invoice_id, grand_total AS amount, outstanding_amount, 0 AS is_return,
                    posting_date, status, 'POS Invoice' AS invoice_type
             FROM `tabPOS Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
@@ -666,8 +668,10 @@ def get_checkout_detail(check_in_name):
     except Exception:
         pass
 
-    total_invoice = sum(flt(inv.get("amount")) for inv in invoices)
-    total_outstanding = sum(flt(inv.get("outstanding_amount")) for inv in invoices)
+    # Exclude credit notes (is_return=1) from charge/outstanding totals
+    charge_invoices = [inv for inv in invoices if not inv.get("is_return")]
+    total_invoice = sum(flt(inv.get("amount")) for inv in charge_invoices)
+    total_outstanding = sum(flt(inv.get("outstanding_amount")) for inv in charge_invoices)
     total_paid = total_invoice - total_outstanding
 
     # If no invoices, fall back to doc fields
