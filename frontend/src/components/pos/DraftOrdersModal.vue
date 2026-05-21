@@ -4,7 +4,7 @@
       class="modal-enter fixed inset-0 z-50 flex items-center justify-center p-6"
       style="background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);"
       @click.self="$emit('update:modelValue', false)">
-      <div class="modal-panel bg-white rounded-2xl w-full shadow-2xl overflow-hidden flex flex-col" style="max-width:1000px;max-height:92vh;">
+      <div class="modal-panel bg-white rounded-2xl w-full shadow-2xl overflow-hidden flex flex-col" style="max-width:1100px;max-height:92vh;">
 
         <!-- Header -->
         <div class="px-8 pt-8 pb-6 border-b border-gray-100">
@@ -21,6 +21,11 @@
             <button @click="deleteDraft" :disabled="!selectedDraft || deleting"
               class="btn-hover px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">
               {{ deleting ? 'Deleting…' : 'Delete Draft' }}
+            </button>
+            <button @click="refreshAll" :disabled="refreshing"
+              class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+              <svg class="w-3 h-3" :class="refreshing ? 'animate-spin' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              {{ refreshing ? 'Refreshing…' : 'Refresh' }}
             </button>
             <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Close Page</button>
             <button @click="printDraftBill" :disabled="!selectedDraft"
@@ -41,9 +46,16 @@
                 <p class="text-xs text-gray-500 mb-1.5">Search draft</p>
                 <div class="relative">
                   <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                  <input v-model="draftSearch" type="text" placeholder="Invoice no., room, table, cashier..."
+                  <input v-model="draftSearch" type="text" placeholder="Invoice no., customer, cashier..."
                     class="w-full pl-8 pr-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white focus:ring-2 focus:ring-blue-500" />
                 </div>
+              </div>
+              <div class="min-w-36">
+                <p class="text-xs text-gray-500 mb-1.5">Customer</p>
+                <select v-model="draftFilterCustomer" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
+                  <option value="">All Customers</option>
+                  <option v-for="c in availableCustomers" :key="c">{{ c }}</option>
+                </select>
               </div>
               <div class="min-w-36">
                 <p class="text-xs text-gray-500 mb-1.5">Service Point</p>
@@ -59,14 +71,14 @@
                   <option v-for="c in availableCashiers" :key="c">{{ c }}</option>
                 </select>
               </div>
-              <button @click="draftSearch='';draftFilterPoint='';draftFilterCashier='';draftPage=1"
+              <button @click="draftSearch='';draftFilterCustomer='';draftFilterPoint='';draftFilterCashier='';draftPage=1"
                 class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Reset</button>
               <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create New Draft</button>
             </div>
           </div>
 
           <!-- Stats -->
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+          <div class="grid grid-cols-2 gap-3" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));">
             <div v-for="s in draftStats" :key="s.label" class="bg-white rounded-xl border border-gray-200 px-6 py-5">
               <p class="text-xs text-gray-400 mb-2">{{ s.label }}</p>
               <p class="text-2xl font-bold text-gray-900">{{ s.value }}</p>
@@ -74,21 +86,23 @@
           </div>
 
           <!-- List + selected -->
-          <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;">
+          <div class="flex flex-col gap-4" style="display:grid;grid-template-columns:1fr;gap:16px;">
             <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h4 class="text-xs font-bold text-gray-900">Saved Draft Orders</h4>
                 <p class="text-xs text-gray-400">Showing {{ draftPageStart + 1 }}–{{ draftPageEnd }} of {{ filteredDrafts.length }} drafts</p>
               </div>
-              <table class="w-full">
+              <div class="overflow-x-auto">
+              <table class="w-full" style="min-width:640px;">
                 <thead>
                   <tr class="border-b border-gray-100 bg-gray-50">
-                    <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Invoice No.</th>
-                    <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Service Point</th>
-                    <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Cashier</th>
-                    <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Items</th>
-                    <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Amount</th>
-                    <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Age</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Invoice No.</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Customer</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Service Point</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Cashier</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Items</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Amount</th>
+                    <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Age</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -96,15 +110,17 @@
                     @click="selectedDraft = d"
                     class="table-row cursor-pointer border-b border-gray-50 last:border-0"
                     :class="selectedDraft?.id === d.id ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'">
-                    <td class="px-6 py-4 text-xs font-semibold text-blue-600">{{ d.invoice }}</td>
-                    <td class="px-4 py-4 text-xs text-gray-600">{{ d.point }}</td>
-                    <td class="px-4 py-4 text-xs text-gray-600">{{ d.cashier }}</td>
-                    <td class="px-4 py-4 text-xs text-gray-700">{{ d.items }}</td>
-                    <td class="px-4 py-4 text-xs font-semibold text-gray-900">₦{{ d.amount.toLocaleString() }}</td>
-                    <td class="px-4 py-4 text-xs font-semibold" :class="d.ageMinutes > 60 ? 'text-orange-500' : 'text-amber-400'">{{ d.age }}</td>
+                    <td class="px-4 py-3 text-xs font-semibold text-blue-600 whitespace-nowrap">{{ d.invoice }}</td>
+                    <td class="px-3 py-3 text-xs text-gray-600 max-w-[140px] truncate">{{ d.customer }}</td>
+                    <td class="px-3 py-3 text-xs text-gray-600 max-w-[120px] truncate">{{ d.point }}</td>
+                    <td class="px-3 py-3 text-xs text-gray-600 max-w-[120px] truncate">{{ d.cashier }}</td>
+                    <td class="px-3 py-3 text-xs text-gray-700">{{ d.items }}</td>
+                    <td class="px-3 py-3 text-xs font-semibold text-gray-900 whitespace-nowrap">₦{{ d.amount.toLocaleString() }}</td>
+                    <td class="px-3 py-3 text-xs font-semibold whitespace-nowrap" :class="d.ageMinutes > 60 ? 'text-orange-500' : 'text-amber-400'">{{ d.age }}</td>
                   </tr>
                 </tbody>
               </table>
+              </div>
               <!-- Pagination -->
               <div v-if="draftTotalPages > 1" class="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50">
                 <p class="text-xs text-gray-400">Page {{ draftPage }} of {{ draftTotalPages }}</p>
@@ -121,28 +137,28 @@
             </div>
 
             <div v-if="selectedDraft" class="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-              <div class="px-6 py-4 border-b border-gray-200 bg-white">
-                <h4 class="text-xs font-bold text-gray-900">Selected Draft</h4>
+              <div class="px-6 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
+                <h4 class="text-xs font-bold text-gray-900">Selected Draft — {{ selectedDraft.invoice }}</h4>
+                <button @click="selectedDraft = null" class="text-gray-400 hover:text-gray-600 text-sm leading-none">✕</button>
               </div>
-              <div class="p-6 space-y-3 text-xs">
-                <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Invoice No.</span><span class="font-bold text-gray-900">{{ selectedDraft.invoice }}</span></div>
-                <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Service Point</span><span class="font-semibold text-gray-900">{{ selectedDraft.detailPoint }}</span></div>
-                <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Cashier</span><span class="font-semibold text-gray-900">{{ selectedDraft.cashier }}</span></div>
-                <div class="flex justify-between py-1.5 border-b border-gray-100"><span class="text-gray-400">Saved At</span><span class="font-semibold text-gray-900">{{ selectedDraft.savedAt }}</span></div>
-                <div class="flex justify-between py-1.5"><span class="text-gray-400">Total Value</span><span class="font-bold text-blue-600">₦{{ selectedDraft.amount.toLocaleString() }}</span></div>
-              </div>
-              <div class="mx-6 mb-5 bg-white rounded-xl border border-gray-200 p-4">
-                <p class="text-xs font-bold text-gray-900 mb-3">Draft Items</p>
-                <div v-for="item in selectedDraft.draftItems" :key="item.name"
-                  class="flex justify-between text-xs py-2 border-b border-gray-50 last:border-0">
-                  <span class="text-gray-600">{{ item.name }}</span>
-                  <span class="font-semibold text-gray-900">× {{ item.qty }}</span>
+              <div class="p-4 grid gap-4" style="grid-template-columns:1fr 1fr;">
+                <div class="space-y-2 text-xs">
+                  <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Customer</span><span class="font-semibold text-gray-900">{{ selectedDraft.customer }}</span></div>
+                  <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Service Point</span><span class="font-semibold text-gray-900">{{ selectedDraft.detailPoint }}</span></div>
+                  <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Cashier</span><span class="font-semibold text-gray-900">{{ selectedDraft.cashier }}</span></div>
+                  <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Saved At</span><span class="font-semibold text-gray-900">{{ selectedDraft.savedAt }}</span></div>
+                  <div class="flex justify-between py-1"><span class="text-gray-400">Total Value</span><span class="font-bold text-blue-600">₦{{ selectedDraft.amount.toLocaleString() }}</span></div>
                 </div>
-              </div>
-              <div class="px-6 pb-6">
-                <p class="text-xs font-bold text-gray-900 mb-2">Draft Note</p>
-                <div class="bg-white rounded-xl border border-gray-200 p-4 text-xs text-gray-500 leading-relaxed min-h-12">
-                  {{ selectedDraft.note || 'No note added.' }}
+                <div>
+                  <p class="text-xs font-bold text-gray-900 mb-2">Draft Items</p>
+                  <div class="bg-white rounded-xl border border-gray-200 p-3 max-h-36 overflow-y-auto">
+                    <div v-for="item in selectedDraft.draftItems" :key="item.name"
+                      class="flex justify-between text-xs py-1.5 border-b border-gray-50 last:border-0">
+                      <span class="text-gray-600">{{ item.name }}</span>
+                      <span class="font-semibold text-gray-900">× {{ item.qty }}</span>
+                    </div>
+                  </div>
+                  <p v-if="selectedDraft.note" class="text-xs text-gray-400 mt-2 italic">{{ selectedDraft.note }}</p>
                 </div>
               </div>
             </div>
@@ -163,6 +179,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'resume'])
 
 const draftSearch = ref('')
+const draftFilterCustomer = ref('')
 const draftFilterPoint = ref('')
 const draftFilterCashier = ref('')
 const draftPage = ref(1)
@@ -171,6 +188,7 @@ const selectedDraft = ref(null)
 
 const resuming = ref(false)
 const deleting = ref(false)
+const refreshing = ref(false)
 const actionError = ref('')
 
 // ── API: Draft Orders ──────────────────────────────────────────────────────
@@ -184,8 +202,19 @@ const statsResource = createResource({
   auto: true,
 })
 
+// Reload data every time the modal is opened
+watch(() => props.modelValue, (open) => {
+  if (open) refreshAll()
+})
+
+function refreshAll() {
+  refreshing.value = true
+  Promise.all([draftsResource.reload(), statsResource.reload()])
+    .finally(() => { refreshing.value = false })
+}
+
 let searchTimer = null
-watch([draftSearch, draftFilterPoint, draftFilterCashier], () => {
+watch([draftSearch, draftFilterCustomer, draftFilterPoint, draftFilterCashier], () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     draftsResource.params = {
@@ -201,14 +230,15 @@ const allDrafts = computed(() => {
   return (draftsResource.data || []).map(d => ({
     id: d.invoice,
     invoice: d.invoice,
-    point: d.service_point || d.pos_profile || d.customer || '—',
+    customer: d.customer || '—',
+    point: d.service_point || d.pos_profile || '—',
     cashier: d.cashier,
     items: d.item_count || 0,
     amount: Number(d.amount) || 0,
     age: d.age || '0m',
     ageMinutes: d.age_minutes || 0,
     savedAt: d.posting_date || '',
-    detailPoint: d.service_point || d.pos_profile || d.customer || '—',
+    detailPoint: d.service_point || d.pos_profile || '—',
     draftItems: d.items || [],
     note: d.note || '',
   }))
@@ -220,17 +250,20 @@ const filteredDrafts = computed(() => {
     const q = draftSearch.value.toLowerCase()
     data = data.filter(d =>
       d.invoice.toLowerCase().includes(q) ||
+      d.customer.toLowerCase().includes(q) ||
       d.point.toLowerCase().includes(q) ||
       d.cashier.toLowerCase().includes(q)
     )
   }
+  if (draftFilterCustomer.value) data = data.filter(d => d.customer === draftFilterCustomer.value)
   if (draftFilterPoint.value) data = data.filter(d => d.point === draftFilterPoint.value)
   if (draftFilterCashier.value) data = data.filter(d => d.cashier === draftFilterCashier.value)
   return data
 })
 
 // Dynamic filter options derived from actual data
-const availableServicePoints = computed(() => [...new Set(allDrafts.value.map(d => d.point).filter(Boolean))])
+const availableCustomers = computed(() => [...new Set(allDrafts.value.map(d => d.customer).filter(p => p && p !== '—'))])
+const availableServicePoints = computed(() => [...new Set(allDrafts.value.map(d => d.point).filter(p => p && p !== '—'))])
 const availableCashiers = computed(() => [...new Set(allDrafts.value.map(d => d.cashier).filter(Boolean))])
 
 const draftStats = computed(() => {

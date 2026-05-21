@@ -1,7 +1,19 @@
+import re
 import frappe
 from frappe import _
 from frappe.utils import flt, cstr, now_datetime, nowdate, add_days, getdate
 from frappe.utils.nestedset import get_descendants_of
+
+
+_TABLE_NAME_RE = re.compile(r'^(Table|Bar|Pool)\s*\S', re.IGNORECASE)
+
+
+def _extract_table_display_name(customer):
+    """If customer looks like a table/bar/pool name, return it as a display name.
+    The caller should use Walk-In as the actual ERPNext customer and override
+    pi.customer_name = the returned value AFTER set_missing_values()."""
+    name = cstr(customer).strip()
+    return name if (name and _TABLE_NAME_RE.match(name)) else None
 
 
 def _get_user_pos_profile(user=None):
@@ -502,7 +514,8 @@ def get_occupied_rooms_for_pos(search=None):
 
 @frappe.whitelist()
 def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
-                        service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0):
+                        service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0,
+                        existing_draft=None):
     """Create and submit a POS Invoice for non-room-posting settlements."""
     import json
 
@@ -510,6 +523,16 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         items = json.loads(items) if isinstance(items, str) else items
         if not items:
             frappe.throw(_("No items in cart"))
+
+        # Delete the resumed draft now that a proper invoice is being created
+        if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+            try:
+                _draft = frappe.get_doc("POS Invoice", existing_draft)
+                if _draft.docstatus == 0:
+                    _draft.flags.ignore_permissions = True
+                    _draft.delete()
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Failed to delete POS draft on invoice creation")
 
         company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
@@ -533,6 +556,11 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
             frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
         if mode_of_payment not in allowed_modes:
             mode_of_payment = allowed_modes[0]
+
+        # Preserve table/bar/pool name as customer_name display field
+        table_display_name = _extract_table_display_name(customer)
+        if table_display_name:
+            customer = None  # force walk-in resolution
 
         customer = _resolve_pos_customer(customer, profile_doc=profile_doc, allow_guest_fallback=True)
 
@@ -569,6 +597,12 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         pi.set_missing_values()
         pi.insert()
         pi.submit()
+        # Override customer_name AFTER submit: ERPNext's validate() inside insert/submit
+        # calls set_missing_values() again which resets customer_name to the linked
+        # Customer's name (e.g. "Walk In"). frappe.db.set_value bypasses validation.
+        if table_display_name:
+            frappe.db.set_value("POS Invoice", pi.name, "customer_name",
+                                table_display_name, update_modified=False)
         frappe.db.commit()
     except Exception as e:
         safe_items = []
@@ -606,7 +640,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None):
+def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None, existing_draft=None):
     """Create a Sales Invoice linked to a Hotel Room Check In folio, then immediately
     create and consolidate a POS Invoice against the open shift so the transaction
     appears in shift reports without waiting for the end-of-shift consolidation job."""
@@ -615,6 +649,16 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
     items = json.loads(items) if isinstance(items, str) else items
     if not items:
         frappe.throw(_("No items in cart"))
+
+    # Delete the resumed draft now that the bill is being posted to room
+    if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+        try:
+            _draft = frappe.get_doc("POS Invoice", existing_draft)
+            if _draft.docstatus == 0:
+                _draft.flags.ignore_permissions = True
+                _draft.delete()
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Failed to delete POS draft on room posting")
 
     if not frappe.db.exists("Hotel Room Check In", check_in):
         frappe.throw(_("Check-in {0} not found").format(check_in))
@@ -685,6 +729,8 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
     if disc > 0:
         si.discount_amount = disc
         si.apply_discount_on = "Grand Total"
+
+    si.custom_invoice_source = "Restaurant"
 
     try:
         si.flags.ignore_permissions = True
@@ -782,7 +828,50 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
     if not items:
         frappe.throw(_("No items in cart"))
 
-    # When re-holding a resumed order, delete the previous draft to avoid duplicates
+    # Preserve table/bar/pool name as customer_name display field (needed early for merge logic)
+    table_display_name = _extract_table_display_name(customer)
+
+    # Auto-detect and merge an existing draft for the same table when the user holds a
+    # new cart without explicitly resuming the old one — prevents duplicate table drafts.
+    items_to_save = list(items)
+    if table_display_name and not existing_draft:
+        found_draft = frappe.db.get_value("POS Invoice", {
+            "customer_name": table_display_name,
+            "docstatus": 0,
+        }, "name")
+        if found_draft:
+            try:
+                old_pi = frappe.get_doc("POS Invoice", found_draft)
+                if old_pi.docstatus == 0:
+                    # Merge: sum qty for same item_code, keep existing price
+                    merged = {}
+                    for row in old_pi.items:
+                        merged[row.item_code] = {
+                            "item_code": row.item_code,
+                            "qty": flt(row.qty),
+                            "price": flt(row.rate),
+                        }
+                    for it in items:
+                        code = it.get("item_code") or it.get("id")
+                        if code in merged:
+                            merged[code]["qty"] += flt(it.get("qty", 1))
+                        else:
+                            merged[code] = {
+                                "item_code": code,
+                                "qty": flt(it.get("qty", 1)),
+                                "price": flt(it.get("price", 0)),
+                            }
+                    items_to_save = list(merged.values())
+                    # Carry over kitchen note / discount from old draft if new order omits them
+                    if not kitchen_note and old_pi.remarks:
+                        kitchen_note = old_pi.remarks
+                    if not flt(discount_amount) and flt(old_pi.discount_amount):
+                        discount_amount = flt(old_pi.discount_amount)
+                    existing_draft = found_draft  # will be deleted below
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Failed to auto-detect table draft for merge")
+
+    # Delete previous draft (explicitly resumed OR auto-detected table draft)
     if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
         try:
             old_pi = frappe.get_doc("POS Invoice", existing_draft)
@@ -800,6 +889,10 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
         frappe.throw(_("No POS Profile is mapped to your user."))
 
     profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+
+    if table_display_name:
+        customer = None  # force walk-in resolution
+
     customer = _resolve_pos_customer(customer, profile_doc=profile_doc, allow_guest_fallback=True)
     if not customer:
         frappe.throw(_("Set a valid default customer on POS Profile {0}. Optionally configure POS Settings.customer if available in your ERPNext version.").format(pos_profile))
@@ -812,7 +905,7 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
     if kitchen_note:
         pi.remarks = kitchen_note
 
-    for it in items:
+    for it in items_to_save:
         pi.append("items", {
             "item_code": it.get("item_code") or it.get("id"),
             "qty": flt(it.get("qty", 1)),
@@ -820,7 +913,7 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
         })
 
     # Keep one payment row to satisfy POS validations while still saving as draft.
-    _draft_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items))
+    _draft_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items_to_save))
     pi.discount_amount = flt(discount_amount)
     pi.append("payments", {
         "mode_of_payment": "Cash",
@@ -831,6 +924,12 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
         pi.flags.ignore_permissions = True
         pi.set_missing_values()
         pi.insert()
+        # Override customer_name AFTER insert: ERPNext's validate() inside insert
+        # calls set_missing_values() again which resets customer_name to the linked
+        # Customer's name (e.g. "Walk In"). frappe.db.set_value bypasses validation.
+        if table_display_name:
+            frappe.db.set_value("POS Invoice", pi.name, "customer_name",
+                                table_display_name, update_modified=False)
         frappe.db.commit()
     except Exception:
         frappe.log_error(frappe.get_traceback(), "POS draft invoice creation failed")
@@ -867,13 +966,13 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
     drafts = frappe.db.sql(f"""
         SELECT
             pi.name AS invoice,
-            pi.customer,
+            COALESCE(NULLIF(pi.customer_name, ''), pi.customer) AS customer,
             pi.pos_profile,
             pi.grand_total AS amount,
             pi.posting_date,
             pi.owner AS cashier,
             pi.remarks AS note,
-            TIMESTAMPDIFF(MINUTE, pi.creation, NOW()) AS age_minutes,
+            TIMESTAMPDIFF(MINUTE, pi.creation, UTC_TIMESTAMP()) AS age_minutes,
             COUNT(pit.name) AS item_count
         FROM `tabPOS Invoice` pi
         LEFT JOIN `tabPOS Invoice Item` pit ON pit.parent = pi.name
@@ -890,7 +989,7 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
             FROM `tabPOS Invoice Item`
             WHERE parent = %s
         """, d["invoice"], as_dict=1)
-        age = int(d.get("age_minutes") or 0)
+        age = max(0, int(d.get("age_minutes") or 0))
         h, m = divmod(age, 60)
         d["age"] = f"{h}h {m}m" if h else f"{m}m"
         d["service_point"] = d.get("pos_profile") or "—"
@@ -906,7 +1005,7 @@ def get_draft_pos_stats():
         SELECT COALESCE(SUM(grand_total), 0) FROM `tabPOS Invoice` WHERE docstatus = 0
     """)[0][0] or 0
     oldest = frappe.db.sql("""
-        SELECT TIMESTAMPDIFF(MINUTE, MIN(creation), NOW())
+        SELECT TIMESTAMPDIFF(MINUTE, MIN(creation), UTC_TIMESTAMP())
         FROM `tabPOS Invoice` WHERE docstatus = 0
     """)[0][0] or 0
 
@@ -1203,6 +1302,13 @@ def get_pos_shift_stats(pos_opening_entry=None):
         "gross_sales": flt(gross),
         "net_collections": flt(gross),
         "open_drafts": int(open_drafts),
+        "open_tables": int(frappe.db.sql("""
+            SELECT COUNT(*) FROM `tabPOS Invoice`
+            WHERE docstatus = 0
+              AND (customer_name LIKE 'Table %%'
+                   OR customer_name LIKE 'Bar %%'
+                   OR customer_name LIKE 'Pool%%')
+        """)[0][0] or 0),
         "difference": 0,
         "cashier": frappe.db.get_value("User", entry_doc.user, "full_name") or entry_doc.user,
         "pos_profile": entry_doc.pos_profile,
@@ -1219,6 +1325,9 @@ def get_pos_shift_stats(pos_opening_entry=None):
 def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None):
     """Create a POS Closing Entry to close the active shift."""
     import json
+    from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import (
+        make_closing_entry_from_opening,
+    )
 
     tender_rows = json.loads(tender_rows) if isinstance(tender_rows, str) else (tender_rows or [])
 
@@ -1227,38 +1336,60 @@ def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None):
 
     entry_doc = frappe.get_doc("POS Opening Entry", pos_opening_entry)
 
-    closing = frappe.new_doc("POS Closing Entry")
-    closing.pos_opening_entry = pos_opening_entry
-    closing.pos_profile = entry_doc.pos_profile
-    closing.user = entry_doc.user
-    closing.company = entry_doc.company
-    closing.period_start_date = entry_doc.period_start_date
-    closing.period_end_date = now_datetime()
-    closing.posting_date = nowdate()
-    if closing_note:
-        closing.notes = closing_note
-
-    # Payment reconciliation
-    for row in tender_rows:
-        counted = flt(row.get("counted", row.get("system_amount", 0)))
-        system = flt(row.get("system_amount", 0))
-        closing.append("payment_reconciliation", {
-            "mode_of_payment": row.get("payment_type"),
-            "opening_amount": system,
-            "expected_amount": system,
-            "closing_amount": counted,
-            "difference": counted - system,
-        })
-
     try:
+        # Use ERPNext's official helper to build the closing entry doc.
+        # It calls get_pos_invoices() internally to populate pos_transactions,
+        # payment_reconciliation and taxes.
+        closing = make_closing_entry_from_opening(entry_doc)
+
         closing.flags.ignore_permissions = True
-        closing.set_missing_values()
+        closing.flags.ignore_mandatory = True
+
+        # Apply counted (physical cash) amounts from the cashier's tender input.
+        # Merge into auto-populated rows first, then add any remaining rows.
+        if tender_rows:
+            tender_map = {
+                r.get("payment_type"): flt(r.get("counted", r.get("system_amount", 0)))
+                for r in tender_rows if r.get("payment_type")
+            }
+            existing_mops = set()
+            for row in (closing.get("payment_reconciliation") or []):
+                existing_mops.add(row.mode_of_payment)
+                if row.mode_of_payment in tender_map:
+                    row.closing_amount = tender_map[row.mode_of_payment]
+                    row.difference = row.closing_amount - flt(row.expected_amount or 0)
+
+            # Add rows not already present from auto-population
+            for r in tender_rows:
+                mop = r.get("payment_type")
+                if mop and mop not in existing_mops:
+                    system = flt(r.get("system_amount", 0))
+                    counted = flt(r.get("counted", system))
+                    closing.append("payment_reconciliation", {
+                        "mode_of_payment": mop,
+                        "opening_amount": system,
+                        "expected_amount": system,
+                        "closing_amount": counted,
+                        "difference": counted - system,
+                    })
+
+        # Set closing note in whichever field the installed ERPNext version uses
+        if closing_note:
+            _meta_fields = {f.fieldname for f in frappe.get_meta("POS Closing Entry").fields}
+            if "notes" in _meta_fields:
+                closing.notes = closing_note
+            elif "remarks" in _meta_fields:
+                closing.remarks = closing_note
+
         closing.insert()
         closing.submit()
 
-        # Update the opening entry status
-        frappe.db.set_value("POS Opening Entry", pos_opening_entry, "status", "Closed")
         frappe.db.commit()
+
+    except frappe.ValidationError:
+        # Re-raise as-is so the frontend shows the real ERPNext validation message
+        frappe.log_error(frappe.get_traceback(), "POS Closing Entry ValidationError")
+        raise
     except Exception:
         frappe.log_error(frappe.get_traceback(), "POS Shift close failed")
         frappe.throw(_("Failed to close POS shift. Please check configuration."))
@@ -1365,7 +1496,7 @@ def get_pos_draft_invoice_detail(invoice_name):
 
     return {
         "invoice": pi.name,
-        "customer": pi.customer or "",
+        "customer": pi.customer_name or pi.customer or "",
         "items": items,
         "remarks": pi.remarks or "",
         "discount_amount": flt(pi.discount_amount or 0),
@@ -1399,24 +1530,24 @@ def delete_pos_draft_invoice(invoice_name):
 
 @frappe.whitelist()
 def get_open_pos_tables():
-    """Return open table orders — draft POS Invoices whose customer is a table or bar name."""
+    """Return open table orders — draft POS Invoices whose customer_name is a table or bar name."""
     drafts = frappe.db.sql("""
         SELECT
             pi.name AS invoice,
-            pi.customer,
+            pi.customer_name AS customer,
             pi.grand_total AS bill,
             pi.owner AS cashier,
             pi.remarks AS notes,
-            TIMESTAMPDIFF(MINUTE, pi.creation, NOW()) AS age_minutes,
+            TIMESTAMPDIFF(MINUTE, pi.creation, UTC_TIMESTAMP()) AS age_minutes,
             DATE_FORMAT(pi.creation, '%%h:%%i %%p') AS open_time,
             COUNT(pit.name) AS item_count
         FROM `tabPOS Invoice` pi
         LEFT JOIN `tabPOS Invoice Item` pit ON pit.parent = pi.name
         WHERE pi.docstatus = 0
           AND (
-            pi.customer LIKE 'Table %%'
-            OR pi.customer LIKE 'Bar %%'
-            OR pi.customer LIKE 'Pool%%'
+            pi.customer_name LIKE 'Table %%'
+            OR pi.customer_name LIKE 'Bar %%'
+            OR pi.customer_name LIKE 'Pool%%'
           )
         GROUP BY pi.name
         ORDER BY pi.creation DESC
@@ -1431,7 +1562,7 @@ def get_open_pos_tables():
             FROM `tabPOS Invoice Item`
             WHERE parent = %s
         """, d["invoice"], as_dict=1)
-        age = int(d.get("age_minutes") or 0)
+        age = max(0, int(d.get("age_minutes") or 0))
         h, m = divmod(age, 60)
         customer = d["customer"] or ""
         area = (

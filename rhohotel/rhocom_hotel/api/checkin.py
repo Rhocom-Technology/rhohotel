@@ -69,7 +69,8 @@ def get_checkin_detail(name):
     try:
         invoices = frappe.db.sql("""
             SELECT name AS invoice, grand_total AS amount, outstanding_amount, is_return,
-                   posting_date, status, 'Sales Invoice' AS invoice_type
+                   posting_date, status,
+                   COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice') AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
@@ -512,7 +513,8 @@ def create_checkin(
     doc.id_type = id_type or ""
     # Use the passed contact_number; fall back to the guest's phone_number (not contact_number
     # which is the "Contact Person Number" — a different person's number).
-    doc.contact_number = contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
+    # doc.contact_number = contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
+    doc.contact_number =  frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
     # Skip room availability overlap check for direct front desk check-in
     doc.flags.skip_availability_check = True
 
@@ -635,7 +637,8 @@ def get_checkout_detail(check_in_name):
     try:
         si_rows = frappe.db.sql("""
             SELECT name AS invoice_id, grand_total AS amount, outstanding_amount, is_return,
-                   posting_date, status, 'Sales Invoice' AS invoice_type
+                   posting_date, status,
+                   COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice') AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC

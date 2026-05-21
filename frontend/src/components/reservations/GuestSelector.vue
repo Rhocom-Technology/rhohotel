@@ -4,7 +4,7 @@
     <!-- Display row -->
     <div
       class="flex items-center gap-1 group cursor-pointer"
-      @click="open = !open"
+      @click="toggleOpen"
     >
       <span class="text-xs text-gray-700 truncate max-w-[140px]">{{ displayValue || '—' }}</span>
       <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -12,12 +12,13 @@
       </svg>
     </div>
 
-    <!-- Dropdown panel -->
-    <div
-      v-if="open"
-      class="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-xl"
-      style="min-width:280px;"
-    >
+    <!-- Dropdown panel – teleported to body to escape overflow:hidden/auto containers -->
+    <Teleport to="body">
+      <div
+        v-if="open"
+        class="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl"
+        :style="dropdownStyle"
+      >
       <!-- Search existing -->
       <div class="p-2 border-b border-gray-100">
         <input
@@ -73,6 +74,7 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -90,6 +92,22 @@ const emit = defineEmits(['update:modelValue', 'update:guestId', 'selected'])
 const root = ref(null)
 const searchInput = ref(null)
 const open = ref(false)
+const dropdownStyle = ref({})
+
+function updateDropdownPosition() {
+  if (!root.value) return
+  const rect = root.value.getBoundingClientRect()
+  dropdownStyle.value = {
+    top: `${rect.bottom + window.scrollY + 4}px`,
+    left: `${rect.left + window.scrollX}px`,
+    minWidth: '280px',
+  }
+}
+
+function toggleOpen() {
+  if (!open.value) updateDropdownPosition()
+  open.value = !open.value
+}
 const query = ref('')
 const results = ref([])
 const searching = ref(false)
