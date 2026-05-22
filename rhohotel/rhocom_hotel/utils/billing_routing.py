@@ -262,7 +262,7 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
         nights:           Optional stay length for min/max stay checks
 
     Returns:
-        list[dict] with rate_code, rate_type, market_segment, meal_plan, description
+        list[dict] with rate_code, market_segment, meal_plan, description
     """
     from frappe.utils import getdate, nowdate
 
@@ -294,7 +294,7 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
     rates = frappe.get_all(
         "Hotel Room Rate",
         filters=filters,
-        fields=["name", "rate_code", "rate_type", "market_segment", "meal_plan",
+        fields=["name", "rate_code", "market_segment", "meal_plan",
                 "description", "valid_from", "valid_to", "cancellation_policy",
                 "min_stay", "max_stay", "room_type", "rate_amount"],
         order_by="rate_code asc",

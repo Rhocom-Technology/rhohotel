@@ -43,9 +43,9 @@
             class="px-4 py-2 text-xs font-medium text-purple-600 border border-purple-200 bg-purple-50 rounded-lg cursor-default" disabled>
             Invoice: {{ reservation.sales_invoice }}
           </button>
-          <button v-if="reservation.docstatus === 1" :disabled="actionLoading" @click="emit('check-in')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
+          <button v-if="reservation.docstatus === 1 && reservation.status !== 'Cancelled'" :disabled="actionLoading" @click="emit('check-in')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
-          <button :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
+          <button v-if="reservation.docstatus !== 2 && reservation.status !== 'Cancelled'" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
           <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
         </div>
       </div>
@@ -66,12 +66,12 @@
             <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(reservation.total_amount) }}</p>
           </div>
           <div class="pl-6">
-            <p class="text-xs text-gray-400 mb-1">Linked Payment</p>
-            <p class="text-sm font-bold text-gray-900">{{ reservation.payment_entry || 'None' }}</p>
+            <p class="text-xs text-gray-400 mb-1">Paid Amount</p>
+            <p class="text-2xl font-bold text-green-600">{{ formatCurrency(paidAmount) }}</p>
           </div>
           <div class="px-6">
-            <p class="text-xs text-gray-400 mb-1">Balance</p>
-            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(reservation.balance) }}</p>
+            <p class="text-xs text-gray-400 mb-1">Balance Due</p>
+            <p class="text-2xl font-bold" :class="(reservation.balance || 0) > 0 ? 'text-red-500' : 'text-gray-900'">{{ formatCurrency(reservation.balance) }}</p>
           </div>
         </div>
       </div>
@@ -110,7 +110,11 @@
                   <span v-if="row.meal_plan_snapshot" class="ml-1 inline-flex items-center px-1.5 py-0.5 text-xs bg-green-50 text-green-600 rounded border border-green-100">{{ row.meal_plan_snapshot }}</span>
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">
+                  <template v-if="reservation.docstatus === 1 && reservation.reservation_type === 'Individual'">
+                    <span class="text-xs text-gray-700">{{ row.occupant_name || row.guest_name || reservation.primary_guest_name || '—' }}</span>
+                  </template>
                   <GuestSelector
+                    v-else
                     v-model="row.occupant_name"
                     :fallback-value="row.guest_name || reservation.primary_guest_name || reservation.customer || ''"
                     v-model:guestId="row.hotel_guest"
@@ -130,6 +134,60 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Reservation Details Section -->
+      <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-4">Reservation Details</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" class="text-xs">
+          <div>
+            <p class="text-gray-400 mb-1">Source Channel</p>
+            <p class="font-semibold text-gray-900">{{ reservation.source_channel || '—' }}</p>
+          </div>
+          <div>
+            <p class="text-gray-400 mb-1">Guest Phone</p>
+            <p class="font-semibold text-gray-900">{{ reservation.primary_guest_phone || '—' }}</p>
+          </div>
+          <div>
+            <p class="text-gray-400 mb-1">Guest Email</p>
+            <p class="font-semibold text-gray-900">{{ reservation.primary_guest_email || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Corporate'">
+            <p class="text-gray-400 mb-1">Corporate Account</p>
+            <p class="font-semibold text-gray-900">{{ reservation.customer || reservation.corporate_guest || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Group'">
+            <p class="text-gray-400 mb-1">Group Name</p>
+            <p class="font-semibold text-gray-900">{{ reservation.group_name || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Group'">
+            <p class="text-gray-400 mb-1">Billing Mode</p>
+            <p class="font-semibold text-gray-900">{{ reservation.group_billing_mode || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Group' && reservation.group_master_customer">
+            <p class="text-gray-400 mb-1">Master Payer</p>
+            <p class="font-semibold text-gray-900">{{ reservation.group_master_customer }}</p>
+          </div>
+          <div>
+            <p class="text-gray-400 mb-1">Booking Date</p>
+            <p class="font-semibold text-gray-900">{{ formatDate(reservation.creation) }}</p>
+          </div>
+          <div v-if="reservation.special_requests">
+            <p class="text-gray-400 mb-1">Special Requests</p>
+            <p class="font-semibold text-gray-900">{{ reservation.special_requests }}</p>
+          </div>
+          <div v-if="reservation.internal_notes || reservation.notes">
+            <p class="text-gray-400 mb-1">Notes</p>
+            <p class="font-semibold text-gray-900">{{ reservation.internal_notes || reservation.notes }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split Billing Notice for Group Reservations -->
+      <div v-if="reservation.reservation_type === 'Group' && reservation.group_billing_mode === 'Split'"
+        class="bg-amber-50 border border-amber-200 rounded-xl px-6 py-4">
+        <p class="text-xs font-bold text-amber-700 mb-1">Split Billing — Group Reservation</p>
+        <p class="text-xs text-amber-600">Each room in this group reservation requires its own individual invoice. Use the "Create Invoice" action per room row to generate separate invoices. A single group invoice is not applicable for split billing.</p>
       </div>
 
       <!-- Group Room Blocks -->
@@ -287,6 +345,11 @@ function handleModalDone() {
 const rooms = computed(() => props.reservation?.rooms || [])
 const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn(row)))
 const canBulkCheckIn = computed(() => pendingRooms.value.length > 1)
+
+const paidAmount = computed(() => {
+  const entries = props.reservation?.payment_entries || []
+  return entries.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
+})
 
 const statusClass = computed(() => {
   const status = String(props.reservation?.status || '').toLowerCase()

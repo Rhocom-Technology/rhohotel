@@ -680,6 +680,127 @@ def get_outstanding_invoices_for_reservation(reservation_name):
 
 
 @frappe.whitelist()
+def adjust_invoice_for_reservation(reservation_name):
+    """
+    Reconcile the linked Sales Invoice after a stay adjustment.
+
+    Rules:
+    - No invoice linked → return no_invoice (user can create fresh).
+    - Invoice fully unpaid (outstanding == grand_total) → cancel old invoice,
+      create a new one reflecting the updated reservation totals.
+    - Invoice has been partially or fully paid → create an additional
+      adjustment invoice for the positive difference (extension charge).
+      For reductions, returns a notice since credits require manual handling.
+    """
+    from frappe.utils import flt
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    if not doc.sales_invoice:
+        return {"status": "no_invoice", "message": "No invoice linked to this reservation."}
+
+    inv = frappe.get_doc("Sales Invoice", doc.sales_invoice)
+    grand_total = flt(inv.grand_total)
+    outstanding = flt(inv.outstanding_amount)
+    paid = grand_total - outstanding
+    new_total = flt(doc.total_amount or doc.net_total or 0)
+    difference = flt(new_total - grand_total)
+
+    # Invoice already cancelled/draft – unlink and recreate
+    if int(inv.docstatus) != 1:
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.sales_invoice = None
+        doc.save(ignore_permissions=True)
+        frappe.db.commit()
+        result = create_invoice_for_reservation(reservation_name)
+        return {"status": "recreated", "sales_invoice": result.get("sales_invoice")}
+
+    # Fully unpaid – cancel and recreate with new amount
+    if paid <= 0.01:
+        inv.flags.ignore_permissions = True
+        inv.cancel()
+        frappe.db.commit()
+
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.sales_invoice = None
+        doc.payment_status = "Pending"
+        doc.save(ignore_permissions=True)
+        frappe.db.commit()
+
+        result = create_invoice_for_reservation(reservation_name)
+        return {
+            "status": "cancelled_and_recreated",
+            "cancelled_invoice": inv.name,
+            "sales_invoice": result.get("sales_invoice"),
+        }
+
+    # Amounts unchanged – nothing to do
+    if abs(difference) < 0.01:
+        return {"status": "no_change", "message": "Invoice total already matches reservation total."}
+
+    # Reduction when invoice has payments – cannot auto-cancel; return notice
+    if difference < 0:
+        return {
+            "status": "reduction_manual",
+            "message": (
+                "The stay was reduced but the invoice has already received payment. "
+                "Please create a credit note manually against invoice {0} for the amount {1}.".format(
+                    inv.name, flt(abs(difference), 2)
+                )
+            ),
+            "original_invoice": inv.name,
+            "difference": difference,
+        }
+
+    # Extension with existing payment – create an additional charge invoice
+    customer = inv.customer
+    if not customer:
+        frappe.throw(_("Cannot create adjustment invoice: no customer on existing invoice."))
+
+    item_code = None
+    for room in doc.rooms:
+        candidate = frappe.db.get_value("Hotel Room", room.room_number, "erpnext_item") or room.room_number
+        if frappe.db.exists("Item", candidate):
+            item_code = candidate
+            break
+
+    if not item_code:
+        frappe.throw(_("Cannot create adjustment invoice: no valid Item found for this reservation's rooms."))
+
+    adj_si = frappe.get_doc({
+        "doctype": "Sales Invoice",
+        "customer": customer,
+        "posting_date": frappe.utils.today(),
+        "due_date": frappe.utils.today(),
+        "update_stock": 0,
+        "items": [{
+            "item_code": item_code,
+            "qty": 1,
+            "rate": flt(difference),
+            "description": _(
+                "Stay extension charge for reservation {0} ({1} to {2}, {3} night(s))."
+            ).format(doc.name, doc.from_date, doc.to_date, doc.number_of_nights),
+        }],
+    })
+    adj_si.set_taxes()
+    adj_si.insert(ignore_permissions=True)
+    adj_si.submit()
+
+    # Update net_total on reservation to reflect new combined total
+    doc.flags.ignore_validate_update_after_submit = True
+    doc.net_total = flt(doc.total_amount)
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "status": "adjustment_created",
+        "original_invoice": inv.name,
+        "adjustment_invoice": adj_si.name,
+        "difference": flt(difference),
+    }
+
+
+@frappe.whitelist()
 def collect_payment_for_reservation(reservation_name, payment_info=None):
     import json
 
