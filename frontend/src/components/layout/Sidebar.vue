@@ -172,5 +172,20 @@ const navGroups = [
   { label: 'Asset Maintenance', to: '/assets-mgmt/maintenance' },
     ],
   },
+  {
+  label: 'Facilities & Fleet',
+  icon: Wrench,
+  children: [
+    { label: 'FWO Dashboard', to: '/work-order/dashboard' },
+    { label: 'Work Order List', to: '/work-order/list' },
+    { label: 'New Work Order', to: '/work-order/new' },
+    { label: 'MAL Dashboard', to: '/machine-access-log/dashboard' },
+    // { label: 'Equipment Repair Authorization', to: '/facilities/equipment-repair-authorizations' },
+    // { label: 'Hotel Vehicles', to: '/facilities/vehicles' },
+    // { label: 'Vehicle Requests', to: '/facilities/vehicle-requests' },
+    // { label: 'Vehicle Safety Checklists', to: '/facilities/vehicle-safety-checklists' },
+    // { label: 'Vehicle Maintenance Reports', to: '/facilities/vehicle-maintenance-reports' }
+  ],
+}
 ]
 </script>

@@ -1,0 +1,48 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "creation": "2026-05-22 00:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "inspection_item",
+    "status",
+    "remarks"
+  ],
+  "fields": [
+    {
+      "fieldname": "inspection_item",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Inspection Item",
+      "reqd": 1
+    },
+    {
+      "default": "OK",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "OK\nFault",
+      "reqd": 1
+    },
+    {
+      "fieldname": "remarks",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Remarks"
+    }
+  ],
+  "grid_page_length": 50,
+  "istable": 1,
+  "modified": "2026-05-22 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Vehicle Inspection Item",
+  "owner": "Administrator",
+  "permissions": [],
+  "row_format": "Dynamic",
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

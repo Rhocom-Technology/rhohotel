@@ -107,6 +107,18 @@ const pageMeta = {
   'CorporateBillingStatementReport':              { title: 'Corporate Billing Statement', subtitle: 'Corporate account ledger with running balance, payments, outstanding exposure, and date filter controls' },
   'PosSalesReport':              { title: 'POS Sales Report', subtitle: 'Point of Sales performance and sales overview' },
   'HousekeepingProductivityReport':              { title: 'Housekeeping Productivity Report', subtitle: 'Housekeeping performance and productivity overview' },
+
+
+  // Facilities & Fleet
+'FacilityWorkOrderDashboard': {title: 'Facility Work Orders Dashboard',subtitle: 'Facilities • work order performance, approvals, urgent issues, and linked repair operations'},
+'FacilityWorkOrderList': {title: 'Facility Work Orders', subtitle: 'Facilities • hotel operational repair and maintenance work order register'},
+'NewFacilityWorkOrder': {title: 'New Facility Work Order', subtitle: 'Facilities • create a new work order for room, asset, or location maintenance issues'},
+'FacilityWorkOrderDetail': {title: 'Facility Work Order', subtitle: 'Facilities • work order details, approvals, linked documents, and closure status'},
+// Machine Access Log
+'MachineAccessLogDashboard': {title: 'Machine Access Log Dashboard', subtitle: 'Facilities • machine access overview, trends, and technician activity'},
+
+'MachineAccessLogDetail': {title: 'Machine Access Log', subtitle: 'Facilities • machine access details, technician, witness, and parts information'},
+'NewMachineAccessLog': {title: 'New Machine Access Log', subtitle: 'Facilities • record a new machine access entry for maintenance or inspection'},
 }
 
 const pageTitle = computed(() => pageMeta[route.name]?.title || 'Dashboard')

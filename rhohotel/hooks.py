@@ -56,7 +56,10 @@ app_include_js = [
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 
-doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
+doctype_js = {
+    "Sales Invoice": "public/js/sales_invoice.js",
+    "Asset Repair": "public/js/asset_repair_custom.js"
+}
 
 # fixtures = [{"doctype": "Workflow"}, {"doctype": "Workflow State"}, {"doctype": "Workflow Action"}]
 

@@ -1,0 +1,211 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "RPR-.YYYY.-.#####",
+    "naming_rule": "Expression (old style)",
+    "creation": "2026-05-21 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "is_submittable": 1,
+    "field_order": [
+        "details_section",
+        "facility_work_order",
+        "machine_access_log",
+        "column_break_det",
+        "date",
+        "asset",
+        "part_removed",
+        "condition",
+        "removal_section",
+        "reason_for_removal",
+        "column_break_rem",
+        "warehouse",
+        "technician",
+        "storekeeper",
+        "remarks_section",
+        "audit_remarks",
+        "confirmation_section",
+        "technician_confirmed",
+        "column_break_conf",
+        "storekeeper_confirmed"
+    ],
+    "fields": [
+        {
+            "fieldname": "details_section",
+            "fieldtype": "Section Break",
+            "label": "Part Details"
+        },
+        {
+            "fieldname": "facility_work_order",
+            "fieldtype": "Link",
+            "label": "Facility Work Order",
+            "options": "Facility Work Order",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "machine_access_log",
+            "fieldtype": "Link",
+            "label": "Machine Access Log",
+            "options": "Machine Access Log",
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "column_break_det",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "date",
+            "fieldtype": "Date",
+            "label": "Date",
+            "reqd": 1,
+            "default": "Today"
+        },
+        {
+            "fieldname": "asset",
+            "fieldtype": "Link",
+            "label": "Asset",
+            "options": "Asset",
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "part_removed",
+            "fieldtype": "Data",
+            "label": "Part Removed",
+            "reqd": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "condition",
+            "fieldtype": "Select",
+            "label": "Condition",
+            "options": "\nDamaged\nWorn\nFunctional\nRepairable",
+            "reqd": 1
+        },
+        {
+            "fieldname": "removal_section",
+            "fieldtype": "Section Break",
+            "label": "Removal & Storage"
+        },
+        {
+            "fieldname": "reason_for_removal",
+            "fieldtype": "Small Text",
+            "label": "Reason for Removal",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_rem",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "warehouse",
+            "fieldtype": "Link",
+            "label": "Returned to Warehouse",
+            "options": "Warehouse",
+            "reqd": 1
+        },
+        {
+            "fieldname": "technician",
+            "fieldtype": "Link",
+            "label": "Technician",
+            "options": "Maintenance Technician",
+            "reqd": 1
+        },
+        {
+            "fieldname": "storekeeper",
+            "fieldtype": "Link",
+            "label": "Storekeeper",
+            "options": "Employee",
+            "reqd": 1
+        },
+        {
+            "fieldname": "remarks_section",
+            "fieldtype": "Section Break",
+            "label": "Remarks"
+        },
+        {
+            "fieldname": "audit_remarks",
+            "fieldtype": "Small Text",
+            "label": "Audit Remarks"
+        },
+        {
+            "fieldname": "confirmation_section",
+            "fieldtype": "Section Break",
+            "label": "Confirmation"
+        },
+        {
+            "fieldname": "technician_confirmed",
+            "fieldtype": "Check",
+            "label": "Technician confirms part was removed and returned to store",
+            "default": "0"
+        },
+        {
+            "fieldname": "column_break_conf",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "storekeeper_confirmed",
+            "fieldtype": "Check",
+            "label": "Storekeeper confirms part was received into warehouse",
+            "default": "0"
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-05-21 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Removed Parts Register",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "select": 1,
+            "share": 1,
+            "submit": 1,
+            "cancel": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "select": 1,
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Facilities Supervisor",
+            "submit": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "date",
+    "sort_order": "DESC",
+    "states": [
+        {"color": "Gray",  "title": "Draft"},
+        {"color": "Green", "title": "Submitted"},
+        {"color": "Red",   "title": "Cancelled"}
+    ],
+    "track_changes": 1
+}

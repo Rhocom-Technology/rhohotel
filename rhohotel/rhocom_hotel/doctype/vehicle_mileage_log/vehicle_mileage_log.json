@@ -1,0 +1,252 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:VML-{YYYY}-{#####}",
+  "creation": "2026-05-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "is_submittable": 1,
+  "field_order": [
+    "vehicle_section",
+    "hotel_vehicle",
+    "plate_number",
+    "asset",
+    "column_break_veh",
+    "driver",
+    "date",
+    "trip_section",
+    "destination",
+    "business_purpose",
+    "column_break_trip",
+    "odometer_start",
+    "odometer_stop",
+    "km_this_trip",
+    "expense_section",
+    "expense_type",
+    "amount",
+    "column_break_exp",
+    "remarks",
+    "supervisor_section",
+    "entries_verified",
+    "mileage_consistent",
+    "column_break_sup",
+    "abnormal_consumption_investigated",
+    "supervisor"
+  ],
+  "fields": [
+    {
+      "fieldname": "vehicle_section",
+      "fieldtype": "Section Break",
+      "label": "Vehicle & Driver"
+    },
+    {
+      "fieldname": "hotel_vehicle",
+      "fieldtype": "Link",
+      "label": "Vehicle",
+      "options": "Hotel Vehicle",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "plate_number",
+      "fieldtype": "Data",
+      "label": "Plate / Registration Number",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "asset",
+      "fieldtype": "Link",
+      "label": "Linked Asset",
+      "options": "Asset",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_veh",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "driver",
+      "fieldtype": "Link",
+      "label": "Driver",
+      "options": "Employee",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "date",
+      "fieldtype": "Date",
+      "label": "Date",
+      "default": "Today",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "trip_section",
+      "fieldtype": "Section Break",
+      "label": "Trip Details"
+    },
+    {
+      "fieldname": "destination",
+      "fieldtype": "Data",
+      "label": "Destination (City / Town / Area)",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "business_purpose",
+      "fieldtype": "Select",
+      "label": "Business Purpose",
+      "options": "Official\nPersonal",
+      "default": "Official",
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_trip",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "odometer_start",
+      "fieldtype": "Int",
+      "label": "Odometer Start (KM)",
+      "reqd": 1
+    },
+    {
+      "fieldname": "odometer_stop",
+      "fieldtype": "Int",
+      "label": "Odometer Stop (KM)"
+    },
+    {
+      "fieldname": "km_this_trip",
+      "fieldtype": "Float",
+      "label": "KM This Trip",
+      "read_only": 1
+    },
+    {
+      "fieldname": "expense_section",
+      "fieldtype": "Section Break",
+      "label": "Expenses"
+    },
+    {
+      "fieldname": "expense_type",
+      "fieldtype": "Select",
+      "label": "Expense Type",
+      "options": "\nGas\nOil\nFlats\nOther"
+    },
+    {
+      "fieldname": "amount",
+      "fieldtype": "Currency",
+      "label": "Amount (₦)"
+    },
+    {
+      "fieldname": "column_break_exp",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "remarks",
+      "fieldtype": "Small Text",
+      "label": "Remarks"
+    },
+    {
+      "fieldname": "supervisor_section",
+      "fieldtype": "Section Break",
+      "label": "Supervisor Review"
+    },
+    {
+      "fieldname": "entries_verified",
+      "fieldtype": "Check",
+      "label": "Entries verified against receipts",
+      "default": "0"
+    },
+    {
+      "fieldname": "mileage_consistent",
+      "fieldtype": "Check",
+      "label": "Mileage consistent with usage",
+      "default": "0"
+    },
+    {
+      "fieldname": "column_break_sup",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "abnormal_consumption_investigated",
+      "fieldtype": "Check",
+      "label": "Abnormal consumption investigated",
+      "default": "0"
+    },
+    {
+      "fieldname": "supervisor",
+      "fieldtype": "Link",
+      "label": "Supervisor Name",
+      "options": "Employee"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "is_submittable": 1,
+  "module": "Rhocom Hotel",
+  "name": "Vehicle Mileage Log",
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "submit": 1,
+      "cancel": 1,
+      "amend": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1,
+      "share": 1
+    },
+    {
+      "role": "Hotel Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "report": 1,
+      "print": 1
+    },
+    {
+      "role": "Fleet Supervisor",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "report": 1,
+      "print": 1
+    },
+    {
+      "role": "Front Desk",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "submit": 1,
+      "report": 1
+    }
+  ],
+  "sort_field": "date",
+  "sort_order": "DESC",
+  "states": [
+    {
+      "color": "Gray",
+      "title": "Draft"
+    },
+    {
+      "color": "Green",
+      "title": "Submitted"
+    },
+    {
+      "color": "Red",
+      "title": "Cancelled"
+    }
+  ],
+  "track_changes": 1
+}

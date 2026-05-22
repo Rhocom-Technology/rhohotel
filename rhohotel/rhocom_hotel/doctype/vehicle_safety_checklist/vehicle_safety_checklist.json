@@ -1,0 +1,249 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:VSC-{YYYY}-{#####}",
+  "creation": "2026-05-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "vehicle_details_section",
+    "hotel_vehicle",
+    "registration_number",
+    "make_model",
+    "vehicle_asset",
+    "department",
+    "column_break_1",
+    "driver",
+    "date_of_inspection",
+    "current_odometer_reading_km",
+    "inspection_section",
+    "inspection_items",
+    "observations_section",
+    "general_observations_defect_description",
+    "safety_declaration",
+    "verification_section",
+    "fleet_supervisor_confirmed",
+    "fleet_supervisor_verified_by",
+    "fleet_supervisor_verified_on"
+  ],
+  "fields": [
+    {
+      "fieldname": "vehicle_details_section",
+      "fieldtype": "Section Break",
+      "label": "Vehicle Details"
+    },
+    {
+      "fieldname": "hotel_vehicle",
+      "fieldtype": "Link",
+      "label": "Vehicle",
+      "options": "Hotel Vehicle",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "registration_number",
+      "fieldtype": "Data",
+      "label": "Registration Number",
+      "reqd": 1,
+      "in_list_view": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "make_model",
+      "fieldtype": "Data",
+      "label": "Make / Model",
+      "read_only": 1
+    },
+    {
+      "fieldname": "vehicle_asset",
+      "fieldtype": "Link",
+      "label": "Linked Asset",
+      "options": "Asset",
+      "read_only": 1
+    },
+    {
+      "fieldname": "department",
+      "fieldtype": "Link",
+      "label": "Department",
+      "options": "Department",
+      "in_standard_filter": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "driver",
+      "fieldtype": "Link",
+      "label": "Driver",
+      "options": "Employee",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "date_of_inspection",
+      "fieldtype": "Date",
+      "label": "Date of Inspection",
+      "default": "Today",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "current_odometer_reading_km",
+      "fieldtype": "Int",
+      "label": "Current Odometer Reading (KM)",
+      "reqd": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "inspection_section",
+      "fieldtype": "Section Break",
+      "label": "Inspection Items"
+    },
+    {
+      "fieldname": "inspection_items",
+      "fieldtype": "Table",
+      "label": "Inspection Items",
+      "options": "Vehicle Inspection Item",
+      "reqd": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "observations_section",
+      "fieldtype": "Section Break",
+      "label": "Observations"
+    },
+    {
+      "fieldname": "general_observations_defect_description",
+      "fieldtype": "Text",
+      "label": "General Observations / Defect Description",
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "safety_declaration",
+      "fieldtype": "Select",
+      "label": "Safety Declaration",
+      "options": "\nSafe\nNot Safe",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "verification_section",
+      "fieldtype": "Section Break",
+      "label": "Fleet Supervisor Verification"
+    },
+    {
+      "fieldname": "fleet_supervisor_confirmed",
+      "fieldtype": "Check",
+      "label": "Fleet Supervisor Confirmed",
+      "default": "0",
+      "read_only_depends_on": "eval:doc.docstatus > 0"
+    },
+    {
+      "fieldname": "fleet_supervisor_verified_by",
+      "fieldtype": "Link",
+      "label": "Verified By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "fleet_supervisor_verified_on",
+      "fieldtype": "Datetime",
+      "label": "Verified On",
+      "read_only": 1
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "is_submittable": 1,
+  "links": [],
+  "modified": "2026-05-22 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Vehicle Safety Checklist",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "submit": 1,
+      "cancel": 1,
+      "amend": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1,
+      "share": 1
+    },
+    {
+      "role": "Fleet Supervisor",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 0,
+      "submit": 1,
+      "cancel": 0,
+      "amend": 0,
+      "report": 1,
+      "print": 1,
+      "select": 1
+    },
+    {
+      "role": "Facilities Manager",
+      "read": 1,
+      "write": 0,
+      "create": 0,
+      "delete": 0,
+      "submit": 0,
+      "cancel": 0,
+      "amend": 0,
+      "report": 1,
+      "print": 1,
+      "select": 1
+    },
+    {
+      "role": "Hotel Manager",
+      "read": 1,
+      "write": 0,
+      "create": 0,
+      "delete": 0,
+      "submit": 0,
+      "cancel": 0,
+      "amend": 0,
+      "report": 1,
+      "print": 1,
+      "select": 1
+    }
+  ],
+  "row_format": "Dynamic",
+  "sort_field": "date_of_inspection",
+  "sort_order": "DESC",
+  "states": [
+    {
+      "color": "Gray",
+      "title": "Draft"
+    },
+    {
+      "color": "Green",
+      "title": "Submitted"
+    },
+    {
+      "color": "Red",
+      "title": "Cancelled"
+    }
+  ],
+  "track_changes": 1
+}

@@ -1,0 +1,147 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "field:plate_number",
+    "creation": "2026-05-22 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "vehicle_section",
+        "plate_number",
+        "vehicle_type",
+        "make",
+        "model",
+        "column_break_veh",
+        "year",
+        "color",
+        "status",
+        "asset",
+        "notes_section",
+        "notes"
+    ],
+    "fields": [
+        {
+            "fieldname": "vehicle_section",
+            "fieldtype": "Section Break",
+            "label": "Vehicle Details"
+        },
+        {
+            "fieldname": "plate_number",
+            "fieldtype": "Data",
+            "label": "Plate / Registration Number",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "unique": 1
+        },
+        {
+            "fieldname": "vehicle_type",
+            "fieldtype": "Select",
+            "label": "Vehicle Type",
+            "options": "\nSedan\nSUV\nVan\nBus\nPickup\nTruck\nOther",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "make",
+            "fieldtype": "Data",
+            "label": "Make",
+            "in_list_view": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "model",
+            "fieldtype": "Data",
+            "label": "Model",
+            "in_list_view": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_veh",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "year",
+            "fieldtype": "Int",
+            "label": "Year"
+        },
+        {
+            "fieldname": "color",
+            "fieldtype": "Data",
+            "label": "Color"
+        },
+        {
+            "default": "Active",
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Active\nUnder Maintenance\nOut of Service\nDisposed",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "asset",
+            "fieldtype": "Link",
+            "label": "Linked Asset",
+            "options": "Asset",
+            "description": "Link to ERPNext Asset for financial/depreciation tracking (optional)",
+            "reqd": 1
+        },
+        {
+            "fieldname": "notes_section",
+            "fieldtype": "Section Break",
+            "label": "Notes"
+        },
+        {
+            "fieldname": "notes",
+            "fieldtype": "Small Text",
+            "label": "Notes"
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-05-22 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Hotel Vehicle",
+    "naming_rule": "By fieldname",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1, "delete": 1, "email": 1, "export": 1, "print": 1,
+            "read": 1, "report": 1, "role": "System Manager",
+            "select": 1, "share": 1, "write": 1
+        },
+        {
+            "create": 1, "delete": 0, "email": 1, "export": 1, "print": 1,
+            "read": 1, "report": 1, "role": "Hotel Manager",
+            "select": 1, "share": 1, "write": 1
+        },
+        {
+            "create": 1, "delete": 0, "read": 1, "report": 1,
+            "role": "Fleet Supervisor", "write": 1
+        },
+        {
+            "create": 0, "delete": 0, "read": 1, "report": 1,
+            "role": "Front Desk"
+        },
+        {
+            "create": 0, "delete": 0, "read": 1, "report": 1,
+            "role": "Facilities Supervisor"
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "plate_number",
+    "sort_order": "ASC",
+    "states": [
+        {"color": "Green",  "title": "Active"},
+        {"color": "Yellow", "title": "Under Maintenance"},
+        {"color": "Red",    "title": "Out of Service"},
+        {"color": "Gray",   "title": "Disposed"}
+    ],
+    "title_field": "plate_number",
+    "track_changes": 1
+}

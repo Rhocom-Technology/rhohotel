@@ -47,6 +47,18 @@ const router = createRouter({
     { path: '/maintenance/technicians/:id', name: 'TechnicianView', component: () => import('@/pages/maintenance/TechnicianView.vue') },
     { path: '/maintenance/new-technician', name: 'NewTechnician', component: () => import('@/pages/maintenance/NewTechnician.vue') },
 
+    // Facility Work Orders
+    { path: '/work-order/dashboard', name: 'FacilityWorkOrderDashboard', component: () => import('@/pages/work-order/FacilityWorkOrderDashboard.vue') },
+    { path: '/work-order/list', name: 'FacilityWorkOrderList', component: () => import('@/pages/work-order/FacilityWorkOrderList.vue') },
+    { path: '/work-order/new', name: 'NewFacilityWorkOrder', component: () => import('@/pages/work-order/NewFacilityWorkOrder.vue') },
+    { path: '/work-order/:id', name: 'FacilityWorkOrderDetail', component: () => import('@/pages/work-order/FacilityWorkOrderDetail.vue') },
+
+    // Machine Access Log
+    { path: '/machine-access-log/dashboard', name: 'MachineAccessLogDashboard', component: () => import('@/pages/machine-access-log/MachineAccessLogDashboard.vue') },
+    { path: '/machine-access-log/list', redirect: '/machine-access-log/dashboard' },
+    { path: '/machine-access-log/new', name: 'NewMachineAccessLog', component: () => import('@/pages/machine-access-log/NewMachineAccessLog.vue') },
+    { path: '/machine-access-log/:id', name: 'MachineAccessLogDetail', component: () => import('@/pages/machine-access-log/MachineAccessLogDetail.vue') },
+
     // POS
     { path: '/pos', name: 'PointOfSales', component: () => import('@/pages/pos/PointOfSales.vue') },
     { path: '/pos/shift-close', name: 'POSShiftClose', component: () => import('@/pages/pos/POSShiftClose.vue') },

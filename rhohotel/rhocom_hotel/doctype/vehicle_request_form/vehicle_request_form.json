@@ -1,0 +1,366 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:VRF-{YYYY}-{#####}",
+  "creation": "2026-05-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "vehicle_section",
+    "hotel_vehicle",
+    "registration_number",
+    "make_model",
+    "vehicle_asset",
+    "column_break_vehicle",
+    "workflow_state",
+    "request_section",
+    "request_date",
+    "request_time",
+    "staff_name",
+    "department",
+    "purpose",
+    "location",
+    "usage_section",
+    "duration",
+    "time_out",
+    "time_in",
+    "authorization_section",
+    "submitted_by",
+    "submitted_on",
+    "column_break_auth_1",
+    "hod_approved_by",
+    "hod_approved_on",
+    "column_break_auth_2",
+    "hr_authorized_by",
+    "hr_authorized_on",
+    "fleet_section",
+    "vehicle_released_by",
+    "vehicle_released_on",
+    "column_break_fleet",
+    "vehicle_returned_by",
+    "vehicle_returned_on",
+    "remarks_section",
+    "remarks",
+    "rejection_reason"
+  ],
+  "fields": [
+    {
+      "fieldname": "vehicle_section",
+      "fieldtype": "Section Break",
+      "label": "Vehicle"
+    },
+    {
+      "fieldname": "hotel_vehicle",
+      "fieldtype": "Link",
+      "label": "Vehicle",
+      "options": "Hotel Vehicle",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "registration_number",
+      "fieldtype": "Data",
+      "label": "Registration Number",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "make_model",
+      "fieldtype": "Data",
+      "label": "Make / Model",
+      "read_only": 1
+    },
+    {
+      "fieldname": "vehicle_asset",
+      "fieldtype": "Link",
+      "label": "Linked Asset",
+      "options": "Asset",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_vehicle",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "workflow_state",
+      "fieldtype": "Data",
+      "label": "Status",
+      "default": "Draft",
+      "read_only": 1,
+      "in_list_view": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "request_section",
+      "fieldtype": "Section Break",
+      "label": "Request Details"
+    },
+    {
+      "fieldname": "request_date",
+      "fieldtype": "Date",
+      "label": "Date",
+      "default": "Today",
+      "reqd": 1,
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "request_time",
+      "fieldtype": "Time",
+      "label": "Request Time",
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "staff_name",
+      "fieldtype": "Link",
+      "label": "Staff Name",
+      "options": "Employee",
+      "reqd": 1,
+      "in_list_view": 1,
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "department",
+      "fieldtype": "Link",
+      "label": "Department",
+      "options": "Department",
+      "reqd": 1,
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "purpose",
+      "fieldtype": "Small Text",
+      "label": "Purpose",
+      "reqd": 1,
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "location",
+      "fieldtype": "Data",
+      "label": "Location",
+      "reqd": 1,
+      "read_only_depends_on": "eval:doc.workflow_state != 'Draft'"
+    },
+    {
+      "fieldname": "usage_section",
+      "fieldtype": "Section Break",
+      "label": "Usage Details"
+    },
+    {
+      "fieldname": "duration",
+      "fieldtype": "Data",
+      "label": "Duration"
+    },
+    {
+      "fieldname": "time_out",
+      "fieldtype": "Time",
+      "label": "Time Out"
+    },
+    {
+      "fieldname": "time_in",
+      "fieldtype": "Time",
+      "label": "Time In"
+    },
+    {
+      "fieldname": "authorization_section",
+      "fieldtype": "Section Break",
+      "label": "Authorizing Signatures"
+    },
+    {
+      "fieldname": "submitted_by",
+      "fieldtype": "Link",
+      "label": "Submitted By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "submitted_on",
+      "fieldtype": "Datetime",
+      "label": "Submitted On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_auth_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "hod_approved_by",
+      "fieldtype": "Link",
+      "label": "H.O.D Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "hod_approved_on",
+      "fieldtype": "Datetime",
+      "label": "H.O.D Approved On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_auth_2",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "hr_authorized_by",
+      "fieldtype": "Link",
+      "label": "HR Authorized By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "hr_authorized_on",
+      "fieldtype": "Datetime",
+      "label": "HR Authorized On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "fleet_section",
+      "fieldtype": "Section Break",
+      "label": "Fleet Release / Return"
+    },
+    {
+      "fieldname": "vehicle_released_by",
+      "fieldtype": "Link",
+      "label": "Vehicle Released By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "vehicle_released_on",
+      "fieldtype": "Datetime",
+      "label": "Vehicle Released On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "column_break_fleet",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "vehicle_returned_by",
+      "fieldtype": "Link",
+      "label": "Vehicle Returned By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "vehicle_returned_on",
+      "fieldtype": "Datetime",
+      "label": "Vehicle Returned On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "remarks_section",
+      "fieldtype": "Section Break",
+      "label": "Remarks"
+    },
+    {
+      "fieldname": "remarks",
+      "fieldtype": "Small Text",
+      "label": "Remarks"
+    },
+    {
+      "fieldname": "rejection_reason",
+      "fieldtype": "Small Text",
+      "label": "Rejection Reason"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "is_submittable": 0,
+  "links": [],
+  "modified": "2026-05-22 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Vehicle Request Form",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1,
+      "share": 1
+    },
+    {
+      "role": "Hotel Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 0,
+      "report": 1,
+      "print": 1
+    },
+    {
+      "role": "Fleet Supervisor",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 0,
+      "report": 1,
+      "print": 1
+    },
+    {
+      "role": "Department Head",
+      "read": 1,
+      "write": 1,
+      "create": 0,
+      "delete": 0,
+      "report": 1,
+      "print": 1
+    },
+    {
+      "role": "HR Manager",
+      "read": 1,
+      "write": 1,
+      "create": 0,
+      "delete": 0,
+      "report": 1,
+      "print": 1
+    }
+  ],
+  "row_format": "Dynamic",
+  "sort_field": "request_date",
+  "sort_order": "DESC",
+  "states": [
+    {
+      "color": "Gray",
+      "title": "Draft"
+    },
+    {
+      "color": "Blue",
+      "title": "Pending HOD Approval"
+    },
+    {
+      "color": "Purple",
+      "title": "Pending HR Authorization"
+    },
+    {
+      "color": "Green",
+      "title": "Approved"
+    },
+    {
+      "color": "Orange",
+      "title": "Vehicle Out"
+    },
+    {
+      "color": "Green",
+      "title": "Completed"
+    },
+    {
+      "color": "Red",
+      "title": "Rejected"
+    },
+    {
+      "color": "Red",
+      "title": "Cancelled"
+    }
+  ],
+  "track_changes": 1
+}

@@ -1,0 +1,417 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "format:WO-{#######}",
+    "creation": "2026-05-20 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "request_details_section",
+        "requesting_department",
+        "contact_person",
+        "column_break_req",
+        "date_reported",
+        "priority",
+        "category",
+        "location_section",
+        "location_type",
+        "room",
+        "asset_location",
+        "location_description",
+        "column_break_loc",
+        "asset",
+        "problem_section",
+        "description_of_problem",
+        "inspection_section",
+        "inspection_findings",
+        "column_break_insp",
+        "assigned_technician",
+        "estimated_materials",
+        "expected_completion_date",
+        "action_section",
+        "action_taken",
+        "column_break_action",
+        "completion_date",
+        "audit_section",
+        "submitted_by",
+        "submitted_on",
+        "column_break_audit",
+        "closed_by",
+        "closed_on",
+        "status_section",
+        "workflow_state"
+    ],
+    "fields": [
+        {
+            "fieldname": "request_details_section",
+            "fieldtype": "Section Break",
+            "label": "Request Details"
+        },
+        {
+            "fieldname": "requesting_department",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Requesting Department",
+            "options": "Department",
+            "reqd": 1,
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "contact_person",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Contact Person",
+            "options": "Employee",
+            "reqd": 1,
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "column_break_req",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "now",
+            "fieldname": "date_reported",
+            "fieldtype": "Datetime",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Date Reported",
+            "reqd": 1,
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "default": "Routine",
+            "fieldname": "priority",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Priority Level",
+            "options": "Routine\nUrgent\nEmergency",
+            "reqd": 1,
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "category",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Category",
+            "options": "\nElectrical\nPlumbing\nHVAC\nCivil\nOther",
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "location_section",
+            "fieldtype": "Section Break",
+            "label": "Location"
+        },
+        {
+            "default": "Room",
+            "fieldname": "location_type",
+            "fieldtype": "Select",
+            "in_standard_filter": 1,
+            "label": "Location Type",
+            "options": "Room\nAsset Location\nOther Location",
+            "reqd": 1,
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "room",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Room",
+            "options": "Hotel Room",
+            "depends_on": "eval:doc.location_type === 'Room'",
+            "mandatory_depends_on": "eval:doc.location_type === 'Room'",
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "asset_location",
+            "fieldtype": "Link",
+            "label": "Asset Location",
+            "options": "Location",
+            "depends_on": "eval:doc.location_type === 'Asset Location'",
+            "mandatory_depends_on": "eval:doc.location_type === 'Asset Location'",
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "location_description",
+            "fieldtype": "Data",
+            "label": "Location Description",
+            "placeholder": "e.g. Laundry Room, Generator House, Kitchen Section B...",
+            "depends_on": "eval:doc.location_type === 'Other Location'",
+            "mandatory_depends_on": "eval:doc.location_type === 'Other Location'",
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "column_break_loc",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "asset",
+            "fieldtype": "Link",
+            "label": "Asset",
+            "options": "Asset",
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "problem_section",
+            "fieldtype": "Section Break",
+            "label": "Description of Problem"
+        },
+        {
+            "fieldname": "description_of_problem",
+            "fieldtype": "Text Editor",
+            "label": "Description of Problem",
+            "reqd": 1,
+            "read_only_depends_on": "eval:['Pending Facility Supervisor Approval', 'Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "inspection_section",
+            "fieldtype": "Section Break",
+            "label": "Facilities / Maintenance Inspection",
+            "depends_on": "eval:frappe.user.has_role('Facilities Supervisor') || frappe.user.has_role('Hotel Manager') || frappe.user.has_role('System Manager')"
+        },
+        {
+            "fieldname": "inspection_findings",
+            "fieldtype": "Small Text",
+            "label": "Inspection Findings",
+            "read_only_depends_on": "eval:['Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "column_break_insp",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "assigned_technician",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Technician Assigned",
+            "options": "Maintenance Technician",
+            "read_only_depends_on": "eval:['Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "estimated_materials",
+            "fieldtype": "Small Text",
+            "label": "Estimated Materials Required",
+            "read_only_depends_on": "eval:['Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "expected_completion_date",
+            "fieldtype": "Date",
+            "label": "Expected Completion Date",
+            "read_only_depends_on": "eval:['Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "action_section",
+            "fieldtype": "Section Break",
+            "label": "Action Taken",
+            "depends_on": "eval:frappe.user.has_role('Facilities Supervisor') || frappe.user.has_role('Hotel Manager') || frappe.user.has_role('System Manager')"
+        },
+        {
+            "fieldname": "action_taken",
+            "fieldtype": "Small Text",
+            "label": "Action Taken",
+            "read_only_depends_on": "eval:['Pending Department Head Signature', 'Closed', 'Rejected', 'Cancelled'].includes(doc.workflow_state)"
+        },
+        {
+            "fieldname": "column_break_action",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "completion_date",
+            "fieldtype": "Datetime",
+            "label": "Completion Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "audit_section",
+            "fieldtype": "Section Break",
+            "label": "Audit Trail"
+        },
+        {
+            "fieldname": "submitted_by",
+            "fieldtype": "Link",
+            "label": "Submitted By",
+            "options": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "submitted_on",
+            "fieldtype": "Datetime",
+            "label": "Submitted On",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_audit",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "closed_by",
+            "fieldtype": "Link",
+            "label": "Closed By",
+            "options": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "closed_on",
+            "fieldtype": "Datetime",
+            "label": "Closed On",
+            "read_only": 1
+        },
+        {
+            "fieldname": "status_section",
+            "fieldtype": "Section Break",
+            "label": "Status"
+        },
+        {
+            "fieldname": "workflow_state",
+            "fieldtype": "Data",
+            "label": "Status",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [
+        {
+            "link_doctype": "Machine Access Log",
+            "link_fieldname": "facility_work_order",
+            "label": "Machine Access Log"
+        },
+        {
+            "link_doctype": "Removed Parts Register",
+            "link_fieldname": "facility_work_order",
+            "label": "Removed Parts Register"
+        },
+        {
+            "link_doctype": "Vehicle Maintenance Report",
+            "link_fieldname": "facility_work_order",
+            "label": "Vehicle Maintenance Report"
+        },
+        {
+            "link_doctype": "Equipment Repair Authorization",
+            "link_fieldname": "facility_work_order",
+            "label": "Equipment Repair Authorization"
+        }
+    ],
+    "modified": "2026-05-21 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Facility Work Order",
+    "naming_rule": "Expression",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "select": 1,
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "select": 1,
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk",
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Receptionist",
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Facilities Supervisor",
+            "write": 1
+        },
+        {
+            "create": 0,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Department Head",
+            "write": 1
+        },
+        {
+            "create": 0,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Facilities Manager",
+            "write": 1
+        },
+        {
+            "create": 0,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Fleet Supervisor",
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "date_reported",
+    "sort_order": "DESC",
+    "states": [
+        {
+            "color": "Gray",
+            "title": "Draft"
+        },
+        {
+            "color": "Blue",
+            "title": "Pending Requesting Officer Approval"
+        },
+        {
+            "color": "Yellow",
+            "title": "Pending Facility Supervisor Approval"
+        },
+        {
+            "color": "Purple",
+            "title": "Pending Department Head Signature"
+        },
+        {
+            "color": "Green",
+            "title": "Closed"
+        },
+        {
+            "color": "Red",
+            "title": "Rejected"
+        },
+        {
+            "color": "Red",
+            "title": "Cancelled"
+        }
+    ],
+    "track_changes": 1
+}

@@ -43,5 +43,59 @@
   "name": "Pending Approval",
   "style": "",
   "workflow_state_name": "Pending Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-20 00:00:00.000000",
+  "name": "In Progress",
+  "style": "Primary",
+  "workflow_state_name": "In Progress"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-20 00:00:00.000000",
+  "name": "Closed",
+  "style": "Success",
+  "workflow_state_name": "Closed"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-20 00:00:00.000000",
+  "name": "Cancelled",
+  "style": "Danger",
+  "workflow_state_name": "Cancelled"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00.000000",
+  "name": "Pending Requesting Officer Approval",
+  "style": "Primary",
+  "workflow_state_name": "Pending Requesting Officer Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00.000000",
+  "name": "Pending Facility Supervisor Approval",
+  "style": "Primary",
+  "workflow_state_name": "Pending Facility Supervisor Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00.000000",
+  "name": "Pending Department Head Signature",
+  "style": "Primary",
+  "workflow_state_name": "Pending Department Head Signature"
  }
 ]
