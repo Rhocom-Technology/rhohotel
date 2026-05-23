@@ -1,0 +1,165 @@
+{
+ "actions": [],
+ "beta": 1,
+ "creation": "2025-10-08 12:33:56.320420",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "default_customer",
+  "default_taxes_and_charges",
+  "default_invoice_naming_series",
+  "default_check_out_time",
+  "sb_late_checkout",
+  "enable_late_checkout_charges",
+  "late_checkout_grace_hours",
+  "late_checkout_policies",
+  "sb_monnify_settings",
+  "monnify_api_key",
+  "monnify_secret_key",
+  "section_break_ypml",
+  "paystack_public_key",
+  "column_break_fkpz",
+  "paystack_secret_key",
+  "consumable_warehouse_section",
+  "consumable_warehouse"
+ ],
+ "fields": [
+  {
+   "fieldname": "default_customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Default Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_taxes_and_charges",
+   "fieldtype": "Link",
+   "label": "Default Taxes and Charges",
+   "options": "Sales Taxes and Charges Template"
+  },
+  {
+   "fieldname": "default_invoice_naming_series",
+   "fieldtype": "Data",
+   "label": "Default Invoice Naming Series"
+  },
+  {
+   "default": "12:00:00",
+   "fieldname": "default_check_out_time",
+   "fieldtype": "Time",
+   "label": "Default Check-Out Time"
+  },
+  {
+   "fieldname": "sb_late_checkout",
+   "fieldtype": "Section Break",
+   "label": "Late Checkout"
+  },
+  {
+   "fieldname": "sb_monnify_settings",
+   "fieldtype": "Section Break",
+   "label": "Monnify Settings"
+  },
+  {
+   "fieldname": "monnify_api_key",
+   "fieldtype": "Password",
+   "label": "Monnify API Key"
+  },
+  {
+   "fieldname": "monnify_secret_key",
+   "fieldtype": "Password",
+   "label": "Monnify Secret Key"
+  },
+  {
+   "description": "This Warehouse is where consumable like tissue, soaps etc for hotel will be removed from",
+   "fieldname": "consumable_warehouse_section",
+   "fieldtype": "Section Break",
+   "label": "Warehouse Section"
+  },
+  {
+   "fieldname": "consumable_warehouse",
+   "fieldtype": "Link",
+   "label": "Consumable Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "section_break_ypml",
+   "fieldtype": "Section Break",
+   "label": "Paystack Settings"
+  },
+  {
+   "fieldname": "paystack_public_key",
+   "fieldtype": "Data",
+   "label": "Paystack Public Key"
+  },
+  {
+   "fieldname": "column_break_fkpz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "paystack_secret_key",
+   "fieldtype": "Password",
+   "label": "Paystack Secret Key"
+  },
+  {
+   "depends_on": "enable_late_checkout_charges",
+   "fieldname": "late_checkout_policies",
+   "fieldtype": "Table",
+   "label": "Late Check-out Policies",
+   "mandatory_depends_on": "enable_late_checkout_charges",
+   "options": "Late Checkout Policy"
+  },
+  {
+   "default": "0.25",
+   "depends_on": "enable_late_checkout_charges",
+   "fieldname": "late_checkout_grace_hours",
+   "fieldtype": "Float",
+   "label": "Late Check-out Grace Period (Hours)"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_late_checkout_charges",
+   "fieldtype": "Check",
+   "label": "Enable Late Check-out Charges"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2025-12-17 15:15:58.227245",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Hotel Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

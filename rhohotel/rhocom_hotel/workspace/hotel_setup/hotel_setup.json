@@ -1,0 +1,401 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"jkXWNy0FHx\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Hotel Setup</span>\",\"col\":12}},{\"id\":\"5hzc3n5rGB\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Rooms\",\"col\":3}},{\"id\":\"3Mz4gpPHTB\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Vacant Rooms\",\"col\":3}},{\"id\":\"ZexFTU9UDC\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Occupied Rooms\",\"col\":3}},{\"id\":\"j6dCegD8d8\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\",\"col\":12}},{\"id\":\"ocIGP7shGS\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Front desk\",\"col\":3}},{\"id\":\"0NSxPKzvHe\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Refund\",\"col\":3}},{\"id\":\"Yj2aYHzCtD\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Room Check In\",\"col\":3}},{\"id\":\"wb8Kbjejvi\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Hall Booking\",\"col\":3}},{\"id\":\"Ry3hC3OWtv\",\"type\":\"card\",\"data\":{\"card_name\":\"Guest Operations\",\"col\":4}},{\"id\":\"aV2ZSxC5bm\",\"type\":\"card\",\"data\":{\"card_name\":\"Room Setup\",\"col\":4}},{\"id\":\"AQN499IVnR\",\"type\":\"card\",\"data\":{\"card_name\":\"Pricing Setup\",\"col\":4}},{\"id\":\"8OLktOScCE\",\"type\":\"card\",\"data\":{\"card_name\":\"Setups\",\"col\":4}},{\"id\":\"UBKRYjj8lL\",\"type\":\"card\",\"data\":{\"card_name\":\"House Keeping\",\"col\":4}},{\"id\":\"70An0-yVzm\",\"type\":\"card\",\"data\":{\"card_name\":\"Maintenance\",\"col\":4}},{\"id\":\"LdiR3CKhMM\",\"type\":\"card\",\"data\":{\"card_name\":\"Configuration\",\"col\":4}},{\"id\":\"jr1MSVQFIa\",\"type\":\"card\",\"data\":{\"card_name\":\"Mis.\",\"col\":4}}]",
+ "creation": "2025-10-31 09:23:30.657804",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "setting-gear",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Hotel Setup",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pricing Setup",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Rate Type",
+   "link_count": 0,
+   "link_to": "Hotel Room Rate",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Tariff",
+   "link_count": 0,
+   "link_to": "Hotel Room Tariff",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "House Keeping",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "House Keep Request",
+   "link_count": 0,
+   "link_to": "Housekeeping Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "House Keep Task",
+   "link_count": 0,
+   "link_to": "Housekeeping Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "House Keeping Type",
+   "link_count": 0,
+   "link_to": "Housekeeping Service Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Maintenance",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Maintenance Request",
+   "link_count": 0,
+   "link_to": "Maintenance Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Maintenance Task",
+   "link_count": 0,
+   "link_to": "Maintenance Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Maintenance Schedule ",
+   "link_count": 0,
+   "link_to": "Maintenance Schedule",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Preventive Maintenance Schedule",
+   "link_count": 0,
+   "link_to": "Preventive Maintenance Schedule",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Configuration",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hotel Settings",
+   "link_count": 0,
+   "link_to": "Hotel Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "AI Settings",
+   "link_count": 0,
+   "link_to": "AI Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mis.",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Lost and Found",
+   "link_count": 0,
+   "link_to": "Lost and Found",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setups",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Market Places",
+   "link_count": 0,
+   "link_to": "Market Place",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Business Sources",
+   "link_count": 0,
+   "link_to": "Business Source",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Season Types",
+   "link_count": 0,
+   "link_to": "Hotel Season Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Season",
+   "link_count": 0,
+   "link_to": "Hotel Season",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Guest Operations",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Check In",
+   "link_count": 0,
+   "link_to": "Hotel Room Check In",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hotel Guests",
+   "link_count": 0,
+   "link_to": "Hotel Guest",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hall Booking",
+   "link_count": 0,
+   "link_to": "Hall Booking",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Setup",
+   "link_count": 6,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Rate Type",
+   "link_count": 0,
+   "link_to": "Hotel Room Rate",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Room Types",
+   "link_count": 0,
+   "link_to": "Hotel Room Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rooms",
+   "link_count": 0,
+   "link_to": "Hotel Room",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Floor",
+   "link_count": 0,
+   "link_to": "Hotel Floor",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hall",
+   "link_count": 0,
+   "link_to": "Hall",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Hall Service",
+   "link_count": 0,
+   "link_to": "Hall Service",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2025-12-16 17:05:12.768637",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel Setup",
+ "number_cards": [
+  {
+   "label": "Total Rooms",
+   "number_card_name": "total room"
+  },
+  {
+   "label": "Vacant Rooms",
+   "number_card_name": "Vacant Rooms"
+  },
+  {
+   "label": "Occupied Rooms",
+   "number_card_name": "Occupied Rooms"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "Hotel Manager"
+  }
+ ],
+ "sequence_id": 21.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Refund",
+   "link_to": "Hotel Refund",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Open Front desk",
+   "link_to": "front-desk",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Hall Booking",
+   "link_to": "Hall Booking",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Room Check In",
+   "link_to": "Hotel Room Check In",
+   "stats_filter": "[[\"Hotel Room Check In\",\"status\",\"=\",\"Checked In\",false]]",
+   "type": "DocType"
+  }
+ ],
+ "title": "Hotel Setup"
+}

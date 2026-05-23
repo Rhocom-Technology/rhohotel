@@ -1,0 +1,527 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "autoname": "format:RES-{YYYY}-{#####}",
+  "beta": 1,
+  "creation": "2026-04-23 00:00:00",
+  "doctype": "DocType",
+  "document_type": "Document",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "is_submittable": 1,
+  "field_order": [
+    "reservation_number",
+    "source_channel",
+    "column_break_header",
+    "reservation_type",
+    "reservation_status",
+    "payment_status",
+    "guest_section",
+    "guest_profile_kind",
+    "primary_guest_name",
+    "primary_guest_email",
+    "column_break_guest",
+    "primary_guest_phone",
+    "corporate_guest",
+    "customer",
+    "group_section",
+    "group_name",
+    "group_billing_mode",
+    "group_master_customer",
+    "ota_section",
+    "ota_channel",
+    "ota_collection_model",
+    "column_break_ota",
+    "ota_commission_amount",
+    "ota_virtual_card_ref",
+    "internal_section",
+    "internal_cost_center",
+    "comp_reason",
+    "theoretical_room_revenue",
+    "dates_section",
+    "from_date",
+    "to_date",
+    "number_of_nights",
+    "column_break_dates",
+    "hold_expires_at",
+    "check_in_time",
+    "check_out_time",
+    "rooms_section",
+    "rooms",
+    "room_blocks_section",
+    "room_blocks",
+    "pricing_section",
+    "subtotal",
+    "discount_type",
+    "discount",
+    "column_break_pricing",
+    "discount_amount",
+    "total_amount",
+    "net_total",
+    "payment_section",
+    "sales_invoice",
+    "payment_entry",
+    "transaction_id",
+    "legacy_section",
+    "amended_from"
+  ],
+  "fields": [
+    {
+      "fieldname": "reservation_number",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "in_global_search": 1,
+      "in_standard_filter": 1,
+      "label": "Reservation Number",
+      "read_only": 1,
+      "description": "Auto-generated unique reservation reference (RES-YYYY-#####). This is the single identifier used across all reservation workflows."
+    },
+    {
+      "fieldname": "source_channel",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Source Channel",
+      "options": "Front Desk\nOnline\nCorporate\nWalk In",
+      "reqd": 1,
+      "description": "How the reservation was created: Front Desk (staff-initiated), Online (guest self-service via Temporary Booking), Corporate (corporate account), or Walk In (same-day direct check-in without prior reservation)."
+    },
+    {
+      "fieldname": "column_break_header",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "reservation_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Reservation Type",
+      "options": "Individual\nCorporate\nGroup\nHouse Use\nComplimentary\nOTA",
+      "reqd": 1,
+      "description": "Individual: private guest. Corporate: corporate account booking. Group: multi-room group block. House Use: internal staff/operational use (no revenue). Complimentary: complimentary stay (theoretical revenue only). OTA: booking via Online Travel Agency channel."
+    },
+    {
+      "fieldname": "reservation_status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Reservation Status",
+      "options": "Draft\nHold\nConfirmed\nChecked In\nChecked Out\nCancelled\nNo Show\nExpired",
+      "reqd": 1,
+      "default": "Draft",
+      "description": "Lifecycle state of the reservation.\n\nAllowed transitions:\n  Draft → Hold\n  Hold → Confirmed | Cancelled | Expired\n  Confirmed → Checked In | Cancelled\n  Checked In → Checked Out | Cancelled (admin only)\n  Any active state → No Show (policy-driven)\n\nPayment status is tracked separately; do not use reservation_status to represent payment state."
+    },
+    {
+      "fieldname": "payment_status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Payment Status",
+      "options": "Pending\nPartly Paid\nPaid\nFailed\nRefunded",
+      "default": "Pending",
+      "description": "Current payment collection state. This is orthogonal to reservation_status: a reservation can be Confirmed but payment still Pending (e.g. pay-at-check-in policy), or Checked Out with a Refunded payment."
+    },
+    {
+      "fieldname": "guest_section",
+      "fieldtype": "Section Break",
+      "label": "Guest Information"
+    },
+    {
+      "fieldname": "guest_profile_kind",
+      "fieldtype": "Select",
+      "label": "Guest Profile Kind",
+      "options": "Primary Guest\nCorporate Account",
+      "reqd": 1,
+      "default": "Primary Guest",
+      "description": "Determines which guest fields are active. Primary Guest: fill primary_guest_name/email/phone. Corporate Account: fill corporate_guest link instead."
+    },
+    {
+      "fieldname": "primary_guest_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "in_global_search": 1,
+      "label": "Primary Guest Name",
+      "depends_on": "eval:doc.guest_profile_kind == 'Primary Guest'",
+      "description": "Full name of the primary (lead) guest. Required for individual reservations."
+    },
+    {
+      "fieldname": "primary_guest_email",
+      "fieldtype": "Data",
+      "options": "Email",
+      "label": "Primary Guest Email",
+      "depends_on": "eval:doc.guest_profile_kind == 'Primary Guest'",
+      "description": "Email address used for booking confirmations, invoices, and communication."
+    },
+    {
+      "fieldname": "column_break_guest",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "primary_guest_phone",
+      "fieldtype": "Data",
+      "label": "Primary Guest Phone",
+      "depends_on": "eval:doc.guest_profile_kind == 'Primary Guest'",
+      "description": "Contact phone number for the primary guest."
+    },
+    {
+      "fieldname": "corporate_guest",
+      "fieldtype": "Link",
+      "options": "Hotel Guest",
+      "label": "Corporate Guest",
+      "depends_on": "eval:doc.guest_profile_kind == 'Corporate Account'",
+      "description": "Link to the Hotel Guest record with guest_type = Corporate. Required when reservation_type = Corporate."
+    },
+    {
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "options": "Customer",
+      "label": "Customer (ERPNext)",
+      "read_only": 1,
+      "description": "ERPNext Customer document linked to this reservation. Auto-populated from corporate_guest.customer on corporate bookings, or auto-created for individual guests on confirmation."
+    },
+    {
+      "fieldname": "group_section",
+      "fieldtype": "Section Break",
+      "label": "Group Details",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Group-specific fields. Only visible when reservation_type = Group."
+    },
+    {
+      "fieldname": "group_name",
+      "fieldtype": "Data",
+      "label": "Group Name",
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Official name of the group (e.g. event name, company name, wedding party). Used in rooming list headers and billing documents."
+    },
+    {
+      "fieldname": "group_billing_mode",
+      "fieldtype": "Select",
+      "label": "Group Billing Mode",
+      "options": "\nCentral\nSplit",
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Central: all charges billed to the master group customer. Split: each room is billed individually to the occupant; only specified charges go to the master customer."
+    },
+    {
+      "fieldname": "group_master_customer",
+      "fieldtype": "Link",
+      "options": "Customer",
+      "label": "Master Payer (Customer)",
+      "depends_on": "eval:doc.reservation_type == 'Group' && doc.group_billing_mode == 'Central'",
+      "description": "The ERPNext Customer that receives the consolidated group invoice. Required when group_billing_mode = Central."
+    },
+    {
+      "fieldname": "ota_section",
+      "fieldtype": "Section Break",
+      "label": "OTA Details",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "Online Travel Agency booking details. Only visible when reservation_type = OTA."
+    },
+    {
+      "fieldname": "ota_channel",
+      "fieldtype": "Link",
+      "options": "Market Place",
+      "label": "OTA Channel",
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "The OTA platform through which this booking was received (e.g. Booking.com, Expedia)."
+    },
+    {
+      "fieldname": "ota_collection_model",
+      "fieldtype": "Select",
+      "label": "Collection Model",
+      "options": "\nHotel Collect\nOTA Collect / Prepaid",
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "Hotel Collect: guest pays hotel directly on check-in/out; hotel remits commission. OTA Collect/Prepaid: OTA collects payment from guest; hotel invoices OTA net of commission."
+    },
+    {
+      "fieldname": "column_break_ota",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "ota_commission_amount",
+      "fieldtype": "Currency",
+      "label": "OTA Commission Amount",
+      "depends_on": "eval:doc.reservation_type == 'OTA'",
+      "description": "Commission amount payable to the OTA, in hotel currency. Used for net revenue reporting."
+    },
+    {
+      "fieldname": "ota_virtual_card_ref",
+      "fieldtype": "Data",
+      "label": "OTA Virtual Card Reference",
+      "depends_on": "eval:doc.reservation_type == 'OTA' && doc.ota_collection_model == 'OTA Collect / Prepaid'",
+      "description": "Virtual credit card reference provided by the OTA for prepaid bookings. Used to match payments against OTA invoices."
+    },
+    {
+      "fieldname": "internal_section",
+      "fieldtype": "Section Break",
+      "label": "Internal / Complimentary Details",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "Fields for internal House Use and Complimentary reservation types."
+    },
+    {
+      "fieldname": "internal_cost_center",
+      "fieldtype": "Link",
+      "options": "Cost Center",
+      "label": "Cost Centre",
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "Department or cost centre absorbing the room cost for internal allocations."
+    },
+    {
+      "fieldname": "comp_reason",
+      "fieldtype": "Small Text",
+      "label": "Reason / Authorisation",
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "Mandatory justification for House Use or Complimentary. Captures who authorised the comp/house use and the business reason."
+    },
+    {
+      "fieldname": "theoretical_room_revenue",
+      "fieldtype": "Currency",
+      "label": "Theoretical Room Revenue",
+      "read_only": 1,
+      "depends_on": "eval:doc.reservation_type == 'House Use' || doc.reservation_type == 'Complimentary'",
+      "description": "What the rooms would have earned at the standard rack rate. Populated for reporting and RevPAR calculations. No actual revenue is recognised."
+    },
+    {
+      "fieldname": "dates_section",
+      "fieldtype": "Section Break",
+      "label": "Stay Dates"
+    },
+    {
+      "fieldname": "from_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Check-In Date",
+      "reqd": 1,
+      "description": "Planned check-in date. Room availability conflicts are evaluated from this date at the hotel's standard 12:00 boundary."
+    },
+    {
+      "fieldname": "to_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Check-Out Date",
+      "reqd": 1,
+      "description": "Planned check-out date. Must be strictly after from_date. Room availability conflicts are evaluated up to (but not including) this date."
+    },
+    {
+      "fieldname": "number_of_nights",
+      "fieldtype": "Int",
+      "label": "Number of Nights",
+      "read_only": 1,
+      "description": "Automatically computed as to_date minus from_date. Used for pricing calculations."
+    },
+    {
+      "fieldname": "column_break_dates",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "hold_expires_at",
+      "fieldtype": "Datetime",
+      "label": "Hold Expires At",
+      "read_only": 1,
+      "description": "Datetime when this reservation's room hold will automatically expire if payment is not received. Populated when status = Hold. A background job monitors this and transitions status to Expired and room back to available."
+    },
+    {
+      "fieldname": "check_in_time",
+      "fieldtype": "Datetime",
+      "label": "Actual Check-In Time",
+      "read_only": 1,
+      "description": "Timestamp when the guest physically checked in (set when status transitions to Checked In). Distinct from from_date, which is the planned date."
+    },
+    {
+      "fieldname": "check_out_time",
+      "fieldtype": "Datetime",
+      "label": "Actual Check-Out Time",
+      "read_only": 1,
+      "description": "Timestamp when the guest physically checked out (set when status transitions to Checked Out)."
+    },
+    {
+      "fieldname": "rooms_section",
+      "fieldtype": "Section Break",
+      "label": "Room Allocations"
+    },
+    {
+      "fieldname": "rooms",
+      "fieldtype": "Table",
+      "options": "Hotel Reservation Room",
+      "label": "Rooms",
+      "description": "One row per allocated room. Each row captures the specific room, pricing, and the occupant assigned to that room. Room availability is validated per row using the centralized room availability utility."
+    },
+    {
+      "fieldname": "room_blocks_section",
+      "fieldtype": "Section Break",
+      "label": "Room Blocks",
+      "collapsible": 1,
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Inventory blocks by room type for group reservations. Each row reserves a quantity of rooms of a given type. Individual rooms are picked up into the Rooms table as guests are assigned."
+    },
+    {
+      "fieldname": "room_blocks",
+      "fieldtype": "Table",
+      "options": "Hotel Reservation Room Block",
+      "label": "Room Blocks",
+      "depends_on": "eval:doc.reservation_type == 'Group'",
+      "description": "Room type inventory blocks for this group reservation. Protected rooms cannot be booked by individual or non-group reservations for the same period."
+    },
+    {
+      "fieldname": "pricing_section",
+      "fieldtype": "Section Break",
+      "label": "Pricing Summary"
+    },
+    {
+      "fieldname": "subtotal",
+      "fieldtype": "Currency",
+      "label": "Subtotal",
+      "read_only": 1,
+      "description": "Sum of all room_total values from the rooms child table before any reservation-level discount."
+    },
+    {
+      "fieldname": "discount_type",
+      "fieldtype": "Select",
+      "label": "Discount Type",
+      "options": "\nPercentage\nFixed Amount",
+      "description": "Type of reservation-level discount to apply. Leave blank for no discount. Percentage: applies % to subtotal. Fixed Amount: subtracts fixed value from subtotal."
+    },
+    {
+      "fieldname": "discount",
+      "fieldtype": "Float",
+      "label": "Discount Value",
+      "depends_on": "eval:doc.discount_type",
+      "description": "Discount value: percentage (0-100) if discount_type = Percentage, or currency amount if discount_type = Fixed Amount."
+    },
+    {
+      "fieldname": "column_break_pricing",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "discount_amount",
+      "fieldtype": "Currency",
+      "label": "Discount Amount",
+      "read_only": 1,
+      "description": "Computed currency amount deducted from subtotal based on discount_type and discount value."
+    },
+    {
+      "fieldname": "total_amount",
+      "fieldtype": "Currency",
+      "label": "Total Amount",
+      "read_only": 1,
+      "bold": 1,
+      "description": "Subtotal minus discount_amount. This is the guest-facing amount due for accommodation."
+    },
+    {
+      "fieldname": "net_total",
+      "fieldtype": "Currency",
+      "label": "Net Total (After Tax)",
+      "read_only": 1,
+      "description": "Total amount after applicable taxes are applied. Populated when a Sales Invoice is created."
+    },
+    {
+      "fieldname": "payment_section",
+      "fieldtype": "Section Break",
+      "label": "Payment & Invoice"
+    },
+    {
+      "fieldname": "sales_invoice",
+      "fieldtype": "Link",
+      "options": "Sales Invoice",
+      "label": "Sales Invoice",
+      "read_only": 1,
+      "allow_on_submit": 1,
+      "description": "ERPNext Sales Invoice document generated for this reservation. Created automatically on confirmation or on manual trigger. Used for accounting and payment reconciliation."
+    },
+    {
+      "fieldname": "payment_entry",
+      "fieldtype": "Link",
+      "options": "Payment Entry",
+      "label": "Payment Entry",
+      "read_only": 1,
+      "allow_on_submit": 1,
+      "description": "ERPNext Payment Entry linked to this reservation for direct payments. For split or partial payments, individual entries are tracked at the invoice level."
+    },
+    {
+      "fieldname": "transaction_id",
+      "fieldtype": "Data",
+      "label": "Payment Transaction ID",
+      "read_only": 1,
+      "description": "External payment gateway transaction reference (e.g. Paystack transaction reference). Populated by the online payment callback."
+    },
+    {
+      "fieldname": "legacy_section",
+      "fieldtype": "Section Break",
+      "label": "Legacy / Migration References",
+      "collapsible": 1,
+      "description": "These fields hold backward-compatibility links to the pre-consolidation doctypes. They are populated during data migration and should not be edited manually. They will be retired after full migration is verified."
+    },
+    {
+      "fieldname": "amended_from",
+      "fieldtype": "Link",
+      "options": "Hotel Reservation",
+      "label": "Amended From",
+      "no_copy": 1,
+      "print_hide": 1,
+      "read_only": 1,
+      "description": "Set automatically when this document is created as an amendment of a cancelled canonical reservation."
+    }
+  ],
+  "links": [],
+  "modified": "2026-04-23 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Hotel Reservation",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Hotel Manager",
+      "share": 1,
+      "submit": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Hotel Receptionist",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [
+    { "color": "Gray",   "title": "Draft"       },
+    { "color": "Yellow", "title": "Hold"        },
+    { "color": "Blue",   "title": "Confirmed"   },
+    { "color": "Green",  "title": "Checked In"  },
+    { "color": "Green",  "title": "Checked Out" },
+    { "color": "Red",    "title": "Cancelled"   },
+    { "color": "Orange", "title": "No Show"     },
+    { "color": "Red",    "title": "Expired"     }
+  ],
+  "track_changes": 1
+}

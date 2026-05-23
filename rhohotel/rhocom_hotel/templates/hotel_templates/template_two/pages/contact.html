@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#2C3E35' }};
+  --web-secondary: {{ hotel.secondary_color or '#BFA37E' }};
+  --web-accent: {{ hotel.accent_color or '#8E6E5E' }};
+">
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
+
+  <header class="web-page-hero">
+    <img src="/assets/rhohotel/hotel_templates/template_two/files/contact-4.jpg"
+      alt="Contact {{ hotel.hotel_name or 'Hotel' }}" class="web-page-hero-bg" />
+
+    <div class="container">
+      <div class="web-breadcrumb-label">Guest Support</div>
+
+      <h1>Contact</h1>
+
+      <p>
+        Speak with {{ hotel.hotel_name or "our hotel" }} about rooms, bookings, dining,
+        wellness, events, transport, and special guest requests.
+      </p>
+    </div>
+  </header>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row align-items-center g-5">
+
+        <div class="col-lg-6">
+          <div class="web-editorial-image">
+            <img src="/assets/rhohotel/hotel_templates/template_two/files/lobby-4.jpg" alt="Hotel guest support" />
+            <img src="/assets/rhohotel/hotel_templates/template_two/files/contact-3.jpg" alt="Contact support detail" />
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="web-kicker">Contact Us</div>
+
+          <h2 class="web-section-title">
+            We Are Ready to Help
+          </h2>
+
+          <p class="web-section-text">
+            Whether you are planning a stay, confirming a reservation, asking about room options,
+            or arranging a special request, our team is available to guide you.
+          </p>
+
+          <div class="web-actions mt-4">
+            <a href="/hotel/booking" class="web-btn-solid">Reserve Now</a>
+            <a href="#contactForm" class="web-btn-ghost">Send Message</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-5">
+          <div class="web-kicker">Hotel Details</div>
+
+          <h2 class="web-section-title">
+            Speak With Our Team
+          </h2>
+
+          <p class="web-section-text">
+            Our reservations and guest support team can assist with room enquiries,
+            booking questions, special arrangements, and general hotel information.
+          </p>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-phone"></i>
+            </div>
+            <div>
+              <h3>Call</h3>
+              <p>{{ hotel.phone or "+234 800 000 0000" }}</p>
+            </div>
+          </div>
+
+          {% if hotel.whatsapp %}
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            <div>
+              <h3>WhatsApp</h3>
+              <p>{{ hotel.whatsapp }}</p>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-envelope"></i>
+            </div>
+            <div>
+              <h3>Email</h3>
+              <p>{{ hotel.email or "reservations@example.com" }}</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-location-dot"></i>
+            </div>
+            <div>
+              <h3>Address</h3>
+              <p>{{ hotel.address or "Visit our front desk for directions and guest support." }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <form class="web-form" id="contactForm">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label>Full Name</label>
+                <input type="text" name="full_name" class="form-control" placeholder="Enter your name" required>
+              </div>
+
+              <div class="col-md-6">
+                <label>Email Address</label>
+                <input type="email" name="email" class="form-control" placeholder="Enter your email" required>
+              </div>
+
+              <div class="col-md-6">
+                <label>Phone Number</label>
+                <input type="tel" name="phone" class="form-control"
+                  placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
+              </div>
+
+              <div class="col-md-6">
+                <label>Enquiry Type</label>
+                <select name="enquiry_type" class="form-select">
+                  <option>Room Booking</option>
+
+                  {% if hotel.enable_events %}
+                  <option>Events & Halls</option>
+                  {% endif %}
+
+                  {% if hotel.enable_spa %}
+                  <option>Spa</option>
+                  {% endif %}
+
+                  {% if hotel.enable_dining %}
+                  <option>Dining</option>
+                  {% endif %}
+
+                  {% if hotel.enable_gym %}
+                  <option>Gym</option>
+                  {% endif %}
+
+                  <option>General</option>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label>Message</label>
+                <textarea name="message" class="form-control" rows="5" placeholder="How can we help?"
+                  required></textarea>
+              </div>
+
+              <div class="col-12">
+                <button class="web-btn-solid border-0" type="submit">
+                  Send Message
+                </button>
+              </div>
+
+              
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-fixed-band"
+    style="background-image: url('/assets/rhohotel/hotel_templates/template_two/files/room-4.jpg');">
+    <div class="container">
+      <div class="web-fixed-box">
+        <div class="web-kicker">Hospitality</div>
+
+        <h2 class="web-section-title text-white">
+          Every Guest Request Matters
+        </h2>
+
+        <p>
+          From simple enquiries to special arrangements, our team is ready to help
+          make your visit smoother and more comfortable.
+        </p>
+
+        <a href="/hotel/booking" class="web-btn-primary">
+          Reserve Experience
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-5">
+          <div class="web-kicker">Support Areas</div>
+
+          <h2 class="web-section-title">
+            How We Can Assist
+          </h2>
+
+          <p class="web-section-text">
+            Use the contact page for any part of your hotel journey, from planning
+            to arrival support and special requests.
+          </p>
+        </div>
+
+        <div class="col-lg-7">
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-bed"></i>
+            </div>
+            <div>
+              <h3>Reservations</h3>
+              <p>Room enquiries, rates, availability, stay details, and booking guidance.</p>
+            </div>
+          </div>
+
+          {% if hotel.enable_events %}
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-calendar-check"></i>
+            </div>
+            <div>
+              <h3>Events</h3>
+              <p>Hall booking, guest size, dates, catering, setup, and event planning support.</p>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if hotel.enable_spa %}
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-spa"></i>
+            </div>
+            <div>
+              <h3>Wellness</h3>
+              <p>Spa treatment enquiries, wellness packages, and relaxation arrangements.</p>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if hotel.enable_dining %}
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-utensils"></i>
+            </div>
+            <div>
+              <h3>Dining</h3>
+              <p>Restaurant enquiries, private dining, breakfast, lounge, and meal requests.</p>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-car"></i>
+            </div>
+            <div>
+              <h3>Guest Assistance</h3>
+              <p>Airport pickup, movement support, arrival questions, and general concierge help.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="web-cta-split">
+        <div class="row g-0 align-items-center">
+          <div class="col-lg-5">
+            <img src="/assets/rhohotel/hotel_templates/template_two/files/lobby-1.jpg"
+              alt="Need Help Planning Your Stay?" class="web-cta-image rounded" />
+          </div>
+
+          <div class="col-lg-7">
+            <div class="web-cta-content">
+              <div class="web-kicker">Reserve With Us</div>
+
+              <h2>Need Help Planning Your Stay?</h2>
+
+              <p>
+                Contact us for guidance or go straight to booking and reserve your preferred dates.
+                Our team will help with the details that make your stay easier.
+              </p>
+
+              <div class="web-actions">
+                <a href="/hotel/booking" class="web-btn-primary">Book Now</a>
+                <a href="#contactForm" class="web-btn-outline">Send Message</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+  <script src="/assets/rhohotel/hotel_templates/template_two/js/contact.js"></script>
+</body>
+
+</html>

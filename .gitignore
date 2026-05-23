@@ -1,0 +1,7 @@
+.DS_Store
+*.pyc
+*.egg-info
+*.swp
+tags
+node_modules
+__pycache__rhohotel/public/hotel_templates/template_two/files/*.mp4

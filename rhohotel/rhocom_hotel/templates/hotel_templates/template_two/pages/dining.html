@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#2C3E35' }};
+  --web-secondary: {{ hotel.secondary_color or '#BFA37E' }};
+  --web-accent: {{ hotel.accent_color or '#8E6E5E' }};
+">
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
+
+  <header class="web-page-hero">
+    <img
+      src="/assets/rhohotel/hotel_templates/template_two/files/dining-hero.jpg"
+      alt="Dining at {{ hotel.hotel_name or 'Hotel' }}"
+      class="web-page-hero-bg"
+    />
+
+    <div class="container">
+      <div class="web-breadcrumb-label">Restaurant & Lounge</div>
+
+      <h1>Dining</h1>
+
+      <p>
+        Enjoy breakfast, restaurant service, lounge drinks, private dining, and warm food moments
+        prepared to become part of your stay.
+      </p>
+    </div>
+  </header>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row align-items-center g-5">
+
+        <div class="col-lg-6">
+          <div class="web-kicker">Dining Story</div>
+
+          <h2 class="web-section-title">
+            Meals With Atmosphere
+          </h2>
+
+          <p class="web-section-text">
+            Dining at {{ hotel.hotel_name or "our hotel" }} is designed around comfort, good timing,
+            attentive service, and a relaxed setting. From morning meals to evening conversations,
+            every dining moment is prepared to feel easy and welcoming.
+          </p>
+
+          <div class="web-actions mt-4">
+            <a href="/hotel/booking" class="web-btn-solid">Reserve Now</a>
+            <a href="/hotel/contact" class="web-btn-ghost">Ask a Question</a>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="web-editorial-image">
+            <img
+              src="/assets/rhohotel/hotel_templates/template_two/files/hotel-restaurant.jpg"
+              alt="Hotel restaurant"
+            />
+            <img
+              src="/assets/rhohotel/hotel_templates/template_two/files/hotel-breakfast.jpg"
+              alt="Hotel breakfast"
+            />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="text-center">
+        <div class="web-kicker">Dining Spaces</div>
+
+        <h2 class="web-section-title">
+          For Every Part of the Day
+        </h2>
+
+        <p class="web-section-subtitle">
+          From fresh morning meals to late evening drinks, the hotel gives guests different
+          dining moods for different moments of the stay.
+        </p>
+      </div>
+
+      <div class="row g-4">
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            <img
+              src="/assets/rhohotel/hotel_templates/template_two/files/hotel-breakfast.jpg"
+              alt="Breakfast"
+            />
+            <div class="web-tile-content">
+              <h3>Breakfast</h3>
+              <p>Start the day with fresh coffee, warm meals, fruits, pastries, and familiar local favourites.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            <img
+              src="/assets/rhohotel/hotel_templates/template_two/files/hotel-restaurant.jpg"
+              alt="Restaurant"
+            />
+            <div class="web-tile-content">
+              <h3>Restaurant</h3>
+              <p>Enjoy carefully prepared dishes in a calm dining room made for comfort and conversation.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            <img
+              src="/assets/rhohotel/hotel_templates/template_two/files/hotel-lounge.jpg"
+              alt="Lounge"
+            />
+            <div class="web-tile-content">
+              <h3>Lounge</h3>
+              <p>Settle into drinks, small plates, warm lighting, soft music, and relaxed evening moments.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="web-fixed-band" style="background-image: url('/assets/rhohotel/hotel_templates/template_two/files/dining-fixed.jpg');">
+    <div class="container">
+      <div class="web-fixed-box">
+        <div class="web-kicker">Dinner</div>
+
+        <h2 class="web-section-title text-white">
+          A Warm Evening Setting
+        </h2>
+
+        <p>
+          Dining becomes part of the stay when good food, soft lighting, attentive service,
+          and comfortable seating come together.
+        </p>
+
+        <a href="/hotel/booking" class="web-btn-primary">
+          Reserve Experience
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-5">
+          <div class="web-kicker">What We Serve</div>
+
+          <h2 class="web-section-title">
+            Flexible Dining Options
+          </h2>
+
+          <p class="web-section-text">
+            The dining experience supports hotel guests, visitors, private moments,
+            breakfast programs, lounge evenings, and simple meals during a comfortable stay.
+          </p>
+        </div>
+
+        <div class="col-lg-7">
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-mug-saucer"></i>
+            </div>
+            <div>
+              <h3>Breakfast</h3>
+              <p>Fresh, simple, and comforting morning options for guests starting their day.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-utensils"></i>
+            </div>
+            <div>
+              <h3>Restaurant</h3>
+              <p>Lunch and dinner service for hotel guests, visitors, meetings, and relaxed meals.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-wine-glass"></i>
+            </div>
+            <div>
+              <h3>Lounge</h3>
+              <p>Drinks, light bites, soft seating, and evening conversations in a calm setting.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-bell-concierge"></i>
+            </div>
+            <div>
+              <h3>Private Dining</h3>
+              <p>Dining support for private moments, small gatherings, room service, and special requests.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="web-cta-split">
+        <div class="row g-0 align-items-center">
+          <div class="col-lg-5">
+            <img
+              src="/assets/rhohotel/hotel_templates/template_two/files/hotel-lounge.jpg"
+              alt="Reserve a Table or Add Dining to Your Stay"
+              class="web-cta-image"
+            />
+          </div>
+
+          <div class="col-lg-7">
+            <div class="web-cta-content">
+              <div class="web-kicker">Reserve With Us</div>
+
+              <h2>Reserve a Table or Add Dining to Your Stay</h2>
+
+              <p>
+                Make dining part of your visit. Ask about breakfast, restaurant service,
+                private dining, lounge evenings, or special meal requests.
+              </p>
+
+              <div class="web-actions">
+                <a href="/hotel/booking" class="web-btn-primary">Book Now</a>
+                <a href="/hotel/contact" class="web-btn-outline">Contact Hotel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+</body>
+</html>

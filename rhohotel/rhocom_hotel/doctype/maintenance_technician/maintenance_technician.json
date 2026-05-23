@@ -1,0 +1,298 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "format:TECH-{#####}",
+    "creation": "2026-04-28 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "basic_section",
+        "technician_name",
+        "technician_type",
+        "column_break_basic",
+        "availability",
+        "response_priority_group",
+        "flags_section",
+        "can_receive_urgent",
+        "visible_for_assignment",
+        "linkage_section",
+        "employee",
+        "column_break_linkage",
+        "supplier",
+        "contact_section",
+        "phone",
+        "email",
+        "column_break_contact",
+        "shift",
+        "skills_section",
+        "primary_specialization",
+        "column_break_skills",
+        "secondary_skills",
+        "asset_categories_section",
+        "supported_categories",
+        "column_break_assets",
+        "certification",
+        "notes_section",
+        "notes",
+        "stats_section",
+        "total_tasks_assigned",
+        "column_break_stats",
+        "total_tasks_completed",
+        "amended_from"
+    ],
+    "fields": [
+        {
+            "fieldname": "basic_section",
+            "fieldtype": "Section Break",
+            "label": "Basic Details"
+        },
+        {
+            "fieldname": "technician_name",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Technician Name",
+            "reqd": 1,
+            "search_index": 1
+        },
+        {
+            "default": "In-House",
+            "fieldname": "technician_type",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Technician Type",
+            "options": "In-House\nOutsourced",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_basic",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "Available",
+            "fieldname": "availability",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Availability",
+            "options": "Available\nOn Call\nUnavailable",
+            "reqd": 1
+        },
+        {
+            "default": "Standard",
+            "fieldname": "response_priority_group",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Response Priority Group",
+            "options": "Standard\nPriority\nEmergency"
+        },
+        {
+            "fieldname": "flags_section",
+            "fieldtype": "Section Break",
+            "label": "Flags"
+        },
+        {
+            "default": "1",
+            "fieldname": "can_receive_urgent",
+            "fieldtype": "Check",
+            "in_list_view": 1,
+            "label": "Can Receive Urgent Tasks"
+        },
+        {
+            "default": "1",
+            "fieldname": "visible_for_assignment",
+            "fieldtype": "Check",
+            "in_list_view": 1,
+            "label": "Visible for Task Assignment"
+        },
+        {
+            "fieldname": "linkage_section",
+            "fieldtype": "Section Break",
+            "label": "Linkage"
+        },
+        {
+            "depends_on": "eval:doc.technician_type == 'In-House'",
+            "fieldname": "employee",
+            "fieldtype": "Link",
+            "in_standard_filter": 1,
+            "label": "Employee",
+            "options": "Employee"
+        },
+        {
+            "fieldname": "column_break_linkage",
+            "fieldtype": "Column Break"
+        },
+        {
+            "depends_on": "eval:doc.technician_type == 'Outsourced'",
+            "fieldname": "supplier",
+            "fieldtype": "Link",
+            "in_standard_filter": 1,
+            "label": "Supplier / Vendor",
+            "options": "Supplier"
+        },
+        {
+            "fieldname": "contact_section",
+            "fieldtype": "Section Break",
+            "label": "Contact"
+        },
+        {
+            "fieldname": "phone",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Phone",
+            "options": "Phone"
+        },
+        {
+            "fieldname": "email",
+            "fieldtype": "Data",
+            "label": "Email",
+            "options": "Email"
+        },
+        {
+            "fieldname": "column_break_contact",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "shift",
+            "fieldtype": "Data",
+            "label": "Shift / Working Window",
+            "placeholder": "e.g. 08:00 AM – 05:00 PM"
+        },
+        {
+            "fieldname": "skills_section",
+            "fieldtype": "Section Break",
+            "label": "Skills"
+        },
+        {
+            "fieldname": "primary_specialization",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Primary Specialization",
+            "options": "\nLaundry / Mechanical\nBoiler / Heating\nElectrical / Electronics\nHVAC\nPlumbing / Pump\nTV / Smart Lock / IT\nGeneral Maintenance"
+        },
+        {
+            "fieldname": "column_break_skills",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "secondary_skills",
+            "fieldtype": "Small Text",
+            "label": "Secondary Skills"
+        },
+        {
+            "fieldname": "asset_categories_section",
+            "fieldtype": "Section Break",
+            "label": "Asset Categories & Certification"
+        },
+        {
+            "fieldname": "supported_categories",
+            "fieldtype": "Small Text",
+            "label": "Supported Asset Categories"
+        },
+        {
+            "fieldname": "column_break_assets",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "certification",
+            "fieldtype": "Data",
+            "label": "Certification / License"
+        },
+        {
+            "fieldname": "notes_section",
+            "fieldtype": "Section Break",
+            "label": "Notes"
+        },
+        {
+            "fieldname": "notes",
+            "fieldtype": "Text Editor",
+            "label": "Notes"
+        },
+        {
+            "fieldname": "stats_section",
+            "collapsible": 1,
+            "fieldtype": "Section Break",
+            "label": "Stats"
+        },
+        {
+            "default": "0",
+            "fieldname": "total_tasks_assigned",
+            "fieldtype": "Int",
+            "label": "Total Tasks Assigned",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_stats",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "0",
+            "fieldname": "total_tasks_completed",
+            "fieldtype": "Int",
+            "label": "Total Tasks Completed",
+            "read_only": 1
+        },
+        {
+            "fieldname": "amended_from",
+            "fieldtype": "Link",
+            "label": "Amended From",
+            "no_copy": 1,
+            "options": "Maintenance Technician",
+            "print_hide": 1,
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-04-28 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Maintenance Technician",
+    "naming_rule": "Expression",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [
+        {
+            "color": "Green",
+            "title": "Available"
+        },
+        {
+            "color": "Yellow",
+            "title": "On Call"
+        },
+        {
+            "color": "Red",
+            "title": "Unavailable"
+        }
+    ],
+    "title_field": "technician_name",
+    "track_changes": 1
+}

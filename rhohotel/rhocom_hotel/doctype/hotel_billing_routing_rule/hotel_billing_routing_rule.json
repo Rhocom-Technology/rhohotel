@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "creation": "2026-05-15 00:00:00",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "reservation_type",
+  "charge_category",
+  "column_break_1",
+  "payer",
+  "priority",
+  "is_active",
+  "filter_section",
+  "corporate_customer",
+  "ota_channel",
+  "notes_section",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "reservation_type",
+   "fieldtype": "Select",
+   "label": "Reservation Type",
+   "options": "\nIndividual\nCorporate\nGroup\nHouse Use\nComplimentary\nOTA",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "The reservation type this rule applies to. Leave blank to create a catch-all fallback rule."
+  },
+  {
+   "fieldname": "charge_category",
+   "fieldtype": "Select",
+   "label": "Charge Category",
+   "options": "\nRoom\nRestaurant\nBar\nLaundry\nMinibar\nSpa\nTransport\nOther",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Type of charge this rule applies to. Leave blank to match all charge categories for the reservation type."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payer",
+   "fieldtype": "Select",
+   "label": "Payer",
+   "options": "Guest\nCorporate Account\nGroup Master\nOTA Virtual Card\nInternal (Cost Centre)",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Who pays this charge. Guest: bill to the individual guest customer. Corporate Account: bill to the linked corporate_customer. Group Master: bill to the group master customer. OTA Virtual Card: bill to the OTA's virtual card/account. Internal: zero-revenue internal cost allocation."
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority",
+   "default": "10",
+   "in_list_view": 1,
+   "description": "Lower number = higher priority. When multiple rules match, the rule with the lowest priority number wins."
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "in_list_view": 1,
+   "description": "Only active rules are evaluated by the billing routing resolver."
+  },
+  {
+   "fieldname": "filter_section",
+   "fieldtype": "Section Break",
+   "label": "Optional Filters",
+   "collapsible": 1,
+   "description": "These filters narrow this rule to specific corporate accounts or OTA channels. Leave blank to apply the rule to all reservations of the given type."
+  },
+  {
+   "fieldname": "corporate_customer",
+   "fieldtype": "Link",
+   "options": "Customer",
+   "label": "Corporate Customer",
+   "depends_on": "eval:doc.reservation_type == 'Corporate'",
+   "description": "When set, this rule only applies to reservations linked to this specific corporate customer. Useful for per-account billing overrides."
+  },
+  {
+   "fieldname": "ota_channel",
+   "fieldtype": "Link",
+   "options": "Market Place",
+   "label": "OTA Channel",
+   "depends_on": "eval:doc.reservation_type == 'OTA'",
+   "description": "When set, this rule only applies to OTA reservations from this specific channel."
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "description": "Internal notes explaining why this routing rule exists (e.g. contract terms, audit trail)."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-15 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel Billing Routing Rule",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Receptionist"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "priority",
+ "sort_order": "ASC",
+ "title_field": "reservation_type",
+ "track_changes": 1
+}

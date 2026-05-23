@@ -1,0 +1,304 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "MNT-TASK-.YYYY.-.#####",
+    "creation": "2025-10-27 12:13:19.867021",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "task_details_section",
+        "maintenance_request",
+        "task_type",
+        "priority",
+        "status",
+        "amended_from",
+        "column_break_main",
+        "assigned_technician",
+        "supervisor",
+        "timing_section",
+        "start_time",
+        "column_break_timing",
+        "end_time",
+        "expected_duration",
+        "location_section",
+        "location",
+        "description_section",
+        "task_description",
+        "column_break_desc",
+        "work_performed",
+        "completion_section",
+        "inspection_required",
+        "completion_notes",
+        "checklist_section",
+        "fault_diagnosed",
+        "test_run_passed",
+        "column_break_checklist",
+        "supervisor_verified",
+        "parts_section",
+        "parts_used",
+        "stock_entry"
+    ],
+    "fields": [
+        {
+            "fieldname": "task_details_section",
+            "fieldtype": "Section Break",
+            "label": "Task Details"
+        },
+        {
+            "fieldname": "maintenance_request",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Maintenance Request",
+            "options": "Maintenance Request",
+            "read_only": 1
+        },
+        {
+            "default": "Corrective",
+            "fieldname": "task_type",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Task Type",
+            "options": "Corrective\nPreventive\nRoutine\nInspection",
+            "reqd": 1
+        },
+        {
+            "default": "Medium",
+            "fieldname": "priority",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Priority",
+            "options": "Low\nMedium\nHigh\nCritical",
+            "reqd": 1
+        },
+        {
+            "default": "Open",
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Status",
+            "options": "Open\nIn Progress\nDone\nHold\nCancelled"
+        },
+        {
+            "fieldname": "amended_from",
+            "fieldtype": "Link",
+            "label": "Amended From",
+            "no_copy": 1,
+            "options": "Maintenance Task",
+            "print_hide": 1,
+            "read_only": 1,
+            "search_index": 1
+        },
+        {
+            "fieldname": "column_break_main",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "assigned_technician",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Assigned Technician",
+            "options": "Maintenance Technician",
+            "reqd": 1
+        },
+        {
+            "fieldname": "supervisor",
+            "fieldtype": "Link",
+            "label": "Supervisor",
+            "options": "Employee"
+        },
+        {
+            "fieldname": "timing_section",
+            "fieldtype": "Section Break",
+            "label": "Timing"
+        },
+        {
+            "fieldname": "start_time",
+            "fieldtype": "Datetime",
+            "in_list_view": 1,
+            "label": "Start Time"
+        },
+        {
+            "fieldname": "column_break_timing",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "end_time",
+            "fieldtype": "Datetime",
+            "in_list_view": 1,
+            "label": "End Time"
+        },
+        {
+            "fieldname": "location_section",
+            "fieldtype": "Section Break",
+            "label": "Location"
+        },
+        {
+            "fieldname": "location",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Location",
+            "reqd": 1
+        },
+        {
+            "fieldname": "description_section",
+            "fieldtype": "Section Break",
+            "label": "Description & Work Performed"
+        },
+        {
+            "fieldname": "task_description",
+            "fieldtype": "Small Text",
+            "label": "Task Description"
+        },
+        {
+            "fieldname": "column_break_desc",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "work_performed",
+            "fieldtype": "Small Text",
+            "label": "Work Performed"
+        },
+        {
+            "fieldname": "completion_section",
+            "fieldtype": "Section Break",
+            "label": "Completion"
+        },
+        {
+            "default": "0",
+            "fieldname": "inspection_required",
+            "fieldtype": "Check",
+            "label": "Inspection Required"
+        },
+        {
+            "fieldname": "completion_notes",
+            "fieldtype": "Small Text",
+            "label": "Completion Notes"
+        },
+        {
+            "fieldname": "checklist_section",
+            "fieldtype": "Section Break",
+            "label": "Checklist"
+        },
+        {
+            "default": "0",
+            "fieldname": "fault_diagnosed",
+            "fieldtype": "Check",
+            "label": "Fault Diagnosed"
+        },
+        {
+            "default": "0",
+            "fieldname": "test_run_passed",
+            "fieldtype": "Check",
+            "label": "Test Run Passed"
+        },
+        {
+            "fieldname": "column_break_checklist",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "0",
+            "fieldname": "supervisor_verified",
+            "fieldtype": "Check",
+            "label": "Supervisor Verified",
+            "depends_on": "eval:doc.inspection_required == 1"
+        },
+        {
+            "fieldname": "parts_section",
+            "fieldtype": "Section Break",
+            "label": "Parts / Material Usage"
+        },
+        {
+            "fieldname": "parts_used",
+            "fieldtype": "Table",
+            "label": "Parts Used",
+            "options": "Maintenance Parts Used"
+        },
+        {
+            "fieldname": "stock_entry",
+            "fieldtype": "Link",
+            "label": "Stock Entry",
+            "options": "Stock Entry",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "is_submittable": 1,
+    "links": [],
+    "module": "Rhocom Hotel",
+    "name": "Maintenance Task",
+    "naming_rule": "Expression (old style)",
+    "owner": "t.ajani@rhocom.ng",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "submit": 1,
+            "cancel": 1,
+            "amend": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "share": 1,
+            "submit": 1,
+            "cancel": 1,
+            "amend": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk",
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [
+        {
+            "color": "Gray",
+            "title": "Open"
+        },
+        {
+            "color": "Blue",
+            "title": "In Progress"
+        },
+        {
+            "color": "Green",
+            "title": "Done"
+        },
+        {
+            "color": "Yellow",
+            "title": "Hold"
+        },
+        {
+            "color": "Red",
+            "title": "Cancelled"
+        }
+    ],
+    "track_changes": 1
+}

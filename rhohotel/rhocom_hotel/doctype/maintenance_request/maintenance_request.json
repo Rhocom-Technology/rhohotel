@@ -1,0 +1,264 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "format:MNT-RQT-{#####}",
+    "creation": "2025-10-27 11:34:21.579463",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "request_details_section",
+        "location_type",
+        "room",
+        "location",
+        "issue_type",
+        "priority",
+        "column_break_nyvj",
+        "status",
+        "reported_by",
+        "reported_at",
+        "issue_section",
+        "issue_description",
+        "approval_section",
+        "approved",
+        "approved_by",
+        "approved_on",
+        "assigned_technician",
+        "tracking_section",
+        "task",
+        "completion_date"
+    ],
+    "fields": [
+        {
+            "fieldname": "request_details_section",
+            "fieldtype": "Section Break",
+            "label": "Request Details"
+        },
+        {
+            "default": "Room",
+            "fieldname": "location_type",
+            "fieldtype": "Select",
+            "in_filter": 1,
+            "in_list_view": 0,
+            "in_standard_filter": 1,
+            "label": "Location Type",
+            "options": "Room\nOther Location",
+            "reqd": 1
+        },
+        {
+            "fieldname": "room",
+            "fieldtype": "Link",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Room",
+            "options": "Hotel Room",
+            "depends_on": "eval:doc.location_type === 'Room'",
+            "mandatory_depends_on": "eval:doc.location_type === 'Room'"
+        },
+        {
+            "fieldname": "location",
+            "fieldtype": "Data",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Location",
+            "depends_on": "eval:doc.location_type === 'Other Location'",
+            "mandatory_depends_on": "eval:doc.location_type === 'Other Location'",
+            "placeholder": "e.g. Laundry, Gym, Kitchen, Lobby..."
+        },
+        {
+            "fieldname": "issue_type",
+            "fieldtype": "Select",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Issue Type",
+            "options": "\nPlumbing\nElectrical\nHVAC\nFurniture\nAppliance\nElectronics\nStructural\nOther",
+            "reqd": 1
+        },
+        {
+            "default": "Medium",
+            "fieldname": "priority",
+            "fieldtype": "Select",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Priority",
+            "options": "Low\nMedium\nHigh\nCritical",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_nyvj",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "Pending",
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Status",
+            "options": "Pending\nApproved\nIn Progress\nCompleted\nCancelled\nRejected",
+            "read_only": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "reported_by",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Reported By",
+            "options": "Employee",
+            "reqd": 1
+        },
+        {
+            "fieldname": "reported_at",
+            "fieldtype": "Datetime",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Reported At",
+            "reqd": 1
+        },
+        {
+            "fieldname": "issue_section",
+            "fieldtype": "Section Break",
+            "label": "Issue Description"
+        },
+        {
+            "fieldname": "issue_description",
+            "fieldtype": "Text Editor",
+            "label": "Issue Description"
+        },
+        {
+            "fieldname": "approval_section",
+            "fieldtype": "Section Break",
+            "label": "Approval"
+        },
+        {
+            "default": "Pending",
+            "fieldname": "approved",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Approval Status",
+            "options": "Pending\nApproved\nRejected"
+        },
+        {
+            "fieldname": "approved_by",
+            "fieldtype": "Link",
+            "label": "Approved By",
+            "options": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "approved_on",
+            "fieldtype": "Datetime",
+            "label": "Approved On",
+            "read_only": 1
+        },
+        {
+            "fieldname": "assigned_technician",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Assigned Technician",
+            "options": "Maintenance Technician"
+        },
+        {
+            "fieldname": "tracking_section",
+            "fieldtype": "Section Break",
+            "label": "Tracking"
+        },
+        {
+            "fieldname": "task",
+            "fieldtype": "Link",
+            "label": "Maintenance Task",
+            "options": "Maintenance Task",
+            "read_only": 1
+        },
+        {
+            "fieldname": "completion_date",
+            "fieldtype": "Datetime",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Completion Date",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-05-08 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Maintenance Request",
+    "naming_rule": "Expression",
+    "owner": "t.ajani@rhocom.ng",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "select": 1,
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "select": 1,
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk",
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [
+        {
+            "color": "Gray",
+            "title": "Pending"
+        },
+        {
+            "color": "Blue",
+            "title": "Approved"
+        },
+        {
+            "color": "Yellow",
+            "title": "In Progress"
+        },
+        {
+            "color": "Green",
+            "title": "Completed"
+        },
+        {
+            "color": "Red",
+            "title": "Cancelled"
+        },
+        {
+            "color": "Red",
+            "title": "Rejected"
+        }
+    ],
+    "track_changes": 1
+}
