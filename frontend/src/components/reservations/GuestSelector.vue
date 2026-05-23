@@ -1,13 +1,13 @@
 <template>
   <!-- Inline guest selector: shows current value, opens dropdown/create panel on click -->
-  <div class="relative" ref="root">
+  <div class="relative w-full" ref="root">
     <!-- Display row -->
     <div
-      class="flex items-center gap-1 group cursor-pointer"
+      class="flex items-center gap-2 group cursor-pointer w-full min-h-[38px] px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white"
       @click="toggleOpen"
     >
-      <span class="text-xs text-gray-700 truncate max-w-[140px]">{{ displayValue || '—' }}</span>
-      <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <span class="text-sm text-gray-700 truncate w-full">{{ displayValue || 'Select guest' }}</span>
+      <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
       </svg>
     </div>
@@ -16,6 +16,7 @@
     <Teleport to="body">
       <div
         v-if="open"
+        ref="dropdown"
         class="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl"
         :style="dropdownStyle"
       >
@@ -39,7 +40,7 @@
           v-for="g in results"
           :key="g.name"
           class="w-full text-left px-4 py-2.5 text-xs hover:bg-blue-50 flex flex-col"
-          @click="selectGuest(g)"
+          @mousedown.prevent="selectGuest(g)"
         >
           <span class="font-medium text-gray-800">{{ g.hotel_guest_name }}</span>
           <span class="text-gray-400">{{ g.email || g.phone_number || '' }}</span>
@@ -86,10 +87,12 @@ const props = defineProps({
   modelValue: { type: String, default: '' },   // guest_name (display name stored on row)
   guestId: { type: String, default: '' },       // hotel_guest docname if available
   fallbackValue: { type: String, default: '' },
+  guestType: { type: String, default: 'Individual' },
 })
 const emit = defineEmits(['update:modelValue', 'update:guestId', 'selected'])
 
 const root = ref(null)
+const dropdown = ref(null)
 const searchInput = ref(null)
 const open = ref(false)
 const dropdownStyle = ref({})
@@ -130,8 +133,11 @@ async function searchGuests() {
   try {
     const rows = await callMethod('frappe.client.get_list', {
       doctype: 'Hotel Guest',
-      fields: ['name', 'hotel_guest_name', 'email', 'phone_number'],
-      filters: [['hotel_guest_name', 'like', `%${query.value}%`]],
+      fields: ['name', 'hotel_guest_name', 'email', 'phone_number', 'customer'],
+      filters: [
+        ['guest_type', '=', props.guestType || 'Individual'],
+        ['hotel_guest_name', 'like', `%${query.value}%`],
+      ],
       limit_page_length: 20,
     })
     results.value = rows || []
@@ -157,13 +163,13 @@ async function createGuest() {
   createError.value = ''
   try {
     const doc = await callMethod('frappe.client.insert', {
-      doc: JSON.stringify({
+      doc: {
         doctype: 'Hotel Guest',
         hotel_guest_name: newGuest.value.hotel_guest_name,
         email: newGuest.value.email || '',
         phone_number: newGuest.value.phone_number || '',
-        guest_type: 'Individual',
-      }),
+        guest_type: props.guestType || 'Individual',
+      },
     })
     selectGuest({ name: doc.name, hotel_guest_name: doc.hotel_guest_name || newGuest.value.hotel_guest_name })
     newGuest.value = { hotel_guest_name: '', email: '', phone_number: '', guest_type: 'Individual' }
@@ -186,7 +192,9 @@ watch(open, async (val) => {
 
 // Close on outside click
 function onClickOutside(e) {
-  if (root.value && !root.value.contains(e.target)) open.value = false
+  const clickedRoot = root.value?.contains(e.target)
+  const clickedDropdown = dropdown.value?.contains(e.target)
+  if (!clickedRoot && !clickedDropdown) open.value = false
 }
 onMounted(() => document.addEventListener('mousedown', onClickOutside))
 onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
@@ -196,7 +204,8 @@ onMounted(async () => {
   try {
     const rows = await callMethod('frappe.client.get_list', {
       doctype: 'Hotel Guest',
-      fields: ['name', 'hotel_guest_name', 'email', 'phone_number'],
+      fields: ['name', 'hotel_guest_name', 'email', 'phone_number', 'customer'],
+      filters: [['guest_type', '=', props.guestType || 'Individual']],
       limit_page_length: 20,
     })
     results.value = rows || []

@@ -1,3 +1,24 @@
+// --- Bulk Check-In ---
+const showBulkCheckInToast = ref(false)
+const bulkCheckInToastMessage = ref('')
+
+async function bulkCheckInReservation() {
+  if (!form.canonical_reservation && !form.reservation) return
+  showBulkCheckInToast.value = true
+  bulkCheckInToastMessage.value = 'Processing bulk check-in...'
+  try {
+    const result = await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.bulk_check_in_reservation',
+      { reservation_name: form.canonical_reservation || form.reservation }
+    )
+    bulkCheckInToastMessage.value = result?.message || 'Bulk check-in complete.'
+    setTimeout(() => { showBulkCheckInToast.value = false }, 3500)
+    // Optionally refresh reservation/room data here
+  } catch (e) {
+    bulkCheckInToastMessage.value = e?.message || 'Bulk check-in failed.'
+    setTimeout(() => { showBulkCheckInToast.value = false }, 3500)
+  }
+}
 <template>
   <div class="space-y-5">
     <div>
@@ -5,6 +26,12 @@
     </div>
 
     <!-- Top Action Bar -->
+    <div
+      v-if="showBulkCheckInToast"
+      class="fixed top-5 right-5 z-[60] bg-green-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-lg"
+    >
+      {{ bulkCheckInToastMessage }}
+    </div>
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h2 class="text-sm font-bold text-gray-900">New Check-In</h2>
@@ -18,6 +45,12 @@
           :disabled="submitting"
           class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           {{ submitting ? 'Checking In...' : 'Confirm Check-In' }}
+        </button>
+        <button
+          v-if="form.canonical_reservation || form.reservation"
+          @click="bulkCheckInReservation"
+          class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors">
+          Bulk Check In
         </button>
       </div>
     </div>
@@ -484,6 +517,7 @@ async function selectReservation(r) {
 
 function clearReservation() {
   form.reservation = ''
+  form.canonical_reservation = ''
   reservationQuery.value = ''
   reservationResults.value = []
 }
@@ -554,6 +588,8 @@ function goToNewGuest() {
     path: '/guests/new',
     query: {
       return_to: 'checkin',
+      reservation: form.canonical_reservation || form.reservation || route.query.reservation || '',
+      canonical_reservation: form.canonical_reservation || route.query.canonical_reservation || route.query.reservation || '',
       room: form.room_number || '',
       room_type: form.room_type || '',
       nights: form.number_of_nights || 1,
@@ -607,7 +643,7 @@ async function loadAvailableRooms() {
       }
     }
     // Pass the reservation so its rooms are not excluded by availability check
-    const preReservation = String(route.query.reservation || '').trim()
+    const preReservation = String(route.query.canonical_reservation || route.query.reservation || '').trim()
     if (preReservation) params.exclude_reservation = preReservation
 
     const rows = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.get_available_rooms', params)
@@ -679,6 +715,7 @@ const form = reactive({
   check_in_datetime: nowLocal,
   rate_type: '',
   reservation: '',
+  canonical_reservation: '',
   reservation_source: '',
   discount_type: 'None',
   discount: 0,
@@ -869,6 +906,7 @@ onMounted(() => {
   loadMarketPlaces()
 
   const preReservation = String(route.query.reservation || '').trim()
+  const preCanonicalReservation = String(route.query.canonical_reservation || '').trim()
   const preGuest = String(route.query.guest || '').trim()
   const preGuestName = String(route.query.guest_name || '').trim()
   const preGuestPhone = String(route.query.guest_phone || '').trim()
@@ -879,6 +917,18 @@ onMounted(() => {
   const preDiscount = parseFloat(route.query.discount || '0')
   const preAdvancePaid = parseFloat(route.query.advance_paid || '0')
   const preSalesInvoice = String(route.query.sales_invoice || '').trim()
+  const preCheckInDt = String(route.query.check_in_dt || '').trim()
+  const preRateAmount = parseFloat(route.query.rate_amount || '0')
+
+  if (preCanonicalReservation) {
+    form.canonical_reservation = preCanonicalReservation
+  }
+  if (preCheckInDt) {
+    form.check_in_datetime = preCheckInDt.includes('T') ? preCheckInDt.slice(0, 16) : preCheckInDt.replace(' ', 'T').slice(0, 16)
+  }
+  if (preRateAmount > 0) {
+    form.rate_amount = preRateAmount
+  }
 
   // Pre-fill number_of_nights from query before async reservation fetch
   // so selectReservation's guard (!form.number_of_nights) won't overwrite it.
@@ -910,7 +960,12 @@ onMounted(() => {
     reservationQuery.value = preReservation
     fetchReservations(preReservation).then(() => {
       const match = reservationResults.value.find(r => r.name === preReservation)
-      if (match) selectReservation(match)
+      if (match) {
+        selectReservation(match)
+      } else if (preCanonicalReservation || preReservation) {
+        form.canonical_reservation = preCanonicalReservation || preReservation
+        form.reservation = ''
+      }
     })
   }
 

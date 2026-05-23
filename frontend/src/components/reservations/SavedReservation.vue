@@ -12,6 +12,7 @@
 
     <template v-else-if="!loading">
       <div v-if="error" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">{{ error }}</div>
+      <div v-if="splitInvoiceError" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">{{ splitInvoiceError }}</div>
 
       <div class="bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-start justify-between mb-3">
@@ -39,13 +40,10 @@
           <button v-if="!reservation.sales_invoice && reservation.docstatus === 1"
             :disabled="actionLoading" @click="emit('create-invoice')"
             class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40">Create Invoice</button>
-          <button v-if="reservation.sales_invoice"
-            class="px-4 py-2 text-xs font-medium text-purple-600 border border-purple-200 bg-purple-50 rounded-lg cursor-default" disabled>
-            Invoice: {{ reservation.sales_invoice }}
-          </button>
-          <button v-if="reservation.docstatus === 1 && reservation.status !== 'Cancelled'" :disabled="actionLoading" @click="emit('check-in')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
+          <!-- Removed invoice name button: all invoices are now shown in the ledger table below -->
+          <button v-if="canCheckInReservation" :disabled="actionLoading" @click="emit('check-in')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
-          <button v-if="reservation.docstatus !== 2 && reservation.status !== 'Cancelled'" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
+          <button v-if="!isCancelled" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
           <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
         </div>
       </div>
@@ -71,7 +69,7 @@
           </div>
           <div class="px-6">
             <p class="text-xs text-gray-400 mb-1">Balance Due</p>
-            <p class="text-2xl font-bold" :class="(reservation.balance || 0) > 0 ? 'text-red-500' : 'text-gray-900'">{{ formatCurrency(reservation.balance) }}</p>
+            <p class="text-2xl font-bold" :class="computedBalance > 0 ? 'text-red-500' : 'text-gray-900'">{{ formatCurrency(computedBalance) }}</p>
           </div>
         </div>
       </div>
@@ -110,7 +108,7 @@
                   <span v-if="row.meal_plan_snapshot" class="ml-1 inline-flex items-center px-1.5 py-0.5 text-xs bg-green-50 text-green-600 rounded border border-green-100">{{ row.meal_plan_snapshot }}</span>
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">
-                  <template v-if="reservation.docstatus === 1 && reservation.reservation_type === 'Individual'">
+                  <template v-if="isRoomCheckedIn(row) || (reservation.docstatus === 1 && reservation.reservation_type === 'Individual')">
                     <span class="text-xs text-gray-700">{{ row.occupant_name || row.guest_name || reservation.primary_guest_name || '—' }}</span>
                   </template>
                   <GuestSelector
@@ -124,11 +122,38 @@
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.rate_per_night) }}</td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.room_total) }}</td>
                 <td class="px-3 py-2 text-xs text-gray-700">
-                  <span
-                    v-if="isRoomCheckedIn(row)"
-                    class="inline-flex px-2 py-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded"
-                  >Checked In</span>
-                  <button v-else @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
+                  <div class="flex flex-col gap-1">
+                    <template v-if="isRoomCheckedIn(row)">
+                      <button
+                        v-if="row.check_in_reference"
+                        @click="goCheckOut(row)"
+                        class="px-2 py-1 text-xs font-semibold text-white bg-orange-500 rounded hover:bg-orange-600"
+                      >Check Out</button>
+                      <span
+                        v-else
+                        class="inline-flex px-2 py-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded"
+                      >Checked In</span>
+                    </template>
+                    <button v-else-if="canCheckInReservation" @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
+                    <span
+                      v-else-if="isCancelled"
+                      class="inline-flex px-2 py-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded"
+                    >Cancelled</span>
+                    <!-- Per-room invoice for Group Split billing -->
+                    <template v-if="isSplitGroup">
+                      <span
+                        v-if="row.split_invoice"
+                        class="inline-flex px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded"
+                        :title="row.split_invoice"
+                      >Invoiced</span>
+                      <button
+                        v-else
+                        :disabled="splitInvoiceLoading === row.name"
+                        @click="createSplitInvoice(row)"
+                        class="px-2 py-1 text-xs font-semibold text-white bg-purple-600 rounded hover:bg-purple-700 disabled:opacity-50"
+                      >{{ splitInvoiceLoading === row.name ? 'Creating…' : 'Create Invoice' }}</button>
+                    </template>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -246,14 +271,69 @@
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-        <h3 class="text-sm font-bold text-gray-900 mb-4">Linked Payments</h3>
-        <div v-if="reservation.payment_entries && reservation.payment_entries.length > 0" class="space-y-2">
-          <div v-for="payment in reservation.payment_entries" :key="payment.name" class="flex justify-between">
-            <span class="text-sm text-gray-700">{{ payment.name }}</span>
-            <span class="text-sm font-bold text-gray-900">{{ formatCurrency(payment.amount) }}</span>
-          </div>
+        <h3 class="text-sm font-bold text-gray-900 mb-4">Paid Amount</h3>
+        <div class="flex items-center justify-between mb-3 rounded-lg bg-green-50 border border-green-100 px-3 py-2">
+          <span class="text-xs font-semibold text-green-700">Total Paid</span>
+          <span class="text-sm font-bold text-green-700">{{ formatCurrency(paidAmount) }}</span>
+        </div>
+        <div v-if="paymentLedger.length > 0" class="overflow-x-auto border border-gray-100 rounded-lg">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Payment Entry</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Date</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Mode</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Reference</th>
+                <th class="text-right text-xs font-medium text-gray-500 px-3 py-2">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="payment in paymentLedger" :key="payment.name" class="border-t border-gray-100">
+                <td class="px-3 py-2 text-xs text-gray-800 font-medium">{{ payment.name || '—' }}</td>
+                <td class="px-3 py-2 text-xs text-gray-500">{{ formatDate(payment.posting_date) }}</td>
+                <td class="px-3 py-2 text-xs text-gray-600">{{ payment.mode_of_payment || '—' }}</td>
+                <td class="px-3 py-2 text-xs text-gray-500">{{ payment.reference_no || '—' }}</td>
+                <td class="px-3 py-2 text-xs text-right font-semibold text-gray-900">{{ formatCurrency(getPaymentValue(payment)) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <div v-else class="text-sm text-gray-400">No linked payments</div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-4">Invoice Ledger</h3>
+        <div v-if="invoiceLedger.length > 0" class="overflow-x-auto border border-gray-100 rounded-lg">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Invoice</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Type</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Date</th>
+                <th class="text-right text-xs font-medium text-gray-500 px-3 py-2">Amount</th>
+                <th class="text-right text-xs font-medium text-gray-500 px-3 py-2">Outstanding</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="invoice in invoiceLedger" :key="invoice.name" class="border-t border-gray-100">
+                <td class="px-3 py-2 text-xs text-gray-800 font-medium">{{ invoice.name || '—' }}</td>
+                <td class="px-3 py-2 text-xs" :class="invoice.is_return ? 'text-teal-600 font-semibold' : 'text-gray-600'">
+                  {{ invoice.invoice_type || (invoice.is_return ? 'Credit Note' : 'Invoice') }}
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-500">{{ formatDate(invoice.posting_date) }}</td>
+                <td class="px-3 py-2 text-xs text-right font-semibold" :class="invoice.is_return ? 'text-teal-600' : 'text-gray-900'">
+                  {{ invoice.is_return ? '- ' : '' }}{{ formatCurrency(Math.abs(Number(invoice.grand_total || 0))) }}
+                </td>
+                <td class="px-3 py-2 text-xs text-right" :class="(Number(invoice.outstanding_amount || 0) > 0 && !invoice.is_return) ? 'text-red-500 font-semibold' : 'text-gray-500'">
+                  {{ formatCurrency(invoice.outstanding_amount || 0) }}
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-600">{{ invoice.status || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="text-sm text-gray-400">No linked invoices</div>
       </div>
     </template>
 
@@ -300,11 +380,15 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import StayAdjustment from '@/components/reservations/StayAdjustment.vue'
 import ChangeRoom from '@/components/reservations/ChangeRoom.vue'
 import ReceivePaymentModal from '@/components/reservations/ReceivePaymentModal.vue'
 import PrintReservationModal from '@/components/reservations/PrintReservationModal.vue'
 import GuestSelector from '@/components/reservations/GuestSelector.vue'
+import { callMethod } from '@/lib/api'
+
+const router = useRouter()
 
 const props = defineProps({
   reservation: { type: Object, required: true },
@@ -344,11 +428,68 @@ function handleModalDone() {
 
 const rooms = computed(() => props.reservation?.rooms || [])
 const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn(row)))
-const canBulkCheckIn = computed(() => pendingRooms.value.length > 1)
+const isCancelled = computed(() => Number(props.reservation?.docstatus || 0) === 2 || String(props.reservation?.status || props.reservation?.reservation_status || '').toLowerCase() === 'cancelled')
+const canCheckInReservation = computed(() => Number(props.reservation?.docstatus || 0) === 1 && !isCancelled.value)
+const canBulkCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length > 1)
+const isSplitGroup = computed(() => props.reservation?.reservation_type === 'Group' && props.reservation?.group_billing_mode === 'Split')
+
+const splitInvoiceLoading = ref(null)
+const splitInvoiceError = ref('')
+
+async function createSplitInvoice(row) {
+  if (!row?.name || splitInvoiceLoading.value) return
+  splitInvoiceLoading.value = row.name
+  splitInvoiceError.value = ''
+  try {
+    const result = await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_invoice_for_reservation_room',
+      { reservation_name: props.reservation.name, room_row_name: row.name },
+    )
+    row.split_invoice = result?.sales_invoice || ''
+    emit('refresh')
+  } catch (e) {
+    splitInvoiceError.value = String(e?.message || 'Failed to create invoice.')
+  } finally {
+    splitInvoiceLoading.value = null
+  }
+}
+
+function getPaymentValue(payment) {
+  return Number(payment?.amount ?? payment?.paid_amount ?? payment?.allocated_amount ?? 0)
+}
 
 const paidAmount = computed(() => {
-  const entries = props.reservation?.payment_entries || []
-  return entries.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
+  const entries = paymentLedger.value
+  const entryTotal = entries.reduce((sum, payment) => sum + getPaymentValue(payment), 0)
+  return entryTotal || Number(props.reservation?.paid_amount || 0)
+})
+
+const paymentLedger = computed(() => {
+  const reservationPayments = Array.isArray(props.reservation?.reservation_payments)
+    ? props.reservation.reservation_payments
+    : []
+  const fallbackPayments = Array.isArray(props.reservation?.payment_entries)
+    ? props.reservation.payment_entries
+    : []
+  return reservationPayments.length ? reservationPayments : fallbackPayments
+})
+
+const invoiceLedger = computed(() => {
+  const reservationInvoices = Array.isArray(props.reservation?.reservation_invoices)
+    ? props.reservation.reservation_invoices
+    : []
+  const fallbackInvoices = Array.isArray(props.reservation?.linked_invoices)
+    ? props.reservation.linked_invoices
+    : []
+  return reservationInvoices.length ? reservationInvoices : fallbackInvoices
+})
+
+const computedBalance = computed(() => {
+  const explicitBalance = Number(props.reservation?.balance)
+  if (Number.isFinite(explicitBalance)) return Math.max(0, explicitBalance)
+
+  const totalAmount = Number(props.reservation?.total_amount || props.reservation?.net_total || 0)
+  return Math.max(0, totalAmount - paidAmount.value)
 })
 
 const statusClass = computed(() => {
@@ -387,33 +528,60 @@ function onGuestSelected(row, guest) {
 
 function isRoomCheckedIn(row) {
   if (!row) return false
-  return Boolean(row.check_in_reference)
+  return Boolean(row.check_in_reference) || String(row.status || '').toLowerCase() === 'checked in'
 }
 
-function checkIn(row) {
+function goCheckOut(row) {
+  if (!row?.check_in_reference) return
+  router.push('/check-outs/' + row.check_in_reference)
+}
+
+async function checkIn(row) {
   if (isRoomCheckedIn(row)) return
   const roomLabel = row?.room_number || row?.name || 'selected room'
-  checkInToastMessage.value = `Opening check-in for ${roomLabel}...`
   showCheckInToast.value = true
-
-  setTimeout(() => {
-    emit('check-in-room', row)
-  }, 250)
-
-  setTimeout(() => {
-    showCheckInToast.value = false
-  }, 2000)
+  checkInToastMessage.value = `Checking in ${roomLabel}...`
+  try {
+    const result = await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.check_in_reservation_room',
+      { reservation_name: props.reservation.name, room_row_name: row.name }
+    )
+    // Apply check-in reference immediately so the button updates before refresh
+    if (result?.check_in_reference) {
+      row.check_in_reference = result.check_in_reference
+      row.status = 'Checked In'
+    }
+    checkInToastMessage.value = result?.message || 'Check-in complete.'
+    setTimeout(() => { showCheckInToast.value = false }, 3500)
+    emit('refresh')
+  } catch (e) {
+    checkInToastMessage.value = e?.message || 'Check-in failed.'
+    setTimeout(() => { showCheckInToast.value = false }, 3500)
+  }
 }
 
-function bulkCheckIn() {
+async function bulkCheckIn() {
   if (!canBulkCheckIn.value) return
-  emit('bulk-check-in', pendingRooms.value)
+  showCheckInToast.value = true
+  checkInToastMessage.value = 'Processing bulk check-in...'
+  try {
+    const result = await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.bulk_check_in_reservation',
+      { reservation_name: props.reservation.name }
+    )
+    checkInToastMessage.value = result?.message || 'Bulk check-in complete.'
+    setTimeout(() => { showCheckInToast.value = false }, 3500)
+    emit('refresh')
+  } catch (e) {
+    checkInToastMessage.value = e?.message || 'Bulk check-in failed.'
+    setTimeout(() => { showCheckInToast.value = false }, 3500)
+  }
 }
 
 function applyDiscount(discount) {
   // Logic to apply discount to the reservation
-  reservation.discount_amount = discount;
-  reservation.total_amount = reservation.subtotal - discount;
+  props.reservation.discount_amount = discount;
+  props.reservation.total_amount = props.reservation.subtotal - discount;
   emit('refresh');
 }
 
@@ -427,7 +595,7 @@ function printReservation() {
         <title>Print Reservation</title>
       </head>
       <body>
-        <h1>${reservation.name}</h1>
+        <h1>${props.reservation.name}</h1>
         ${printContent}
       </body>
     </html>
@@ -437,10 +605,10 @@ function printReservation() {
 }
 
 function generateSummary() {
-  return `<p>Reservation Summary for ${reservation.name}</p>`;
+  return `<p>Reservation Summary for ${props.reservation.name}</p>`;
 }
 
 function generateDetailed() {
-  return `<p>Detailed Reservation Information for ${reservation.name}</p>`;
+  return `<p>Detailed Reservation Information for ${props.reservation.name}</p>`;
 }
 </script>

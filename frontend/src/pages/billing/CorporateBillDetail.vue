@@ -4,11 +4,15 @@
     <!-- Breadcrumb -->
     <div class="text-xs text-gray-400">
       Billing / <router-link to="/billing/corporate" class="hover:text-gray-600 transition-colors">Corporate Billing</router-link> /
-      <span class="text-gray-600">{{ bill.billNo }}</span>
+      <span class="text-gray-600">{{ bill.billNo || route.params.id }}</span>
     </div>
 
+    <!-- Loading / Error -->
+    <div v-if="loading" class="bg-white rounded-xl border border-gray-200 px-6 py-10 text-center text-xs text-gray-400">Loading bill…</div>
+    <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl px-5 py-3 text-xs text-red-600">{{ error }}</div>
+
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">{{ bill.billNo }}</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ bill.billNo || route.params.id }}</h1>
       <p class="text-xs text-gray-400 mt-1">Corporate bill detail — review charges, payment history, allocation status, and take follow-up or settlement actions.</p>
     </div>
 
@@ -20,7 +24,8 @@
       <button v-if="bill.status === 'Overdue' || bill.status === 'Unpaid'"
         class="px-4 py-2 text-xs font-medium text-yellow-700 border border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors">Send Reminder</button>
       <button v-if="bill.status !== 'Paid'"
-        class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Record Payment</button>
+        class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+        @click="showPaymentModal = true">Record Payment</button>
     </div>
 
     <!-- Status Stats -->
@@ -171,141 +176,165 @@
     </div>
 
   </div>
+
+  <!-- Record Payment Modal -->
+  <Teleport to="body">
+    <div v-if="showPaymentModal" class="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style="background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);"
+      @click.self="showPaymentModal = false">
+      <div class="bg-white rounded-2xl w-full shadow-2xl" style="max-width:520px;">
+
+        <div class="px-8 pt-8 pb-5 flex items-start justify-between border-b border-gray-100">
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">Record Payment</h2>
+            <p class="text-xs text-gray-400 mt-1">{{ bill.billNo }} · Balance: {{ bill.balance }}</p>
+          </div>
+          <button @click="showPaymentModal = false"
+            class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">✕</button>
+        </div>
+
+        <div class="px-8 py-6 space-y-4">
+          <div v-if="paymentError" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-600">{{ paymentError }}</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Mode of Payment <span class="text-red-400">*</span></p>
+              <select v-model="paymentForm.mode_of_payment"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select mode</option>
+                <option v-for="m in paymentModes" :key="m.name" :value="m.name">{{ m.name }}</option>
+              </select>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Amount <span class="text-red-400">*</span></p>
+              <input type="number" v-model.number="paymentForm.paid_amount" min="0.01" step="0.01"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Payment Date</p>
+              <input type="date" v-model="paymentForm.payment_date"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Reference No</p>
+              <input type="text" v-model="paymentForm.reference_no" placeholder="Bank / terminal reference"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Reference Date</p>
+              <input type="date" v-model="paymentForm.reference_date"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Remarks</p>
+              <input type="text" v-model="paymentForm.remarks" placeholder="Optional note"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2">
+            <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              @click="showPaymentModal = false">Cancel</button>
+            <button
+              :disabled="paymentSubmitting || !paymentForm.mode_of_payment || !(paymentForm.paid_amount > 0)"
+              @click="submitPayment"
+              class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              {{ paymentSubmitting ? 'Processing…' : 'Confirm Payment' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { callMethodForm } from '@/lib/api'
 
 const route = useRoute()
 
-const allBills = [
-  {
-    billNo: 'CBL-000431', client: 'Wells Corporate Services', clientNote: 'Accommodation + conference charges',
-    period: 'Mar 2026', issueDate: '18 Apr 2026', dueDate: '02 May 2026',
-    amount: '₦1,250,000', balance: '₦1,250,000', status: 'Unpaid',
-    charges: [
-      { desc: 'Executive Room Accommodation (10 nights × 2 rooms)', date: '01–10 Mar 2026', guests: '2', amount: '₦800,000' },
-      { desc: 'Conference Hall Booking (2 days)', date: '05–06 Mar 2026', guests: '—', amount: '₦300,000' },
-      { desc: 'Catering & Refreshments', date: '05–06 Mar 2026', guests: '30', amount: '₦150,000' },
-    ],
-    payments: [],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '18 Apr 2026 • 09:14 AM' },
-      { action: 'Payment reminder sent', by: 'System', at: '28 Apr 2026 • 08:00 AM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000430', client: 'Rubiconnode Ltd', clientNote: 'Staff lodging invoice batch',
-    period: 'Apr 2026', issueDate: '16 Apr 2026', dueDate: '30 Apr 2026',
-    amount: '₦920,000', balance: '₦420,000', status: 'Part Paid',
-    charges: [
-      { desc: 'Standard Room × 4 staff (15 nights)', date: '01–15 Apr 2026', guests: '4', amount: '₦720,000' },
-      { desc: 'Breakfast Package (15 days × 4)', date: '01–15 Apr 2026', guests: '4', amount: '₦200,000' },
-    ],
-    payments: [
-      { receipt: 'RCPT-000227', amount: '₦500,000', method: 'Bank Transfer', date: '04 May 2026', reference: 'TXN-0013802' },
-    ],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '16 Apr 2026 • 10:30 AM' },
-      { action: 'Part payment received — ₦500,000', by: 'Finance Desk', at: '04 May 2026 • 02:15 PM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000429', client: 'Herotech Ltd', clientNote: 'Executive room usage billing',
-    period: 'Apr 2026', issueDate: '10 Apr 2026', dueDate: '24 Apr 2026',
-    amount: '₦640,000', balance: '₦640,000', status: 'Unpaid',
-    charges: [
-      { desc: 'Executive Suite (8 nights)', date: '01–08 Apr 2026', guests: '1', amount: '₦640,000' },
-    ],
-    payments: [],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '10 Apr 2026 • 11:00 AM' },
-      { action: 'Payment reminder sent', by: 'System', at: '20 Apr 2026 • 08:00 AM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000428', client: 'Wells Corporate Services', clientNote: 'February lodging invoice',
-    period: 'Feb 2026', issueDate: '20 Mar 2026', dueDate: '03 Apr 2026',
-    amount: '₦1,980,000', balance: '₦1,980,000', status: 'Overdue',
-    charges: [
-      { desc: 'Executive Rooms × 3 (28 nights)', date: 'Feb 2026', guests: '3', amount: '₦1,680,000' },
-      { desc: 'Meals & Entertainment', date: 'Feb 2026', guests: '—', amount: '₦300,000' },
-    ],
-    payments: [],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '20 Mar 2026 • 09:00 AM' },
-      { action: 'Payment reminder sent ×2', by: 'System', at: '04 Apr 2026 • 08:00 AM' },
-      { action: 'Escalated to accounts manager', by: 'Finance Desk', at: '10 Apr 2026 • 03:00 PM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000427', client: 'Accentral Group', clientNote: 'Team stay and transport charges',
-    period: 'Apr 2026', issueDate: '15 Apr 2026', dueDate: '29 Apr 2026',
-    amount: '₦540,000', balance: '₦240,000', status: 'Part Paid',
-    charges: [
-      { desc: 'Standard Rooms × 3 (10 nights)', date: 'Apr 2026', guests: '3', amount: '₦420,000' },
-      { desc: 'Airport Transfer × 6', date: 'Apr 2026', guests: '6', amount: '₦120,000' },
-    ],
-    payments: [
-      { receipt: 'RCPT-000225', amount: '₦300,000', method: 'Cheque', date: '02 May 2026', reference: 'CHQ-00228' },
-    ],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '15 Apr 2026 • 01:45 PM' },
-      { action: 'Part payment received — ₦300,000', by: 'Finance Desk', at: '02 May 2026 • 11:00 AM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000426', client: 'Fixcenter Services', clientNote: 'Partner accommodation charges',
-    period: 'Apr 2026', issueDate: '11 Apr 2026', dueDate: '25 Apr 2026',
-    amount: '₦460,000', balance: '₦0.00', status: 'Paid',
-    charges: [
-      { desc: 'Standard Rooms × 2 (10 nights)', date: 'Apr 2026', guests: '2', amount: '₦460,000' },
-    ],
-    payments: [
-      { receipt: 'RCPT-000223', amount: '₦460,000', method: 'Bank Transfer', date: '30 Apr 2026', reference: 'TXN-0013751' },
-    ],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '11 Apr 2026 • 10:00 AM' },
-      { action: 'Payment received in full — ₦460,000', by: 'Finance Desk', at: '30 Apr 2026 • 04:00 PM' },
-      { action: 'Bill marked as Paid', by: 'System', at: '30 Apr 2026 • 04:01 PM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000425', client: 'Herotech Ltd', clientNote: 'Monthly corporate accommodation',
-    period: 'Mar 2026', issueDate: '01 Apr 2026', dueDate: '15 Apr 2026',
-    amount: '₦780,000', balance: '₦0.00', status: 'Paid',
-    charges: [
-      { desc: 'Executive Suite (30 nights)', date: 'Mar 2026', guests: '1', amount: '₦780,000' },
-    ],
-    payments: [
-      { receipt: 'RCPT-000218', amount: '₦780,000', method: 'Bank Transfer', date: '14 Apr 2026', reference: 'TXN-0013610' },
-    ],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '01 Apr 2026 • 09:00 AM' },
-      { action: 'Payment received in full — ₦780,000', by: 'Finance Desk', at: '14 Apr 2026 • 12:00 PM' },
-      { action: 'Bill marked as Paid', by: 'System', at: '14 Apr 2026 • 12:01 PM' },
-    ],
-  },
-  {
-    billNo: 'CBL-000424', client: 'Rubiconnode Ltd', clientNote: 'Conference and room charges',
-    period: 'Mar 2026', issueDate: '28 Mar 2026', dueDate: '11 Apr 2026',
-    amount: '₦310,000', balance: '₦310,000', status: 'Overdue',
-    charges: [
-      { desc: 'Standard Room × 1 (10 nights)', date: 'Mar 2026', guests: '1', amount: '₦180,000' },
-      { desc: 'Conference Room (2 half-days)', date: 'Mar 2026', guests: '—', amount: '₦130,000' },
-    ],
-    payments: [],
-    audit: [
-      { action: 'Bill created and posted', by: 'Finance Desk', at: '28 Mar 2026 • 10:00 AM' },
-      { action: 'Payment reminder sent ×3', by: 'System', at: '12 Apr 2026 • 08:00 AM' },
-    ],
-  },
-]
-
-const bill = computed(() => {
-  return allBills.find(b => b.billNo === route.params.id) || allBills[0]
+const bill = ref({
+  billNo: '', client: '', clientNote: '', period: '', issueDate: '', dueDate: '',
+  amount: '', balance: '', status: '',
+  charges: [], payments: [], audit: [],
 })
+const loading = ref(false)
+const error = ref('')
+
+async function fetchBill() {
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await callMethodForm(
+      'rhohotel.rhocom_hotel.api.corporate_billing.get_corporate_bill_detail',
+      { invoice_name: route.params.id }
+    )
+    if (result) bill.value = result
+  } catch (e) {
+    error.value = e.message || 'Failed to load bill'
+  } finally {
+    loading.value = false
+  }
+}
+
+// ── Payment modal ──────────────────────────────────────────
+const showPaymentModal = ref(false)
+const paymentModes = ref([])
+const paymentSubmitting = ref(false)
+const paymentError = ref('')
+const today = new Date().toISOString().slice(0, 10)
+const paymentForm = reactive({
+  mode_of_payment: '',
+  paid_amount: 0,
+  payment_date: today,
+  reference_no: '',
+  reference_date: '',
+  remarks: '',
+})
+
+async function loadPaymentModes() {
+  try {
+    const result = await callMethodForm(
+      'rhohotel.rhocom_hotel.api.corporate_billing.get_payment_modes', {}
+    )
+    paymentModes.value = result || []
+  } catch {
+    paymentModes.value = []
+  }
+}
+
+async function submitPayment() {
+  if (!paymentForm.mode_of_payment || !(paymentForm.paid_amount > 0)) return
+  paymentSubmitting.value = true
+  paymentError.value = ''
+  try {
+    await callMethodForm(
+      'rhohotel.rhocom_hotel.api.corporate_billing.record_corporate_payment',
+      {
+        invoice_name: route.params.id,
+        mode_of_payment: paymentForm.mode_of_payment,
+        paid_amount: paymentForm.paid_amount,
+        payment_date: paymentForm.payment_date,
+        reference_no: paymentForm.reference_no,
+        reference_date: paymentForm.reference_date,
+        remarks: paymentForm.remarks,
+      }
+    )
+    showPaymentModal.value = false
+    paymentForm.mode_of_payment = ''
+    paymentForm.paid_amount = 0
+    paymentForm.reference_no = ''
+    paymentForm.reference_date = ''
+    paymentForm.remarks = ''
+    await fetchBill()
+  } catch (e) {
+    paymentError.value = e.message || 'Failed to record payment'
+  } finally {
+    paymentSubmitting.value = false
+  }
+}
 
 function statusBadgeClass(s) {
   return {
@@ -315,4 +344,9 @@ function statusBadgeClass(s) {
     'Overdue':   'bg-red-100 text-red-500',
   }[s] || 'bg-gray-100 text-gray-500'
 }
+
+onMounted(() => {
+  fetchBill()
+  loadPaymentModes()
+})
 </script>

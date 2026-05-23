@@ -30,7 +30,9 @@
     "occupant_email",
     "links_section",
     "check_in_reference",
-    "checkout_reference"
+    "checkout_reference",
+    "hotel_guest",
+    "split_invoice"
   ],
   "fields": [
     {
@@ -211,6 +213,23 @@
       "label": "Check-Out Reference",
       "read_only": 1,
       "description": "Link to the Hotel Room Check Out document created when this specific room is checked out. Populated automatically by the checkout workflow."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "hotel_guest",
+      "fieldtype": "Link",
+      "options": "Hotel Guest",
+      "label": "Hotel Guest",
+      "description": "Linked Hotel Guest record for this occupant. Used for split billing invoicing."
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "split_invoice",
+      "fieldtype": "Link",
+      "options": "Sales Invoice",
+      "label": "Split Invoice",
+      "read_only": 1,
+      "description": "Sales Invoice created for this specific room row (used in Group Split billing mode)."
     }
   ],
   "grid_page_length": 50,

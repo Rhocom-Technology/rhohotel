@@ -1,0 +1,289 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "format:CMP-{######}",
+    "creation": "2026-05-22 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "complimentary_details_section",
+        "guest",
+        "room",
+        "reservation",
+        "complimentary_type",
+        "column_break_main",
+        "department",
+        "approval_level",
+        "source_category",
+        "value",
+        "quantity",
+        "dates_section",
+        "issue_date",
+        "expiry_date",
+        "reason_section",
+        "reason",
+        "redemption_rule",
+        "note",
+        "status_section",
+        "status",
+        "issued_by",
+        "approval_section",
+        "approved_by",
+        "approved_on",
+        "consumption_section",
+        "consumption_reference",
+        "consumed_on"
+    ],
+    "fields": [
+        {
+            "fieldname": "complimentary_details_section",
+            "fieldtype": "Section Break",
+            "label": "Complimentary Details"
+        },
+        {
+            "fieldname": "guest",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "in_filter": 1,
+            "label": "Guest",
+            "reqd": 1
+        },
+        {
+            "fieldname": "room",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "in_filter": 1,
+            "in_standard_filter": 1,
+            "label": "Room"
+        },
+        {
+            "fieldname": "reservation",
+            "fieldtype": "Link",
+            "label": "Reservation",
+            "options": "Hotel Reservation"
+        },
+        {
+            "fieldname": "complimentary_type",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_filter": 1,
+            "in_standard_filter": 1,
+            "label": "Complimentary Type",
+            "options": "\nFood Voucher\nAirport Transfer\nRoom Upgrade\nAmenity Basket\nLate Checkout\nLaundry\nTransport / Food\nAmenity / Late CO\nLaundry / Amenity",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_main",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "department",
+            "fieldtype": "Select",
+            "in_filter": 1,
+            "in_standard_filter": 1,
+            "label": "Department",
+            "options": "\nRestaurant\nFront Desk\nHousekeeping\nGM Office\nOperations",
+            "reqd": 1
+        },
+        {
+            "fieldname": "approval_level",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Approval Level",
+            "options": "\nGeneral Manager\nDuty Manager\nFront Desk Supervisor\nOperations Lead",
+            "reqd": 1
+        },
+        {
+            "fieldname": "source_category",
+            "fieldtype": "Select",
+            "label": "Source Category",
+            "options": "\nService Recovery\nVIP Courtesy\nLoyalty Reward\nOperational Adjustment"
+        },
+        {
+            "fieldname": "value",
+            "fieldtype": "Currency",
+            "in_list_view": 1,
+            "label": "Value"
+        },
+        {
+            "fieldname": "quantity",
+            "fieldtype": "Data",
+            "label": "Quantity / Limit",
+            "default": "1"
+        },
+        {
+            "fieldname": "dates_section",
+            "fieldtype": "Section Break",
+            "label": "Dates"
+        },
+        {
+            "fieldname": "issue_date",
+            "fieldtype": "Date",
+            "in_list_view": 1,
+            "in_filter": 1,
+            "in_standard_filter": 1,
+            "label": "Issue Date",
+            "reqd": 1
+        },
+        {
+            "fieldname": "expiry_date",
+            "fieldtype": "Date",
+            "in_filter": 1,
+            "label": "Expiry Date"
+        },
+        {
+            "fieldname": "reason_section",
+            "fieldtype": "Section Break",
+            "label": "Details"
+        },
+        {
+            "fieldname": "reason",
+            "fieldtype": "Text",
+            "label": "Reason / Justification"
+        },
+        {
+            "fieldname": "redemption_rule",
+            "fieldtype": "Text",
+            "label": "Redemption Rule"
+        },
+        {
+            "fieldname": "note",
+            "fieldtype": "Text",
+            "label": "Internal Note"
+        },
+        {
+            "fieldname": "status_section",
+            "fieldtype": "Section Break",
+            "label": "Status"
+        },
+        {
+            "default": "Pending",
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Status",
+            "options": "Pending\nApproved\nIn Progress\nConsumed\nExpired\nCancelled",
+            "read_only": 1,
+            "reqd": 1
+        },
+        {
+            "fieldname": "issued_by",
+            "fieldtype": "Link",
+            "label": "Issued By",
+            "options": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "approval_section",
+            "fieldtype": "Section Break",
+            "label": "Approval"
+        },
+        {
+            "fieldname": "approved_by",
+            "fieldtype": "Link",
+            "label": "Approved By",
+            "options": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "approved_on",
+            "fieldtype": "Datetime",
+            "label": "Approved On",
+            "read_only": 1
+        },
+        {
+            "fieldname": "consumption_section",
+            "fieldtype": "Section Break",
+            "label": "Consumption"
+        },
+        {
+            "fieldname": "consumption_reference",
+            "fieldtype": "Data",
+            "label": "Consumption Reference",
+            "read_only": 1
+        },
+        {
+            "fieldname": "consumed_on",
+            "fieldtype": "Datetime",
+            "label": "Consumed On",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-05-22 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Rhocom Hotel",
+    "name": "Hotel Complimentary",
+    "naming_rule": "Expression",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "select": 1,
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Hotel Manager",
+            "select": 1,
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 0,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk",
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [
+        {
+            "color": "Gray",
+            "title": "Pending"
+        },
+        {
+            "color": "Blue",
+            "title": "Approved"
+        },
+        {
+            "color": "Yellow",
+            "title": "In Progress"
+        },
+        {
+            "color": "Green",
+            "title": "Consumed"
+        },
+        {
+            "color": "Gray",
+            "title": "Expired"
+        },
+        {
+            "color": "Red",
+            "title": "Cancelled"
+        }
+    ],
+    "track_changes": 1
+}

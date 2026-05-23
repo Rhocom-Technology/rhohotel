@@ -9,7 +9,7 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Complimentary Control</h3>
-        <p class="text-xs text-gray-400 mt-0.5">19 active complimentary items • 6 pending approvals • 4 consumed today • 2 expired unused</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ controlBarText }}</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -27,28 +27,28 @@
           <p class="text-xs text-gray-400">Issued Today</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">14</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.issued_today }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Pending Approval</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Waiting</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">6</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.pending_approval }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Consumed Today</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Used</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">4</p>
+        <p class="text-3xl font-bold text-gray-900">{{ stats.consumed_today }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Budget Impact</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Today</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦286K</p>
+        <p class="text-3xl font-bold text-gray-900">{{ formatValue(stats.budget_impact_today) }}</p>
       </div>
     </div>
 
@@ -82,7 +82,7 @@
           <option>Housekeeping</option>
           <option>GM Office</option>
         </select>
-        <button @click="search='';filterType='';filterStatus='';filterDept='';showPendingOnly=false"
+        <button @click="resetFilters()"
           class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
         <button
           class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
@@ -113,18 +113,24 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in records" :key="r.code"
+            <tr v-if="listResource.loading" class="border-b border-gray-50">
+              <td colspan="6" class="px-6 py-8 text-xs text-center text-gray-400">Loading...</td>
+            </tr>
+            <tr v-else-if="!records.length" class="border-b border-gray-50">
+              <td colspan="6" class="px-6 py-8 text-xs text-center text-gray-400">No complimentary records found.</td>
+            </tr>
+            <tr v-for="r in records" v-else :key="r.name"
               class="border-b border-gray-50 last:border-0 cursor-pointer transition-colors"
-              :class="selectedRecord === r.code ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50'"
-              @click="selectedRecord = r.code">
+              :class="selectedRecord === r.name ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50'"
+              @click="selectedRecord = r.name; $router.push('/complimentary/' + r.name)">
               <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ r.guest }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ r.room }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ r.type }}</td>
+              <td class="px-4 py-4 text-xs text-gray-600">{{ r.room || '—' }}</td>
+              <td class="px-4 py-4 text-xs text-gray-600">{{ r.complimentary_type }}</td>
               <td class="px-4 py-4">
                 <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(r.status)">{{ r.status }}</span>
               </td>
-              <td class="px-4 py-4 text-xs font-bold text-gray-900">{{ r.value }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ r.approver }}</td>
+              <td class="px-4 py-4 text-xs font-bold text-gray-900">{{ formatValue(r.value) }}</td>
+              <td class="px-4 py-4 text-xs text-gray-600">{{ r.approval_level }}</td>
             </tr>
           </tbody>
         </table>
@@ -163,8 +169,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 
 const router = useRouter()
 const search = ref('')
@@ -172,14 +179,70 @@ const filterType = ref('')
 const filterStatus = ref('')
 const filterDept = ref('')
 const showPendingOnly = ref(false)
-const selectedRecord = ref('CMP-000431')
+const selectedRecord = ref(null)
 
-const records = [
-  { code: 'CMP-000431', guest: 'Sarah Johnson',  room: '305', type: 'Amenity + Late Checkout', status: 'Approved',    value: '₦18,000', approver: 'Duty Mgr' },
-  { code: 'CMP-000432', guest: 'Michael Duke',   room: '603', type: 'Airport Transfer',        status: 'In Progress', value: '₦32,000', approver: 'Front Desk' },
-  { code: 'CMP-000433', guest: 'Grace Kelvin',   room: '219', type: 'Laundry + Amenity',       status: 'Consumed',    value: '₦9,500',  approver: 'Housekeeping' },
-  { code: 'CMP-000434', guest: 'Ngozi Cole',     room: '511', type: 'Food Voucher',            status: 'Pending',     value: '₦15,000', approver: 'GM' },
-]
+// ── Stats ─────────────────────────────────────────────────────────────────────
+const stats = ref({ issued_today: 0, pending_approval: 0, consumed_today: 0, active_count: 0, expired_unused: 0, budget_impact_today: 0 })
+
+const dashboardResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_complimentary_dashboard',
+  onSuccess(data) {
+    stats.value = data
+  },
+})
+
+// ── Register List ─────────────────────────────────────────────────────────────
+const records = ref([])
+const totalRecords = ref(0)
+
+const listResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_complimentary_list',
+  onSuccess(data) {
+    records.value = data.records || []
+    totalRecords.value = data.total || 0
+    if (records.value.length && !selectedRecord.value) {
+      selectedRecord.value = records.value[0].name
+    }
+  },
+  onError() {
+    records.value = []
+  },
+})
+
+function fetchList() {
+  listResource.fetch({
+    search: search.value || null,
+    filter_type: filterType.value || null,
+    filter_status: showPendingOnly.value ? 'Pending' : (filterStatus.value || null),
+    filter_approver: filterDept.value || null,
+    page: 1,
+    page_size: 10,
+  })
+}
+
+watch([search, filterType, filterStatus, filterDept], fetchList)
+watch(showPendingOnly, fetchList)
+
+const controlBarText = computed(() => {
+  const active = stats.value.active_count
+  const pending = stats.value.pending_approval
+  const consumed = stats.value.consumed_today
+  const expired = stats.value.expired_unused
+  return `${active} active complimentary items • ${pending} pending approvals • ${consumed} consumed today • ${expired} expired unused`
+})
+
+function formatValue(v) {
+  if (!v && v !== 0) return '—'
+  return '₦' + Number(v).toLocaleString()
+}
+
+function resetFilters() {
+  search.value = ''
+  filterType.value = ''
+  filterStatus.value = ''
+  filterDept.value = ''
+  showPendingOnly.value = false
+}
 
 function statusClass(s) {
   return {
@@ -191,4 +254,9 @@ function statusClass(s) {
     'Cancelled':   'bg-red-50 text-red-500',
   }[s] || 'bg-gray-100 text-gray-500'
 }
+
+onMounted(() => {
+  dashboardResource.fetch()
+  fetchList()
+})
 </script>

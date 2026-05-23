@@ -20,8 +20,12 @@
       <div class="flex items-center gap-2">
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           @click="$router.push('/complimentary/list')">Cancel</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Save Draft</button>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Submit Approval</button>
+        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          :disabled="submitResource.loading" @click="saveDraft">Save Draft</button>
+        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          :disabled="submitResource.loading" @click="submitApproval">
+          {{ submitResource.loading ? 'Submitting...' : 'Submit Approval' }}
+        </button>
       </div>
     </div>
 
@@ -32,20 +36,34 @@
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
         <h3 class="text-sm font-bold text-gray-900 mb-5">Complimentary Details</h3>
 
+        <!-- Error message -->
+        <div v-if="errorMsg" class="mb-4 px-4 py-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg">{{ errorMsg }}</div>
+
+        <!-- Guest selector from active check-ins -->
+        <div class="mb-4">
+          <p class="text-xs text-gray-500 mb-1.5">Select Active Guest</p>
+          <select @change="onCheckinSelect" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+            <option value="">-- Select checked-in guest --</option>
+            <option v-for="c in checkins" :key="c.check_in" :value="c.check_in">
+              {{ c.guest }} — Room {{ c.room_number }}
+            </option>
+          </select>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Guest</p>
-            <input v-model="form.guest" type="text" placeholder="Select existing guest"
+            <input v-model="form.guest" type="text" placeholder="Guest name"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Room</p>
-            <input v-model="form.room" type="text" placeholder="Auto-fill from guest or choose room"
+            <input v-model="form.room" type="text" placeholder="Room number"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Complimentary Type</p>
-            <select v-model="form.type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+            <select v-model="form.complimentary_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
               <option>Food Voucher</option>
               <option>Airport Transfer</option>
               <option>Room Upgrade</option>
@@ -53,6 +71,8 @@
               <option>Late Checkout</option>
               <option>Laundry</option>
               <option>Transport / Food</option>
+              <option>Amenity / Late CO</option>
+              <option>Laundry / Amenity</option>
             </select>
           </div>
           <div>
@@ -66,8 +86,8 @@
             </select>
           </div>
           <div>
-            <p class="text-xs text-gray-500 mb-1.5">Value</p>
-            <input v-model="form.value" type="text" placeholder="₦0.00"
+            <p class="text-xs text-gray-500 mb-1.5">Value (₦)</p>
+            <input v-model="form.value" type="text" placeholder="0.00"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
@@ -77,12 +97,12 @@
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Issue Date</p>
-            <input v-model="form.issueDate" type="text" placeholder="18 Apr 2026"
+            <input v-model="form.issue_date" type="date"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Expiry Date</p>
-            <input v-model="form.expiryDate" type="text" placeholder="Select expiry / validity end"
+            <input v-model="form.expiry_date" type="date"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
@@ -95,7 +115,7 @@
         </div>
         <div class="mt-4">
           <p class="text-xs text-gray-500 mb-1.5">Redemption Rule</p>
-          <textarea v-model="form.redemptionRule" rows="3"
+          <textarea v-model="form.redemption_rule" rows="3"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             placeholder="Define how this benefit can be used, where it can be redeemed, limits, and whether cash exchange is prohibited..."></textarea>
         </div>
@@ -113,7 +133,7 @@
 
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Approval Level</p>
-          <select v-model="form.approvalLevel" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+          <select v-model="form.approval_level" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option>General Manager</option>
             <option>Duty Manager</option>
             <option>Front Desk Supervisor</option>
@@ -130,7 +150,7 @@
 
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Source Category</p>
-          <select v-model="form.sourceCategory" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+          <select v-model="form.source_category" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option>Service Recovery</option>
             <option>VIP Courtesy</option>
             <option>Loyalty Reward</option>
@@ -174,10 +194,10 @@
         <div>
           <p class="text-xs text-gray-500 mb-2">Preview Summary</p>
           <div class="bg-blue-50 rounded-xl border border-blue-200 px-4 py-4">
-            <p class="text-xs font-bold text-blue-700 mb-2">{{ form.type }} • {{ form.department }}</p>
+            <p class="text-xs font-bold text-blue-700 mb-2">{{ form.complimentary_type }} • {{ form.department }}</p>
             <p class="text-xs text-blue-600">Guest: {{ form.guest || 'Select guest' }}</p>
-            <p class="text-xs text-blue-600">Value: {{ form.value || '₦0.00' }}</p>
-            <p class="text-xs text-blue-600">Approval: {{ form.approvalLevel }}</p>
+            <p class="text-xs text-blue-600">Value: {{ form.value ? '₦' + form.value : '₦0.00' }}</p>
+            <p class="text-xs text-blue-600">Approval: {{ form.approval_level }}</p>
           </div>
         </div>
 
@@ -195,21 +215,108 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
+
+const router = useRouter()
+const errorMsg = ref('')
+const successMsg = ref('')
 
 const form = reactive({
   guest: '',
   room: '',
-  type: 'Food Voucher',
+  complimentary_type: 'Food Voucher',
   department: 'Restaurant',
   value: '',
-  quantity: '',
-  issueDate: '18 Apr 2026',
-  expiryDate: '',
+  quantity: '1',
+  issue_date: new Date().toISOString().slice(0, 10),
+  expiry_date: '',
   reason: '',
-  redemptionRule: '',
+  redemption_rule: '',
   note: '',
-  approvalLevel: 'General Manager',
-  sourceCategory: 'Service Recovery',
+  approval_level: 'General Manager',
+  source_category: 'Service Recovery',
+})
+
+// ── Active check-ins for guest/room dropdowns ─────────────────────────────────
+const checkins = ref([])
+
+const checkinsResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_active_checkins',
+  onSuccess(data) {
+    checkins.value = data.checkins || []
+  },
+})
+
+function onCheckinSelect(e) {
+  const selected = checkins.value.find(c => c.check_in === e.target.value)
+  if (selected) {
+    form.guest = selected.guest
+    form.room = selected.room_number
+  }
+}
+
+// ── Validation ────────────────────────────────────────────────────────────────
+const validationErrors = computed(() => {
+  const errors = []
+  if (!form.guest.trim()) errors.push('Guest name is required')
+  if (!form.complimentary_type) errors.push('Complimentary type is required')
+  if (!form.department) errors.push('Department is required')
+  if (!form.approval_level) errors.push('Approval level is required')
+  if (!form.issue_date) errors.push('Issue date is required')
+  return errors
+})
+
+// ── Create ────────────────────────────────────────────────────────────────────
+const submitResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.create_complimentary',
+  onSuccess(res) {
+    if (res.success) {
+      successMsg.value = `Created: ${res.complimentary_name}`
+      router.push('/complimentary/' + res.complimentary_name)
+    } else {
+      errorMsg.value = res.error || 'Failed to create record'
+    }
+  },
+  onError(err) {
+    errorMsg.value = err?.message || 'An error occurred'
+  },
+})
+
+function submitApproval() {
+  errorMsg.value = ''
+  if (validationErrors.value.length) {
+    errorMsg.value = validationErrors.value[0]
+    return
+  }
+  submitResource.fetch({
+    complimentary_data: {
+      guest: form.guest,
+      room: form.room,
+      complimentary_type: form.complimentary_type,
+      department: form.department,
+      value: form.value ? parseFloat(form.value.replace(/[^0-9.]/g, '')) : 0,
+      quantity: form.quantity,
+      issue_date: form.issue_date,
+      expiry_date: form.expiry_date || null,
+      reason: form.reason,
+      redemption_rule: form.redemption_rule,
+      note: form.note,
+      approval_level: form.approval_level,
+      source_category: form.source_category,
+    },
+  })
+}
+
+function saveDraft() {
+  errorMsg.value = ''
+  if (!form.guest.trim()) { errorMsg.value = 'Guest name is required'; return }
+  if (!form.complimentary_type) { errorMsg.value = 'Complimentary type is required'; return }
+  submitApproval()
+}
+
+onMounted(() => {
+  checkinsResource.fetch()
 })
 </script>

@@ -261,15 +261,16 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { User, Building2 } from 'lucide-vue-next'
 import { createResource } from 'frappe-ui'
 import { dateKey, parseServerDate } from '@/lib/utils'
 
 const router = useRouter()
+const route = useRoute()
 const search = ref('')
-const filterStatus = ref('')
-const filterArrival = ref('')
+const filterStatus = ref(String(route.query.status || ''))
+const filterArrival = ref(route.query.arrival === 'today' ? dateKey(new Date()) : String(route.query.arrival || ''))
 const filterSource = ref('')
 const page = ref(1)
 const pageSize = 10

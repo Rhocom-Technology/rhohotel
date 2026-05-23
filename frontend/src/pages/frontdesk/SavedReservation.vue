@@ -30,6 +30,33 @@ const actionLoading = ref(false)
 const reservation = ref({})
 const errorMessage = ref('')
 
+function getPaymentValue(entry) {
+  return Number(entry?.amount ?? entry?.paid_amount ?? entry?.allocated_amount ?? 0)
+}
+
+function normalizeInvoiceRow(row) {
+  return {
+    name: row?.invoice || row?.name || '',
+    invoice_type: row?.invoice_type || (Number(row?.is_return || 0) ? 'Credit Note' : 'Invoice'),
+    posting_date: row?.posting_date || null,
+    grand_total: Number(row?.amount ?? row?.grand_total ?? 0),
+    outstanding_amount: Number(row?.outstanding_amount ?? 0),
+    status: row?.status || '',
+    is_return: Number(row?.is_return || 0),
+  }
+}
+
+function normalizePaymentRow(row) {
+  return {
+    name: row?.payment_entry || row?.name || '',
+    posting_date: row?.posting_date || null,
+    mode_of_payment: row?.mode_of_payment || '',
+    reference_no: row?.reference_no || '',
+    remarks: row?.remarks || '',
+    amount: getPaymentValue(row),
+  }
+}
+
 function getReservationId() {
   return String(route.params.id || '').trim()
 }
@@ -49,6 +76,10 @@ async function loadReservation() {
       doctype: 'Hotel Reservation',
       name: id,
     })
+    const paymentSummary = await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.get_payment_summary_for_reservation',
+      { reservation_name: id },
+    ).catch(() => null)
 
     const defaultGuest = doc.primary_guest_name || doc.customer || ''
     const rooms = Array.isArray(doc.rooms)
@@ -58,16 +89,36 @@ async function loadReservation() {
         }))
       : []
 
-    const paidAmount = (Array.isArray(doc.payment_entries) ? doc.payment_entries : [])
-      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
+    const reservationInvoices = (Array.isArray(doc.reservation_invoices) ? doc.reservation_invoices : [])
+      .map(normalizeInvoiceRow)
+    const fallbackInvoices = (Array.isArray(paymentSummary?.invoices) ? paymentSummary.invoices : [])
+      .map(normalizeInvoiceRow)
+    const invoiceEntries = reservationInvoices.length ? reservationInvoices : fallbackInvoices
+
+    const reservationPayments = (Array.isArray(doc.reservation_payments) ? doc.reservation_payments : [])
+      .map(normalizePaymentRow)
+    const fallbackPayments = (Array.isArray(paymentSummary?.payment_entries) ? paymentSummary.payment_entries : [])
+      .map(normalizePaymentRow)
+    const paymentEntries = reservationPayments.length ? reservationPayments : fallbackPayments
+
+    const fallbackPaidAmount = paymentEntries.reduce((sum, row) => sum + getPaymentValue(row), 0)
+    const paidAmount = Number(paymentSummary?.paid_amount ?? fallbackPaidAmount)
     const totalAmount = parseFloat(doc.total_amount || doc.net_total || 0)
+    const outstandingAmount = Number(paymentSummary?.outstanding_amount)
+    const balanceAmount = Number.isFinite(outstandingAmount)
+      ? Math.max(0, outstandingAmount)
+      : Math.max(0, totalAmount - paidAmount)
 
     reservation.value = {
       ...doc,
       status: doc.reservation_status || doc.status || 'Draft',
       rooms,
       paid_amount: paidAmount,
-      balance: Math.max(0, totalAmount - paidAmount),
+      balance: Number(paymentSummary?.balance ?? balanceAmount),
+      payment_entries: paymentEntries,
+      reservation_invoices: invoiceEntries,
+      reservation_payments: paymentEntries,
+      linked_invoices: invoiceEntries,
     }
   } catch (error) {
     reservation.value = {}
@@ -90,15 +141,25 @@ function goToCheckIn() {
 
   const query = {}
   if (id) query.reservation = id
+  if (id) query.canonical_reservation = id
+  if (res?.reservation_type) query.reservation_type = res.reservation_type
   if (firstRoom?.room_number) query.room = firstRoom.room_number
   if (firstRoom?.room_type) query.room_type = firstRoom.room_type
+  if (firstRoom?.rate_per_night) query.rate_amount = firstRoom.rate_per_night
 
   const guestName = res?.primary_guest_name || res?.customer || ''
   if (guestName) query.guest_name = guestName
   if (res?.hotel_guest || res?.corporate_guest) query.guest = res.hotel_guest || res.corporate_guest
+  if (res?.primary_guest_phone) query.guest_phone = res.primary_guest_phone
+  if (res?.primary_guest_email) query.guest_email = res.primary_guest_email
+  if (res?.corporate_guest) query.corporate_guest = res.corporate_guest
+  if (res?.customer) query.customer = res.customer
+  if (res?.group_billing_mode) query.group_billing_mode = res.group_billing_mode
+  if (res?.group_master_customer) query.group_master_customer = res.group_master_customer
 
   const nights = firstRoom?.number_of_nights || res?.number_of_nights
   if (nights) query.nights = nights
+  if (res?.from_date) query.check_in_dt = `${res.from_date} 14:00:00`
   if (res?.to_date) query.checkout_date = res.to_date
 
   const resDiscountType = res?.discount_type || 'None'
@@ -108,7 +169,7 @@ function goToCheckIn() {
   }
 
   const payments = Array.isArray(res?.payment_entries) ? res.payment_entries : []
-  const advancePaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+  const advancePaid = payments.reduce((sum, payment) => sum + getPaymentValue(payment), 0)
   if (advancePaid > 0) query.advance_paid = advancePaid
   if (res?.sales_invoice) query.sales_invoice = res.sales_invoice
 
@@ -119,16 +180,22 @@ function goToIndividualCheckIn(row) {
   const id = getReservationId()
   const query = {}
   if (id) query.reservation = id
+  if (id) query.canonical_reservation = id
+  if (reservation.value?.reservation_type) query.reservation_type = reservation.value.reservation_type
   if (row?.room_number) query.room = row.room_number
   if (row?.room_type) query.room_type = row.room_type
+  if (row?.rate_per_night) query.rate_amount = row.rate_per_night
 
   const guestName = row?.occupant_name || row?.guest_name || reservation.value?.primary_guest_name || ''
   if (guestName) query.guest_name = guestName
-  if (row?.hotel_guest) query.guest = row.hotel_guest
-  if (row?.occupant_phone) query.guest_phone = row.occupant_phone
-  if (row?.occupant_email) query.guest_email = row.occupant_email
+  if (row?.hotel_guest || reservation.value?.corporate_guest) query.guest = row.hotel_guest || reservation.value.corporate_guest
+  if (row?.occupant_phone || reservation.value?.primary_guest_phone) query.guest_phone = row.occupant_phone || reservation.value.primary_guest_phone
+  if (row?.occupant_email || reservation.value?.primary_guest_email) query.guest_email = row.occupant_email || reservation.value.primary_guest_email
+  if (reservation.value?.corporate_guest) query.corporate_guest = reservation.value.corporate_guest
+  if (reservation.value?.customer) query.customer = reservation.value.customer
 
   if (row?.number_of_nights) query.nights = row.number_of_nights
+  if (reservation.value?.from_date) query.check_in_dt = `${reservation.value.from_date} 14:00:00`
   if (reservation.value?.to_date) query.checkout_date = reservation.value.to_date
 
   // Discount — map reservation's discount_type/discount value
@@ -142,7 +209,7 @@ function goToIndividualCheckIn(row) {
   const payments = Array.isArray(reservation.value?.payment_entries)
     ? reservation.value.payment_entries
     : []
-  const advancePaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+  const advancePaid = payments.reduce((sum, payment) => sum + getPaymentValue(payment), 0)
   if (advancePaid > 0) query.advance_paid = advancePaid
   if (reservation.value?.sales_invoice) query.sales_invoice = reservation.value.sales_invoice
 
@@ -151,7 +218,7 @@ function goToIndividualCheckIn(row) {
 
 function goToBulkCheckIn() {
   const id = getReservationId()
-  router.push({ name: 'NewCheckIn', query: id ? { reservation: id } : undefined })
+  router.push({ name: 'NewCheckIn', query: id ? { reservation: id, canonical_reservation: id } : undefined })
 }
 
 async function saveRoomOccupant(payload) {
@@ -224,6 +291,12 @@ async function submitReservation() {
 
 async function cancelReservation() {
   if (!reservation.value?.name || Number(reservation.value.docstatus) === 2) return
+
+  // Show confirmation dialog before proceeding
+  if (typeof window !== 'undefined') {
+    const confirmed = window.confirm('Are you sure you want to cancel this reservation? This action cannot be undone.')
+    if (!confirmed) return
+  }
 
   actionLoading.value = true
   errorMessage.value = ''

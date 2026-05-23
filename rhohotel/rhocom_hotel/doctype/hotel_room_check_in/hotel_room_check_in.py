@@ -58,6 +58,9 @@ class HotelRoomCheckIn(Document):
 			frappe.throw(_("Rate amount must be greater than zero"))
 
 	def validate_rate_and_session(self):
+		# Only require a tariff when rate_amount was not explicitly provided.
+		if flt(self.rate_amount) > 0:
+			return
 		tariff = frappe.get_all("Hotel Room Tariff", filters={"room_type": self.room_type})
 		if not tariff:
 			frappe.throw(_("No valid tariff found for Room Type {0}").format(self.room_type))
@@ -85,14 +88,15 @@ class HotelRoomCheckIn(Document):
 		if not frappe.db.exists("Hotel Room", self.room_number):
 			frappe.throw(_("Room {0} does not exist").format(self.room_number))
 
+		# Allow explicit skip for internal flows (reservation check-in) that
+		# have already validated availability and room state.
+		if self.flags.get("skip_availability_check"):
+			return
+
 		room = frappe.get_doc("Hotel Room", self.room_number)
 
 		if room.status != "Vacant":
 			frappe.throw(_("Room {0} is not vacant").format(self.room_number))
-
-		# Allow explicit skip (used by internal flows that already validated)
-		if self.flags.get("skip_availability_check"):
-			return
 
 		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
@@ -165,7 +169,11 @@ class HotelRoomCheckIn(Document):
 		payer_info = None
 
 		if canonical_res_name and frappe.db.exists("Hotel Reservation", canonical_res_name):
-			payer_info = resolve_payer(canonical_res_name, charge_category="Room")
+			# For reservation-based check-ins, room billing is managed at the
+			# reservation level via "Create Invoice". Never create a per-check-in
+			# invoice here — room charges are covered by the reservation workflow
+			# regardless of whether the reservation-level invoice exists yet.
+			return
 
 		# ------------------------------------------------------------------
 		# Handle fallback (no canonical reservation linked) – use guest customer

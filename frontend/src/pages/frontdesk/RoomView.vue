@@ -188,7 +188,7 @@
 									padding: 1px 6px;
 									border-radius: 4px;
 								"
-								>VIP</span
+								>RESERVED</span
 							>
 							<span
 								v-if="room.housekeeping_status === 'In Progress'"
@@ -347,7 +347,7 @@ const statCards = computed(() => [
 		value: stats.value.reserved,
 		subtitle: "Incoming arrivals",
 		hexColor: "#8b5cf6",
-		to: "/reservations",
+		to: { name: "Reservations", query: { arrival: "today", status: "Confirmed" } },
 	},
 	{
 		label: "Dirty Rooms",

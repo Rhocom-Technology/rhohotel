@@ -44,24 +44,24 @@
         </span>
       </div>
       <p class="text-xs" :class="invoiceIsPaid ? 'text-green-600' : 'text-amber-600'">
-        <span v-if="!invoiceIsPaid">After applying this adjustment, the existing invoice will be <strong>cancelled</strong> and a new invoice will be created with the updated amount.</span>
-        <span v-else-if="totalImpact > 0.01">After applying this adjustment, an <strong>additional charge invoice</strong> of {{ formatCurrency(totalImpact) }} will be created to cover the extended stay.</span>
-        <span v-else-if="totalImpact < -0.01">After applying this adjustment, you will need to <strong>manually create a credit note</strong> against the existing invoice for the reduced amount.</span>
+        <span v-if="totalImpact > 0.01">After applying this adjustment, an <strong>additional charge invoice</strong> of {{ formatCurrency(totalImpact) }} will be created to cover the extended stay.</span>
+        <span v-else-if="totalImpact < -0.01">After applying this adjustment, a <strong>credit note</strong> will be created for the reduced stay amount.</span>
         <span v-else>The invoice total matches the new stay amount — no invoice change required.</span>
       </p>
     </div>
 
     <!-- Invoice Adjust Result -->
     <div v-if="invoiceResult" class="mb-5 rounded-xl border px-5 py-4"
-      :class="invoiceResult.status === 'cancelled_and_recreated' || invoiceResult.status === 'recreated' || invoiceResult.status === 'adjustment_created' ? 'bg-green-50 border-green-200' : invoiceResult.status === 'reduction_manual' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'">
+      :class="invoiceResult.status === 'cancelled_and_recreated' || invoiceResult.status === 'recreated' || invoiceResult.status === 'adjustment_created' || invoiceResult.status === 'credit_note_created' ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'">
       <p class="text-xs font-bold mb-1"
-        :class="['cancelled_and_recreated','recreated','adjustment_created'].includes(invoiceResult.status) ? 'text-green-700' : invoiceResult.status === 'reduction_manual' ? 'text-amber-700' : 'text-gray-700'">
+        :class="['cancelled_and_recreated','recreated','adjustment_created','credit_note_created'].includes(invoiceResult.status) ? 'text-green-700' : 'text-gray-700'">
         Invoice Update: {{ invoiceResultLabel }}
       </p>
       <p v-if="invoiceResult.sales_invoice" class="text-xs text-green-600">New invoice created: <strong>{{ invoiceResult.sales_invoice }}</strong></p>
       <p v-if="invoiceResult.cancelled_invoice" class="text-xs text-gray-500">Previous invoice cancelled: {{ invoiceResult.cancelled_invoice }}</p>
       <p v-if="invoiceResult.adjustment_invoice" class="text-xs text-green-600">Adjustment invoice created: <strong>{{ invoiceResult.adjustment_invoice }}</strong> ({{ formatCurrency(invoiceResult.difference) }})</p>
-      <p v-if="invoiceResult.message" class="text-xs text-amber-600">{{ invoiceResult.message }}</p>
+      <p v-if="invoiceResult.credit_note" class="text-xs text-green-600">Credit note created: <strong>{{ invoiceResult.credit_note }}</strong> ({{ formatCurrency(Math.abs(invoiceResult.difference)) }})</p>
+      <p v-if="invoiceResult.message" class="text-xs text-gray-600">{{ invoiceResult.message }}</p>
     </div>
 
     <!-- Body -->
@@ -268,7 +268,7 @@ const invoiceResultLabel = computed(() => {
     cancelled_and_recreated: 'Previous invoice cancelled — new invoice created',
     recreated: 'Invoice recreated with updated amount',
     adjustment_created: 'Adjustment invoice created for extension charge',
-    reduction_manual: 'Manual credit note required',
+    credit_note_created: 'Credit note created for reduced stay',
     no_change: 'No invoice change needed',
     no_invoice: 'No invoice was linked',
   }
@@ -280,7 +280,7 @@ async function fetchInvoiceStatus() {
   try {
     const inv = await callMethodForm('frappe.client.get_value', {
       doctype: 'Sales Invoice',
-      filters: props.reservation.sales_invoice,
+      filters: { name: props.reservation.sales_invoice },
       fieldname: JSON.stringify(['grand_total', 'outstanding_amount']),
     })
     if (inv) {
@@ -388,11 +388,6 @@ async function apply() {
           { reservation_name: props.reservation.name },
         )
         invoiceResult.value = result
-        // If manual credit note required, don't auto-close — let user read the message
-        if (result?.status === 'reduction_manual') {
-          submitting.value = false
-          return
-        }
       } catch (invErr) {
         // Invoice adjustment failed — still succeeded with dates, show warning
         invoiceResult.value = { status: 'error', message: String(invErr?.message || 'Invoice update failed. Please amend manually.') }

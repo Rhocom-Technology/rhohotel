@@ -315,6 +315,12 @@ const form = reactive({
   notes: '',
 })
 
+if (route.query.type === 'Corporate' || route.query.guest_type === 'Corporate') {
+  form.guest_type = 'Corporate'
+} else if (route.query.type === 'Individual' || route.query.guest_type === 'Individual') {
+  form.guest_type = 'Individual'
+}
+
 const availablePreferences = computed(() =>
   allPreferences.filter(p => !form.preferences.includes(p))
 )
@@ -413,6 +419,11 @@ async function createGuest() {
         path: '/check-ins/new',
         query: {
           guest: created.name,
+          guest_name: created.hotel_guest_name || form.hotel_guest_name,
+          guest_phone: fullPhone,
+          guest_email: form.email || '',
+          reservation: route.query.reservation || '',
+          canonical_reservation: route.query.canonical_reservation || route.query.reservation || '',
           room: route.query.room || '',
           room_type: route.query.room_type || '',
           nights: route.query.nights || '',
@@ -422,7 +433,13 @@ async function createGuest() {
     } else if (route.query.return_to === 'new_reservation') {
       router.push({
         name: 'NewReservation',
-        query: { type: route.query.type || 'Individual' },
+        query: {
+          type: route.query.type || form.guest_type || 'Individual',
+          guest: created.name,
+          guest_name: created.hotel_guest_name || form.hotel_guest_name,
+          guest_phone: fullPhone,
+          guest_email: form.email || '',
+        },
       })
     } else if (route.query.return_to === 'saved_reservation' && route.query.reservation_id) {
       router.push({

@@ -142,12 +142,48 @@ def get_room_view_data(filters=None):
 		if key:
 			checkin_map[key] = checkin
 
+	today = frappe.utils.today()
+	reservation_rows = frappe.db.sql(
+		"""
+		SELECT
+			rr.room_number,
+			rr.room_type,
+			rr.rate_per_night,
+			rr.number_of_nights,
+			hr.name AS reservation,
+			hr.primary_guest_name,
+			hr.primary_guest_phone,
+			hr.primary_guest_email,
+			hr.corporate_guest,
+			hr.customer,
+			hr.reservation_type,
+			hr.from_date,
+			hr.to_date
+		FROM `tabHotel Reservation Room` rr
+		INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
+		WHERE hr.docstatus != 2
+		  AND hr.reservation_status = 'Confirmed'
+		  AND hr.from_date = %s
+		ORDER BY hr.creation ASC
+		""",
+		today,
+		as_dict=True,
+	)
+	reservation_map = {}
+	for reservation in reservation_rows:
+		key = cstr(reservation.get("room_number")).strip()
+		if key and key not in reservation_map:
+			reservation_map[key] = reservation
+
 	now = now_datetime()
 	room_rows = []
 	for room in rooms:
 		room_key = cstr(room.get("room_number") or room.get("name")).strip()
 		checkin = checkin_map.get(room_key) or {}
+		reservation = reservation_map.get(room_key) or {}
 		status = _normalize_room_status(room.get("status"))
+		if reservation and status == "Vacant":
+			status = "Reserved"
 		housekeeping_status = _normalize_housekeeping_status(room.get("housekeeping_status"))
 		expected_checkout = checkin.get("expected_check_out_datetime")
 		overdue = bool(status == "Occupied" and expected_checkout and expected_checkout < now)
@@ -160,8 +196,19 @@ def get_room_view_data(filters=None):
 			"floor": room.get("floor"),
 			"status": status,
 			"housekeeping_status": housekeeping_status,
-			"current_guest": room.get("current_guest") or checkin.get("guest"),
+			"current_guest": room.get("current_guest") or checkin.get("guest") or reservation.get("primary_guest_name"),
 			"check_in": checkin.get("name"),
+			"reservation": reservation.get("reservation"),
+			"reservation_type": reservation.get("reservation_type"),
+			"reservation_arrival": reservation.get("from_date"),
+			"reservation_departure": reservation.get("to_date"),
+			"reserved_for": reservation.get("primary_guest_name"),
+			"guest_phone": reservation.get("primary_guest_phone"),
+			"guest_email": reservation.get("primary_guest_email"),
+			"corporate_guest": reservation.get("corporate_guest"),
+			"customer": reservation.get("customer"),
+			"rate_per_night": flt(reservation.get("rate_per_night")),
+			"number_of_nights": reservation.get("number_of_nights"),
 			"reservation_source": checkin.get("reservation_source"),
 			"expected_check_out_datetime": expected_checkout,
 			"total_outstanding_amount": flt(checkin.get("total_outstanding_amount")),
@@ -171,14 +218,7 @@ def get_room_view_data(filters=None):
 		row["subtitle"] = _compute_room_subtitle(row)
 		room_rows.append(row)
 
-	reserved_today = frappe.db.count(
-		"Hotel Reservation",
-		filters={
-			"from_date": frappe.utils.today(),
-			"reservation_status": "Confirmed",
-			"docstatus": ["!=", 2],
-		},
-	)
+	reserved_today = len({row.get("reservation") for row in reservation_rows if row.get("reservation")})
 
 	stats = {
 		"vacant": len([r for r in room_rows if r.get("status") == "Vacant"]),

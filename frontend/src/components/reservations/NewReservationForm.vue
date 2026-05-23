@@ -16,7 +16,7 @@
     <div v-if="successMessage" class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-xs text-green-700">{{ successMessage }}</div>
 
     <div class="bg-white rounded-xl border border-gray-200 p-5">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Reservation Type</p>
           <select v-model="reservationType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
@@ -39,6 +39,13 @@
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Nights</p>
           <div class="px-3 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-lg text-gray-700">{{ nightsCount }}</div>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Source Channel</p>
+          <select v-model="form.source_channel" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+            <option value="">— Select source —</option>
+            <option v-for="mp in otaChannels" :key="mp.name" :value="mp.name">{{ mp.name }}</option>
+          </select>
         </div>
       </div>
     </div>
@@ -69,7 +76,7 @@
             @input="onCustomerSearch"
             @focus="customerDropdownOpen = true"
           />
-          <div v-if="customerDropdownOpen && filteredCustomers.length > 0"
+          <div v-if="customerDropdownOpen"
             class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
             <div
               v-for="c in filteredCustomers"
@@ -136,24 +143,40 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
         <div v-if="reservationType === 'Corporate'">
           <p class="text-xs text-gray-500 mb-1.5">Corporate Guest</p>
-          <select v-model="form.corporate_guest" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
-            <option value="">Select corporate guest</option>
-            <option v-for="g in corporateGuests" :key="g.name" :value="g.name">{{ g.hotel_guest_name || g.name }}</option>
-          </select>
+          <div class="w-full">
+            <GuestSelector
+              v-model="form.primary_guest_name"
+              v-model:guestId="form.corporate_guest"
+              :fallback-value="form.primary_guest_name"
+              guest-type="Corporate"
+              @selected="onBookerSelected"
+            />
+          </div>
         </div>
         <div v-else>
           <p class="text-xs text-gray-500 mb-1.5">Individual Guest</p>
-          <select v-model="form.individual_guest" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
-            <option value="">Select guest</option>
-            <option v-for="g in individualGuests" :key="g.name" :value="g.name">{{ g.hotel_guest_name || g.name }}</option>
-          </select>
+          <div class="w-full">
+            <GuestSelector
+              v-model="form.primary_guest_name"
+              v-model:guestId="form.individual_guest"
+              :fallback-value="form.primary_guest_name"
+              guest-type="Individual"
+              @selected="onBookerSelected"
+            />
+          </div>
         </div>
         <div class="flex items-end">
           <button @click="goToNewGuest" type="button" class="w-full px-3 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">+ New Guest</button>
         </div>
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Guest/Contact Name</p>
-          <input v-model="form.primary_guest_name" type="text" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+          <input
+            v-model="form.primary_guest_name"
+            type="text"
+            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none"
+            :readonly="form.individual_guest || form.corporate_guest"
+            :placeholder="(form.individual_guest || form.corporate_guest) ? 'Selected from guest list' : 'Enter guest name'"
+          />
         </div>
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Contact Phone</p>
@@ -347,15 +370,18 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createResource } from 'frappe-ui'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { callMethod } from '@/lib/api'
+import GuestSelector from '@/components/reservations/GuestSelector.vue'
 
 const props = defineProps({ type: { type: String, required: true } })
 const emit = defineEmits(['close', 'saved'])
 const router = useRouter()
+const route = useRoute()
 
 const reservationTypes = ['Individual', 'Corporate', 'Group', 'House Use', 'Complimentary', 'OTA']
 const reservationType = ref(reservationTypes.includes(props.type) ? props.type : 'Individual')
+const selectedBooker = ref(null)
 const form = ref({
   from_date: '',
   to_date: '',
@@ -378,7 +404,28 @@ const form = ref({
   // House Use / Comp fields
   comp_reason: '',
   internal_cost_center: '',
+  // Source
+  source_channel: '',
 })
+
+const preselectedGuest = {
+  name: String(route.query.guest || ''),
+  hotel_guest_name: String(route.query.guest_name || ''),
+  phone_number: String(route.query.guest_phone || ''),
+  email: String(route.query.guest_email || ''),
+}
+
+if (preselectedGuest.name || preselectedGuest.hotel_guest_name) {
+  selectedBooker.value = preselectedGuest
+  form.value.primary_guest_name = preselectedGuest.hotel_guest_name
+  form.value.primary_guest_phone = preselectedGuest.phone_number
+  form.value.primary_guest_email = preselectedGuest.email
+  if (reservationType.value === 'Corporate') {
+    form.value.corporate_guest = preselectedGuest.name
+  } else {
+    form.value.individual_guest = preselectedGuest.name
+  }
+}
 
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -423,7 +470,7 @@ function onCustomerSearch() {
 }
 
 function selectCustomer(c) {
-  form.value.group_master_customer = c.customer_name || c.name
+  form.value.group_master_customer = c.name
   customerSearch.value = c.customer_name || c.name
   customerDropdownOpen.value = false
 }
@@ -681,8 +728,25 @@ function removeRoom(roomName) {
 function goToNewGuest() {
   router.push({
     path: '/guests/new',
-    query: { return_to: 'new_reservation', type: reservationType.value },
+    query: {
+      return_to: 'new_reservation',
+      type: reservationType.value,
+      guest_type: reservationType.value === 'Corporate' ? 'Corporate' : 'Individual',
+    },
   })
+}
+
+function onBookerSelected(guest) {
+  if (!guest) return
+  selectedBooker.value = guest
+  form.value.primary_guest_name = guest.hotel_guest_name || form.value.primary_guest_name
+  form.value.primary_guest_email = guest.email || form.value.primary_guest_email
+  form.value.primary_guest_phone = guest.phone_number || form.value.primary_guest_phone
+  if (reservationType.value === 'Corporate') {
+    form.value.corporate_guest = guest.name
+  } else {
+    form.value.individual_guest = guest.name
+  }
 }
 
 function validateForm() {
@@ -717,12 +781,12 @@ async function saveReservation(submitAfterSave) {
   isSaving.value = true
   try {
     const guestDoc = reservationType.value === 'Corporate'
-      ? corporateGuests.value.find((g) => g.name === form.value.corporate_guest)
-      : individualGuests.value.find((g) => g.name === form.value.individual_guest)
+      ? (selectedBooker.value?.name === form.value.corporate_guest ? selectedBooker.value : corporateGuests.value.find((g) => g.name === form.value.corporate_guest))
+      : (selectedBooker.value?.name === form.value.individual_guest ? selectedBooker.value : individualGuests.value.find((g) => g.name === form.value.individual_guest))
 
     const doc = {
       doctype: 'Hotel Reservation',
-      source_channel: reservationType.value === 'OTA' ? 'Online' : 'Front Desk',
+      source_channel: form.value.source_channel || '',
       reservation_type: reservationType.value,
       guest_profile_kind: reservationType.value === 'Corporate' ? 'Corporate Account' : 'Primary Guest',
       from_date: form.value.from_date,

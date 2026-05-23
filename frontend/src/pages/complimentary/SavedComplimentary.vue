@@ -10,45 +10,57 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-end gap-2">
       <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         @click="$router.push('/complimentary/list')">Back to List</button>
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print Record</button>
-      <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Approve</button>
-      <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Mark as Consumed</button>
+      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        @click="window.print()">Print Record</button>
+      <button v-if="canApprove" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+        :disabled="approveResource.loading" @click="approveRecord">
+        {{ approveResource.loading ? 'Approving...' : 'Approve' }}
+      </button>
+      <button v-if="canConsume" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        :disabled="consumeResource.loading" @click="markConsumed">
+        {{ consumeResource.loading ? 'Marking...' : 'Mark as Consumed' }}
+      </button>
     </div>
 
+    <!-- Feedback messages -->
+    <div v-if="actionMsg" class="px-4 py-3 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg">{{ actionMsg }}</div>
+    <div v-if="errorMsg" class="px-4 py-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg">{{ errorMsg }}</div>
+    <div v-if="isLoading" class="px-4 py-3 text-xs text-gray-400">Loading...</div>
+
     <!-- Status Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div v-if="record" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Record Value</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Approved</span>
+          <span class="px-2.5 py-0.5 text-xs font-medium rounded-full" :class="statusBadgeClass">{{ record.status }}</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦25,000</p>
+        <p class="text-3xl font-bold text-gray-900">{{ formatValue(record.value) }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Benefit Type</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Dining</span>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Benefit</span>
         </div>
-        <p class="text-xl font-bold text-gray-900 mt-1">Food Voucher</p>
+        <p class="text-sm font-bold text-gray-900 mt-1">{{ record.complimentary_type }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Redemption Status</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Open</span>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">{{ record.status }}</span>
         </div>
-        <p class="text-xl font-bold text-gray-900 mt-1">Pending Use</p>
+        <p class="text-sm font-bold text-gray-900 mt-1">{{ record.status === 'Consumed' ? 'Consumed' : record.status === 'Approved' ? 'Pending Use' : record.status }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Linked Department</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Ready</span>
         </div>
-        <p class="text-xl font-bold text-gray-900 mt-1">Restaurant</p>
+        <p class="text-sm font-bold text-gray-900 mt-1">{{ record.department }}</p>
       </div>
     </div>
 
     <!-- Details + Audit -->
-    <div style="display:grid;grid-template-columns:1fr 340px;gap:12px;">
+    <div v-if="record" style="display:grid;grid-template-columns:1fr 340px;gap:12px;">
 
       <!-- Complimentary Details -->
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
@@ -56,48 +68,41 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Complimentary Code</p>
-            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">CMP-000437</div>
+            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.name }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Issue Date</p>
-            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">18 Apr 2026 • 03:24 PM</div>
+            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.issue_date }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Guest</p>
-            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">Ngozi Cole</div>
+            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.guest }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Room</p>
-            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">511</div>
+            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.room || '—' }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Complimentary Type</p>
-            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">Food Voucher</div>
+            <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.complimentary_type }}</div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Value</p>
-            <div class="px-3 py-2.5 text-xs font-bold text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">₦25,000</div>
+            <div class="px-3 py-2.5 text-xs font-bold text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ formatValue(record.value) }}</div>
           </div>
         </div>
 
         <div class="mt-4">
           <p class="text-xs text-gray-500 mb-1.5">Reason / Justification</p>
-          <div class="px-3 py-3 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed min-h-16">
-            Service recovery approval granted after delayed room readiness and guest wait time at check-in.
-          </div>
+          <div class="px-3 py-3 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed min-h-16">{{ record.reason || '—' }}</div>
         </div>
         <div class="mt-4">
           <p class="text-xs text-gray-500 mb-1.5">Usage Rule</p>
-          <div class="px-3 py-3 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed">
-            Redeemable once at restaurant POS against dinner items only.<br/>
-            Cannot be exchanged for cash or combined with another voucher.
-          </div>
+          <div class="px-3 py-3 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed">{{ record.redemption_rule || '—' }}</div>
         </div>
         <div class="mt-4">
           <p class="text-xs text-gray-500 mb-1.5">Notes</p>
-          <div class="px-3 py-3 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed min-h-16">
-            Guest has acknowledged the complimentary dinner voucher. Waiting for restaurant redemption confirmation.
-          </div>
+          <div class="px-3 py-3 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg leading-relaxed min-h-16">{{ record.note || '—' }}</div>
         </div>
       </div>
 
@@ -107,31 +112,32 @@
 
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Approval Status</p>
-          <div class="px-4 py-2.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg">
-            Approved • waiting consumption confirmation
+          <div class="px-4 py-2.5 text-xs font-semibold rounded-lg border" :class="approvalStatusClass">
+            {{ approvalStatusText }}
           </div>
         </div>
 
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Approved By</p>
-          <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">General Manager</div>
+          <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.approved_by || '—' }}</div>
         </div>
 
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Consumption Status</p>
-          <div class="px-4 py-2.5 text-xs font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg">
-            Pending Use at restaurant POS
+          <div class="px-4 py-2.5 text-xs font-semibold rounded-lg border" :class="consumptionStatusClass">
+            {{ consumptionStatusText }}
           </div>
         </div>
 
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Redemption Reference</p>
-          <div class="px-3 py-2.5 text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg">Not yet posted</div>
+          <div class="px-3 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-lg" :class="record.consumption_reference ? 'text-gray-900' : 'text-gray-400'">{{ record.consumption_reference || 'Not yet posted' }}</div>
         </div>
 
         <div>
           <p class="text-xs text-gray-500 mb-2">Audit Trail</p>
           <div class="bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 space-y-3">
+            <div v-if="!audit.length" class="text-xs text-gray-400">No audit entries yet.</div>
             <div v-for="a in audit" :key="a.time">
               <p class="text-xs font-semibold text-gray-900">{{ a.time }}</p>
               <p class="text-xs text-gray-500">{{ a.action }}</p>
@@ -143,7 +149,10 @@
           <p class="text-xs text-gray-500 mb-2">Related Actions</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <button class="px-4 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Edit Record</button>
-            <button class="px-4 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel Record</button>
+            <button v-if="canCancel" class="px-4 py-2.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+              :disabled="cancelResource.loading" @click="cancelRecord">
+              {{ cancelResource.loading ? 'Cancelling...' : 'Cancel Record' }}
+            </button>
           </div>
         </div>
       </div>
@@ -158,11 +167,154 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { createResource } from 'frappe-ui'
 
+const route = useRoute()
+const router = useRouter()
 
-const audit = [
-  { time: '18 Apr 2026 • 03:24 PM', action: 'Created by Front Desk Supervisor' },
-  { time: '18 Apr 2026 • 03:41 PM', action: 'Approved by General Manager' },
-  { time: '18 Apr 2026 • 04:05 PM', action: 'Notification sent to Restaurant outlet' },
-]
+const record = ref(null)
+const audit = ref([])
+const errorMsg = ref('')
+const actionMsg = ref('')
+
+// ── Fetch record ──────────────────────────────────────────────────────────────
+const fetchResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_complimentary',
+  onSuccess(data) {
+    record.value = data
+    audit.value = data.audit_trail || []
+  },
+  onError(err) {
+    errorMsg.value = err?.message || 'Failed to load record'
+  },
+})
+
+function loadRecord() {
+  fetchResource.fetch({ complimentary_name: route.params.id })
+}
+
+// ── Approve ───────────────────────────────────────────────────────────────────
+const approveResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.approve_complimentary',
+  onSuccess(res) {
+    if (res.success) {
+      actionMsg.value = 'Record approved successfully.'
+      loadRecord()
+    } else {
+      errorMsg.value = res.error || 'Approval failed'
+    }
+  },
+  onError(err) { errorMsg.value = err?.message || 'Approval failed' },
+})
+
+// ── Mark Consumed ─────────────────────────────────────────────────────────────
+const consumeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.mark_consumed',
+  onSuccess(res) {
+    if (res.success) {
+      actionMsg.value = 'Marked as consumed.'
+      loadRecord()
+    } else {
+      errorMsg.value = res.error || 'Failed to mark consumed'
+    }
+  },
+  onError(err) { errorMsg.value = err?.message || 'Failed to mark consumed' },
+})
+
+// ── Cancel ────────────────────────────────────────────────────────────────────
+const cancelResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.cancel_complimentary',
+  onSuccess(res) {
+    if (res.success) {
+      router.push('/complimentary/list')
+    } else {
+      errorMsg.value = res.error || 'Cancellation failed'
+    }
+  },
+  onError(err) { errorMsg.value = err?.message || 'Cancellation failed' },
+})
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function approveRecord() {
+  errorMsg.value = ''
+  actionMsg.value = ''
+  approveResource.fetch({ complimentary_name: route.params.id })
+}
+
+function markConsumed() {
+  errorMsg.value = ''
+  actionMsg.value = ''
+  consumeResource.fetch({ complimentary_name: route.params.id })
+}
+
+function cancelRecord() {
+  errorMsg.value = ''
+  actionMsg.value = ''
+  cancelResource.fetch({ complimentary_name: route.params.id })
+}
+
+// ── Computed display helpers ──────────────────────────────────────────────────
+const statusBadgeClass = computed(() => {
+  const s = record.value?.status
+  return {
+    'Approved':    'bg-green-100 text-green-600',
+    'In Progress': 'bg-blue-100 text-blue-600',
+    'Consumed':    'bg-green-100 text-green-700',
+    'Pending':     'bg-yellow-100 text-yellow-600',
+    'Expired':     'bg-gray-100 text-gray-500',
+    'Cancelled':   'bg-red-100 text-red-500',
+  }[s] || 'bg-gray-100 text-gray-500'
+})
+
+function formatValue(v) {
+  if (!v && v !== 0) return '—'
+  return '₦' + Number(v).toLocaleString()
+}
+
+function formatDate(d) {
+  if (!d) return '—'
+  return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+const approvalStatusText = computed(() => {
+  const s = record.value?.status
+  if (s === 'Approved') return 'Approved • waiting consumption confirmation'
+  if (s === 'Consumed') return 'Consumed and closed'
+  if (s === 'Cancelled') return 'Cancelled'
+  if (s === 'Pending') return 'Pending approval'
+  return s || '—'
+})
+
+const approvalStatusClass = computed(() => {
+  const s = record.value?.status
+  if (s === 'Approved') return 'text-green-700 bg-green-50 border-green-200'
+  if (s === 'Consumed') return 'text-green-700 bg-green-50 border-green-200'
+  if (s === 'Cancelled') return 'text-red-700 bg-red-50 border-red-200'
+  return 'text-yellow-700 bg-yellow-50 border-yellow-200'
+})
+
+const consumptionStatusClass = computed(() => {
+  const s = record.value?.status
+  if (s === 'Consumed') return 'text-green-700 bg-green-50 border-green-200'
+  if (s === 'Cancelled' || s === 'Expired') return 'text-gray-700 bg-gray-50 border-gray-200'
+  return 'text-yellow-700 bg-yellow-50 border-yellow-200'
+})
+
+const consumptionStatusText = computed(() => {
+  const s = record.value?.status
+  if (s === 'Consumed') return `Consumed on ${formatDate(record.value?.consumed_on)}`
+  if (s === 'Cancelled') return 'Cancelled — benefit not used'
+  if (s === 'Expired') return 'Expired — benefit unused'
+  const dept = record.value?.department || 'outlet'
+  return `Pending use at ${dept}`
+})
+
+const isLoading = computed(() => fetchResource.loading)
+const canApprove = computed(() => ['Pending', 'In Progress'].includes(record.value?.status))
+const canConsume = computed(() => ['Approved', 'In Progress'].includes(record.value?.status))
+const canCancel  = computed(() => !['Consumed', 'Cancelled', 'Expired'].includes(record.value?.status))
+
+onMounted(loadRecord)
 </script>

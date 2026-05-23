@@ -229,6 +229,12 @@ def resolve_payer(reservation_name, charge_category="Room"):
                 "customer": res.group_master_customer,
                 "payer_type": "Group Master",
             }
+        if res.group_billing_mode == "Split":
+            # Each room pays individually; caller should use create_invoice_for_reservation_room
+            return {
+                "customer": _get_check_in_guest_customer(res),
+                "payer_type": "Guest",
+            }
         if charge_category == "Room" and res.group_master_customer:
             return {
                 "customer": res.group_master_customer,

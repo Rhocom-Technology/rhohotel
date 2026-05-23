@@ -20,28 +20,28 @@
           <p class="text-xs text-gray-400">Active Corporate Bills</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">Open</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">32</p>
+        <p class="text-3xl font-bold text-gray-900">{{ loading ? '…' : summary.activeBills }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Outstanding Value</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-600 rounded-full">Watch</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦6.18M</p>
+        <p class="text-3xl font-bold text-gray-900">{{ loading ? '…' : summary.outstandingValue }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Paid This Month</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">Received</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦7.59M</p>
+        <p class="text-3xl font-bold text-gray-900">{{ loading ? '…' : summary.paidThisMonth }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Overdue Bills</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Alert</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">9</p>
+        <p class="text-3xl font-bold text-gray-900">{{ loading ? '…' : summary.overdueCount }}</p>
       </div>
     </div>
 
@@ -55,11 +55,7 @@
         </div>
         <select v-model="filterClient" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Clients</option>
-          <option>Wells Corporate Services</option>
-          <option>Rubiconnode Ltd</option>
-          <option>Herotech Ltd</option>
-          <option>Accentral Group</option>
-          <option>Fixcenter Services</option>
+          <option v-for="c in clients" :key="c" :value="c">{{ c }}</option>
         </select>
         <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Statuses</option>
@@ -85,11 +81,14 @@
       </div>
     </div>
 
+      <!-- Error -->
+    <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl px-5 py-3 text-xs text-red-600">{{ error }}</div>
+
     <!-- Corporate Bill Records -->
     <div class="bg-white rounded-xl border-2 border-blue-400 overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 class="text-sm font-bold text-gray-900">Corporate Bill Records</h3>
-        <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} bills</p>
+        <p class="text-xs text-gray-400">Showing {{ filtered.length === 0 ? 0 : pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} bills</p>
       </div>
       <table class="w-full">
         <thead>
@@ -106,6 +105,12 @@
           </tr>
         </thead>
         <tbody>
+          <tr v-if="loading">
+            <td colspan="9" class="px-6 py-10 text-center text-xs text-gray-400">Loading bills…</td>
+          </tr>
+          <tr v-else-if="paged.length === 0">
+            <td colspan="9" class="px-6 py-10 text-center text-xs text-gray-400">No bills found.</td>
+          </tr>
           <tr v-for="b in paged" :key="b.billNo" class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
             <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ b.billNo }}</td>
             <td class="px-4 py-4">
@@ -121,7 +126,8 @@
               <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="billStatusClass(b.status)">{{ b.status }}</span>
             </td>
             <td class="px-4 py-4">
-              <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                @click="$router.push('/billing/corporate/' + b.billNo)">
                 {{ b.action }}
               </button>
             </td>
@@ -145,7 +151,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { callMethodForm } from '@/lib/api'
 
 const search = ref('')
 const filterClient = ref('')
@@ -155,19 +162,34 @@ const showOverdueOnly = ref(false)
 const currentPage = ref(1)
 const perPage = 25
 
-const bills = [
-  { billNo: 'CBL-000431', client: 'Wells Corporate Services', clientNote: 'Accommodation + conference charges', period: 'Mar 2026', issueDate: '18 Apr 2026', dueDate: '02 May 2026', amount: '₦1,250,000', balance: '₦1,250,000', status: 'Unpaid',   action: 'View' },
-  { billNo: 'CBL-000430', client: 'Rubiconnode Ltd',          clientNote: 'Staff lodging invoice batch',        period: 'Apr 2026', issueDate: '16 Apr 2026', dueDate: '30 Apr 2026', amount: '₦920,000',   balance: '₦420,000',   status: 'Part Paid',action: 'View' },
-  { billNo: 'CBL-000429', client: 'Herotech Ltd',             clientNote: 'Executive room usage billing',       period: 'Apr 2026', issueDate: '10 Apr 2026', dueDate: '24 Apr 2026', amount: '₦640,000',   balance: '₦640,000',   status: 'Unpaid',   action: 'View' },
-  { billNo: 'CBL-000428', client: 'Wells Corporate Services', clientNote: 'February lodging invoice',           period: 'Feb 2026', issueDate: '20 Mar 2026', dueDate: '03 Apr 2026', amount: '₦1,980,000', balance: '₦1,980,000', status: 'Overdue',  action: 'Follow Up' },
-  { billNo: 'CBL-000427', client: 'Accentral Group',          clientNote: 'Team stay and transport charges',   period: 'Apr 2026', issueDate: '15 Apr 2026', dueDate: '29 Apr 2026', amount: '₦540,000',   balance: '₦240,000',   status: 'Part Paid',action: 'View' },
-  { billNo: 'CBL-000426', client: 'Fixcenter Services',       clientNote: 'Partner accommodation charges',     period: 'Apr 2026', issueDate: '11 Apr 2026', dueDate: '25 Apr 2026', amount: '₦460,000',   balance: '₦0.00',      status: 'Paid',     action: 'Print' },
-  { billNo: 'CBL-000425', client: 'Herotech Ltd',             clientNote: 'Monthly corporate accommodation',   period: 'Mar 2026', issueDate: '01 Apr 2026', dueDate: '15 Apr 2026', amount: '₦780,000',   balance: '₦0.00',      status: 'Paid',     action: 'Print' },
-  { billNo: 'CBL-000424', client: 'Rubiconnode Ltd',          clientNote: 'Conference and room charges',       period: 'Mar 2026', issueDate: '28 Mar 2026', dueDate: '11 Apr 2026', amount: '₦310,000',   balance: '₦310,000',   status: 'Overdue',  action: 'Follow Up' },
-]
+const bills = ref([])
+const summary = ref({ activeBills: 0, outstandingValue: '₦0', paidThisMonth: '₦0', overdueCount: 0 })
+const loading = ref(false)
+const error = ref('')
+
+const clients = computed(() =>
+  [...new Set(bills.value.map(b => b.client).filter(Boolean))].sort()
+)
+
+async function fetchBills() {
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await callMethodForm(
+      'rhohotel.rhocom_hotel.api.corporate_billing.get_corporate_bills',
+      { page: 1, page_size: 500 }
+    )
+    bills.value = result?.bills || []
+    summary.value = result?.summary || { activeBills: 0, outstandingValue: '₦0', paidThisMonth: '₦0', overdueCount: 0 }
+  } catch (e) {
+    error.value = e.message || 'Failed to load bills'
+  } finally {
+    loading.value = false
+  }
+}
 
 const filtered = computed(() => {
-  let list = bills
+  let list = bills.value
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(b => b.billNo.toLowerCase().includes(q) || b.client.toLowerCase().includes(q))
@@ -191,4 +213,6 @@ function billStatusClass(s) {
     'Overdue':   'bg-red-50 text-red-500',
   }[s] || 'bg-gray-100 text-gray-500'
 }
+
+onMounted(fetchBills)
 </script>

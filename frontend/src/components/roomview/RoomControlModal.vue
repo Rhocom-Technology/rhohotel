@@ -265,9 +265,19 @@ function goCheckInFromReservation() {
     room_type: props.room.room_type || '',
   }
   if (props.room.reservation) query.reservation = props.room.reservation
+  if (props.room.reservation) query.canonical_reservation = props.room.reservation
+  if (props.room.reservation_type) query.reservation_type = props.room.reservation_type
   if (props.room.current_guest || props.room.reserved_for) {
     query.guest_name = props.room.current_guest || props.room.reserved_for
   }
+  if (props.room.guest_phone) query.guest_phone = props.room.guest_phone
+  if (props.room.guest_email) query.guest_email = props.room.guest_email
+  if (props.room.corporate_guest) query.guest = props.room.corporate_guest
+  if (props.room.customer) query.customer = props.room.customer
+  if (props.room.rate_per_night) query.rate_amount = props.room.rate_per_night
+  if (props.room.number_of_nights) query.nights = props.room.number_of_nights
+  if (props.room.reservation_arrival) query.check_in_dt = `${props.room.reservation_arrival} 14:00:00`
+  if (props.room.reservation_departure) query.checkout_date = props.room.reservation_departure
   router.push({ path: '/check-ins/new', query })
 }
 
