@@ -12,12 +12,74 @@
 
   {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
 
+  {% set gym_media = page_media.get("gym", {}) %}
+  {% set general_media = page_media.get("general", {}) %}
+
+  {% set gym_hero_images = gym_media.get("hero_image", []) %}
+  {% set gym_main_images = gym_media.get("main_image", []) %}
+  {% set gym_side_images = gym_media.get("side_image", []) %}
+  {% set gym_card_images = gym_media.get("card_image", []) %}
+  {% set gym_background_images = gym_media.get("background_image", []) %}
+  {% set gym_cta_images = gym_media.get("cta_image", []) %}
+
+  {% set general_background_images = general_media.get("background_image", []) %}
+  {% set general_cta_images = general_media.get("cta_image", []) %}
+
+  {% if gym_hero_images|length > 0 %}
+    {% set gym_hero_image = gym_hero_images[0].image %}
+    {% set gym_hero_alt = gym_hero_images[0].alt_text or "Gym at " ~ (hotel.hotel_name or "Hotel") %}
+  {% else %}
+    {% set gym_hero_image = "" %}
+    {% set gym_hero_alt = "Gym at " ~ (hotel.hotel_name or "Hotel") %}
+  {% endif %}
+
+  {% if gym_main_images|length > 0 %}
+    {% set gym_main_image = gym_main_images[0].image %}
+    {% set gym_main_alt = gym_main_images[0].alt_text or "Hotel fitness area" %}
+  {% else %}
+    {% set gym_main_image = "" %}
+    {% set gym_main_alt = "Hotel fitness area" %}
+  {% endif %}
+
+  {% if gym_side_images|length > 0 %}
+    {% set gym_side_image = gym_side_images[0].image %}
+    {% set gym_side_alt = gym_side_images[0].alt_text or "Fitness equipment detail" %}
+  {% else %}
+    {% set gym_side_image = "" %}
+    {% set gym_side_alt = "Fitness equipment detail" %}
+  {% endif %}
+
+  {% if gym_background_images|length > 0 %}
+    {% set gym_background_image = gym_background_images[0].image %}
+  {% elif general_background_images|length > 0 %}
+    {% set gym_background_image = general_background_images[0].image %}
+  {% else %}
+    {% set gym_background_image = "" %}
+  {% endif %}
+
+  {% if gym_cta_images|length > 0 %}
+    {% set gym_cta_image = gym_cta_images[0].image %}
+    {% set gym_cta_alt = gym_cta_images[0].alt_text or "Stay Well During Your Visit" %}
+  {% elif general_cta_images|length > 0 %}
+    {% set gym_cta_image = general_cta_images[0].image %}
+    {% set gym_cta_alt = general_cta_images[0].alt_text or "Stay Well During Your Visit" %}
+  {% else %}
+    {% set gym_cta_image = "" %}
+    {% set gym_cta_alt = "Stay Well During Your Visit" %}
+  {% endif %}
+
   <header class="web-page-hero">
-    <img
-      src="/assets/rhohotel/hotel_templates/template_two/files/gym.jpg"
-      alt="Gym at {{ hotel.hotel_name or 'Hotel' }}"
-      class="web-page-hero-bg"
-    />
+    {% if gym_hero_image %}
+      <img
+        src="{{ gym_hero_image }}"
+        alt="{{ gym_hero_alt }}"
+        class="web-page-hero-bg"
+      />
+    {% else %}
+      <div class="web-page-hero-bg web-image-placeholder">
+        <i class="fa-solid fa-dumbbell"></i>
+      </div>
+    {% endif %}
 
     <div class="container">
       <div class="web-breadcrumb-label">Fitness & Wellness</div>
@@ -56,14 +118,27 @@
 
         <div class="col-lg-6">
           <div class="web-editorial-image">
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/gym-2.jpg"
-              alt="Hotel fitness area"
-            />
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/gym-3.jpg"
-              alt="Fitness equipment detail"
-            />
+            {% if gym_main_image %}
+              <img
+                src="{{ gym_main_image }}"
+                alt="{{ gym_main_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-person-running"></i>
+              </div>
+            {% endif %}
+
+            {% if gym_side_image %}
+              <img
+                src="{{ gym_side_image }}"
+                alt="{{ gym_side_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-image-placeholder-small">
+                <i class="fa-solid fa-dumbbell"></i>
+              </div>
+            {% endif %}
           </div>
         </div>
 
@@ -90,10 +165,17 @@
 
         <div class="col-lg-4 col-md-6">
           <div class="web-tile-card">
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/gym-3.jpg"
-              alt="Cardio Zone"
-            />
+            {% if gym_card_images|length > 0 %}
+              <img
+                src="{{ gym_card_images[0].image }}"
+                alt="{{ gym_card_images[0].alt_text or 'Cardio Zone' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-person-running"></i>
+              </div>
+            {% endif %}
+
             <div class="web-tile-content">
               <h3>Cardio Zone</h3>
               <p>Use treadmills, bikes, and movement equipment for stamina, energy, and light training.</p>
@@ -103,10 +185,17 @@
 
         <div class="col-lg-4 col-md-6">
           <div class="web-tile-card">
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/gym-2.jpg"
-              alt="Strength Area"
-            />
+            {% if gym_card_images|length > 1 %}
+              <img
+                src="{{ gym_card_images[1].image }}"
+                alt="{{ gym_card_images[1].alt_text or 'Strength Area' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-dumbbell"></i>
+              </div>
+            {% endif %}
+
             <div class="web-tile-content">
               <h3>Strength Area</h3>
               <p>Train with weights and machines for simple, focused, full-body workout sessions.</p>
@@ -116,10 +205,17 @@
 
         <div class="col-lg-4 col-md-6">
           <div class="web-tile-card">
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/gym-4.jpg"
-              alt="Stretch Space"
-            />
+            {% if gym_card_images|length > 2 %}
+              <img
+                src="{{ gym_card_images[2].image }}"
+                alt="{{ gym_card_images[2].alt_text or 'Stretch Space' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-person-praying"></i>
+              </div>
+            {% endif %}
+
             <div class="web-tile-content">
               <h3>Stretch Space</h3>
               <p>A calm area for stretching, mobility, warmups, cooldowns, and gentle movement.</p>
@@ -131,7 +227,14 @@
     </div>
   </section>
 
-  <section class="web-fixed-band" style="background-image: url('/assets/rhohotel/hotel_templates/template_two/files/gym-4.jpg');">
+  {% if gym_background_image %}
+    <section
+      class="web-fixed-band"
+      style="background-image: url('{{ gym_background_image }}');"
+    >
+  {% else %}
+    <section class="web-fixed-band">
+  {% endif %}
     <div class="container">
       <div class="web-fixed-box">
         <div class="web-kicker">Energy</div>
@@ -232,11 +335,17 @@
       <div class="web-cta-split">
         <div class="row g-0 align-items-center">
           <div class="col-lg-5">
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/gym.jpg"
-              alt="Stay Well During Your Visit"
-              class="web-cta-image rounded"
-            />
+            {% if gym_cta_image %}
+              <img
+                src="{{ gym_cta_image }}"
+                alt="{{ gym_cta_alt }}"
+                class="web-cta-image rounded"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
+                <i class="fa-solid fa-heart-pulse"></i>
+              </div>
+            {% endif %}
           </div>
 
           <div class="col-lg-7">

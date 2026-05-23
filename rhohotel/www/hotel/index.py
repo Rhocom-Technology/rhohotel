@@ -40,6 +40,7 @@ def get_context(context):
     context.current_page = page
     context.rooms = get_rooms()
     context.home_rooms = get_home_rooms()
+    context.page_media = get_page_media()
     context.body_template = (
         f"rhocom_hotel/templates/hotel_templates/{template_code}/pages/{page_map[page]}.html"
     )
@@ -208,3 +209,52 @@ def get_home_rooms():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Hotel Website Home Room Fetch Error")
         return []
+    
+def get_page_media():
+    try:
+        records = frappe.get_all(
+            "Hotel Page Media",
+            filters={"is_active": 1},
+            fields=["name", "page"],
+            order_by="creation asc",
+        )
+
+        media = {}
+
+        for record in records:
+            if not record.page:
+                continue
+
+            page_key = frappe.scrub(record.page)
+
+            if page_key not in media:
+                media[page_key] = {}
+
+            doc = frappe.get_doc("Hotel Page Media", record.name)
+
+            for row in doc.get("images") or []:
+                if not row.image_type or not row.image:
+                    continue
+
+                image_type_key = frappe.scrub(row.image_type)
+
+                if image_type_key not in media[page_key]:
+                    media[page_key][image_type_key] = []
+
+                media[page_key][image_type_key].append({
+                    "image": row.image,
+                    "alt_text": row.alt_text or "",
+                    "sort_order": row.sort_order or 0,
+                })
+
+            for image_type_key in media[page_key]:
+                media[page_key][image_type_key] = sorted(
+                    media[page_key][image_type_key],
+                    key=lambda item: item.get("sort_order", 0)
+                )
+
+        return media
+
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Hotel Page Media Fetch Error")
+        return {}

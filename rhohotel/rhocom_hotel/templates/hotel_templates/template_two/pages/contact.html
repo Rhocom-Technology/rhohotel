@@ -13,9 +13,73 @@
 
   {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
 
+  {% set contact_media = page_media.get("contact", {}) %}
+  {% set general_media = page_media.get("general", {}) %}
+
+  {% set contact_hero_images = contact_media.get("hero_image", []) %}
+  {% set contact_main_images = contact_media.get("main_image", []) %}
+  {% set contact_side_images = contact_media.get("side_image", []) %}
+  {% set contact_background_images = contact_media.get("background_image", []) %}
+  {% set contact_cta_images = contact_media.get("cta_image", []) %}
+
+  {% set general_background_images = general_media.get("background_image", []) %}
+  {% set general_cta_images = general_media.get("cta_image", []) %}
+
+  {% if contact_hero_images|length > 0 %}
+    {% set contact_hero_image = contact_hero_images[0].image %}
+    {% set contact_hero_alt = contact_hero_images[0].alt_text or "Contact " ~ (hotel.hotel_name or "Hotel") %}
+  {% else %}
+    {% set contact_hero_image = "" %}
+    {% set contact_hero_alt = "Contact " ~ (hotel.hotel_name or "Hotel") %}
+  {% endif %}
+
+  {% if contact_main_images|length > 0 %}
+    {% set contact_main_image = contact_main_images[0].image %}
+    {% set contact_main_alt = contact_main_images[0].alt_text or "Hotel guest support" %}
+  {% else %}
+    {% set contact_main_image = "" %}
+    {% set contact_main_alt = "Hotel guest support" %}
+  {% endif %}
+
+  {% if contact_side_images|length > 0 %}
+    {% set contact_side_image = contact_side_images[0].image %}
+    {% set contact_side_alt = contact_side_images[0].alt_text or "Contact support detail" %}
+  {% else %}
+    {% set contact_side_image = "" %}
+    {% set contact_side_alt = "Contact support detail" %}
+  {% endif %}
+
+  {% if contact_background_images|length > 0 %}
+    {% set contact_background_image = contact_background_images[0].image %}
+  {% elif general_background_images|length > 0 %}
+    {% set contact_background_image = general_background_images[0].image %}
+  {% else %}
+    {% set contact_background_image = "" %}
+  {% endif %}
+
+  {% if contact_cta_images|length > 0 %}
+    {% set contact_cta_image = contact_cta_images[0].image %}
+    {% set contact_cta_alt = contact_cta_images[0].alt_text or "Need Help Planning Your Stay?" %}
+  {% elif general_cta_images|length > 0 %}
+    {% set contact_cta_image = general_cta_images[0].image %}
+    {% set contact_cta_alt = general_cta_images[0].alt_text or "Need Help Planning Your Stay?" %}
+  {% else %}
+    {% set contact_cta_image = "" %}
+    {% set contact_cta_alt = "Need Help Planning Your Stay?" %}
+  {% endif %}
+
   <header class="web-page-hero">
-    <img src="/assets/rhohotel/hotel_templates/template_two/files/contact-4.jpg"
-      alt="Contact {{ hotel.hotel_name or 'Hotel' }}" class="web-page-hero-bg" />
+    {% if contact_hero_image %}
+      <img
+        src="{{ contact_hero_image }}"
+        alt="{{ contact_hero_alt }}"
+        class="web-page-hero-bg"
+      />
+    {% else %}
+      <div class="web-page-hero-bg web-image-placeholder">
+        <i class="fa-solid fa-headset"></i>
+      </div>
+    {% endif %}
 
     <div class="container">
       <div class="web-breadcrumb-label">Guest Support</div>
@@ -35,8 +99,27 @@
 
         <div class="col-lg-6">
           <div class="web-editorial-image">
-            <img src="/assets/rhohotel/hotel_templates/template_two/files/lobby-4.jpg" alt="Hotel guest support" />
-            <img src="/assets/rhohotel/hotel_templates/template_two/files/contact-3.jpg" alt="Contact support detail" />
+            {% if contact_main_image %}
+              <img
+                src="{{ contact_main_image }}"
+                alt="{{ contact_main_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-concierge-bell"></i>
+              </div>
+            {% endif %}
+
+            {% if contact_side_image %}
+              <img
+                src="{{ contact_side_image }}"
+                alt="{{ contact_side_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-image-placeholder-small">
+                <i class="fa-solid fa-phone"></i>
+              </div>
+            {% endif %}
           </div>
         </div>
 
@@ -88,15 +171,15 @@
           </div>
 
           {% if hotel.whatsapp %}
-          <div class="web-feature-line">
-            <div class="web-feature-icon">
-              <i class="fa-brands fa-whatsapp"></i>
+            <div class="web-feature-line">
+              <div class="web-feature-icon">
+                <i class="fa-brands fa-whatsapp"></i>
+              </div>
+              <div>
+                <h3>WhatsApp</h3>
+                <p>{{ hotel.whatsapp }}</p>
+              </div>
             </div>
-            <div>
-              <h3>WhatsApp</h3>
-              <p>{{ hotel.whatsapp }}</p>
-            </div>
-          </div>
           {% endif %}
 
           <div class="web-feature-line">
@@ -135,8 +218,12 @@
 
               <div class="col-md-6">
                 <label>Phone Number</label>
-                <input type="tel" name="phone" class="form-control"
-                  placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
+                <input
+                  type="tel"
+                  name="phone"
+                  class="form-control"
+                  placeholder="{{ hotel.phone or '+234 800 000 0000' }}"
+                >
               </div>
 
               <div class="col-md-6">
@@ -145,19 +232,19 @@
                   <option>Room Booking</option>
 
                   {% if hotel.enable_events %}
-                  <option>Events & Halls</option>
+                    <option>Events & Halls</option>
                   {% endif %}
 
                   {% if hotel.enable_spa %}
-                  <option>Spa</option>
+                    <option>Spa</option>
                   {% endif %}
 
                   {% if hotel.enable_dining %}
-                  <option>Dining</option>
+                    <option>Dining</option>
                   {% endif %}
 
                   {% if hotel.enable_gym %}
-                  <option>Gym</option>
+                    <option>Gym</option>
                   {% endif %}
 
                   <option>General</option>
@@ -166,8 +253,13 @@
 
               <div class="col-12">
                 <label>Message</label>
-                <textarea name="message" class="form-control" rows="5" placeholder="How can we help?"
-                  required></textarea>
+                <textarea
+                  name="message"
+                  class="form-control"
+                  rows="5"
+                  placeholder="How can we help?"
+                  required
+                ></textarea>
               </div>
 
               <div class="col-12">
@@ -175,8 +267,6 @@
                   Send Message
                 </button>
               </div>
-
-              
             </div>
           </form>
         </div>
@@ -184,8 +274,14 @@
     </div>
   </section>
 
-  <section class="web-fixed-band"
-    style="background-image: url('/assets/rhohotel/hotel_templates/template_two/files/room-4.jpg');">
+  {% if contact_background_image %}
+    <section
+      class="web-fixed-band"
+      style="background-image: url('{{ contact_background_image }}');"
+    >
+  {% else %}
+    <section class="web-fixed-band">
+  {% endif %}
     <div class="container">
       <div class="web-fixed-box">
         <div class="web-kicker">Hospitality</div>
@@ -235,39 +331,39 @@
           </div>
 
           {% if hotel.enable_events %}
-          <div class="web-feature-line">
-            <div class="web-feature-icon">
-              <i class="fa-solid fa-calendar-check"></i>
+            <div class="web-feature-line">
+              <div class="web-feature-icon">
+                <i class="fa-solid fa-calendar-check"></i>
+              </div>
+              <div>
+                <h3>Events</h3>
+                <p>Hall booking, guest size, dates, catering, setup, and event planning support.</p>
+              </div>
             </div>
-            <div>
-              <h3>Events</h3>
-              <p>Hall booking, guest size, dates, catering, setup, and event planning support.</p>
-            </div>
-          </div>
           {% endif %}
 
           {% if hotel.enable_spa %}
-          <div class="web-feature-line">
-            <div class="web-feature-icon">
-              <i class="fa-solid fa-spa"></i>
+            <div class="web-feature-line">
+              <div class="web-feature-icon">
+                <i class="fa-solid fa-spa"></i>
+              </div>
+              <div>
+                <h3>Wellness</h3>
+                <p>Spa treatment enquiries, wellness packages, and relaxation arrangements.</p>
+              </div>
             </div>
-            <div>
-              <h3>Wellness</h3>
-              <p>Spa treatment enquiries, wellness packages, and relaxation arrangements.</p>
-            </div>
-          </div>
           {% endif %}
 
           {% if hotel.enable_dining %}
-          <div class="web-feature-line">
-            <div class="web-feature-icon">
-              <i class="fa-solid fa-utensils"></i>
+            <div class="web-feature-line">
+              <div class="web-feature-icon">
+                <i class="fa-solid fa-utensils"></i>
+              </div>
+              <div>
+                <h3>Dining</h3>
+                <p>Restaurant enquiries, private dining, breakfast, lounge, and meal requests.</p>
+              </div>
             </div>
-            <div>
-              <h3>Dining</h3>
-              <p>Restaurant enquiries, private dining, breakfast, lounge, and meal requests.</p>
-            </div>
-          </div>
           {% endif %}
 
           <div class="web-feature-line">
@@ -290,8 +386,17 @@
       <div class="web-cta-split">
         <div class="row g-0 align-items-center">
           <div class="col-lg-5">
-            <img src="/assets/rhohotel/hotel_templates/template_two/files/lobby-1.jpg"
-              alt="Need Help Planning Your Stay?" class="web-cta-image rounded" />
+            {% if contact_cta_image %}
+              <img
+                src="{{ contact_cta_image }}"
+                alt="{{ contact_cta_alt }}"
+                class="web-cta-image rounded"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
+                <i class="fa-solid fa-headset"></i>
+              </div>
+            {% endif %}
           </div>
 
           <div class="col-lg-7">

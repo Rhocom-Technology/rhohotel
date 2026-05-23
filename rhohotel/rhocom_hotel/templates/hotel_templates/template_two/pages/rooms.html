@@ -12,8 +12,55 @@
 
   {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
 
+  {% set rooms_media = page_media.get("rooms", {}) %}
+  {% set general_media = page_media.get("general", {}) %}
+
+  {% set rooms_hero_images = rooms_media.get("hero_image", []) %}
+  {% set rooms_background_images = rooms_media.get("background_image", []) %}
+  {% set rooms_cta_images = rooms_media.get("cta_image", []) %}
+
+  {% set general_background_images = general_media.get("background_image", []) %}
+  {% set general_cta_images = general_media.get("cta_image", []) %}
+
+  {% if rooms_hero_images|length > 0 %}
+    {% set rooms_hero_image = rooms_hero_images[0].image %}
+    {% set rooms_hero_alt = rooms_hero_images[0].alt_text or "Rooms & Suites" %}
+  {% else %}
+    {% set rooms_hero_image = "" %}
+    {% set rooms_hero_alt = "Rooms & Suites" %}
+  {% endif %}
+
+  {% if rooms_background_images|length > 0 %}
+    {% set rooms_background_image = rooms_background_images[0].image %}
+  {% elif general_background_images|length > 0 %}
+    {% set rooms_background_image = general_background_images[0].image %}
+  {% else %}
+    {% set rooms_background_image = "" %}
+  {% endif %}
+
+  {% if rooms_cta_images|length > 0 %}
+    {% set rooms_cta_image = rooms_cta_images[0].image %}
+    {% set rooms_cta_alt = rooms_cta_images[0].alt_text or "Reserve a Room With the Right Mood" %}
+  {% elif general_cta_images|length > 0 %}
+    {% set rooms_cta_image = general_cta_images[0].image %}
+    {% set rooms_cta_alt = general_cta_images[0].alt_text or "Reserve a Room With the Right Mood" %}
+  {% else %}
+    {% set rooms_cta_image = "" %}
+    {% set rooms_cta_alt = "Reserve a Room With the Right Mood" %}
+  {% endif %}
+
   <header class="web-page-hero">
-    <img src="/assets/rhohotel/hotel_templates/template_two/files/room-4.jpg" alt="Rooms & Suites" class="web-page-hero-bg" />
+    {% if rooms_hero_image %}
+      <img
+        src="{{ rooms_hero_image }}"
+        alt="{{ rooms_hero_alt }}"
+        class="web-page-hero-bg"
+      />
+    {% else %}
+      <div class="web-page-hero-bg web-image-placeholder">
+        <i class="fa-solid fa-bed"></i>
+      </div>
+    {% endif %}
 
     <div class="container">
       <div class="web-breadcrumb-label">Stay in Comfort</div>
@@ -45,11 +92,17 @@
         {% for room in rooms %}
           <div class="web-room-wide-card">
             <div class="web-room-wide-image">
-              <img
-                src="{{ room.display_image or '/assets/rhohotel/hotel_templates/template_two/files/room-1.jpg' }}"
-                alt="{{ room.display_name }}"
-                class="rounded"
-              />
+              {% if room.display_image %}
+                <img
+                  src="{{ room.display_image }}"
+                  alt="{{ room.display_name }}"
+                  class="rounded"
+                />
+              {% else %}
+                <div class="web-image-placeholder">
+                  <i class="fa-solid fa-bed"></i>
+                </div>
+              {% endif %}
             </div>
 
             <div class="web-room-wide-content">
@@ -182,7 +235,14 @@
     </div>
   </section>
 
-  <section class="web-fixed-band" style="background-image: url('/assets/rhohotel/hotel_templates/template_two/files/slider-1.jpeg');">
+  {% if rooms_background_image %}
+    <section
+      class="web-fixed-band"
+      style="background-image: url('{{ rooms_background_image }}');"
+    >
+  {% else %}
+    <section class="web-fixed-band">
+  {% endif %}
     <div class="container">
       <div class="web-fixed-box">
         <div class="web-kicker">Rest</div>
@@ -207,11 +267,17 @@
       <div class="web-cta-split">
         <div class="row g-0 align-items-center">
           <div class="col-lg-5">
-            <img
-              src="/assets/rhohotel/hotel_templates/template_two/files/customer-support.jpg"
-              alt="Reserve a Room With the Right Mood"
-              class="web-cta-image rounded"
-            />
+            {% if rooms_cta_image %}
+              <img
+                src="{{ rooms_cta_image }}"
+                alt="{{ rooms_cta_alt }}"
+                class="web-cta-image rounded"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
+                <i class="fa-solid fa-headset"></i>
+              </div>
+            {% endif %}
           </div>
 
           <div class="col-lg-7">
@@ -242,11 +308,17 @@
           <div class="modal-content web-modal-content">
             <div class="row g-0">
               <div class="col-lg-6">
-                <img
-                  src="{{ room.display_image or '/assets/rhohotel/hotel_templates/template_two/files/room-1.jpg' }}"
-                  alt="{{ room.display_name }}"
-                  class="web-modal-image"
-                />
+                {% if room.display_image %}
+                  <img
+                    src="{{ room.display_image }}"
+                    alt="{{ room.display_name }}"
+                    class="web-modal-image"
+                  />
+                {% else %}
+                  <div class="web-image-placeholder web-modal-image">
+                    <i class="fa-solid fa-bed"></i>
+                  </div>
+                {% endif %}
               </div>
 
               <div class="col-lg-6">
