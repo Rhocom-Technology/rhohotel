@@ -67,9 +67,8 @@
             "fieldname": "id_type",
             "fieldtype": "Select",
             "label": "ID Type",
-            "options": "\nPassport\nInternational\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card",
+            "options": "\nInternational Passport\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card",
             "reqd":1
-
         },
         {
             "fieldname": "id_number",

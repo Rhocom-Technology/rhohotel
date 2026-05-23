@@ -21,7 +21,7 @@
           <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Refresh
           </button>
-          <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+          <button @click="exportCheckIns" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
             Export List
           </button>
           <button @click="router.push('/check-ins/new')" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
@@ -352,4 +352,32 @@ function inDateRange(dateValue, rangeKey) {
 watch([search, filterStatus, filterDateRange, filterPayment], () => {
   page.value = 1
 })
+
+function exportCheckIns() {
+  const rows = filteredList.value
+  if (!rows.length) return alert('No check-ins to export.')
+  const header = ['Check-in No.', 'Guest', 'Check-in Date', 'Check-out Date', 'Room', 'Source', 'Payment', 'Stay Status']
+  const csv = [header.join(',')]
+  for (const r of rows) {
+    csv.push([
+      r.name,
+      r.guest,
+      r.check_in_date,
+      r.check_out_date,
+      r.room,
+      r.source,
+      r.payment,
+      r.stayStatus,
+    ].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(','))
+  }
+  const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'checkins.csv'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 </script>

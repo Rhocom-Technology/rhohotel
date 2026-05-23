@@ -19,7 +19,7 @@
         <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
           Refresh
         </button>
-        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+        <button @click="exportCheckOuts" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
           Export List
         </button>
       </div>
@@ -295,6 +295,36 @@ function inDateRange(dateValue, rangeKey) {
 
 function refreshData() {
   checkOutResource.reload()
+}
+
+function exportCheckOuts() {
+  const rows = filteredList.value
+  if (!rows.length) return alert('No check-out records to export.')
+
+  const header = ['Folio No.', 'Guest', 'Room', 'Check-in Date', 'Check-out Date', 'Source', 'Payment']
+  const csv = [header.join(',')]
+
+  for (const r of rows) {
+    csv.push([
+      r.name,
+      r.guest,
+      r.room_number,
+      formatDate(r.check_in_datetime),
+      formatDate(r.actual_check_out_datetime || r.expected_check_out_datetime),
+      r.reservation_source,
+      (r.total_outstanding_amount || 0) > 0 ? 'Balance Due' : 'Settled',
+    ].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(','))
+  }
+
+  const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'checkouts.csv'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 watch([search, filterDateRange, filterPayment, filterSource], () => {

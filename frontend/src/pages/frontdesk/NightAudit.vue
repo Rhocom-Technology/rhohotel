@@ -28,9 +28,12 @@
         </div>
         <div class="na-close-banner-right">
           <button @click="loadData" class="na-btn-refresh">Refresh</button>
-          <button @click="closeDay" class="na-btn-close-lg">Close Day</button>
+          <button @click="closeDay" :disabled="closingDay" class="na-btn-close-lg">{{ closingDay ? 'Closing...' : 'Close Day' }}</button>
         </div>
       </div>
+
+      <div v-if="closeDaySuccess" class="na-inline-ok">{{ closeDaySuccess }}</div>
+      <div v-if="closeDayError" class="na-inline-err">{{ closeDayError }}</div>
 
       <!-- Audit Meta Row -->
       <div class="na-meta-row">
@@ -351,6 +354,7 @@ import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import { useSessionStore } from '@/stores/session'
 import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
+import { callMethodForm } from '@/lib/api'
 
 const router = useRouter()
 const session = useSessionStore()
@@ -361,6 +365,9 @@ const roomSearch = ref('')
 const roomStatusFilter = ref('')
 const roomPage = ref(1)
 const roomPageSize = 30
+const closingDay = ref(false)
+const closeDayError = ref('')
+const closeDaySuccess = ref('')
 
 // ── Session / avatar ─────────────────────────────────────────────────────
 const avatarInitials = computed(() => {
@@ -555,9 +562,52 @@ function roomStatusClass(s) {
 function hkStatusClass(s) {
   return { Clean: 'pill-green-soft', Dirty: 'pill-yellow', 'In Progress': 'pill-blue-soft', Inspected: 'pill-purple' }[s] || 'pill-gray'
 }
-function closeDay() {
+async function closeDay() {
+  if (closingDay.value) return
+  closeDayError.value = ''
+  closeDaySuccess.value = ''
   if (!confirm('Are you sure you want to close the day? This action cannot be undone.')) return
-  alert('Day close initiated…')
+
+  closingDay.value = true
+  try {
+    const result = await callMethodForm('rhohotel.rhocom_hotel.api.front_desk.close_day', {
+      audit_date: auditDate.value,
+      force_close: 0,
+      reason: '',
+    })
+    closeDaySuccess.value = result?.message || 'Day close completed successfully.'
+    await loadData()
+  } catch (e) {
+    const msg = String(e?.message || 'Day close failed.')
+    // Allow manager override from UI when server blocks with exceptions.
+    if (msg.toLowerCase().includes('force close')) {
+      const proceed = confirm(msg + '\n\nProceed with manager override?')
+      if (!proceed) {
+        closeDayError.value = msg
+        return
+      }
+      const reason = prompt('Enter manager reason for force close:') || ''
+      if (!reason.trim()) {
+        closeDayError.value = 'Manager reason is required for force close.'
+        return
+      }
+      try {
+        const forced = await callMethodForm('rhohotel.rhocom_hotel.api.front_desk.close_day', {
+          audit_date: auditDate.value,
+          force_close: 1,
+          reason,
+        })
+        closeDaySuccess.value = forced?.message || 'Day close completed with manager override.'
+        await loadData()
+      } catch (forcedErr) {
+        closeDayError.value = String(forcedErr?.message || 'Forced close failed.')
+      }
+      return
+    }
+    closeDayError.value = msg
+  } finally {
+    closingDay.value = false
+  }
 }
 
 const nightAuditContext = computed(() => {
@@ -656,6 +706,26 @@ const nightAuditContext = computed(() => {
   font-size: 13px; font-weight: 700; cursor: pointer;
 }
 .na-btn-close-lg:hover { background: #dc2626; }
+
+.na-inline-ok {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.na-inline-err {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #b91c1c;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
 
 /* ── Audit Meta Row ─────────────────────────────────────────────────── */
 .na-meta-row {

@@ -8,8 +8,8 @@
     <!-- Control Bar -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-end gap-2">
       <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
-      <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export Overdue</button>
-      <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Start Check-out</button>
+      <button @click="exportOverdue" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export Overdue</button>
+      <button @click="startCheckout" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Start Check-out</button>
     </div>
 
     <!-- Stats -->
@@ -184,12 +184,62 @@ const records = computed(() => {
   })
 })
 
+// TODO: Replace extensionRequests with backend value when available
 const statCards = computed(() => ({
   overdueDepartures: records.value.length,
   balanceDue: records.value.filter((r) => r.payment === 'Balance Due').length,
-  extensionRequests: 0,
+  extensionRequests: extensionRequests.value,
   awaitingInspection: records.value.filter((r) => r.roomStatus === 'Occupied').length,
 }))
+
+// Placeholder for extension requests, to be replaced with backend value
+const extensionRequests = ref(0)
+
+// Example: fetch extension requests count from backend if/when available
+// onMounted(async () => {
+//   const res = await callMethod('rhohotel.rhocom_hotel.api.front_desk.get_extension_requests_count')
+//   extensionRequests.value = res?.count || 0
+// })
+import { callMethod } from '@/lib/api'
+function exportOverdue() {
+  // Export filtered list as CSV
+  const rows = filtered.value
+  if (!rows.length) return alert('No overdue records to export.')
+  const header = ['Folio', 'Guest', 'Room', 'Expected Check-out', 'Payment', 'Overdue By']
+  const csv = [header.join(',')]
+  for (const r of rows) {
+    csv.push([
+      r.folio,
+      r.guest,
+      r.room,
+      r.expectedCheckout,
+      r.payment,
+      r.overdueBy
+    ].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(','))
+  }
+  const blob = new Blob([csv.join('\n')], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'overdue-checkouts.csv'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+async function startCheckout() {
+  // Start check-out for the first overdue folio with no balance due
+  const first = filtered.value.find(r => r.payment !== 'Balance Due')
+  if (!first) return alert('No eligible overdue folio to check out.')
+  try {
+    await callMethod('rhohotel.rhocom_hotel.api.front_desk.make_check_out', { checkin_name: first.folio })
+    alert('Check-out started for folio ' + first.folio)
+    refreshData()
+  } catch (e) {
+    alert('Check-out failed: ' + (e?.message || e))
+  }
+}
 
 const filtered = computed(() => {
   let list = records.value

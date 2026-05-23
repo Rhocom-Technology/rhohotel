@@ -152,8 +152,9 @@
                 class="px-4 py-2.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
                 @click="goMakeReservation">Make Reservation</button>
               <button v-if="isReady"
+                :disabled="blockBusy"
                 class="px-4 py-2.5 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
-                @click="blockRoom">Block Room</button>
+                @click="blockRoom">{{ blockBusy ? 'Blocking...' : 'Block Room' }}</button>
               <button v-if="isReserved && room.reservation"
                 class="px-4 py-2.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
                 @click="goToReservation">Open Reservation</button>
@@ -171,6 +172,7 @@
               <button class="px-4 py-2.5 text-xs font-bold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 @click="goRoomDetails">Room Details</button>
             </div>
+            <p v-if="blockError" class="mt-2 text-xs font-medium text-red-600">{{ blockError }}</p>
           </div>
 
         </div>
@@ -215,6 +217,8 @@ const checkoutDate = computed(() => {
 })
 
 const invoices = computed(() => checkinDetail.value?.invoices || [])
+const blockBusy = ref(false)
+const blockError = ref('')
 
 const totalOutstanding = computed(() =>
   invoices.value.reduce((sum, inv) => sum + (parseFloat(inv.outstanding_amount) || 0), 0)
@@ -307,15 +311,24 @@ function goMakeReservation() {
 }
 
 async function blockRoom() {
+  if (blockBusy.value) return
+  blockBusy.value = true
+  blockError.value = ''
   try {
-    await fetch('/api/method/rhohotel.rhocom_hotel.api.front_desk.block_room', {
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.front_desk.block_room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
       body: new URLSearchParams({ room: props.room.room_number || props.room.name }),
     })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok || payload?.exc) {
+      throw new Error(payload?._server_messages || payload?.message || 'Failed to block room.')
+    }
     emit('close')
   } catch (e) {
-    console.error('Failed to block room', e)
+    blockError.value = String(e?.message || 'Failed to block room.')
+  } finally {
+    blockBusy.value = false
   }
 }
 

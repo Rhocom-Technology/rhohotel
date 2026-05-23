@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, add_to_date, flt, cstr
+import json
 
 
 def _safe_json(filters):
@@ -912,4 +913,194 @@ def get_night_audit_data(audit_date=None):
 			"unallocated_payments": unallocated_payments,
 		},
 		"hourly_movement": hourly_movement,
+	}
+
+
+def _resolve_room_docname(room):
+	room = cstr(room).strip()
+	if not room:
+		frappe.throw(_("Room is required."))
+
+	if frappe.db.exists("Hotel Room", room):
+		return room
+
+	docname = frappe.db.get_value("Hotel Room", {"room_number": room}, "name")
+	if docname:
+		return docname
+
+	frappe.throw(_("Room {0} was not found.").format(room))
+
+
+def _has_manager_role(user):
+	roles = set(frappe.get_roles(user or frappe.session.user))
+	return bool({"System Manager", "Hotel Manager", "Front Desk Manager"} & roles)
+
+
+@frappe.whitelist()
+def block_room(room, reason=None):
+	"""Block a room from front desk operations.
+
+	Sets room status to Maintenance and raises maintenance flag where available.
+	"""
+	user = frappe.session.user
+	if not _has_manager_role(user):
+		frappe.throw(_("Only a manager can block rooms."))
+
+	docname = _resolve_room_docname(room)
+	room_doc = frappe.get_doc("Hotel Room", docname)
+
+	if cstr(room_doc.get("status")).strip().lower() == "occupied" or room_doc.get("current_check_in"):
+		frappe.throw(_("Room {0} is currently occupied and cannot be blocked.").format(room_doc.room_number or room_doc.name))
+
+	room_doc.status = "Maintenance"
+	if room_doc.meta.has_field("maintenance_flag"):
+		room_doc.maintenance_flag = 1
+	if room_doc.meta.has_field("operational_status"):
+		room_doc.operational_status = "Out of Service"
+
+	reason_text = cstr(reason).strip() or _("Blocked from Front Desk")
+	if room_doc.meta.has_field("operational_notes"):
+		existing = cstr(room_doc.operational_notes or "").strip()
+		stamp = now_datetime().strftime("%Y-%m-%d %H:%M")
+		note = "[{0}] {1}: {2}".format(stamp, user, reason_text)
+		room_doc.operational_notes = "\n".join([v for v in [existing, note] if v])
+
+	room_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	frappe.logger("rhohotel.front_desk").info(
+		"room_block user=%s room=%s reason=%s", user, room_doc.name, reason_text
+	)
+
+	return {
+		"status": "blocked",
+		"room": room_doc.name,
+		"room_number": room_doc.room_number or room_doc.name,
+		"message": _("Room {0} has been blocked.").format(room_doc.room_number or room_doc.name),
+	}
+
+
+@frappe.whitelist()
+def close_day(audit_date=None, force_close=False, reason=None):
+	"""Close front-desk day with control checks and an idempotent close marker."""
+	from frappe.utils import getdate, nowdate
+
+	user = frappe.session.user
+	if not _has_manager_role(user):
+		frappe.throw(_("Only managers can close day."))
+
+	if isinstance(force_close, str):
+		force_close = force_close.strip().lower() in ("1", "true", "yes", "on")
+	force_close = bool(force_close)
+
+	audit_date_str = str(getdate(audit_date) if audit_date else getdate(nowdate()))
+	cache_key = "rhohotel:night_audit_closed:{0}".format(audit_date_str)
+	cached = frappe.cache().get_value(cache_key)
+	if cached:
+		try:
+			already = json.loads(cached)
+		except Exception:
+			already = {"raw": cstr(cached)}
+		return {
+			"status": "already_closed",
+			"audit_date": audit_date_str,
+			"message": _("Day is already closed for {0}.").format(audit_date_str),
+			"closed_meta": already,
+		}
+
+	# Validate control exceptions for the closing date
+	open_pos_orders = 0
+	unallocated_payments = 0
+	outstanding_count = 0
+	outstanding_amount = 0.0
+
+	try:
+		open_pos_orders = int(frappe.db.count("POS Invoice", {"docstatus": 0}) or 0)
+	except Exception:
+		open_pos_orders = 0
+
+	try:
+		unallocated_payments = int(
+			frappe.db.sql(
+				"""
+				SELECT COUNT(*) FROM `tabPayment Entry` pe
+				WHERE pe.posting_date = %s
+				  AND pe.docstatus = 1
+				  AND pe.payment_type = 'Receive'
+				  AND NOT EXISTS (
+				      SELECT 1 FROM `tabPayment Entry Reference` per
+				      WHERE per.parent = pe.name
+				  )
+				""",
+				audit_date_str,
+			)[0][0]
+			or 0
+		)
+	except Exception:
+		unallocated_payments = 0
+
+	try:
+		outstanding_rows = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(total_outstanding_amount), 0) AS total,
+			       COUNT(*) AS cnt
+			FROM `tabHotel Room Check In`
+			WHERE status = 'Checked In'
+			  AND docstatus = 1
+			  AND total_outstanding_amount > 0
+			""",
+			as_dict=True,
+		)
+		row = (outstanding_rows or [{}])[0]
+		outstanding_amount = flt(row.get("total") or 0)
+		outstanding_count = int(row.get("cnt") or 0)
+	except Exception:
+		outstanding_amount = 0.0
+		outstanding_count = 0
+
+	blockers = []
+	if open_pos_orders > 0:
+		blockers.append(_("{0} open POS orders").format(open_pos_orders))
+	if unallocated_payments > 0:
+		blockers.append(_("{0} unallocated payments").format(unallocated_payments))
+	if outstanding_count > 0:
+		blockers.append(_("{0} in-house folios with outstanding balance").format(outstanding_count))
+
+	if blockers and not force_close:
+		frappe.throw(
+			_("Cannot close day for {0}. Resolve exceptions or force close with reason: {1}").format(
+				audit_date_str, ", ".join(blockers)
+			)
+		)
+
+	if blockers and force_close and not cstr(reason).strip():
+		frappe.throw(_("Manager reason is required for force close."))
+
+	close_meta = {
+		"audit_date": audit_date_str,
+		"closed_by": user,
+		"closed_at": now_datetime().isoformat(),
+		"force_close": force_close,
+		"reason": cstr(reason).strip() if reason else "",
+		"summary": {
+			"open_pos_orders": open_pos_orders,
+			"unallocated_payments": unallocated_payments,
+			"outstanding_count": outstanding_count,
+			"outstanding_amount": outstanding_amount,
+		},
+	}
+
+	# Keep marker for 90 days to preserve idempotent behavior.
+	frappe.cache().set_value(cache_key, json.dumps(close_meta), expires_in_sec=90 * 24 * 60 * 60)
+
+	frappe.logger("rhohotel.front_desk").info(
+		"close_day user=%s date=%s force=%s blockers=%s", user, audit_date_str, force_close, blockers
+	)
+
+	return {
+		"status": "closed",
+		"audit_date": audit_date_str,
+		"message": _("Day close completed for {0}.").format(audit_date_str),
+		"blockers": blockers,
+		"closed_meta": close_meta,
 	}

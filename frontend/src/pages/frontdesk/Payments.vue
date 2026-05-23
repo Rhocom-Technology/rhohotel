@@ -135,7 +135,7 @@
                 </span>
               </td>
               <td class="px-4 py-4">
-                <button class="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors">
+                <button @click.stop="openPayment(item)" class="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors">
                   Open
                 </button>
               </td>
@@ -167,6 +167,81 @@
       </div>
     </div>
 
+    <!-- Receive Payment Modal -->
+    <Teleport to="body">
+      <div v-if="showReceiveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background:rgba(15,23,42,0.6);" @click.self="closeReceivePaymentModal">
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full" style="max-width:560px;">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-900">Receive Payment</h3>
+            <button @click="closeReceivePaymentModal" class="w-7 h-7 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">✕</button>
+          </div>
+
+          <div class="px-6 py-5 space-y-4">
+            <div v-if="receiveError" class="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p class="text-xs text-red-600 font-medium">{{ receiveError }}</p>
+            </div>
+
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Check-in / Folio <span class="text-red-500">*</span></p>
+              <select v-model="receiveForm.check_in" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+                <option value="">Select check-in</option>
+                <option v-for="c in checkinOptions" :key="c.name" :value="c.name">
+                  {{ c.name }} • {{ c.guest || '—' }} • Room {{ c.room_number || '—' }}
+                </option>
+              </select>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Amount <span class="text-red-500">*</span></p>
+                <input v-model.number="receiveForm.paid_amount" type="number" min="0" step="0.01"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" placeholder="0.00" />
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Mode of Payment <span class="text-red-500">*</span></p>
+                <select v-model="receiveForm.mode_of_payment" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
+                  <option value="">Select mode</option>
+                  <option>Cash</option>
+                  <option>Card</option>
+                  <option>POS</option>
+                  <option>Bank Transfer</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Reference No.</p>
+                <input v-model="receiveForm.reference_no" type="text"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" placeholder="Optional" />
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Payment Date</p>
+                <input v-model="receiveForm.payment_date" type="date"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+              </div>
+            </div>
+
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Remarks</p>
+              <textarea v-model="receiveForm.remarks" rows="3"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none"
+                placeholder="Optional note"></textarea>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+            <button @click="closeReceivePaymentModal" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+            <button @click="submitReceivePayment" :disabled="receivingPayment"
+              class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {{ receivingPayment ? 'Processing...' : 'Submit Payment' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -174,6 +249,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import { callMethod } from '@/lib/api'
 
 const router = useRouter()
 
@@ -183,12 +259,31 @@ const filterStatus = ref('')
 const filterDate = ref('')
 const page = ref(1)
 const pageSize = 10
+const showReceiveModal = ref(false)
+const receivingPayment = ref(false)
+const receiveError = ref('')
+const receiveForm = ref({
+  check_in: '',
+  paid_amount: '',
+  mode_of_payment: '',
+  reference_no: '',
+  payment_date: new Date().toISOString().slice(0, 10),
+  remarks: '',
+})
 
 const paymentResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.front_desk.get_payment_list',
   params: { limit: 500 },
   auto: true,
 })
+
+const checkInResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.checkin.get_checkin_list',
+  params: { limit: 500 },
+  auto: true,
+})
+
+const checkinOptions = computed(() => checkInResource.data || [])
 
 const payments = computed(() => (paymentResource.data || []).map((row) => {
   const amount = Number(row.received_amount || row.paid_amount || 0)
@@ -272,7 +367,65 @@ function formatPaymentDate(dateValue, timeValue) {
 }
 
 function openReceivePayment() {
-  router.push('/check-ins')
+  receiveError.value = ''
+  showReceiveModal.value = true
+}
+
+function closeReceivePaymentModal() {
+  showReceiveModal.value = false
+  receivingPayment.value = false
+  receiveError.value = ''
+  receiveForm.value = {
+    check_in: '',
+    paid_amount: '',
+    mode_of_payment: '',
+    reference_no: '',
+    payment_date: new Date().toISOString().slice(0, 10),
+    remarks: '',
+  }
+}
+
+function openPayment(item) {
+  if (!item?.id) return
+  window.open(`/app/payment-entry/${encodeURIComponent(item.id)}`, '_blank')
+}
+
+async function submitReceivePayment() {
+  receiveError.value = ''
+  const amount = Number(receiveForm.value.paid_amount || 0)
+  if (!receiveForm.value.check_in) {
+    receiveError.value = 'Please select a check-in / folio.'
+    return
+  }
+  if (amount <= 0) {
+    receiveError.value = 'Payment amount must be greater than zero.'
+    return
+  }
+  if (!receiveForm.value.mode_of_payment) {
+    receiveError.value = 'Please choose a mode of payment.'
+    return
+  }
+
+  receivingPayment.value = true
+  try {
+    await callMethod('rhohotel.rhocom_hotel.api.front_desk.collect_payment_for_checkin', {
+      check_in: receiveForm.value.check_in,
+      allocations: [],
+      payment_info: {
+        mode_of_payment: receiveForm.value.mode_of_payment,
+        paid_amount: amount,
+        reference_no: receiveForm.value.reference_no || '',
+        payment_date: receiveForm.value.payment_date || '',
+        remarks: receiveForm.value.remarks || '',
+      },
+    })
+    paymentResource.reload()
+    closeReceivePaymentModal()
+  } catch (e) {
+    receiveError.value = String(e?.message || 'Failed to receive payment.')
+  } finally {
+    receivingPayment.value = false
+  }
 }
 
 watch([search, filterMethod, filterStatus, filterDate], () => {

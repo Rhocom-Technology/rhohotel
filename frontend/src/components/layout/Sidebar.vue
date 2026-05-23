@@ -142,8 +142,12 @@ const navGroups = [
       { label: 'Manager Dashboard', to: '/pos/manager-dashboard' },   
       { label: 'POS Invoice List', to: '/pos/invoices' },
       { label: 'Shift Difference Log', to: '/pos/shift-difference-log' }, 
-      { label: 'Staff Roaster', to: '/pos/staff-roaster' },    
     ],
+  },
+  {
+    label: 'Staff Roaster',
+    icon: ShoppingCart,
+    to: '/pos/staff-roaster',
   },
   {
     label: 'Kitchen Terminal',
