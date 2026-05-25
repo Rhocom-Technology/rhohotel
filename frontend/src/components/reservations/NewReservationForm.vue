@@ -599,7 +599,7 @@ watch(
   { immediate: true },
 )
 
-function onRateCodeChange() {
+async function onRateCodeChange() {
   // When a rate code changes, apply its meal plan to all existing room rows
   const rateDoc = eligibleRateCodes.value.find((r) => r.name === selectedRateCode.value)
   if (form.value.from_date && form.value.to_date && nightsCount.value > 0) {
