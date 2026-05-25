@@ -278,8 +278,7 @@ def assert_room_available(
 
 @frappe.whitelist()
 def get_available_rooms(
-    check_in_dt, check_out_dt, room_type=None, require_clean=False, require_vacant=False,
-    rate_code=None
+    check_in_dt, check_out_dt, room_type=None, require_clean=False, require_vacant=False
 ):
     """
     Return all rooms that are available for the given period, with pricing attached.
@@ -295,7 +294,6 @@ def get_available_rooms(
         room_type     : Optional Hotel Room Type filter.
         require_clean : When True, only rooms with housekeeping_status = 'Clean' are returned.
         require_vacant: When True, only rooms with status = 'Vacant' are returned.
-        rate_code     : Optional Hotel Room Rate name to price returned rooms with.
 
     Returns:
         list[dict] – each dict has name, room_type, floor, capacity,
@@ -385,11 +383,9 @@ def get_available_rooms(
     nights = date_diff(getdate(check_out_dt), getdate(check_in_dt)) or 1
 
     for room in available:
-        rate = get_room_rate(room.room_type, rate_type=rate_code, check_in_date=from_date_str)
+        rate = get_room_rate(room.room_type, check_in_date=from_date_str)
         room["rate_per_night"] = rate
         room["total_amount"] = rate * nights
-        if rate_code:
-            room["rate_code"] = rate_code
 
     return available
 
@@ -500,3 +496,4 @@ def is_room_type_blocked_for_period(
 
     # Available to non-group = total - protected - already_booked
     return (total - protected - already_booked) <= 0
+

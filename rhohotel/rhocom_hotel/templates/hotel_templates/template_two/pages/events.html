@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#2C3E35' }};
+  --web-secondary: {{ hotel.secondary_color or '#BFA37E' }};
+  --web-accent: {{ hotel.accent_color or '#8E6E5E' }};
+">
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
+
+  {% set events_media = page_media.get("events", {}) %}
+  {% set general_media = page_media.get("general", {}) %}
+
+  {% set events_hero_images = events_media.get("hero_image", []) %}
+  {% set events_main_images = events_media.get("main_image", []) %}
+  {% set events_side_images = events_media.get("side_image", []) %}
+  {% set events_card_images = events_media.get("card_image", []) %}
+  {% set events_background_images = events_media.get("background_image", []) %}
+  {% set events_cta_images = events_media.get("cta_image", []) %}
+
+  {% set general_background_images = general_media.get("background_image", []) %}
+  {% set general_cta_images = general_media.get("cta_image", []) %}
+
+  {% if events_hero_images|length > 0 %}
+    {% set events_hero_image = events_hero_images[0].image %}
+    {% set events_hero_alt = events_hero_images[0].alt_text or "Events and halls at " ~ (hotel.hotel_name or "Hotel") %}
+  {% else %}
+    {% set events_hero_image = "" %}
+    {% set events_hero_alt = "Events and halls at " ~ (hotel.hotel_name or "Hotel") %}
+  {% endif %}
+
+  {% if events_main_images|length > 0 %}
+    {% set events_main_image = events_main_images[0].image %}
+    {% set events_main_alt = events_main_images[0].alt_text or "Elegant event space" %}
+  {% else %}
+    {% set events_main_image = "" %}
+    {% set events_main_alt = "Elegant event space" %}
+  {% endif %}
+
+  {% if events_side_images|length > 0 %}
+    {% set events_side_image = events_side_images[0].image %}
+    {% set events_side_alt = events_side_images[0].alt_text or "Event hall detail" %}
+  {% else %}
+    {% set events_side_image = "" %}
+    {% set events_side_alt = "Event hall detail" %}
+  {% endif %}
+
+  {% if events_background_images|length > 0 %}
+    {% set events_background_image = events_background_images[0].image %}
+  {% elif general_background_images|length > 0 %}
+    {% set events_background_image = general_background_images[0].image %}
+  {% else %}
+    {% set events_background_image = "" %}
+  {% endif %}
+
+  {% if events_cta_images|length > 0 %}
+    {% set events_cta_image = events_cta_images[0].image %}
+    {% set events_cta_alt = events_cta_images[0].alt_text or "Plan Your Event With Us" %}
+  {% elif general_cta_images|length > 0 %}
+    {% set events_cta_image = general_cta_images[0].image %}
+    {% set events_cta_alt = general_cta_images[0].alt_text or "Plan Your Event With Us" %}
+  {% else %}
+    {% set events_cta_image = "" %}
+    {% set events_cta_alt = "Plan Your Event With Us" %}
+  {% endif %}
+
+  <header class="web-page-hero">
+    {% if events_hero_image %}
+      <img
+        src="{{ events_hero_image }}"
+        alt="{{ events_hero_alt }}"
+        class="web-page-hero-bg"
+      />
+    {% else %}
+      <div class="web-page-hero-bg web-image-placeholder">
+        <i class="fa-solid fa-champagne-glasses"></i>
+      </div>
+    {% endif %}
+
+    <div class="container">
+      <div class="web-breadcrumb-label">Meetings, Weddings & Celebrations</div>
+
+      <h1>Events & Halls</h1>
+
+      <p>
+        Host weddings, meetings, conferences, dinners, receptions, trainings, and private gatherings
+        in spaces prepared with comfort, service, and attention to detail.
+      </p>
+    </div>
+  </header>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row align-items-center g-5">
+
+        <div class="col-lg-6">
+          <div class="web-editorial-image">
+            {% if events_main_image %}
+              <img
+                src="{{ events_main_image }}"
+                alt="{{ events_main_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-chair"></i>
+              </div>
+            {% endif %}
+
+            {% if events_side_image %}
+              <img
+                src="{{ events_side_image }}"
+                alt="{{ events_side_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-image-placeholder-small">
+                <i class="fa-solid fa-calendar-check"></i>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="web-kicker">Gatherings</div>
+
+          <h2 class="web-section-title">
+            Elegant Spaces for Real Moments
+          </h2>
+
+          <p class="web-section-text">
+            {{ hotel.hotel_name or "Our hotel" }} provides event spaces for intimate meetings,
+            milestone celebrations, formal receptions, and social gatherings. Each setup can be planned
+            around guest size, seating style, dining needs, and the kind of atmosphere you want.
+          </p>
+
+          <div class="web-actions mt-4">
+            <a href="/hotel/booking" class="web-btn-solid">Reserve Now</a>
+            <a href="/hotel/contact" class="web-btn-ghost">Ask a Question</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="text-center">
+        <div class="web-kicker">Event Spaces</div>
+
+        <h2 class="web-section-title">
+          Pick the Right Setting
+        </h2>
+
+        <p class="web-section-subtitle">
+          Different gatherings need different moods. Choose a setting for formal meetings,
+          relaxed celebrations, private dinners, or larger receptions.
+        </p>
+      </div>
+
+      <div class="row g-4">
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            {% if events_card_images|length > 0 %}
+              <img
+                src="{{ events_card_images[0].image }}"
+                alt="{{ events_card_images[0].alt_text or 'Grand Ballroom' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-champagne-glasses"></i>
+              </div>
+            {% endif %}
+
+            <div class="web-tile-content">
+              <h3>Grand Ballroom</h3>
+              <p>Suitable for weddings, receptions, banquets, corporate dinners, and larger celebrations.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            {% if events_card_images|length > 1 %}
+              <img
+                src="{{ events_card_images[1].image }}"
+                alt="{{ events_card_images[1].alt_text or 'Boardroom' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-briefcase"></i>
+              </div>
+            {% endif %}
+
+            <div class="web-tile-content">
+              <h3>Boardroom</h3>
+              <p>Designed for private meetings, presentations, executive sessions, and focused discussions.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            {% if events_card_images|length > 2 %}
+              <img
+                src="{{ events_card_images[2].image }}"
+                alt="{{ events_card_images[2].alt_text or 'Terrace Events' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-tree"></i>
+              </div>
+            {% endif %}
+
+            <div class="web-tile-content">
+              <h3>Terrace Events</h3>
+              <p>A relaxed option for outdoor-inspired dinners, cocktails, socials, and intimate gatherings.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  {% if events_background_image %}
+    <section
+      class="web-fixed-band"
+      style="background-image: url('{{ events_background_image }}');"
+    >
+  {% else %}
+    <section class="web-fixed-band">
+  {% endif %}
+    <div class="container">
+      <div class="web-fixed-box">
+        <div class="web-kicker">Occasions</div>
+
+        <h2 class="web-section-title text-white">
+          Celebrate in a Considered Space
+        </h2>
+
+        <p>
+          From the room arrangement to dining, guest flow, lighting, and support,
+          every detail helps the event feel organized and memorable.
+        </p>
+
+        <a href="/hotel/booking" class="web-btn-primary">
+          Reserve Experience
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-5">
+          <div class="web-kicker">Event Support</div>
+
+          <h2 class="web-section-title">
+            The Team Handles the Details
+          </h2>
+
+          <p class="web-section-text">
+            Our event support helps with space planning, seating style, catering discussions,
+            guest movement, technical setup, and the details that make gatherings run smoothly.
+          </p>
+        </div>
+
+        <div class="col-lg-7">
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-chair"></i>
+            </div>
+            <div>
+              <h3>Setup</h3>
+              <p>Plan seating style, table layout, guest movement, décor flow, and room arrangement.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-utensils"></i>
+            </div>
+            <div>
+              <h3>Catering</h3>
+              <p>Discuss meals, drinks, service style, tea breaks, dinner plans, and private dining needs.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-microphone"></i>
+            </div>
+            <div>
+              <h3>AV Support</h3>
+              <p>Support for sound, microphone use, projector needs, presentations, and meeting tools.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-people-group"></i>
+            </div>
+            <div>
+              <h3>Guest Care</h3>
+              <p>Arrival guidance, ushering, hospitality support, and coordination for guests and hosts.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="web-cta-split">
+        <div class="row g-0 align-items-center">
+          <div class="col-lg-5">
+            {% if events_cta_image %}
+              <img
+                src="{{ events_cta_image }}"
+                alt="{{ events_cta_alt }}"
+                class="web-cta-image rounded"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
+                <i class="fa-solid fa-calendar-check"></i>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="col-lg-7">
+            <div class="web-cta-content">
+              <div class="web-kicker">Reserve With Us</div>
+
+              <h2>Plan Your Event With Us</h2>
+
+              <p>
+                Share your event date, guest count, preferred hall, seating style, and setup request.
+                The team will help you plan the next step.
+              </p>
+
+              <div class="web-actions">
+                <a href="/hotel/booking" class="web-btn-primary">Book Now</a>
+                <a href="/hotel/contact" class="web-btn-outline">Contact Hotel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+</body>
+</html>

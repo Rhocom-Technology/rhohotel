@@ -140,27 +140,23 @@ def get_active_checkin_for_room(room_number):
 @frappe.whitelist()
 def get_room_rate(room_type, rate_type=None, check_in_date=None):
 	try:
+		# --- Convert and determine the day type ---
+		day_of_week = datetime.strptime(check_in_date, "%Y-%m-%d").weekday()
+		day_type = "Weekend" if day_of_week >= 5 else "Weekday"
+
+		# --- Base filters ---
 		base_filters = {"room_type": room_type, "is_active": 1}
 
-		# 1. Exact match: room type + selected rate card
-		if rate_type:
-			rate_amount = frappe.db.get_value(
-				"Hotel Room Rate",
-				{**base_filters, "name": rate_type},
-				"rate_amount",
-			)
-			if rate_amount:
-				return rate_amount
-
-		# 2. Default rate for this room type
+		# --- 1. Try exact match: room type + day type ---
 		rate_amount = frappe.db.get_value(
-			"Hotel Room Rate", {**base_filters, "is_default": 1}, "rate_amount"
+			"Hotel Room Tariff", {**base_filters, "day_type": day_type}, "rate_amount"
 		)
 
-		# 3. Any active rate for this room type
+		# --- 2. If not found, try fallback: room type only ---
 		if not rate_amount:
-			rate_amount = frappe.db.get_value("Hotel Room Rate", base_filters, "rate_amount")
+			rate_amount = frappe.db.get_value("Hotel Room Tariff", base_filters, "rate_amount")
 
+		# --- Final return ---
 		return rate_amount or 0
 
 	except Exception as e:

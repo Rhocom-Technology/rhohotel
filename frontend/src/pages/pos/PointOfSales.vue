@@ -346,7 +346,6 @@
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
       :bill-to="selectedBillTo?.name || billToSearch || ''"
-      :existing-draft="resumedDraftInvoice"
       @room-selected="onRoomSelected"
       @confirmed="onPostConfirmed"
     />
@@ -359,8 +358,6 @@
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
-      :pre-selected-room="selectedBillTo?.room ? { room: selectedBillTo.room, guest: selectedBillTo.name, check_in: selectedBillTo.id } : null"
-      :existing-draft="resumedDraftInvoice"
       @confirmed="onSplitConfirmed"
     />
 
@@ -461,7 +458,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
@@ -844,7 +841,6 @@ const holdSaleResource = createResource({
     holding.value = false
     clearCart()
     menuResource.reload()
-    draftOrdersKey.value++
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
@@ -1154,52 +1150,6 @@ function onKitchenSelectionChange(item, checked) {
   }
 }
 
-// ── POS state persistence ──────────────────────────────────────────
-const POS_STATE_KEY = 'rhohotel_pos_draft_state'
-
-function savePosState() {
-  try {
-    localStorage.setItem(POS_STATE_KEY, JSON.stringify({
-      cart: cart.value,
-      selectedBillTo: selectedBillTo.value,
-      kitchenNote: kitchenNote.value,
-      discountType: discountType.value,
-      discountInput: discountInput.value,
-      showDiscountPanel: showDiscountPanel.value,
-      settlementMethod: settlementMethod.value,
-      resumedDraftInvoice: resumedDraftInvoice.value,
-      lastInvoiceName: lastInvoiceName.value,
-      kitchenSentMap: kitchenSentMap.value,
-    }))
-  } catch (_) {}
-}
-
-function restorePosState() {
-  try {
-    const raw = localStorage.getItem(POS_STATE_KEY)
-    if (!raw) return
-    const s = JSON.parse(raw)
-    if (Array.isArray(s.cart) && s.cart.length) {
-      cart.value = s.cart
-      chargeSuccess.value = 'Cart restored from your last session'
-      setTimeout(() => { chargeSuccess.value = '' }, 4000)
-    }
-    if (s.selectedBillTo) selectedBillTo.value = s.selectedBillTo
-    if (s.kitchenNote) kitchenNote.value = s.kitchenNote
-    if (s.discountType) discountType.value = s.discountType
-    if (s.discountInput) discountInput.value = s.discountInput
-    showDiscountPanel.value = !!s.showDiscountPanel
-    if (s.settlementMethod) settlementMethod.value = s.settlementMethod
-    if (s.resumedDraftInvoice) resumedDraftInvoice.value = s.resumedDraftInvoice
-    if (s.lastInvoiceName) lastInvoiceName.value = s.lastInvoiceName
-    if (s.kitchenSentMap) kitchenSentMap.value = s.kitchenSentMap
-  } catch (_) {}
-}
-
-onMounted(() => {
-  restorePosState()
-})
-
 function clearCart() {
   cart.value = []
   selectedKitchenItemMap.value = {}
@@ -1211,7 +1161,6 @@ function clearCart() {
   discountInput.value = ''
   showDiscountPanel.value = false
   resumedDraftInvoice.value = null
-  try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}
 }
 
 function onHoldSale() {
@@ -1281,7 +1230,6 @@ function onChargeNow() {
         discount_amount: discountAmount.value,
         kitchen_note: kitchenNote.value || null,
         pos_profile: terminalInfo.value?.pos_profile || null,
-        existing_draft: resumedDraftInvoice.value || null,
       })
       return
     }
@@ -1310,7 +1258,6 @@ function onChargeNow() {
     discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
-    existing_draft: resumedDraftInvoice.value || null,
   })
 }
 
@@ -1387,14 +1334,6 @@ watch(cart, (items) => {
   }
   selectedKitchenItemMap.value = nextMap
 }, { deep: true })
-
-// Persist relevant POS state to localStorage on every change
-watch(
-  [cart, selectedBillTo, kitchenNote, discountType, discountInput,
-   showDiscountPanel, settlementMethod, resumedDraftInvoice, lastInvoiceName, kitchenSentMap],
-  savePosState,
-  { deep: true }
-)
 </script>
 
 <style>

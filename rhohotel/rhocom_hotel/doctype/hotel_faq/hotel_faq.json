@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:FAQ-{#####}",
+ "creation": "2026-05-22 05:33:10.900362",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "hotel",
+  "page",
+  "question",
+  "answer",
+  "published",
+  "sort_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "hotel",
+   "fieldtype": "Link",
+   "label": "Hotel",
+   "options": "Hotel Profile"
+  },
+  {
+   "fieldname": "page",
+   "fieldtype": "Select",
+   "label": "Page",
+   "options": "General\nHome\nRooms\nRoom Detail\nBooking\nContact\nDining\nSpa\nGym\nEvents\nExperiences"
+  },
+  {
+   "fieldname": "question",
+   "fieldtype": "Data",
+   "label": "Question"
+  },
+  {
+   "fieldname": "answer",
+   "fieldtype": "Data",
+   "label": "Answer"
+  },
+  {
+   "default": "0",
+   "fieldname": "published",
+   "fieldtype": "Check",
+   "label": "Published"
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-22 09:24:39.078755",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel FAQ",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "question"
+}

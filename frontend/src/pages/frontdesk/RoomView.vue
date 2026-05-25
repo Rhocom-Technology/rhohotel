@@ -347,7 +347,6 @@ const statCards = computed(() => [
 		value: stats.value.reserved,
 		subtitle: "Incoming arrivals",
 		hexColor: "#8b5cf6",
-		to: "/reservations",
 	},
 	{
 		label: "Dirty Rooms",

@@ -703,7 +703,7 @@ def reduce_stay(check_in_name, new_checkout):
 
 
 @frappe.whitelist()
-def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, source_invoice=None):
+def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None):
 	from frappe.utils import now_datetime, get_datetime, getdate, date_diff, flt
 
 	# Safe-get doc (avoid missing permissions)
@@ -808,34 +808,24 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 
 		# === REDUCTION CREDIT NOTE ===
 		else:
-			credit_note_data = {
-				"doctype": "Sales Invoice",
-				"customer": customer,
-				"is_return": 1,
-				"update_stock": 0,
-				"custom_hotel_room_check_in": doc.name,
-				"items": [
-					{
-						"item_code": room_doc.erpnext_item,
-						"qty": -diff_nights,
-						"rate": doc.rate_amount,
-					}
-				],
-				"posting_date": frappe.utils.today(),
-			}
+			credit_note = frappe.get_doc(
+				{
+					"doctype": "Sales Invoice",
+					"customer": customer,
+					"is_return": 1,
+					"update_stock": 0,
+					"custom_hotel_room_check_in": doc.name,
+					"items": [
+						{
+							"item_code": room_doc.erpnext_item,
+							"qty": -diff_nights,
+							"rate": doc.rate_amount,
+						}
+					],
+					"posting_date": frappe.utils.today(),
+				}
+			)
 
-			if source_invoice:
-				credit_note_data["return_against"] = source_invoice
-				src_fields = frappe.db.get_value(
-					"Sales Invoice", source_invoice, ["debit_to", "company"], as_dict=1
-				)
-				if src_fields:
-					if src_fields.debit_to:
-						credit_note_data["debit_to"] = src_fields.debit_to
-					if src_fields.company:
-						credit_note_data["company"] = src_fields.company
-
-			credit_note = frappe.get_doc(credit_note_data)
 			credit_note.flags.ignore_permissions = True
 			credit_note.flags.ignore_mandatory = True
 			credit_note.flags.ignore_links = True
@@ -851,22 +841,6 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 			credit_note.insert()
 			credit_note.submit()
 			adjustment_invoice_name = credit_note.name
-
-			# Explicitly reduce the source invoice's outstanding as a guaranteed fallback
-			# in case Frappe's automatic GL reconciliation has not yet updated the field.
-			if source_invoice:
-				reloaded_cn = frappe.get_doc("Sales Invoice", credit_note.name)
-				reduction_amount = abs(flt(reloaded_cn.grand_total))
-				current_outstanding = flt(
-					frappe.db.get_value("Sales Invoice", source_invoice, "outstanding_amount") or 0
-				)
-				frappe.db.set_value(
-					"Sales Invoice",
-					source_invoice,
-					"outstanding_amount",
-					max(0.0, current_outstanding - reduction_amount),
-					update_modified=False,
-				)
 
 		# === Update Check-In Document ===
 		doc.flags.ignore_permissions = True
