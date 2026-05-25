@@ -171,7 +171,13 @@ async function createGuest() {
         guest_type: props.guestType || 'Individual',
       },
     })
-    selectGuest({ name: doc.name, hotel_guest_name: doc.hotel_guest_name || newGuest.value.hotel_guest_name })
+    selectGuest({
+      name: doc.name,
+      hotel_guest_name: doc.hotel_guest_name || newGuest.value.hotel_guest_name,
+      email: doc.email || newGuest.value.email || '',
+      phone_number: doc.phone_number || newGuest.value.phone_number || '',
+      customer: doc.customer || '',
+    })
     newGuest.value = { hotel_guest_name: '', email: '', phone_number: '', guest_type: 'Individual' }
     showCreate.value = false
   } catch (e) {

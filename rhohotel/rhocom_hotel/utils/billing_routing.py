@@ -75,6 +75,67 @@ def _get_marketplace_customer(ota_channel):
     return None
 
 
+def _create_customer(customer_name, custom_guest_id=None):
+    """Create a Customer record with minimal required fields."""
+    customer = frappe.new_doc("Customer")
+    customer.customer_name = customer_name
+    if custom_guest_id and frappe.get_meta("Customer").has_field("custom_guest_id"):
+        customer.custom_guest_id = custom_guest_id
+    customer.insert(ignore_permissions=True)
+    return customer.name
+
+
+def _resolve_customer_reference(value):
+    """Resolve a value that may be a Customer id, customer_name, Hotel Guest id or guest name."""
+    if not value:
+        return None
+
+    hint = str(value).strip()
+    if not hint:
+        return None
+
+    if frappe.db.exists("Customer", hint):
+        return hint
+
+    by_customer_name = frappe.db.get_value("Customer", {"customer_name": hint}, "name")
+    if by_customer_name:
+        return by_customer_name
+
+    if frappe.db.exists("Hotel Guest", hint):
+        guest_customer = frappe.db.get_value("Hotel Guest", hint, "customer")
+        if guest_customer and frappe.db.exists("Customer", guest_customer):
+            return guest_customer
+        guest_name = frappe.db.get_value("Hotel Guest", hint, "hotel_guest_name") or hint
+        created = _create_customer(guest_name, custom_guest_id=hint)
+        frappe.db.set_value("Hotel Guest", hint, "customer", created, update_modified=False)
+        return created
+
+    guest_id = frappe.db.get_value("Hotel Guest", {"hotel_guest_name": hint}, "name")
+    if guest_id:
+        guest_customer = frappe.db.get_value("Hotel Guest", guest_id, "customer")
+        if guest_customer and frappe.db.exists("Customer", guest_customer):
+            return guest_customer
+        created = _create_customer(hint, custom_guest_id=guest_id)
+        frappe.db.set_value("Hotel Guest", guest_id, "customer", created, update_modified=False)
+        return created
+
+    return None
+
+
+@frappe.whitelist()
+def resolve_or_create_customer(customer_hint, hotel_guest=None):
+    """Resolve a customer from hint, creating one when needed for new payer flows."""
+    customer = _resolve_customer_reference(hotel_guest) or _resolve_customer_reference(customer_hint)
+    if customer:
+        return customer
+
+    clean_name = (customer_hint or "").strip()
+    if not clean_name:
+        frappe.throw(_("Please provide a payer name."))
+
+    return _create_customer(clean_name)
+
+
 # ---------------------------------------------------------------------------
 # Rule evaluation
 # ---------------------------------------------------------------------------
@@ -183,9 +244,10 @@ def resolve_payer(reservation_name, charge_category="Room"):
             # Fall through if no corporate customer is linked
 
         if payer_type == "Group Master":
-            if res.group_master_customer:
+            resolved_master = _resolve_customer_reference(res.group_master_customer)
+            if resolved_master:
                 return {
-                    "customer": res.group_master_customer,
+                    "customer": resolved_master,
                     "payer_type": "Group Master",
                 }
             # Fall through if no master customer
@@ -224,9 +286,10 @@ def resolve_payer(reservation_name, charge_category="Room"):
         }
 
     if rtype == "Group":
-        if res.group_billing_mode == "Central" and res.group_master_customer:
+        resolved_master = _resolve_customer_reference(res.group_master_customer)
+        if res.group_billing_mode == "Central" and resolved_master:
             return {
-                "customer": res.group_master_customer,
+                "customer": resolved_master,
                 "payer_type": "Group Master",
             }
         if res.group_billing_mode == "Split":
@@ -235,9 +298,9 @@ def resolve_payer(reservation_name, charge_category="Room"):
                 "customer": _get_check_in_guest_customer(res),
                 "payer_type": "Guest",
             }
-        if charge_category == "Room" and res.group_master_customer:
+        if charge_category == "Room" and resolved_master:
             return {
-                "customer": res.group_master_customer,
+                "customer": resolved_master,
                 "payer_type": "Group Master",
             }
 

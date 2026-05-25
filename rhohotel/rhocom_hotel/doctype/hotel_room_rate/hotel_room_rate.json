@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
+ "autoname": "format:{rate_code}-{room_type}",
  "creation": "2025-11-01 12:47:40.612616",
  "doctype": "DocType",
  "engine": "InnoDB",

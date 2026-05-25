@@ -551,9 +551,34 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
 
     doc._recalculate_totals()
     doc.save(ignore_permissions=True)
+
+    adjustment = None
+    linked_invoice_names = [
+        name for name in [doc.sales_invoice] if name
+    ] + [
+        row.invoice for row in (doc.get("reservation_invoices") or []) if row.invoice
+    ]
+
+    has_submitted_invoice = any(
+        frappe.db.get_value(
+            "Sales Invoice",
+            {"name": invoice_name, "docstatus": 1},
+            "name",
+        )
+        for invoice_name in set(linked_invoice_names)
+    )
+
+    # Adjustment invoice/credit note is created only when reservation already has invoice(s).
+    if has_submitted_invoice:
+        adjustment = adjust_invoice_for_reservation(reservation_name)
+
     frappe.db.commit()
 
-    return {"status": "success", "new_room": new_room_number}
+    return {
+        "status": "success",
+        "new_room": new_room_number,
+        "invoice_adjustment": adjustment,
+    }
 
 
 @frappe.whitelist()
@@ -564,6 +589,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
     Returns a summary for frontend notification.
     """
     from frappe.utils import add_days, cint, flt, get_datetime
+    from rhohotel.rhocom_hotel.utils.room_availability import check_checkin_conflict
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     row = next((r for r in doc.rooms if r.name == room_row_name), None)
@@ -578,8 +604,35 @@ def check_in_reservation_room(reservation_name, room_row_name):
         nights = cint(row.number_of_nights or doc.number_of_nights or 1)
         expected_out = add_days(get_datetime(ci_dt), nights)
 
-        # Resolve guest: prefer per-room guest, fall back to primary guest
+        existing_ci = frappe.db.get_value(
+            "Hotel Room Check In",
+            {
+                "canonical_reservation": reservation_name,
+                "room_number": row.room_number,
+                "status": ["in", ["Draft", "Checked In"]],
+            },
+            "name",
+        )
+        if existing_ci:
+            row.check_in_reference = existing_ci
+            row.status = STATUS_CHECKED_IN
+            doc.flags.ignore_validate_update_after_submit = True
+            doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            return {
+                "status": "success",
+                "message": f"Room {row.room_number} already checked in.",
+                "check_in_reference": existing_ci,
+            }
+
+        # Resolve guest: prefer per-room guest, then occupant/guest name lookup, then primary guest.
         guest = row.hotel_guest or None
+        if not guest and (row.occupant_name or row.guest_name):
+            guest = frappe.db.get_value(
+                "Hotel Guest",
+                {"hotel_guest_name": row.occupant_name or row.guest_name},
+                "name",
+            )
         if not guest and doc.primary_guest_name:
             guest = frappe.db.get_value(
                 "Hotel Guest",
@@ -589,6 +642,13 @@ def check_in_reservation_room(reservation_name, room_row_name):
         if not guest:
             return {"status": "error", "message": "No guest linked to this room row. Please assign a guest first."}
 
+        room_conflict = check_checkin_conflict(row.room_number, ci_dt, expected_out)
+        if room_conflict:
+            return {
+                "status": "error",
+                "message": f"Room {row.room_number} is already occupied for this period (Check-in: {room_conflict.name}).",
+            }
+
         ci_doc = frappe.new_doc("Hotel Room Check In")
         ci_doc.guest = guest
         ci_doc.room_number = row.room_number
@@ -597,9 +657,10 @@ def check_in_reservation_room(reservation_name, room_row_name):
         ci_doc.number_of_nights = nights
         ci_doc.check_in_datetime = ci_dt
         ci_doc.expected_check_out_datetime = expected_out
+        ci_doc.reservation = reservation_name
         ci_doc.canonical_reservation = reservation_name
         _source = doc.source_channel or ""
-        ci_doc.reservation_source = _source if (_source and frappe.db.exists("Market Place", _source)) else ""
+        ci_doc.reservation_source = _source if (_source and frappe.db.exists("Market Place", _source)) else "Reservation"
         ci_doc.discount_type = doc.discount_type or "None"
         ci_doc.discount = flt(doc.discount or 0)
         ci_doc.flags.skip_availability_check = True
@@ -634,6 +695,7 @@ def bulk_check_in_reservation(reservation_name):
     Returns a summary for frontend notification.
     """
     from frappe.utils import add_days, cint, flt, get_datetime
+    from rhohotel.rhocom_hotel.utils.room_availability import check_checkin_conflict
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     if doc.reservation_status not in (STATUS_CONFIRMED, STATUS_HOLD):
@@ -657,8 +719,14 @@ def bulk_check_in_reservation(reservation_name):
             nights = cint(row.number_of_nights or doc.number_of_nights or 1)
             expected_out = add_days(get_datetime(ci_dt), nights)
 
-            # Resolve guest: prefer per-room guest, fall back to primary guest
+            # Resolve guest: prefer per-room guest, then occupant/guest name lookup, then primary guest.
             guest = row.hotel_guest or None
+            if not guest and (row.occupant_name or row.guest_name):
+                guest = frappe.db.get_value(
+                    "Hotel Guest",
+                    {"hotel_guest_name": row.occupant_name or row.guest_name},
+                    "name",
+                )
             if not guest and doc.primary_guest_name:
                 guest = frappe.db.get_value(
                     "Hotel Guest",
@@ -667,6 +735,27 @@ def bulk_check_in_reservation(reservation_name):
                 )
             if not guest:
                 errors.append(f"Room {room_label}: no guest assigned, skipped.")
+                continue
+
+            existing_ci = frappe.db.get_value(
+                "Hotel Room Check In",
+                {
+                    "canonical_reservation": reservation_name,
+                    "room_number": row.room_number,
+                    "status": ["in", ["Draft", "Checked In"]],
+                },
+                "name",
+            )
+            if existing_ci:
+                row.status = STATUS_CHECKED_IN
+                row.check_in_time = ci_dt
+                row.check_in_reference = existing_ci
+                already_checked_in += 1
+                continue
+
+            room_conflict = check_checkin_conflict(row.room_number, ci_dt, expected_out)
+            if room_conflict:
+                errors.append(f"Room {room_label}: already occupied for this period (Check-in: {room_conflict.name}).")
                 continue
 
             ci_doc = frappe.new_doc("Hotel Room Check In")
@@ -690,9 +779,10 @@ def bulk_check_in_reservation(reservation_name):
             ci_doc.number_of_nights = nights
             ci_doc.check_in_datetime = ci_dt
             ci_doc.expected_check_out_datetime = expected_out
+            ci_doc.reservation = reservation_name
             ci_doc.canonical_reservation = reservation_name
             _source = doc.source_channel or ""
-            ci_doc.reservation_source = _source if (_source and frappe.db.exists("Market Place", _source)) else ""
+            ci_doc.reservation_source = _source if (_source and frappe.db.exists("Market Place", _source)) else "Reservation"
             ci_doc.discount_type = doc.discount_type or "None"
             ci_doc.discount = flt(doc.discount or 0)
             ci_doc.flags.skip_availability_check = True
@@ -883,6 +973,14 @@ def create_invoice_for_reservation(reservation_name):
     from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    if _is_group_split_billing(doc):
+        frappe.throw(
+            _(
+                "Group Split billing requires per-room invoicing. "
+                "Use 'Create Invoice' on each room row instead of the top-level invoice action."
+            )
+        )
 
     if doc.sales_invoice:
         updated = _upsert_reservation_invoice_row(doc, doc.sales_invoice, invoice_type="Primary")
@@ -1237,7 +1335,7 @@ def create_invoice_for_reservation_room(reservation_name, room_row_name):
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
 
-    if doc.reservation_type != "Group" or doc.group_billing_mode != "Split":
+    if not _is_group_split_billing(doc):
         frappe.throw(_("Per-room invoicing is only available for Group reservations with Split billing mode."))
 
     room_row = next((r for r in doc.rooms if r.name == room_row_name), None)
@@ -1302,6 +1400,69 @@ def create_invoice_for_reservation_room(reservation_name, room_row_name):
     frappe.db.commit()
 
     return {"sales_invoice": si.name}
+
+
+def _is_group_split_billing(doc):
+    reservation_type = (doc.reservation_type or "").strip().lower()
+    billing_mode = (doc.group_billing_mode or "").strip().lower()
+    return reservation_type == "group" and billing_mode.startswith("split")
+
+
+@frappe.whitelist()
+def create_pending_split_invoices(reservation_name):
+    """Create invoices only for split-group room rows that do not yet have split_invoice."""
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    if not _is_group_split_billing(doc):
+        frappe.throw(_("Bulk split invoicing is only available for Group reservations with Split billing mode."))
+
+    pending_rows = [row for row in (doc.rooms or []) if not row.split_invoice]
+    if not pending_rows:
+        return {
+            "status": "no_pending_rooms",
+            "created_count": 0,
+            "already_invoiced_count": len(doc.rooms or []),
+            "created": [],
+            "failed": [],
+        }
+
+    created = []
+    failed = []
+
+    for row in pending_rows:
+        try:
+            result = create_invoice_for_reservation_room(reservation_name, row.name)
+            created.append(
+                {
+                    "room_row_name": row.name,
+                    "room_number": row.room_number,
+                    "sales_invoice": result.get("sales_invoice"),
+                }
+            )
+        except Exception as exc:
+            failed.append(
+                {
+                    "room_row_name": row.name,
+                    "room_number": row.room_number,
+                    "error": str(exc),
+                }
+            )
+
+    status = "success"
+    if failed and created:
+        status = "partial"
+    elif failed and not created:
+        status = "failed"
+
+    return {
+        "status": status,
+        "created_count": len(created),
+        "already_invoiced_count": len(doc.rooms or []) - len(pending_rows),
+        "pending_count": len(pending_rows),
+        "failed_count": len(failed),
+        "created": created,
+        "failed": failed,
+    }
 
 
 @frappe.whitelist()

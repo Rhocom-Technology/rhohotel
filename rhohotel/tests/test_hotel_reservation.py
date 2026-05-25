@@ -22,6 +22,7 @@ if "frappe" not in sys.modules:
 
     utils_stub = types.ModuleType("frappe.utils")
     utils_stub.getdate = lambda value: value if isinstance(value, date) else date.fromisoformat(value)
+    utils_stub.flt = lambda value: float(value or 0)
     utils_stub.date_diff = lambda a, b: (a - b).days
     utils_stub.now_datetime = lambda: "2026-04-10 12:00:00"
 
@@ -47,6 +48,7 @@ from rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation import (
     STATUS_DRAFT,
     STATUS_EXPIRED,
 )
+from rhohotel.rhocom_hotel.doctype.hotel_reservation import hotel_reservation as hr_module
 
 
 class Row(types.SimpleNamespace):
@@ -237,6 +239,139 @@ class TestHotelReservation(unittest.TestCase):
         self.assertTrue(room_reserved.saved)
         self.assertEqual(room_occupied.status, "Occupied")
         self.assertFalse(room_occupied.saved)
+
+    def test_change_room_creates_adjustment_when_invoice_exists(self):
+        reservation_doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            from_date="2026-04-10",
+            number_of_nights=2,
+            sales_invoice="INV-0001",
+            rooms=[Row(room_number="R-101", room_type="Deluxe", rate_code="", rate_per_night=5000, room_total=10000)],
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
+            _recalculate_totals=Mock(),
+            save=Mock(),
+            get=lambda fieldname: [],
+        )
+
+        new_room = FakeRoom(status="Vacant")
+        new_room.room_type = "Suite"
+        old_room = FakeRoom(status="Reserved")
+
+        def fake_get_doc(doctype, name):
+            if doctype == "Hotel Reservation":
+                return reservation_doc
+            if doctype == "Hotel Room" and name == "R-101":
+                return old_room
+            if doctype == "Hotel Room" and name == "R-202":
+                return new_room
+            raise RuntimeError(f"Unexpected get_doc call: {doctype} {name}")
+
+        def fake_get_value(doctype, filters, fieldname):
+            if doctype == "Sales Invoice":
+                return "INV-0001"
+            return None
+
+        fake_rho_api = types.SimpleNamespace(get_room_rate=Mock(return_value=8000))
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+        if not hasattr(hr_module.frappe.db, "get_value"):
+            hr_module.frappe.db.get_value = lambda *args, **kwargs: None
+        if not hasattr(hr_module.frappe.db, "commit"):
+            hr_module.frappe.db.commit = lambda *args, **kwargs: None
+
+        with (
+            patch.dict(sys.modules, {"rhohotel.api": fake_rho_api}),
+            patch.object(hr_module.frappe, "get_doc", side_effect=fake_get_doc),
+            patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value),
+            patch.object(hr_module.frappe.db, "commit"),
+            patch.object(hr_module, "adjust_invoice_for_reservation", return_value={"status": "adjustment_created"}) as adjust_mock,
+        ):
+            result = hr_module.change_room_in_reservation("RES-TEST-0001", "R-101", "R-202")
+
+        adjust_mock.assert_called_once_with("RES-TEST-0001")
+        self.assertEqual(result.get("invoice_adjustment", {}).get("status"), "adjustment_created")
+
+    def test_change_room_skips_adjustment_when_no_existing_invoice(self):
+        reservation_doc = types.SimpleNamespace(
+            name="RES-TEST-0002",
+            from_date="2026-04-10",
+            number_of_nights=2,
+            sales_invoice="",
+            rooms=[Row(room_number="R-301", room_type="Deluxe", rate_code="", rate_per_night=5000, room_total=10000)],
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
+            _recalculate_totals=Mock(),
+            save=Mock(),
+            get=lambda fieldname: [],
+        )
+
+        new_room = FakeRoom(status="Vacant")
+        new_room.room_type = "Executive"
+        old_room = FakeRoom(status="Reserved")
+
+        def fake_get_doc(doctype, name):
+            if doctype == "Hotel Reservation":
+                return reservation_doc
+            if doctype == "Hotel Room" and name == "R-301":
+                return old_room
+            if doctype == "Hotel Room" and name == "R-302":
+                return new_room
+            raise RuntimeError(f"Unexpected get_doc call: {doctype} {name}")
+
+        fake_rho_api = types.SimpleNamespace(get_room_rate=Mock(return_value=4000))
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+        if not hasattr(hr_module.frappe.db, "commit"):
+            hr_module.frappe.db.commit = lambda *args, **kwargs: None
+
+        with (
+            patch.dict(sys.modules, {"rhohotel.api": fake_rho_api}),
+            patch.object(hr_module.frappe, "get_doc", side_effect=fake_get_doc),
+            patch.object(hr_module.frappe.db, "commit"),
+            patch.object(hr_module, "adjust_invoice_for_reservation") as adjust_mock,
+        ):
+            result = hr_module.change_room_in_reservation("RES-TEST-0002", "R-301", "R-302")
+
+        adjust_mock.assert_not_called()
+        self.assertIsNone(result.get("invoice_adjustment"))
+
+    def test_create_invoice_for_reservation_blocks_group_split_variants(self):
+        split_doc = types.SimpleNamespace(
+            name="RES-SPLIT-0001",
+            reservation_type="Group",
+            group_billing_mode="Split Billing",
+        )
+
+        with patch.object(hr_module.frappe, "get_doc", return_value=split_doc):
+            with self.assertRaises(RuntimeError):
+                hr_module.create_invoice_for_reservation("RES-SPLIT-0001")
+
+    def test_create_pending_split_invoices_only_creates_for_uninvoiced_rows(self):
+        split_doc = types.SimpleNamespace(
+            name="RES-SPLIT-0002",
+            reservation_type="Group",
+            group_billing_mode="Split",
+            rooms=[
+                Row(name="ROW-1", room_number="R-101", split_invoice=""),
+                Row(name="ROW-2", room_number="R-102", split_invoice="INV-EXIST-1"),
+                Row(name="ROW-3", room_number="R-103", split_invoice=""),
+            ],
+        )
+
+        def fake_create_room_invoice(reservation_name, room_row_name):
+            return {"sales_invoice": f"INV-{room_row_name}"}
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=split_doc),
+            patch.object(hr_module, "create_invoice_for_reservation_room", side_effect=fake_create_room_invoice) as create_row_mock,
+        ):
+            result = hr_module.create_pending_split_invoices("RES-SPLIT-0002")
+
+        self.assertEqual(create_row_mock.call_count, 2)
+        called_rows = {call.args[1] for call in create_row_mock.call_args_list}
+        self.assertEqual(called_rows, {"ROW-1", "ROW-3"})
+        self.assertEqual(result.get("created_count"), 2)
+        self.assertEqual(result.get("already_invoiced_count"), 1)
+        self.assertEqual(result.get("failed_count"), 0)
 
 
 if __name__ == "__main__":

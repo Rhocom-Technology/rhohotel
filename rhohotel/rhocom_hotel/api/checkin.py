@@ -63,6 +63,9 @@ def get_checkin_detail(name):
 
     doc = frappe.get_doc("Hotel Room Check In", name)
     checkin = doc.as_dict()
+    checkin["reservation"] = checkin.get("reservation") or doc.canonical_reservation or ""
+    if doc.canonical_reservation and not checkin.get("reservation_source"):
+        checkin["reservation_source"] = "Reservation"
 
     # Fetch invoices linked via custom field — gracefully skip if column doesn't exist
     invoices = []
@@ -126,7 +129,7 @@ def get_checkin_detail(name):
         if inv["invoice"] not in room_posting_pos_names
     ]
 
-    checkin["invoices"] = list(invoices) + list(filtered_pos_invoices)
+    merged_invoices = list(invoices) + list(filtered_pos_invoices)
 
     # Acquired bills — Bill Transfer records where this check-in is the recipient
     acquired_bills = []
@@ -183,7 +186,68 @@ def get_checkin_detail(name):
     except Exception:
         pass
 
-    checkin["payments"] = list(payments)
+    merged_payments = list(payments)
+
+    # If this check-in came from a canonical reservation, include reservation-level
+    # invoice/payment ledger so front desk does not lose billing context.
+    # Corporate reservations are billed on the corporate account and should not
+    # show reservation-level invoices on individual occupant folios.
+    include_reservation_ledger = True
+    if doc.canonical_reservation and frappe.db.exists("Hotel Reservation", doc.canonical_reservation):
+        reservation_type = frappe.db.get_value(
+            "Hotel Reservation",
+            doc.canonical_reservation,
+            "reservation_type",
+        )
+        if reservation_type == "Corporate":
+            include_reservation_ledger = False
+
+    if include_reservation_ledger and doc.canonical_reservation and frappe.db.exists("Hotel Reservation", doc.canonical_reservation):
+        try:
+            from rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation import get_payment_summary_for_reservation
+
+            summary = get_payment_summary_for_reservation(doc.canonical_reservation) or {}
+
+            existing_invoice_names = {row.get("invoice") for row in merged_invoices}
+            for inv in summary.get("invoices") or []:
+                inv_name = inv.get("name")
+                if not inv_name or inv_name in existing_invoice_names:
+                    continue
+                merged_invoices.append(
+                    {
+                        "invoice": inv_name,
+                        "amount": inv.get("grand_total") or 0,
+                        "outstanding_amount": inv.get("outstanding_amount") or 0,
+                        "is_return": inv.get("is_return") or 0,
+                        "posting_date": inv.get("posting_date"),
+                        "status": inv.get("status"),
+                        "invoice_type": "Reservation Invoice",
+                    }
+                )
+                existing_invoice_names.add(inv_name)
+
+            existing_payment_names = {row.get("payment_id") or row.get("name") for row in merged_payments}
+            for payment in summary.get("payment_entries") or []:
+                pay_name = payment.get("name")
+                if not pay_name or pay_name in existing_payment_names:
+                    continue
+                merged_payments.append(
+                    {
+                        "payment_id": pay_name,
+                        "paid_amount": payment.get("amount") or payment.get("paid_amount") or 0,
+                        "payment_type": "Receive",
+                        "posting_date": payment.get("posting_date"),
+                        "mode_of_payment": payment.get("mode_of_payment"),
+                        "remarks": payment.get("remarks"),
+                        "docstatus": 1,
+                    }
+                )
+                existing_payment_names.add(pay_name)
+        except Exception:
+            pass
+
+    checkin["invoices"] = merged_invoices
+    checkin["payments"] = merged_payments
 
     return checkin
 
@@ -485,6 +549,30 @@ def create_checkin(
     ci_dt = get_datetime(check_in_datetime)
     expected_out = add_days(ci_dt, cint(number_of_nights))
 
+    from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
+
+    # Guard against duplicate check-ins from the same canonical reservation room.
+    if canonical_reservation:
+        existing_row_ref = frappe.db.get_value(
+            "Hotel Reservation Room",
+            {"parent": canonical_reservation, "room_number": room_number},
+            ["name", "check_in_reference"],
+            as_dict=True,
+        )
+        if existing_row_ref and existing_row_ref.get("check_in_reference"):
+            frappe.throw(
+                f"Room {room_number} is already checked in for reservation {canonical_reservation} "
+                f"(Check-in: {existing_row_ref.get('check_in_reference')})."
+            )
+
+    # Ensure the room is actually available at this time.
+    assert_room_available(
+        room_number,
+        ci_dt,
+        expected_out,
+        exclude_canonical=canonical_reservation or None,
+    )
+
     doc = frappe.new_doc("Hotel Room Check In")
     doc.guest = guest
     doc.room_number = room_number
@@ -494,9 +582,9 @@ def create_checkin(
     doc.number_of_nights = cint(number_of_nights)
     doc.check_in_datetime = ci_dt
     doc.expected_check_out_datetime = expected_out
-    doc.reservation = reservation or ""
+    doc.reservation = reservation or canonical_reservation or ""
     doc.canonical_reservation = canonical_reservation or ""
-    doc.reservation_source = reservation_source or ""
+    doc.reservation_source = reservation_source or ("Reservation" if canonical_reservation else "")
     doc.discount_type = discount_type or "None"
     doc.discount = flt(discount)
     doc.late_checkout = cint(late_checkout)
@@ -513,10 +601,10 @@ def create_checkin(
     doc.id_type = id_type or ""
     # Use the passed contact_number; fall back to the guest's phone_number (not contact_number
     # which is the "Contact Person Number" — a different person's number).
-    # doc.contact_number = contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
-    doc.contact_number =  frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
-    # Skip room availability overlap check for direct front desk check-in
-    doc.flags.skip_availability_check = True
+    doc.contact_number = contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
+    # Reservation check-ins often use rooms in Reserved status; allow submit after
+    # explicit availability assertion above.
+    doc.flags.skip_availability_check = bool(canonical_reservation)
 
     doc.insert(ignore_permissions=True)
     doc.submit()

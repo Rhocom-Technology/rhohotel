@@ -136,8 +136,36 @@ function openPayments() {
 function goToCheckIn() {
   const id = getReservationId()
   const res = reservation.value
-  const rooms = res?.rooms || []
-  const firstRoom = rooms.find(r => !r.check_in_reference) || rooms[0]
+  const rooms = Array.isArray(res?.rooms) ? res.rooms : []
+  const pendingRooms = rooms.filter(r => !r.check_in_reference)
+
+  if (!pendingRooms.length) {
+    errorMessage.value = 'All reservation rooms are already checked in.'
+    return
+  }
+
+  // For corporate/group reservations, force explicit room/occupant selection.
+  if (res?.reservation_type === 'Corporate' || res?.reservation_type === 'Group') {
+    if (pendingRooms.length === 1) {
+      goToIndividualCheckIn(pendingRooms[0])
+      return
+    }
+
+    if (typeof window !== 'undefined') {
+      const options = pendingRooms
+        .map((room, index) => `${index + 1}. ${room.room_number || 'Unassigned room'} - ${room.occupant_name || room.guest_name || 'No occupant'}`)
+        .join('\n')
+      const selected = window.prompt(`Select room to check in by number:\n${options}`)
+      const selectedIndex = Number(selected) - 1
+      if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= pendingRooms.length) {
+        return
+      }
+      goToIndividualCheckIn(pendingRooms[selectedIndex])
+      return
+    }
+  }
+
+  const firstRoom = pendingRooms[0]
 
   const query = {}
   if (id) query.reservation = id
@@ -147,11 +175,12 @@ function goToCheckIn() {
   if (firstRoom?.room_type) query.room_type = firstRoom.room_type
   if (firstRoom?.rate_per_night) query.rate_amount = firstRoom.rate_per_night
 
-  const guestName = res?.primary_guest_name || res?.customer || ''
+  const guestName = firstRoom?.occupant_name || firstRoom?.guest_name || res?.primary_guest_name || res?.customer || ''
   if (guestName) query.guest_name = guestName
-  if (res?.hotel_guest || res?.corporate_guest) query.guest = res.hotel_guest || res.corporate_guest
-  if (res?.primary_guest_phone) query.guest_phone = res.primary_guest_phone
-  if (res?.primary_guest_email) query.guest_email = res.primary_guest_email
+  const guestId = firstRoom?.hotel_guest || res?.hotel_guest || ((res?.reservation_type === 'Corporate') ? res?.corporate_guest : '')
+  if (guestId) query.guest = guestId
+  if (firstRoom?.occupant_phone || res?.primary_guest_phone) query.guest_phone = firstRoom.occupant_phone || res.primary_guest_phone
+  if (firstRoom?.occupant_email || res?.primary_guest_email) query.guest_email = firstRoom.occupant_email || res.primary_guest_email
   if (res?.corporate_guest) query.corporate_guest = res.corporate_guest
   if (res?.customer) query.customer = res.customer
   if (res?.group_billing_mode) query.group_billing_mode = res.group_billing_mode
@@ -182,13 +211,21 @@ function goToIndividualCheckIn(row) {
   if (id) query.reservation = id
   if (id) query.canonical_reservation = id
   if (reservation.value?.reservation_type) query.reservation_type = reservation.value.reservation_type
+  if (row?.check_in_reference) {
+    errorMessage.value = `${row.room_number || 'This room'} is already checked in.`
+    return
+  }
+
   if (row?.room_number) query.room = row.room_number
   if (row?.room_type) query.room_type = row.room_type
   if (row?.rate_per_night) query.rate_amount = row.rate_per_night
 
   const guestName = row?.occupant_name || row?.guest_name || reservation.value?.primary_guest_name || ''
   if (guestName) query.guest_name = guestName
-  if (row?.hotel_guest || reservation.value?.corporate_guest) query.guest = row.hotel_guest || reservation.value.corporate_guest
+  const fallbackCorporateGuest = reservation.value?.reservation_type === 'Corporate'
+    ? reservation.value?.corporate_guest
+    : ''
+  if (row?.hotel_guest || fallbackCorporateGuest) query.guest = row.hotel_guest || fallbackCorporateGuest
   if (row?.occupant_phone || reservation.value?.primary_guest_phone) query.guest_phone = row.occupant_phone || reservation.value.primary_guest_phone
   if (row?.occupant_email || reservation.value?.primary_guest_email) query.guest_email = row.occupant_email || reservation.value.primary_guest_email
   if (reservation.value?.corporate_guest) query.corporate_guest = reservation.value.corporate_guest
@@ -315,13 +352,29 @@ async function cancelReservation() {
 
 async function createInvoice() {
   if (!reservation.value?.name) return
+
+  const reservationType = String(reservation.value?.reservation_type || '').trim().toLowerCase()
+  const groupBillingMode = String(reservation.value?.group_billing_mode || '').trim().toLowerCase()
+  const isSplitGroup = reservationType === 'group' && groupBillingMode.startsWith('split')
+
   actionLoading.value = true
   errorMessage.value = ''
   try {
-    await callMethod(
-      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_invoice_for_reservation',
-      { reservation_name: reservation.value.name },
-    )
+    if (isSplitGroup) {
+      const result = await callMethod(
+        'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_pending_split_invoices',
+        { reservation_name: reservation.value.name },
+      )
+      const failedCount = Number(result?.failed_count || 0)
+      if (failedCount > 0) {
+        errorMessage.value = `Created ${Number(result?.created_count || 0)} invoice(s); ${failedCount} room(s) failed. Check room guests and try again.`
+      }
+    } else {
+      await callMethod(
+        'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_invoice_for_reservation',
+        { reservation_name: reservation.value.name },
+      )
+    }
     await loadReservation()
   } catch (error) {
     errorMessage.value = String(error?.message || 'Could not create invoice.')

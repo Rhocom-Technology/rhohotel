@@ -475,6 +475,19 @@ function selectCustomer(c) {
   customerDropdownOpen.value = false
 }
 
+function applyGroupMasterFromBooker(guest) {
+  if (!guest) return
+  if (reservationType.value !== 'Group' || form.value.group_billing_mode !== 'Central') return
+  if (form.value.group_master_customer) return
+
+  const customer = guest.customer || ''
+  if (!customer) return
+
+  form.value.group_master_customer = customer
+  const match = allCustomers.value.find((c) => c.name === customer)
+  customerSearch.value = match?.customer_name || customer
+}
+
 function handleCustomerClickOutside(e) {
   if (customerPickerRef.value && !customerPickerRef.value.contains(e.target)) {
     customerDropdownOpen.value = false
@@ -507,11 +520,13 @@ function handleClickOutside(e) {
 onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside)
   document.addEventListener('mousedown', handleCustomerClickOutside)
+  window.addEventListener('focus', loadCustomers)
   loadCustomers()
 })
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleClickOutside)
   document.removeEventListener('mousedown', handleCustomerClickOutside)
+  window.removeEventListener('focus', loadCustomers)
 })
 
 const corporateGuestsResource = createResource({
@@ -596,14 +611,19 @@ async function onRateCodeChange() {
   if (form.value.from_date && form.value.to_date && nightsCount.value > 0) {
     await loadAvailableRooms()
   }
-  selectedRooms.value = selectedRooms.value.map((room) => ({
-    ...room,
-    rate_per_night: getPricedRoomRate(room),
-    room_total: Math.max(0, (getPricedRoomRate(room) * nightsCount.value) - getRoomDiscount(room)),
-    rate_code: rateDoc ? rateDoc.name : '',
-    meal_plan_snapshot: rateDoc ? (rateDoc.meal_plan || '') : '',
-    cancellation_policy_snapshot: rateDoc ? (rateDoc.cancellation_policy || '') : '',
-  }))
+  const updatedRows = []
+  for (const room of selectedRooms.value) {
+    const resolvedRate = await resolveRateForRoom(room)
+    updatedRows.push({
+      ...room,
+      rate_per_night: resolvedRate,
+      room_total: Math.max(0, (resolvedRate * nightsCount.value) - getRoomDiscount(room)),
+      rate_code: rateDoc ? rateDoc.name : '',
+      meal_plan_snapshot: rateDoc ? (rateDoc.meal_plan || '') : '',
+      cancellation_policy_snapshot: rateDoc ? (rateDoc.cancellation_policy || '') : '',
+    })
+  }
+  selectedRooms.value = updatedRows
 }
 
 function addRoomBlock() {
@@ -638,6 +658,22 @@ function getRoomAmount(room) {
 function getPricedRoomRate(room) {
   const pricedRoom = availableRooms.value.find((r) => r.name === room.name)
   return pricedRoom ? getRoomRate(pricedRoom) : getRoomRate(room)
+}
+
+async function resolveRateForRoom(room) {
+  const quickRate = getPricedRoomRate(room)
+  if (Number(quickRate) > 0) return Number(quickRate)
+
+  try {
+    const fallbackRate = await callMethod('rhohotel.api.get_room_rate', {
+      room_type: room?.room_type || '',
+      rate_type: selectedRateCode.value || undefined,
+      check_in_date: form.value.from_date || undefined,
+    })
+    return Number(fallbackRate || 0)
+  } catch {
+    return 0
+  }
 }
 
 const subTotal = computed(() => selectedRooms.value.reduce((acc, room) => acc + (getRoomRate(room) * nightsCount.value), 0))
@@ -699,18 +735,19 @@ async function loadAvailableRooms() {
   }
 }
 
-function addRoom() {
+async function addRoom() {
   if (!selectedRoom.value.length) return
   const rateDoc = eligibleRateCodes.value.find((r) => r.name === selectedRateCode.value)
   for (const roomName of selectedRoom.value) {
     const room = availableRooms.value.find((r) => r.name === roomName)
     if (!room) continue
     if (selectedRooms.value.some((r) => r.name === room.name)) continue
+    const resolvedRate = await resolveRateForRoom(room)
     selectedRooms.value.push({
       ...room,
-      rate_per_night: getRoomRate(room),
+      rate_per_night: resolvedRate,
       discount: getRoomDiscount(room),
-      room_total: getRoomAmount(room),
+      room_total: Math.max(0, (resolvedRate * nightsCount.value) - getRoomDiscount(room)),
       rate_code: rateDoc ? rateDoc.name : '',
       meal_plan_snapshot: rateDoc ? (rateDoc.meal_plan || '') : '',
       cancellation_policy_snapshot: rateDoc ? (rateDoc.cancellation_policy || '') : '',
@@ -747,6 +784,42 @@ function onBookerSelected(guest) {
   } else {
     form.value.individual_guest = guest.name
   }
+
+  applyGroupMasterFromBooker(guest)
+}
+
+async function ensureGroupMasterCustomer() {
+  if (!(reservationType.value === 'Group' && form.value.group_billing_mode === 'Central')) {
+    return
+  }
+
+  if (form.value.group_master_customer) return
+
+  const typedName = String(customerSearch.value || '').trim()
+  if (!typedName) return
+
+  const exact = allCustomers.value.find((c) => {
+    const customerName = String(c.customer_name || '').toLowerCase()
+    const customerId = String(c.name || '').toLowerCase()
+    const needle = typedName.toLowerCase()
+    return customerName === needle || customerId === needle
+  })
+  if (exact) {
+    form.value.group_master_customer = exact.name
+    customerSearch.value = exact.customer_name || exact.name
+    return
+  }
+
+  const resolved = await callMethod('rhohotel.rhocom_hotel.utils.billing_routing.resolve_or_create_customer', {
+    customer_hint: typedName,
+    hotel_guest: selectedBooker.value?.name || undefined,
+  })
+  if (resolved) {
+    form.value.group_master_customer = resolved
+    await loadCustomers()
+    const row = allCustomers.value.find((c) => c.name === resolved)
+    customerSearch.value = row?.customer_name || resolved
+  }
 }
 
 function validateForm() {
@@ -780,6 +853,8 @@ async function saveReservation(submitAfterSave) {
 
   isSaving.value = true
   try {
+    await ensureGroupMasterCustomer()
+
     const guestDoc = reservationType.value === 'Corporate'
       ? (selectedBooker.value?.name === form.value.corporate_guest ? selectedBooker.value : corporateGuests.value.find((g) => g.name === form.value.corporate_guest))
       : (selectedBooker.value?.name === form.value.individual_guest ? selectedBooker.value : individualGuests.value.find((g) => g.name === form.value.individual_guest))

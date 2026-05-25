@@ -68,13 +68,13 @@
             "fieldtype": "Select",
             "label": "ID Type",
             "options": "\nInternational Passport\nNational ID\nDriver's License\nVoter's Card\nOffice ID Card",
-            "reqd":1
+            "reqd": 0
         },
         {
             "fieldname": "id_number",
             "fieldtype": "Data",
             "label": "ID Number",
-            "reqd": 1
+            "reqd": 0
         },
         {
             "fieldname": "phone_number",

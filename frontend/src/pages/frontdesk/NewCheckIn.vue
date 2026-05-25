@@ -1,24 +1,3 @@
-// --- Bulk Check-In ---
-const showBulkCheckInToast = ref(false)
-const bulkCheckInToastMessage = ref('')
-
-async function bulkCheckInReservation() {
-  if (!form.canonical_reservation && !form.reservation) return
-  showBulkCheckInToast.value = true
-  bulkCheckInToastMessage.value = 'Processing bulk check-in...'
-  try {
-    const result = await callMethodForm(
-      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.bulk_check_in_reservation',
-      { reservation_name: form.canonical_reservation || form.reservation }
-    )
-    bulkCheckInToastMessage.value = result?.message || 'Bulk check-in complete.'
-    setTimeout(() => { showBulkCheckInToast.value = false }, 3500)
-    // Optionally refresh reservation/room data here
-  } catch (e) {
-    bulkCheckInToastMessage.value = e?.message || 'Bulk check-in failed.'
-    setTimeout(() => { showBulkCheckInToast.value = false }, 3500)
-  }
-}
 <template>
   <div class="space-y-5">
     <div>
@@ -530,6 +509,27 @@ const showGuestDropdown = ref(false)
 const selectedGuest = ref({})
 let guestDebounce = null
 
+// ---- Bulk Check-In ----
+const showBulkCheckInToast = ref(false)
+const bulkCheckInToastMessage = ref('')
+
+async function bulkCheckInReservation() {
+  if (!form.canonical_reservation && !form.reservation) return
+  showBulkCheckInToast.value = true
+  bulkCheckInToastMessage.value = 'Processing bulk check-in...'
+  try {
+    const result = await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.bulk_check_in_reservation',
+      { reservation_name: form.canonical_reservation || form.reservation },
+    )
+    bulkCheckInToastMessage.value = result?.message || 'Bulk check-in complete.'
+    setTimeout(() => { showBulkCheckInToast.value = false }, 3500)
+  } catch (e) {
+    bulkCheckInToastMessage.value = e?.message || 'Bulk check-in failed.'
+    setTimeout(() => { showBulkCheckInToast.value = false }, 3500)
+  }
+}
+
 function onGuestInput() {
   form.guest = ''
   selectedGuest.value = {}
@@ -867,6 +867,9 @@ async function submitCheckIn() {
 
   submitting.value = true
   try {
+    const linkedReservation = form.reservation || form.canonical_reservation || ''
+    const linkedCanonicalReservation = form.canonical_reservation || form.reservation || ''
+
     const params = {
       guest: form.guest,
       room_number: form.room_number,
@@ -875,9 +878,9 @@ async function submitCheckIn() {
       number_of_nights: form.number_of_nights,
       check_in_datetime: form.check_in_datetime,
       rate_type: form.rate_type || '',
-      reservation: form.reservation || '',
-      canonical_reservation: form.canonical_reservation || '',
-      reservation_source: form.reservation_source || '',
+      reservation: linkedReservation,
+      canonical_reservation: linkedCanonicalReservation,
+      reservation_source: form.reservation_source || (linkedCanonicalReservation ? 'Reservation' : ''),
       discount_type: form.discount_type || 'None',
       discount: form.discount || 0,
       late_checkout: form.late_checkout ? 1 : 0,

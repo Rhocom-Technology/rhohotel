@@ -26,10 +26,37 @@ function parseServerMessages(serverMessages) {
   }
 }
 
+function stripHtml(value) {
+  if (!value) return ''
+  return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function humanizeErrorMessage(rawMessage) {
+  let message = stripHtml(rawMessage || '')
+  if (!message) return 'Something went wrong. Please try again.'
+
+  // Keep the first meaningful line and drop traceback/debug payloads.
+  message = message
+    .replace(/Traceback \(most recent call last\):[\s\S]*/i, '')
+    .replace(/\bFile ".*"[\s\S]*/i, '')
+    .replace(/\{\"exc_type\"[\s\S]*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!message) return 'Something went wrong. Please try again.'
+
+  // Remove raw SQL/code fragments when present in thrown messages.
+  if (message.includes('SELECT ') || message.includes('INSERT ') || message.includes('UPDATE ')) {
+    return 'A server error occurred while processing your request. Please try again.'
+  }
+
+  return message
+}
+
 function extractErrorMessage(payload, response) {
   const serverMessage = parseServerMessages(payload?._server_messages)
   const message = serverMessage || payload?.message || payload?.exc || response.statusText || 'Request failed'
-  return typeof message === 'string' ? message : 'Request failed'
+  return humanizeErrorMessage(typeof message === 'string' ? message : 'Request failed')
 }
 
 export async function requestApi(url, options = {}) {

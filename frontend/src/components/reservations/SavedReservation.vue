@@ -7,6 +7,13 @@
       {{ checkInToastMessage }}
     </div>
 
+    <div
+      v-if="showPaymentToast"
+      class="fixed top-16 right-5 z-[60] bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-lg"
+    >
+      {{ paymentToastMessage }}
+    </div>
+
     <div v-if="loading" class="bg-white rounded-xl border border-gray-200 px-6 py-10 text-sm text-gray-400 text-center">Loading reservation...</div>
     <div v-else-if="error && !reservation.name" class="bg-white rounded-xl border border-red-200 px-6 py-10 text-sm text-red-500 text-center">{{ error }}</div>
 
@@ -37,11 +44,28 @@
           <button @click="showPaymentModal = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
           <button @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
           <button @click="showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
-          <button v-if="!reservation.sales_invoice && reservation.docstatus === 1"
+          <button v-if="showTopCreateInvoice"
             :disabled="actionLoading" @click="emit('create-invoice')"
             class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40">Create Invoice</button>
+          <button
+            v-if="showTopSplitBulkInvoice"
+            :disabled="actionLoading"
+            @click="emit('create-invoice')"
+            class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40"
+          >Create Invoices (Pending Guests)</button>
           <!-- Removed invoice name button: all invoices are now shown in the ledger table below -->
-          <button v-if="canCheckInReservation" :disabled="actionLoading" @click="emit('check-in')" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40">Check In Guest</button>
+          <button
+            v-if="canSingleTopCheckIn"
+            :disabled="actionLoading"
+            @click="checkIn(singleTopCheckInRoom)"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40"
+          >Check In</button>
+          <button
+            v-else-if="canTopBulkCheckIn"
+            :disabled="actionLoading"
+            @click="openBulkCheckInPicker"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40"
+          >Bulk Check In</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
           <button v-if="!isCancelled" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
           <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
@@ -77,7 +101,7 @@
       <div class="bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-bold text-gray-900">Reserved Rooms</h3>
-          <button v-if="canBulkCheckIn" @click="bulkCheckIn" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Bulk Check In</button>
+          <button v-if="canTopBulkCheckIn" @click="openBulkCheckInPicker" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Bulk Check In</button>
         </div>
         <div class="overflow-x-auto border border-gray-100 rounded-lg">
           <table class="w-full">
@@ -142,9 +166,9 @@
                     <!-- Per-room invoice for Group Split billing -->
                     <template v-if="isSplitGroup">
                       <span
-                        v-if="row.split_invoice"
+                        v-if="isRowInvoiced(row)"
                         class="inline-flex px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded"
-                        :title="row.split_invoice"
+                        :title="row.split_invoice || 'Invoice created'"
                       >Invoiced</span>
                       <button
                         v-else
@@ -366,7 +390,7 @@
       v-if="showPaymentModal"
       :reservation="reservation"
       @close="showPaymentModal = false"
-      @done="handleModalDone"
+      @done="handlePaymentDone"
     />
 
     <PrintReservationModal
@@ -375,11 +399,61 @@
       @close="showPrintModal = false"
       @done="handleModalDone"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="showBulkCheckInPicker"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        style="background:rgba(0,0,0,0.55);"
+        @click.self="closeBulkCheckInPicker"
+      >
+        <div class="bg-white rounded-2xl shadow-2xl w-full mx-4" style="max-width:640px;">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-gray-900">Bulk Check In</h3>
+              <p class="text-xs text-gray-400 mt-0.5">Select rooms to check in. All pending rooms are pre-selected.</p>
+            </div>
+            <button @click="closeBulkCheckInPicker" class="text-xs text-gray-400 hover:text-gray-600">Close</button>
+          </div>
+
+          <div class="px-6 py-4 max-h-[320px] overflow-y-auto space-y-2">
+            <label
+              v-for="room in pendingRooms"
+              :key="room.name || room.idx"
+              class="flex items-start gap-3 rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50"
+            >
+              <input
+                :checked="selectedBulkRoomNames.includes(room.name)"
+                type="checkbox"
+                class="mt-0.5"
+                @change="toggleBulkRoomSelection(room.name, $event.target.checked)"
+              />
+              <div>
+                <p class="text-xs font-semibold text-gray-900">{{ room.room_number || 'Unassigned Room' }} • {{ room.room_type || '—' }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ room.occupant_name || room.guest_name || reservation.primary_guest_name || 'No occupant selected' }}</p>
+              </div>
+            </label>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+            <p class="text-xs text-gray-500">Selected: {{ selectedBulkRoomNames.length }} / {{ pendingRooms.length }}</p>
+            <div class="flex items-center gap-2">
+              <button @click="closeBulkCheckInPicker" class="px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button
+                :disabled="selectedBulkRoomNames.length === 0 || actionLoading"
+                @click="bulkCheckInSelected"
+                class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-40"
+              >Check In Selected</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import StayAdjustment from '@/components/reservations/StayAdjustment.vue'
 import ChangeRoom from '@/components/reservations/ChangeRoom.vue'
@@ -417,6 +491,10 @@ const showPrintModal = ref(false)
 const printFormat = ref('summary')
 const showCheckInToast = ref(false)
 const checkInToastMessage = ref('')
+const showPaymentToast = ref(false)
+const paymentToastMessage = ref('')
+const showBulkCheckInPicker = ref(false)
+const selectedBulkRoomNames = ref([])
 
 function handleModalDone() {
   showAdjustModal.value = false
@@ -426,18 +504,38 @@ function handleModalDone() {
   emit('refresh')
 }
 
+function handlePaymentDone() {
+  handleModalDone()
+  paymentToastMessage.value = 'Payment recorded successfully.'
+  showPaymentToast.value = true
+  setTimeout(() => {
+    showPaymentToast.value = false
+  }, 3200)
+}
+
 const rooms = computed(() => props.reservation?.rooms || [])
 const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn(row)))
 const isCancelled = computed(() => Number(props.reservation?.docstatus || 0) === 2 || String(props.reservation?.status || props.reservation?.reservation_status || '').toLowerCase() === 'cancelled')
-const canCheckInReservation = computed(() => Number(props.reservation?.docstatus || 0) === 1 && !isCancelled.value)
-const canBulkCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length > 1)
-const isSplitGroup = computed(() => props.reservation?.reservation_type === 'Group' && props.reservation?.group_billing_mode === 'Split')
+const canCheckInReservation = computed(() => Number(props.reservation?.docstatus || 0) === 1 && !isCancelled.value && pendingRooms.value.length > 0)
+const canSingleTopCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length === 1)
+const canTopBulkCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length > 1)
+const singleTopCheckInRoom = computed(() => (canSingleTopCheckIn.value ? pendingRooms.value[0] : null))
+const reservationType = computed(() => String(props.reservation?.reservation_type || '').trim().toLowerCase())
+const groupBillingMode = computed(() => String(props.reservation?.group_billing_mode || '').trim().toLowerCase())
+const isSplitGroup = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('split'))
+const invoicedRowNames = reactive(new Set())
+function isRowInvoiced(row) {
+  return Boolean(row?.split_invoice) || invoicedRowNames.has(row?.name)
+}
+const splitInvoicePendingRooms = computed(() => (isSplitGroup.value ? rooms.value.filter((row) => !isRowInvoiced(row)) : []))
+const showTopCreateInvoice = computed(() => !isSplitGroup.value && !props.reservation?.sales_invoice && Number(props.reservation?.docstatus || 0) === 1)
+const showTopSplitBulkInvoice = computed(() => isSplitGroup.value && Number(props.reservation?.docstatus || 0) === 1 && splitInvoicePendingRooms.value.length > 0)
 
 const splitInvoiceLoading = ref(null)
 const splitInvoiceError = ref('')
 
 async function createSplitInvoice(row) {
-  if (!row?.name || splitInvoiceLoading.value) return
+  if (!row?.name || row?.split_invoice || splitInvoiceLoading.value) return
   splitInvoiceLoading.value = row.name
   splitInvoiceError.value = ''
   try {
@@ -445,7 +543,8 @@ async function createSplitInvoice(row) {
       'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_invoice_for_reservation_room',
       { reservation_name: props.reservation.name, room_row_name: row.name },
     )
-    row.split_invoice = result?.sales_invoice || ''
+    row.split_invoice = result?.sales_invoice || 'created'
+    invoicedRowNames.add(row.name)
     emit('refresh')
   } catch (e) {
     splitInvoiceError.value = String(e?.message || 'Failed to create invoice.')
@@ -537,7 +636,11 @@ function goCheckOut(row) {
 }
 
 async function checkIn(row) {
-  if (isRoomCheckedIn(row)) return
+  if (!row || !row.name || isRoomCheckedIn(row)) return
+  if (typeof window !== 'undefined') {
+    const confirmed = window.confirm(`Check in ${row?.occupant_name || row?.guest_name || row?.room_number || 'this guest'} now?`)
+    if (!confirmed) return
+  }
   const roomLabel = row?.room_number || row?.name || 'selected room'
   showCheckInToast.value = true
   checkInToastMessage.value = `Checking in ${roomLabel}...`
@@ -560,16 +663,51 @@ async function checkIn(row) {
   }
 }
 
-async function bulkCheckIn() {
-  if (!canBulkCheckIn.value) return
+function openBulkCheckInPicker() {
+  if (!canTopBulkCheckIn.value) return
+  selectedBulkRoomNames.value = pendingRooms.value
+    .map((row) => row?.name)
+    .filter(Boolean)
+  showBulkCheckInPicker.value = true
+}
+
+function closeBulkCheckInPicker() {
+  showBulkCheckInPicker.value = false
+}
+
+function toggleBulkRoomSelection(roomName, checked) {
+  if (!roomName) return
+  if (checked) {
+    if (!selectedBulkRoomNames.value.includes(roomName)) {
+      selectedBulkRoomNames.value = [...selectedBulkRoomNames.value, roomName]
+    }
+    return
+  }
+  selectedBulkRoomNames.value = selectedBulkRoomNames.value.filter((name) => name !== roomName)
+}
+
+async function bulkCheckInSelected() {
+  if (!canTopBulkCheckIn.value || selectedBulkRoomNames.value.length === 0) return
+  if (typeof window !== 'undefined') {
+    const confirmed = window.confirm(`Check in ${selectedBulkRoomNames.value.length} selected room(s) now?`)
+    if (!confirmed) return
+  }
   showCheckInToast.value = true
-  checkInToastMessage.value = 'Processing bulk check-in...'
+  checkInToastMessage.value = 'Processing selected room check-ins...'
   try {
-    const result = await callMethod(
-      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.bulk_check_in_reservation',
-      { reservation_name: props.reservation.name }
+    const rowsToCheckIn = pendingRooms.value.filter((row) => selectedBulkRoomNames.value.includes(row.name))
+    const results = await Promise.allSettled(
+      rowsToCheckIn.map((row) => callMethod(
+        'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.check_in_reservation_room',
+        { reservation_name: props.reservation.name, room_row_name: row.name },
+      ))
     )
-    checkInToastMessage.value = result?.message || 'Bulk check-in complete.'
+    const successCount = results.filter((entry) => entry.status === 'fulfilled').length
+    const failedCount = results.length - successCount
+    checkInToastMessage.value = failedCount > 0
+      ? `Checked in ${successCount} room(s); ${failedCount} failed.`
+      : `Checked in ${successCount} room(s) successfully.`
+    closeBulkCheckInPicker()
     setTimeout(() => { showCheckInToast.value = false }, 3500)
     emit('refresh')
   } catch (e) {
