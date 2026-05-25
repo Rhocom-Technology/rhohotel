@@ -76,8 +76,8 @@ STATUS_EXPIRED    = "Expired"
 # Valid forward-transition map: maps current status → set of allowed next statuses
 # Used by _assert_valid_transition() to prevent illegal state changes.
 _ALLOWED_TRANSITIONS = {
-    STATUS_DRAFT:       {STATUS_HOLD,       STATUS_CANCELLED},
-    STATUS_HOLD:        {STATUS_CONFIRMED,  STATUS_CANCELLED, STATUS_EXPIRED},
+    STATUS_DRAFT:       {STATUS_HOLD,       STATUS_CONFIRMED, STATUS_CANCELLED},
+    STATUS_HOLD:        {STATUS_CONFIRMED,  STATUS_CHECKED_IN, STATUS_CANCELLED, STATUS_EXPIRED},
     STATUS_CONFIRMED:   {STATUS_CHECKED_IN, STATUS_CANCELLED, STATUS_NO_SHOW},
     STATUS_CHECKED_IN:  {STATUS_CHECKED_OUT, STATUS_CANCELLED},  # CANCELLED requires admin
     STATUS_CHECKED_OUT: set(),          # terminal state
@@ -92,6 +92,7 @@ _CONFLICT_CHECK_STATUSES = {STATUS_HOLD, STATUS_CONFIRMED, STATUS_CHECKED_IN}
 # Statuses that mean a room is no longer occupied / unavailable
 STATUS_COMPLETED = STATUS_CHECKED_OUT   # alias for readability in queries
 _TERMINAL_STATUSES = {STATUS_CANCELLED, STATUS_COMPLETED, STATUS_NO_SHOW, STATUS_EXPIRED}
+_DEFAULT_HOLD_HOURS = 1
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,8 @@ class HotelReservation(Document):
         8. Room block pickup counts are recalculated.
         9. Theoretical revenue is computed for House Use / Complimentary.
         """
+        self._assert_valid_transition()
+        self._set_hold_expiry()
         self._validate_dates()
         self._validate_rooms_present()
         self._validate_corporate_guest()
@@ -147,6 +150,7 @@ class HotelReservation(Document):
                     "Current status: {0}."
                 ).format(self.reservation_status)
             )
+        self._reserve_rooms()
 
     def on_cancel(self):
         """
@@ -160,6 +164,50 @@ class HotelReservation(Document):
     # ------------------------------------------------------------------
     # Validation helpers
     # ------------------------------------------------------------------
+
+    def _child_rows(self, fieldname):
+        """Return a child-table list while remaining friendly to lightweight tests."""
+        getter = getattr(self, "get", None)
+        if callable(getter):
+            return getter(fieldname) or []
+        return getattr(self, fieldname, None) or []
+
+    def _previous_reservation_status(self):
+        """Return the reservation status from the previous saved version, if any."""
+        get_doc_before_save = getattr(self, "get_doc_before_save", None)
+        if not callable(get_doc_before_save):
+            return None
+        previous = get_doc_before_save()
+        return getattr(previous, "reservation_status", None) if previous else None
+
+    def _assert_valid_transition(self):
+        """
+        Prevent accidental backward or terminal-state transitions.
+
+        New documents are allowed to start in Draft, Hold, or Confirmed because
+        front-desk users may directly submit a confirmed booking.
+        """
+        current = self.reservation_status or STATUS_DRAFT
+        previous = self._previous_reservation_status()
+        if not previous or previous == current:
+            return
+
+        allowed = _ALLOWED_TRANSITIONS.get(previous, set())
+        if current not in allowed:
+            frappe.throw(
+                _("Reservation status cannot move from {0} to {1}.").format(
+                    previous, current
+                )
+            )
+
+    def _set_hold_expiry(self):
+        """Stamp hold expiry when a reservation enters Hold."""
+        if self.reservation_status == STATUS_HOLD and not self.hold_expires_at:
+            self.hold_expires_at = frappe.utils.add_to_date(
+                now_datetime(), hours=_DEFAULT_HOLD_HOURS
+            )
+        elif self.reservation_status in (STATUS_CONFIRMED, STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
+            self.hold_expires_at = None
 
     def _validate_dates(self):
         """Ensure from_date and to_date are present and logically ordered."""
@@ -182,7 +230,7 @@ class HotelReservation(Document):
         but in practice they typically have explicit room rows.
         """
         if self.reservation_type == "Group":
-            if not self.rooms and not self.get("room_blocks"):
+            if not self.rooms and not self._child_rows("room_blocks"):
                 frappe.throw(
                     _(
                         "Group reservations require at least one Room Allocation or one Room Block. "
@@ -318,7 +366,7 @@ class HotelReservation(Document):
         """
         if self.reservation_type != "Group":
             return
-        for block in self.get("room_blocks") or []:
+        for block in self._child_rows("room_blocks"):
             picked = sum(
                 1 for r in self.rooms if r.room_type == block.room_type
             )
@@ -335,7 +383,7 @@ class HotelReservation(Document):
         if self.reservation_type not in ("House Use", "Complimentary"):
             return
 
-        from rhohotel.rhocom_hotel.utils.room_availability import get_room_rate
+        from rhohotel.api import get_room_rate
         nights = int(self.number_of_nights or 0)
         if nights <= 0 or not self.rooms:
             self.theoretical_room_revenue = 0.0
@@ -353,6 +401,18 @@ class HotelReservation(Document):
     # ------------------------------------------------------------------
     # Room state management
     # ------------------------------------------------------------------
+
+    def _reserve_rooms(self):
+        """Mark explicitly allocated rooms as Reserved once the reservation is submitted."""
+        if self.reservation_status not in (STATUS_CONFIRMED, STATUS_CHECKED_IN):
+            return
+        for row in self.rooms:
+            if not row.room_number:
+                continue
+            room = frappe.get_doc("Hotel Room", row.room_number)
+            if room.status == "Vacant":
+                room.status = "Reserved"
+                room.save(ignore_permissions=True)
 
     def _release_rooms(self):
         """
@@ -372,7 +432,7 @@ class HotelReservation(Document):
                 room.save(ignore_permissions=True)
 
         # Reset block pickup/remaining counts so freed inventory is visible
-        for block in self.get("room_blocks") or []:
+        for block in self._child_rows("room_blocks"):
             block.picked_up = 0
             block.remaining = int(block.quantity or 0)
 
@@ -468,8 +528,12 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
     # Update the room row
     target_row.room_number = new_room_number
     target_row.room_type = new_room.room_type or target_row.room_type
-    from rhohotel.rhocom_hotel.utils.room_availability import get_room_rate
-    target_row.rate_per_night = get_room_rate(new_room.room_type, check_in_date=str(doc.from_date))
+    from rhohotel.api import get_room_rate
+    target_row.rate_per_night = get_room_rate(
+        new_room.room_type,
+        rate_type=target_row.rate_code or None,
+        check_in_date=str(doc.from_date),
+    )
     target_row.room_total = round(float(target_row.rate_per_night or 0) * float(doc.number_of_nights or 0), 2)
 
     # Update the old room status back to Reserved (if not occupied)
@@ -906,6 +970,7 @@ def _get_open_invoice_for_payment(doc):
 @frappe.whitelist()
 def create_invoice_for_reservation(reservation_name):
     from frappe.utils import getdate, flt
+    from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
 
@@ -927,12 +992,38 @@ def create_invoice_for_reservation(reservation_name):
     if not doc.rooms:
         frappe.throw(_("Cannot create invoice without reserved rooms."))
 
-    customer = _find_or_create_customer_for_reservation(doc)
+    payer_info = resolve_payer(reservation_name, charge_category="Room")
+    if payer_info.get("payer_type") == "Internal (Cost Centre)":
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.payment_status = "Paid"
+        doc.save(ignore_permissions=True)
+        frappe.db.commit()
+        return {"sales_invoice": None, "internal": True, "payer_type": payer_info.get("payer_type")}
 
-    room_number = doc.rooms[0].room_number
-    item_code = frappe.db.get_value("Hotel Room", room_number, "erpnext_item") or room_number
-    if not frappe.db.exists("Item", item_code):
-        frappe.throw(_("No billable Item found for room {0}. Configure Hotel Room.erpnext_item.").format(room_number))
+    customer = payer_info.get("customer") or _find_or_create_customer_for_reservation(doc)
+    if not customer:
+        frappe.throw(_("Cannot create invoice: no customer could be resolved for this reservation."))
+
+    items = []
+    for room in doc.rooms:
+        room_number = room.room_number
+        item_code = frappe.db.get_value("Hotel Room", room_number, "erpnext_item") or room_number
+        if not frappe.db.exists("Item", item_code):
+            frappe.throw(_("No billable Item found for room {0}. Configure Hotel Room.erpnext_item.").format(room_number))
+        items.append(
+            {
+                "item_code": item_code,
+                "qty": 1,
+                "rate": flt(room.room_total or 0),
+                "description": _("Reservation charge for {0}, room {1} ({2} night(s), {3} to {4})").format(
+                    doc.name,
+                    room_number,
+                    room.number_of_nights or doc.number_of_nights or 0,
+                    doc.from_date,
+                    doc.to_date,
+                ),
+            }
+        )
 
     si = frappe.get_doc(
         {
@@ -941,19 +1032,15 @@ def create_invoice_for_reservation(reservation_name):
             "posting_date": frappe.utils.today(),
             "due_date": getdate(doc.to_date),
             "update_stock": 0,
-            "items": [
-                {
-                    "item_code": item_code,
-                    "qty": 1,
-                    "rate": flt(doc.total_amount or doc.net_total or 0),
-                    "description": _("Reservation charge for {0} ({1} to {2})").format(
-                        doc.name, doc.from_date, doc.to_date
-                    ),
-                }
-            ],
+            "items": items,
         }
     )
     si.set_taxes()
+    if doc.discount_amount:
+        if doc.discount_type == "Percentage":
+            si.additional_discount_percentage = flt(doc.discount or 0)
+        else:
+            si.discount_amount = flt(doc.discount_amount)
     si.insert(ignore_permissions=True)
     si.submit()
 
@@ -1473,3 +1560,53 @@ def cancel_reservation(reservation_name, reason=None):
 
     frappe.db.commit()
     return {"status": "success", "reason": reason or ""}
+
+
+def process_reservation_lifecycle():
+    """
+    Scheduled maintenance for canonical reservations.
+
+    - Hold reservations whose hold_expires_at has passed become Expired.
+    - Confirmed reservations with an arrival date before today become No Show.
+    """
+    now_value = now_datetime()
+    today = frappe.utils.nowdate()
+
+    expired_holds = frappe.get_all(
+        "Hotel Reservation",
+        filters={
+            "reservation_status": STATUS_HOLD,
+            "hold_expires_at": ["<", now_value],
+            "docstatus": ["!=", 2],
+        },
+        fields=["name"],
+    )
+
+    no_shows = frappe.get_all(
+        "Hotel Reservation",
+        filters={
+            "reservation_status": STATUS_CONFIRMED,
+            "from_date": ["<", today],
+            "docstatus": ["!=", 2],
+        },
+        fields=["name"],
+    )
+
+    for row in expired_holds:
+        doc = frappe.get_doc("Hotel Reservation", row.name)
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.reservation_status = STATUS_EXPIRED
+        doc._release_rooms()
+        doc.save(ignore_permissions=True)
+
+    for row in no_shows:
+        doc = frappe.get_doc("Hotel Reservation", row.name)
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.reservation_status = STATUS_NO_SHOW
+        doc._release_rooms()
+        doc.save(ignore_permissions=True)
+
+    if expired_holds or no_shows:
+        frappe.db.commit()
+
+    return {"expired": len(expired_holds), "no_show": len(no_shows)}

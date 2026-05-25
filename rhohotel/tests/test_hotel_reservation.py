@@ -14,12 +14,17 @@ if "frappe" not in sys.modules:
     frappe_stub.throw = _default_throw
     frappe_stub.get_doc = lambda *args, **kwargs: None
     frappe_stub._ = lambda text: text
+    frappe_stub.whitelist = lambda *args, **kwargs: (lambda fn: fn) if args == () else args[0]
+    frappe_stub.utils = types.SimpleNamespace(
+        add_to_date=lambda value, **kwargs: "2026-04-10 13:00:00",
+        nowdate=lambda: "2026-04-10",
+    )
 
     utils_stub = types.ModuleType("frappe.utils")
     utils_stub.getdate = lambda value: value if isinstance(value, date) else date.fromisoformat(value)
     utils_stub.flt = lambda value: float(value or 0)
     utils_stub.date_diff = lambda a, b: (a - b).days
-    utils_stub.now_datetime = lambda: None
+    utils_stub.now_datetime = lambda: "2026-04-10 12:00:00"
 
     model_stub = types.ModuleType("frappe.model")
     model_document_stub = types.ModuleType("frappe.model.document")
@@ -64,6 +69,7 @@ class TestHotelReservation(unittest.TestCase):
         doc = HotelReservation()
         doc.name = "RES-TEST-0001"
         doc.reservation_status = STATUS_DRAFT
+        doc.hold_expires_at = None
         doc.reservation_type = "Individual"
         doc.primary_guest_name = "John Doe"
         doc.corporate_guest = None
@@ -73,6 +79,34 @@ class TestHotelReservation(unittest.TestCase):
         doc.discount_type = None
         doc.discount = 0
         return doc
+
+    def test_assert_valid_transition_rejects_terminal_move(self):
+        doc = self._base_doc()
+        doc.reservation_status = STATUS_CONFIRMED
+        doc.get_doc_before_save = lambda: Row(reservation_status=STATUS_EXPIRED)
+
+        with self.assertRaises(RuntimeError):
+            doc._assert_valid_transition()
+
+    def test_set_hold_expiry_when_entering_hold(self):
+        doc = self._base_doc()
+        doc.reservation_status = "Hold"
+
+        doc._set_hold_expiry()
+
+        self.assertEqual(doc.hold_expires_at, "2026-04-10 13:00:00")
+
+    def test_on_submit_reserves_vacant_rooms(self):
+        doc = self._base_doc()
+        doc.reservation_status = STATUS_CONFIRMED
+        doc.rooms = [Row(room_number="R-101")]
+        room = FakeRoom(status="Vacant")
+
+        with patch("rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.frappe.get_doc", return_value=room):
+            doc.on_submit()
+
+        self.assertEqual(room.status, "Reserved")
+        self.assertTrue(room.saved)
 
     def test_validate_dates_sets_number_of_nights(self):
         doc = self._base_doc()
@@ -174,7 +208,9 @@ class TestHotelReservation(unittest.TestCase):
         doc.reservation_status = STATUS_CONFIRMED
 
         # Should not throw
-        doc.on_submit()
+        with patch.object(doc, "_reserve_rooms") as reserve_mock:
+            doc.on_submit()
+        reserve_mock.assert_called_once()
 
     def test_on_cancel_sets_status_and_releases_rooms(self):
         doc = self._base_doc()

@@ -576,6 +576,9 @@ async function selectGuest(g) {
     if (fullDoc) {
       selectedGuest.value = { ...selectedGuest.value, ...fullDoc }
       if (fullDoc.id_type && !form.id_type) form.id_type = fullDoc.id_type
+      // Always populate contact_number from phone_number (primary contact),
+      // never from contact_number which is "Contact Person Number" (emergency contact).
+      if (fullDoc.phone_number) form.contact_number = fullDoc.phone_number
     }
   } catch { /* keep partial data from search */ }
 }

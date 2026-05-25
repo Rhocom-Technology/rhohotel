@@ -147,6 +147,7 @@ const props = defineProps({
   cashier: { type: String, default: '' },
   posProfile: { type: String, default: '' },
   billTo: { type: String, default: '' },
+  existingDraft: { type: String, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirmed', 'room-selected'])
@@ -232,6 +233,7 @@ function confirm() {
     narration: postingNarration.value || null,
     kitchen_note: props.kitchenNote || null,
     pos_profile: props.posProfile || null,
+    existing_draft: props.existingDraft || null,
   })
 }
 

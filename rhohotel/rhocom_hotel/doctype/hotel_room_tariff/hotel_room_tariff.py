@@ -1,3 +1,4 @@
+#Deprecated: This doctype is no longer used. Tariffs are now managed via the Hotel Room Rate doctype.
 # Copyright (c) 2025, Rhocom Technology Ltd and contributors
 # For license information, please see license.txt
 

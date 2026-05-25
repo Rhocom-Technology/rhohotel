@@ -413,7 +413,7 @@ async function createGuest() {
 
     await uploadIdDocument(created.name)
 
-    // Issue #15: If we came from check-in page, route back there
+    // Route back to the correct context
     if (route.query.return_to === 'checkin') {
       router.push({
         path: '/check-ins/new',

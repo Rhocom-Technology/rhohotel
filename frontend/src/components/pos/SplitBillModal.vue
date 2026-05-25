@@ -104,9 +104,9 @@
                         :placeholder="portion.selectedRoom ? `Room ${portion.selectedRoom.room}` : 'Type room no. or guest…'"
                         class="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none bg-white focus:ring-2 focus:ring-blue-500"
                         :class="portion.selectedRoom ? 'border-blue-300 bg-blue-50' : 'border-gray-200'" />
-                      <div v-if="portion.roomResults && portion.roomResults.length > 0 && !portion.selectedRoom"
+                      <div v-if="portionRoomResults[idx]?.length > 0"
                         class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
-                        <div v-for="r in portion.roomResults" :key="r.check_in"
+                        <div v-for="r in portionRoomResults[idx]" :key="r.check_in"
                           @mousedown.prevent="selectRoomForPortion(idx, r)"
                           class="px-3 py-2.5 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0">
                           <span class="font-bold text-gray-900">Room {{ r.room }}</span>
@@ -159,6 +159,8 @@ const props = defineProps({
   kitchenNote: { type: String, default: '' },
   cashier: { type: String, default: '' },
   posProfile: { type: String, default: '' },
+  preSelectedRoom: { type: Object, default: null },
+  existingDraft: { type: String, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirmed'])
@@ -174,7 +176,6 @@ const makePortion = () => ({
   paymentType: 'Cash',
   target: '',
   roomSearch: '',
-  roomResults: [],
   selectedRoom: null,
   checkIn: null,
 })
@@ -202,9 +203,26 @@ function removePortion(idx) {
 // Reset when modal opens
 watch(() => props.modelValue, (open) => {
   if (open) {
-    portions.value = [makePortion(), makePortion()]
     splitError.value = ''
-    equalSplit()
+    const r = props.preSelectedRoom
+    if (r?.room && (r?.check_in || r?.id)) {
+      // Pre-populate first portion with the already-selected room/guest
+      portions.value = [
+        {
+          amount: props.grandTotal,
+          paymentType: 'Post to Room',
+          target: '',
+          roomSearch: `Room ${r.room} — ${r.guest || r.name || ''}`,
+          selectedRoom: { room: r.room, guest: r.guest || r.name || '', check_in: r.check_in || r.id },
+          checkIn: r.check_in || r.id,
+        },
+        makePortion(),
+      ]
+      // Second portion starts at 0; user adjusts if they want a real split
+    } else {
+      portions.value = [makePortion(), makePortion()]
+      equalSplit()
+    }
   }
 })
 
@@ -218,24 +236,23 @@ function loadRooms() {
   if (!roomsResource.data && !roomsResource.loading) roomsResource.reload()
 }
 
-function filterRoomsForPortion(p) {
+// Derived room suggestions per portion — computed to avoid mutating portions (which causes infinite deep-watch loop)
+const portionRoomResults = computed(() => {
   const allRooms = roomsResource.data || []
-  if (!p.roomSearch || p.selectedRoom) { p.roomResults = []; return }
-  const q = p.roomSearch.toLowerCase()
-  p.roomResults = allRooms.filter(r =>
-    (r.room || '').toLowerCase().includes(q) || (r.guest || '').toLowerCase().includes(q)
-  ).slice(0, 6)
-}
-
-watch(portions, () => { portions.value.forEach(filterRoomsForPortion) }, { deep: true })
-watch(() => roomsResource.data, () => { portions.value.forEach(filterRoomsForPortion) })
+  return portions.value.map(p => {
+    if (!p.roomSearch || p.selectedRoom) return []
+    const q = p.roomSearch.toLowerCase()
+    return allRooms.filter(r =>
+      (r.room || '').toLowerCase().includes(q) || (r.guest || '').toLowerCase().includes(q)
+    ).slice(0, 6)
+  })
+})
 
 function selectRoomForPortion(idx, room) {
   const p = portions.value[idx]
   p.selectedRoom = room
   p.checkIn = room.check_in
   p.roomSearch = `Room ${room.room} — ${room.guest}`
-  p.roomResults = []
 }
 
 function clearRoomForPortion(idx) {
@@ -243,7 +260,6 @@ function clearRoomForPortion(idx) {
   p.selectedRoom = null
   p.checkIn = null
   p.roomSearch = ''
-  p.roomResults = []
 }
 
 // ── Apply split ────────────────────────────────────────────────────────────
@@ -272,6 +288,9 @@ async function applySplit() {
   applying.value = true
   splitError.value = ''
 
+  // The draft should be deleted once (on the first API call that completes)
+  let draftToDelete = props.existingDraft || null
+
   try {
     for (const portion of portions.value) {
       if (Number(portion.amount) <= 0) continue
@@ -290,6 +309,7 @@ async function applySplit() {
           discount_amount: 0,
           kitchen_note: props.kitchenNote || null,
           pos_profile: props.posProfile || null,
+          existing_draft: draftToDelete,
         })
       } else {
         await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_pos_invoice', {
@@ -300,8 +320,10 @@ async function applySplit() {
           discount_amount: 0,
           kitchen_note: props.kitchenNote || null,
           pos_profile: props.posProfile || null,
+          existing_draft: draftToDelete,
         })
       }
+      draftToDelete = null  // only delete once — first successful call handles it
     }
     emit('confirmed', { split: true })
     emit('update:modelValue', false)

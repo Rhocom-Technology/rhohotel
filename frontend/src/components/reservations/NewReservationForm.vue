@@ -203,7 +203,7 @@
           <p class="text-xs text-gray-500 mb-1.5">Rate Code</p>
           <select v-model="selectedRateCode" @change="onRateCodeChange" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
             <option value="">Default rate</option>
-            <option v-for="r in eligibleRateCodes" :key="r.name" :value="r.name">{{ r.rate_code }} – {{ r.rate_type }}</option>
+            <option v-for="r in eligibleRateCodes" :key="r.name" :value="r.name">{{ r.rate_code }}{{ r.rate_amount ? ' (' + Number(r.rate_amount).toLocaleString() + ')' : '' }}</option>
           </select>
         </div>
         <div class="relative" ref="roomPickerRef">
@@ -586,15 +586,21 @@ async function loadEligibleRateCodes() {
     const codes = await callMethod('rhohotel.rhocom_hotel.utils.billing_routing.get_eligible_rate_codes', {
       reservation_type: reservationType.value,
       check_in_date: form.value.from_date || undefined,
+      room_type: selectedRoomType.value || undefined,
+      nights: nightsCount.value || undefined,
     })
     eligibleRateCodes.value = Array.isArray(codes) ? codes : []
+    if (selectedRateCode.value && !eligibleRateCodes.value.some((r) => r.name === selectedRateCode.value)) {
+      selectedRateCode.value = ''
+    }
   } catch {
     eligibleRateCodes.value = []
+    selectedRateCode.value = ''
   }
 }
 
 watch(
-  () => [reservationType.value, form.value.from_date],
+  () => [reservationType.value, form.value.from_date, form.value.to_date, selectedRoomType.value],
   () => loadEligibleRateCodes(),
   { immediate: true },
 )
@@ -680,7 +686,7 @@ const discountAmount = computed(() => {
 const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
 
 watch(
-  () => [form.value.from_date, form.value.to_date, selectedRoomType.value],
+  () => [form.value.from_date, form.value.to_date, selectedRoomType.value, selectedRateCode.value],
   () => {
     availableRooms.value = []
     selectedRoom.value = []
@@ -721,6 +727,7 @@ async function loadAvailableRooms() {
       check_in_dt: form.value.from_date,
       check_out_dt: form.value.to_date,
       room_type: selectedRoomType.value || undefined,
+      rate_code: selectedRateCode.value || undefined,
     })
     availableRooms.value = Array.isArray(rows) ? rows : []
   } catch {

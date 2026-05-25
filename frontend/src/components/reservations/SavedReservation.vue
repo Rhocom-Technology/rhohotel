@@ -88,8 +88,8 @@
             <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(reservation.total_amount) }}</p>
           </div>
           <div class="pl-6">
-            <p class="text-xs text-gray-400 mb-1">Linked Payment</p>
-            <p class="text-sm font-bold text-gray-900">{{ reservation.payment_entry || 'None' }}</p>
+            <p class="text-xs text-gray-400 mb-1">Paid Amount</p>
+            <p class="text-2xl font-bold text-green-600">{{ formatCurrency(paidAmount) }}</p>
           </div>
           <div class="px-6">
             <p class="text-xs text-gray-400 mb-1">Balance Due</p>
@@ -136,6 +136,7 @@
                     <span class="text-xs text-gray-700">{{ row.occupant_name || row.guest_name || reservation.primary_guest_name || '—' }}</span>
                   </template>
                   <GuestSelector
+                    v-else
                     v-model="row.occupant_name"
                     :fallback-value="row.guest_name || reservation.primary_guest_name || reservation.customer || ''"
                     v-model:guestId="row.hotel_guest"
@@ -182,6 +183,60 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Reservation Details Section -->
+      <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+        <h3 class="text-sm font-bold text-gray-900 mb-4">Reservation Details</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" class="text-xs">
+          <div>
+            <p class="text-gray-400 mb-1">Source Channel</p>
+            <p class="font-semibold text-gray-900">{{ reservation.source_channel || '—' }}</p>
+          </div>
+          <div>
+            <p class="text-gray-400 mb-1">Guest Phone</p>
+            <p class="font-semibold text-gray-900">{{ reservation.primary_guest_phone || '—' }}</p>
+          </div>
+          <div>
+            <p class="text-gray-400 mb-1">Guest Email</p>
+            <p class="font-semibold text-gray-900">{{ reservation.primary_guest_email || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Corporate'">
+            <p class="text-gray-400 mb-1">Corporate Account</p>
+            <p class="font-semibold text-gray-900">{{ reservation.customer || reservation.corporate_guest || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Group'">
+            <p class="text-gray-400 mb-1">Group Name</p>
+            <p class="font-semibold text-gray-900">{{ reservation.group_name || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Group'">
+            <p class="text-gray-400 mb-1">Billing Mode</p>
+            <p class="font-semibold text-gray-900">{{ reservation.group_billing_mode || '—' }}</p>
+          </div>
+          <div v-if="reservation.reservation_type === 'Group' && reservation.group_master_customer">
+            <p class="text-gray-400 mb-1">Master Payer</p>
+            <p class="font-semibold text-gray-900">{{ reservation.group_master_customer }}</p>
+          </div>
+          <div>
+            <p class="text-gray-400 mb-1">Booking Date</p>
+            <p class="font-semibold text-gray-900">{{ formatDate(reservation.creation) }}</p>
+          </div>
+          <div v-if="reservation.special_requests">
+            <p class="text-gray-400 mb-1">Special Requests</p>
+            <p class="font-semibold text-gray-900">{{ reservation.special_requests }}</p>
+          </div>
+          <div v-if="reservation.internal_notes || reservation.notes">
+            <p class="text-gray-400 mb-1">Notes</p>
+            <p class="font-semibold text-gray-900">{{ reservation.internal_notes || reservation.notes }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split Billing Notice for Group Reservations -->
+      <div v-if="reservation.reservation_type === 'Group' && reservation.group_billing_mode === 'Split'"
+        class="bg-amber-50 border border-amber-200 rounded-xl px-6 py-4">
+        <p class="text-xs font-bold text-amber-700 mb-1">Split Billing — Group Reservation</p>
+        <p class="text-xs text-amber-600">Each room in this group reservation requires its own individual invoice. Use the "Create Invoice" action per room row to generate separate invoices. A single group invoice is not applicable for split billing.</p>
       </div>
 
       <!-- Group Room Blocks -->

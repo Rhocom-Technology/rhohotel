@@ -99,7 +99,34 @@ class HotelRoomCheckOut(Document):
         
     def update_reservation(self):
         """Update reservation status if linked"""
-        pass
+        check_in = frappe.get_doc("Hotel Room Check In", self.check_in)
+        reservation_name = getattr(check_in, "canonical_reservation", None)
+        if not reservation_name or not frappe.db.exists("Hotel Reservation", reservation_name):
+            return
+
+        reservation = frappe.get_doc("Hotel Reservation", reservation_name)
+        reservation.flags.ignore_validate_update_after_submit = True
+
+        for row in reservation.rooms:
+            if row.check_in_reference == self.check_in or row.room_number == self.room_number:
+                frappe.db.set_value(
+                    "Hotel Reservation Room",
+                    row.name,
+                    "checkout_reference",
+                    self.name,
+                    update_modified=False,
+                )
+                row.checkout_reference = self.name
+                break
+
+        all_checked_out = all(
+            bool(row.checkout_reference or (row.check_in_reference == self.check_in and row.room_number == self.room_number))
+            for row in reservation.rooms
+        )
+        if all_checked_out:
+            reservation.reservation_status = "Checked Out"
+            reservation.check_out_time = self.check_out_datetime
+            reservation.save(ignore_permissions=True)
         
 
     # create house keeping task on checkout
