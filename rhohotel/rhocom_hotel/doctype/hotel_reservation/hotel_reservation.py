@@ -281,8 +281,13 @@ class HotelReservation(Document):
         Delegates to assert_room_available from room_availability.py.
         Skips validation when the reservation is in a terminal status (cancelled,
         checked-out, no-show, expired) because those do not block availability.
+        Also skips for STATUS_CHECKED_IN: rooms are already occupied by this
+        reservation's own check-ins so re-validating would raise false conflicts
+        and risk orphaning check-in documents inside the outer try/except.
         """
         if self.reservation_status in _TERMINAL_STATUSES:
+            return
+        if self.reservation_status == STATUS_CHECKED_IN:
             return
 
         from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
@@ -536,18 +541,44 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
     )
     target_row.room_total = round(float(target_row.rate_per_night or 0) * float(doc.number_of_nights or 0), 2)
 
-    # Update the old room status back to Reserved (if not occupied)
+    # Check if this room row has an active check-in
+    linked_check_in = frappe.db.get_value(
+        "Hotel Room Check In",
+        {
+            "canonical_reservation": reservation_name,
+            "room_number": old_room_number,
+            "status": ["in", ["Checked In", "Draft"]],
+        },
+        ["name", "docstatus"],
+        as_dict=True,
+    )
+    is_checked_in = bool(linked_check_in)
+
+    # Update the old room status back to Vacant
     try:
         old_room = frappe.get_doc("Hotel Room", old_room_number)
-        if old_room.status == "Reserved":
+        if old_room.status in ("Reserved", "Occupied"):
             old_room.status = "Vacant"
             old_room.save(ignore_permissions=True)
     except Exception:
         pass
 
-    # Mark new room as Reserved
-    new_room.status = "Reserved"
+    # Mark new room as Occupied (if guest is transferring mid-stay) or Reserved
+    new_room.status = "Occupied" if is_checked_in else "Reserved"
     new_room.save(ignore_permissions=True)
+
+    # Sync the linked check-in document to reflect the new room
+    if linked_check_in:
+        frappe.db.set_value(
+            "Hotel Room Check In",
+            linked_check_in.name,
+            {
+                "room_number": new_room_number,
+                "room_type": new_room.room_type or target_row.room_type,
+                "rate_amount": target_row.rate_per_night,
+            },
+            update_modified=True,
+        )
 
     doc._recalculate_totals()
     doc.save(ignore_permissions=True)
@@ -589,7 +620,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
     Returns a summary for frontend notification.
     """
     from frappe.utils import add_days, cint, flt, get_datetime
-    from rhohotel.rhocom_hotel.utils.room_availability import check_checkin_conflict
+    from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     row = next((r for r in doc.rooms if r.name == room_row_name), None)
@@ -614,10 +645,14 @@ def check_in_reservation_room(reservation_name, room_row_name):
             "name",
         )
         if existing_ci:
-            row.check_in_reference = existing_ci
-            row.status = STATUS_CHECKED_IN
-            doc.flags.ignore_validate_update_after_submit = True
-            doc.save(ignore_permissions=True)
+            frappe.db.set_value(
+                "Hotel Reservation Room",
+                row.name,
+                "check_in_reference",
+                existing_ci,
+                update_modified=False,
+            )
+            frappe.clear_document_cache("Hotel Reservation", reservation_name)
             frappe.db.commit()
             return {
                 "status": "success",
@@ -642,12 +677,16 @@ def check_in_reservation_room(reservation_name, room_row_name):
         if not guest:
             return {"status": "error", "message": "No guest linked to this room row. Please assign a guest first."}
 
-        room_conflict = check_checkin_conflict(row.room_number, ci_dt, expected_out)
-        if room_conflict:
-            return {
-                "status": "error",
-                "message": f"Room {row.room_number} is already occupied for this period (Check-in: {room_conflict.name}).",
-            }
+        # Use the centralised availability guard from room_availability.py.
+        # assert_room_available raises frappe.ValidationError on conflict,
+        # which propagates to the outer except block as a clean error response.
+        assert_room_available(
+            row.room_number,
+            ci_dt,
+            expected_out,
+            exclude_canonical=reservation_name,
+            reservation_type=doc.reservation_type,
+        )
 
         ci_doc = frappe.new_doc("Hotel Room Check In")
         ci_doc.guest = guest
@@ -667,14 +706,23 @@ def check_in_reservation_room(reservation_name, room_row_name):
         ci_doc.insert(ignore_permissions=True)
         ci_doc.submit()
 
-        row.check_in_time = ci_dt
-        row.check_in_reference = ci_doc.name
-        doc.flags.ignore_validate_update_after_submit = True
-        # Update reservation status if not already checked in
-        if doc.reservation_status not in (STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
-            doc.reservation_status = STATUS_CHECKED_IN
-            doc.check_in_time = ci_dt
-        doc.save(ignore_permissions=True)
+        frappe.db.set_value(
+            "Hotel Reservation Room",
+            row.name,
+            "check_in_reference",
+            ci_doc.name,
+            update_modified=False,
+        )
+        # Update reservation-level status atomically without loading the full doc
+        current_res_status = frappe.db.get_value("Hotel Reservation", reservation_name, "reservation_status")
+        if current_res_status not in (STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
+            frappe.db.set_value(
+                "Hotel Reservation",
+                reservation_name,
+                {"reservation_status": STATUS_CHECKED_IN, "check_in_time": ci_dt},
+                update_modified=False,
+            )
+        frappe.clear_document_cache("Hotel Reservation", reservation_name)
         frappe.db.commit()
 
         return {
@@ -695,7 +743,7 @@ def bulk_check_in_reservation(reservation_name):
     Returns a summary for frontend notification.
     """
     from frappe.utils import add_days, cint, flt, get_datetime
-    from rhohotel.rhocom_hotel.utils.room_availability import check_checkin_conflict
+    from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     if doc.reservation_status not in (STATUS_CONFIRMED, STATUS_HOLD):
@@ -753,9 +801,17 @@ def bulk_check_in_reservation(reservation_name):
                 already_checked_in += 1
                 continue
 
-            room_conflict = check_checkin_conflict(row.room_number, ci_dt, expected_out)
-            if room_conflict:
-                errors.append(f"Room {room_label}: already occupied for this period (Check-in: {room_conflict.name}).")
+            # Use the centralised availability guard from room_availability.py.
+            try:
+                assert_room_available(
+                    row.room_number,
+                    ci_dt,
+                    expected_out,
+                    exclude_canonical=reservation_name,
+                    reservation_type=doc.reservation_type,
+                )
+            except frappe.ValidationError as avail_err:
+                errors.append(f"Room {room_label}: {str(avail_err)}")
                 continue
 
             ci_doc = frappe.new_doc("Hotel Room Check In")
@@ -806,8 +862,6 @@ def bulk_check_in_reservation(reservation_name):
                 errors.append(f"Room {room_label}: {str(submit_exc)}")
                 continue
 
-            row.status = STATUS_CHECKED_IN
-            row.check_in_time = ci_dt
             row.check_in_reference = ci_doc.name
             checked_in_count += 1
         except Exception as e:
@@ -819,6 +873,7 @@ def bulk_check_in_reservation(reservation_name):
         doc.check_in_time = ci_dt
         doc.flags.ignore_validate_update_after_submit = True
         doc.save(ignore_permissions=True)
+        frappe.clear_document_cache("Hotel Reservation", reservation_name)
         frappe.db.commit()
 
     return {
@@ -1474,38 +1529,63 @@ def collect_payment_for_reservation(reservation_name, payment_info=None):
     payment_info = payment_info or {}
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
-    invoice = _get_open_invoice_for_payment(doc)
-    if not invoice:
+
+    # Collect ALL outstanding invoices, ordered oldest first
+    invoice_names = _get_reservation_invoice_names(doc)
+    if not invoice_names:
         frappe.throw(_("No outstanding Sales Invoice found for this reservation."))
 
-    _upsert_reservation_invoice_row(doc, invoice.name, invoice_type="Primary" if invoice.name == doc.sales_invoice else "Invoice")
-    outstanding = float(invoice.outstanding_amount or 0)
+    outstanding_rows = frappe.get_all(
+        "Sales Invoice",
+        filters={"name": ["in", invoice_names], "docstatus": 1, "outstanding_amount": [">", 0]},
+        fields=["name", "customer", "company", "outstanding_amount"],
+        order_by="posting_date asc, creation asc",
+    )
+    if not outstanding_rows:
+        frappe.throw(_("No outstanding Sales Invoice found for this reservation."))
+
     paid_amount = float(payment_info.get("paid_amount") or 0)
     if paid_amount <= 0:
         frappe.throw(_("Paid amount must be greater than zero."))
 
-    company = invoice.company or frappe.db.get_single_value("Global Defaults", "default_company")
     mode_of_payment = payment_info.get("mode_of_payment")
     if not mode_of_payment:
         frappe.throw(_("Mode of Payment is required."))
+
+    # Use the first invoice to derive company / customer (all should be the same)
+    first_inv = frappe.get_doc("Sales Invoice", outstanding_rows[0].name)
+    company = first_inv.company or frappe.db.get_single_value("Global Defaults", "default_company")
+    customer = first_inv.customer
 
     mop = frappe.get_doc("Mode of Payment", mode_of_payment)
     mop_account = next((a.default_account for a in mop.accounts if a.company == company), None)
     if not mop_account:
         frappe.throw(_("No account found for selected Mode of Payment in company {0}.").format(company))
 
-    allocated_amount = min(paid_amount, outstanding)
+    # Distribute paid_amount across invoices oldest-first
+    remaining = paid_amount
+    allocations = []  # list of (invoice_name, allocated_amount)
+    for row in outstanding_rows:
+        if remaining <= 0:
+            break
+        inv_outstanding = float(row.outstanding_amount or 0)
+        alloc = min(remaining, inv_outstanding)
+        if alloc > 0:
+            allocations.append((row.name, alloc))
+            remaining -= alloc
+
+    total_allocated = sum(a for _, a in allocations)
 
     pe = frappe.new_doc("Payment Entry")
     pe.payment_type = "Receive"
     pe.company = company
     pe.party_type = "Customer"
-    pe.party = invoice.customer
+    pe.party = customer
     pe.posting_date = payment_info.get("payment_date") or frappe.utils.today()
     pe.mode_of_payment = mode_of_payment
     pe.paid_to = mop_account
-    pe.paid_amount = allocated_amount
-    pe.received_amount = allocated_amount
+    pe.paid_amount = total_allocated
+    pe.received_amount = total_allocated
     pe.source_exchange_rate = 1
     pe.target_exchange_rate = 1
     if payment_info.get("reference_no"):
@@ -1515,29 +1595,32 @@ def collect_payment_for_reservation(reservation_name, payment_info=None):
     if payment_info.get("remarks"):
         pe.remarks = payment_info.get("remarks")
 
-    pe.append(
-        "references",
-        {
-            "reference_doctype": "Sales Invoice",
-            "reference_name": invoice.name,
-            "allocated_amount": allocated_amount,
-        },
-    )
+    for inv_name, alloc in allocations:
+        pe.append(
+            "references",
+            {
+                "reference_doctype": "Sales Invoice",
+                "reference_name": inv_name,
+                "allocated_amount": alloc,
+            },
+        )
+        _upsert_reservation_invoice_row(doc, inv_name, invoice_type="Primary" if inv_name == doc.sales_invoice else "Invoice")
 
     pe.insert(ignore_permissions=True)
     pe.submit()
 
+    total_outstanding = sum(float(r.outstanding_amount or 0) for r in outstanding_rows)
     doc.flags.ignore_validate_update_after_submit = True
     doc.payment_entry = pe.name
-    if allocated_amount >= outstanding and outstanding > 0:
+    if total_allocated >= total_outstanding:
         doc.payment_status = "Paid"
-    elif allocated_amount > 0:
+    elif total_allocated > 0:
         doc.payment_status = "Partly Paid"
-    _upsert_reservation_payment_row(doc, pe.name, amount=allocated_amount)
+    _upsert_reservation_payment_row(doc, pe.name, amount=total_allocated)
     doc.save(ignore_permissions=True)
     frappe.db.commit()
 
-    return {"payment_entry": pe.name}
+    return {"payment_entry": pe.name, "allocated_invoices": len(allocations)}
 
 
 @frappe.whitelist()

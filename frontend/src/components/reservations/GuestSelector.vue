@@ -105,6 +105,26 @@ const newGuest = ref({ hotel_guest_name: '', email: '', phone_number: '', guest_
 
 const displayValue = computed(() => props.modelValue || props.fallbackValue || '')
 
+// Dropdown positioning
+const dropdownStyle = ref({})
+
+function toggleOpen() {
+  open.value = !open.value
+  if (open.value) {
+    nextTick(() => {
+      const rect = root.value?.getBoundingClientRect()
+      if (rect) {
+        dropdownStyle.value = {
+          top: `${rect.bottom + 4}px`,
+          left: `${rect.left}px`,
+          width: `${Math.max(rect.width, 280)}px`,
+        }
+      }
+    })
+  }
+}
+
+
 let searchTimer = null
 function onSearch() {
   clearTimeout(searchTimer)

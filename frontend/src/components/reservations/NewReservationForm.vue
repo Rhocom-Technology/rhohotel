@@ -606,24 +606,11 @@ watch(
 )
 
 async function onRateCodeChange() {
-  // When a rate code changes, apply its meal plan to all existing room rows
-  const rateDoc = eligibleRateCodes.value.find((r) => r.name === selectedRateCode.value)
+  // Rate code picker is only a selector for new additions and availability filtering.
+  // Existing room rows keep their own captured rate_code/meal_plan snapshots.
   if (form.value.from_date && form.value.to_date && nightsCount.value > 0) {
     await loadAvailableRooms()
   }
-  const updatedRows = []
-  for (const room of selectedRooms.value) {
-    const resolvedRate = await resolveRateForRoom(room)
-    updatedRows.push({
-      ...room,
-      rate_per_night: resolvedRate,
-      room_total: Math.max(0, (resolvedRate * nightsCount.value) - getRoomDiscount(room)),
-      rate_code: rateDoc ? rateDoc.name : '',
-      meal_plan_snapshot: rateDoc ? (rateDoc.meal_plan || '') : '',
-      cancellation_policy_snapshot: rateDoc ? (rateDoc.cancellation_policy || '') : '',
-    })
-  }
-  selectedRooms.value = updatedRows
 }
 
 function addRoomBlock() {
@@ -796,12 +783,18 @@ async function ensureGroupMasterCustomer() {
   if (form.value.group_master_customer) return
 
   const typedName = String(customerSearch.value || '').trim()
-  if (!typedName) return
+  const guestFallbackName = String(
+    selectedBooker.value?.hotel_guest_name ||
+    form.value.primary_guest_name ||
+    '',
+  ).trim()
+  const customerHint = typedName || guestFallbackName
+  if (!customerHint) return
 
   const exact = allCustomers.value.find((c) => {
     const customerName = String(c.customer_name || '').toLowerCase()
     const customerId = String(c.name || '').toLowerCase()
-    const needle = typedName.toLowerCase()
+    const needle = customerHint.toLowerCase()
     return customerName === needle || customerId === needle
   })
   if (exact) {
@@ -811,8 +804,8 @@ async function ensureGroupMasterCustomer() {
   }
 
   const resolved = await callMethod('rhohotel.rhocom_hotel.utils.billing_routing.resolve_or_create_customer', {
-    customer_hint: typedName,
-    hotel_guest: selectedBooker.value?.name || undefined,
+    customer_hint: customerHint,
+    hotel_guest: selectedBooker.value?.name || form.value.individual_guest || form.value.corporate_guest || undefined,
   })
   if (resolved) {
     form.value.group_master_customer = resolved
@@ -845,6 +838,8 @@ async function saveReservation(submitAfterSave) {
   errorMessage.value = ''
   successMessage.value = ''
 
+  await ensureGroupMasterCustomer()
+
   const validationError = validateForm()
   if (validationError) {
     errorMessage.value = validationError
@@ -853,8 +848,6 @@ async function saveReservation(submitAfterSave) {
 
   isSaving.value = true
   try {
-    await ensureGroupMasterCustomer()
-
     const guestDoc = reservationType.value === 'Corporate'
       ? (selectedBooker.value?.name === form.value.corporate_guest ? selectedBooker.value : corporateGuests.value.find((g) => g.name === form.value.corporate_guest))
       : (selectedBooker.value?.name === form.value.individual_guest ? selectedBooker.value : individualGuests.value.find((g) => g.name === form.value.individual_guest))

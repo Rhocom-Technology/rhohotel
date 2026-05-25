@@ -76,7 +76,7 @@
                   </div>
                   <div>
                     <p class="text-xs text-gray-500 mb-1.5">Amount Received <span class="text-red-400">*</span></p>
-                    <input type="text" v-model="formattedPaidAmount" @input="updatePaidAmount" placeholder="₦0.00"
+                    <input type="text" :value="rawAmountInput" @input="onAmountInput" @focus="onAmountFocus" @blur="onAmountBlur" placeholder="0.00"
                       class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
@@ -155,23 +155,24 @@ const totalOutstanding = computed(() =>
   invoices.value.reduce((s, i) => s + (Number(i.outstanding_amount) || 0), 0)
 )
 
-const formattedPaidAmount = computed({
-  get: () => fmt(form.paid_amount),
-  set: (value) => {
-    const numericValue = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
-    form.paid_amount = numericValue;
-  },
-})
+const rawAmountInput = ref('')
 
 function fmt(v) {
   if (!v && v !== 0) return '₦ 0.00'
   return `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 }
 
-function updatePaidAmount(event) {
-  const value = event.target.value;
-  const numericValue = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
-  form.paid_amount = numericValue;
+function onAmountInput(e) {
+  rawAmountInput.value = e.target.value
+  form.paid_amount = parseFloat(String(e.target.value).replace(/[^0-9.]/g, '')) || 0
+}
+
+function onAmountFocus() {
+  rawAmountInput.value = form.paid_amount > 0 ? String(form.paid_amount) : ''
+}
+
+function onAmountBlur() {
+  rawAmountInput.value = form.paid_amount > 0 ? fmt(form.paid_amount) : ''
 }
 
 onMounted(async () => {
@@ -190,6 +191,7 @@ onMounted(async () => {
     invoices.value = invRows || []
     paymentModes.value = mops || []
     form.paid_amount = totalOutstanding.value
+    rawAmountInput.value = fmt(totalOutstanding.value)
   } catch (e) {
     error.value = String(e?.message || 'Failed to load invoices. Please try again.')
   } finally {

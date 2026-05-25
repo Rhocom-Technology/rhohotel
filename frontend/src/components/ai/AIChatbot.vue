@@ -242,6 +242,21 @@
             </span>
             <span class="text-gray-300" style="font-size:10px;">{{ inputText.length }}/500</span>
           </div>
+
+          <div v-if="ttsSupported" class="mt-2 flex items-center gap-2">
+            <label class="text-gray-400" style="font-size:10px;">Narrator voice</label>
+            <select
+              v-model="selectedVoicePreset"
+              class="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              :disabled="isSpeaking"
+              title="Voice preset is saved per user"
+            >
+              <option value="en-US-female">English (United States) - Female</option>
+              <option value="en-US-male">English (United States) - Male</option>
+              <option value="en-GB-female">English (United Kingdom) - Female</option>
+              <option value="en-GB-male">English (United Kingdom) - Male</option>
+            </select>
+          </div>
         </div>
       </div>
     </Transition>
@@ -363,6 +378,74 @@ const ttsSupported  = 'speechSynthesis' in window
 const isSpeaking    = ref(false)
 const speakingMsgId = ref(null)
 const autoSpeak     = ref(localStorage.getItem('ai_auto_speak') === 'true')
+const availableVoices = ref([])
+const selectedVoicePreset = ref('auto')
+
+const voiceStorageKey = computed(() => {
+  const userKey = session.user || 'guest'
+  return `ai_voice_preset_${userKey}`
+})
+
+const femaleHints = ['female', 'woman', 'zira', 'susan', 'hazel', 'samantha', 'victoria', 'karen', 'moira']
+const maleHints = ['male', 'man', 'david', 'james', 'john', 'daniel', 'george', 'fred', 'alex']
+
+function getDefaultVoice(voices) {
+  if (!voices?.length) return null
+  return voices.find(v =>
+    v.lang?.toLowerCase().startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.localService)
+  ) || voices.find(v => v.lang?.toLowerCase().startsWith('en')) || voices[0]
+}
+
+function hasHint(name, hints) {
+  const n = (name || '').toLowerCase()
+  return hints.some(h => n.includes(h))
+}
+
+function resolveVoiceByPreset(preset, voices) {
+  if (!voices?.length || !preset || preset === 'auto') return null
+
+  const [lang, region, gender] = preset.split('-')
+  const locale = `${lang || ''}-${region || ''}`.toLowerCase()
+  const localeVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith(locale))
+  if (!localeVoices.length) return null
+
+  if (gender === 'female') {
+    return localeVoices.find(v => hasHint(v.name, femaleHints)) || localeVoices[0]
+  }
+  if (gender === 'male') {
+    return localeVoices.find(v => hasHint(v.name, maleHints)) || localeVoices[0]
+  }
+  return localeVoices[0]
+}
+
+function loadSelectedVoiceFromStorage() {
+  try {
+    const stored = localStorage.getItem(voiceStorageKey.value)
+    selectedVoicePreset.value = stored || 'en-US-female'
+  } catch {
+    selectedVoicePreset.value = 'en-US-female'
+  }
+}
+
+function persistSelectedVoice() {
+  try {
+    localStorage.setItem(voiceStorageKey.value, selectedVoicePreset.value || 'auto')
+  } catch {
+    // Ignore storage issues.
+  }
+}
+
+function refreshVoices() {
+  if (!ttsSupported) return
+  const voices = window.speechSynthesis.getVoices() || []
+  availableVoices.value = [...voices].sort((a, b) => {
+    const an = (a?.name || '').toLowerCase()
+    const bn = (b?.name || '').toLowerCase()
+    if (an < bn) return -1
+    if (an > bn) return 1
+    return 0
+  })
+}
 
 function toggleAutoSpeak() {
   autoSpeak.value = !autoSpeak.value
@@ -381,12 +464,15 @@ function speakMessage(msg) {
   utter.rate  = 1.0
   utter.pitch = 1.0
 
-  // Prefer a natural English voice if available
-  const voices = window.speechSynthesis.getVoices()
-  const preferred = voices.find(v =>
-    v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.localService)
-  ) || voices.find(v => v.lang.startsWith('en'))
-  if (preferred) utter.voice = preferred
+  const voices = availableVoices.value.length
+    ? availableVoices.value
+    : window.speechSynthesis.getVoices()
+  const selected = resolveVoiceByPreset(selectedVoicePreset.value, voices)
+  const preferred = selected || getDefaultVoice(voices)
+  if (preferred) {
+    utter.voice = preferred
+    utter.lang = preferred.lang || utter.lang
+  }
 
   utter.onstart = () => {
     isSpeaking.value    = true
@@ -405,6 +491,19 @@ function stopSpeaking() {
   isSpeaking.value    = false
   speakingMsgId.value = null
 }
+
+watch(
+  () => voiceStorageKey.value,
+  () => {
+    loadSelectedVoiceFromStorage()
+    refreshVoices()
+  },
+  { immediate: true }
+)
+
+watch(selectedVoicePreset, () => {
+  persistSelectedVoice()
+})
 
 // Auto-speak new AI responses when toggle is ON
 watch(
@@ -678,11 +777,15 @@ watch(
 
 onMounted(() => {
   aiStore.loadSettings()
-  // Pre-load voices (Chrome requires this)
-  if (ttsSupported) window.speechSynthesis.getVoices()
+  if (ttsSupported) {
+    loadSelectedVoiceFromStorage()
+    refreshVoices()
+    window.speechSynthesis.onvoiceschanged = refreshVoices
+  }
 })
 
 onBeforeUnmount(() => {
+  if (ttsSupported) window.speechSynthesis.onvoiceschanged = null
   stopSpeaking()
   stopRecording()
 })

@@ -169,6 +169,21 @@ _ALL_TOOLS = {
 			"required": ["query"],
 		},
 	},
+	"get_guest_payment_total": {
+		"fn": ai_tools.get_guest_payment_total,
+		"description": "Get the total amount a specific guest has paid so far (from submitted Payment Entries and POS paid amounts).",
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"guest_query": {"type": "string", "description": "Guest name/ID/customer name to match."},
+				"include_pos": {
+					"type": "boolean",
+					"description": "Whether to include submitted POS invoice paid amounts. Defaults to true.",
+				},
+			},
+			"required": ["guest_query"],
+		},
+	},
 }
 
 # Role → allowed tool names (cascading: higher roles inherit all lower-role tools)
@@ -180,11 +195,11 @@ _ROLE_TOOLS = {
 		"get_reservations", "get_overdue_checkouts", "get_guest_profile",
 		"get_outstanding_invoices", "get_housekeeping_summary",
 		"get_maintenance_summary", "get_pos_summary", "get_payment_summary",
-		"search_guests",
+		"search_guests", "get_guest_payment_total",
 	],
 	"Hotel Receptionist": [
 		"get_occupancy_summary", "get_inhouse_guests", "get_reservations",
-		"get_overdue_checkouts", "get_guest_profile", "search_guests",
+		"get_overdue_checkouts", "get_guest_profile", "search_guests", "get_guest_payment_total",
 	],
 	"Housekeeping Supervisor": [
 		"get_occupancy_summary", "get_housekeeping_summary",

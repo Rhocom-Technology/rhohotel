@@ -442,7 +442,7 @@ function statusLineColor(room) {
 }
 
 function statusLine(room) {
-	if (room.overdue) return "Overdue check-out";
+	if (room.overdue) return overdueByText(room.expected_check_out_datetime);
 	if (
 		room.status === "Vacant" &&
 		(room.housekeeping_status === "Clean" || room.housekeeping_status === "Inspected")
@@ -455,6 +455,42 @@ function statusLine(room) {
 	if (room.status === "Reserved") return "Reserved for today";
 	if (room.status === "Occupied") return "Occupied";
 	return room.status || "—";
+}
+
+function overdueByText(expectedCheckoutDatetime) {
+	const overdueMs = getOverdueMs(expectedCheckoutDatetime);
+	if (!overdueMs) return "Overdue check-out";
+
+	const totalMinutes = Math.floor(overdueMs / (1000 * 60));
+	if (totalMinutes < 1) return "Overdue by less than a minute";
+
+	const minutesInHour = 60;
+	const minutesInDay = 60 * 24;
+
+	if (totalMinutes < minutesInHour)
+		return `Overdue by ${totalMinutes} minute${totalMinutes === 1 ? "" : "s"}`;
+
+	if (totalMinutes < minutesInDay) {
+		const hours = Math.floor(totalMinutes / minutesInHour);
+		return `Overdue by ${hours} hour${hours === 1 ? "" : "s"}`;
+	}
+
+	const days = Math.floor(totalMinutes / minutesInDay);
+	const remainingHours = Math.floor((totalMinutes % minutesInDay) / minutesInHour);
+	if (!remainingHours) return `Overdue by ${days} day${days === 1 ? "" : "s"}`;
+
+	return `Overdue by ${days} day${days === 1 ? "" : "s"} ${remainingHours} hour${remainingHours === 1 ? "" : "s"}`;
+}
+
+function getOverdueMs(expectedCheckoutDatetime) {
+	if (!expectedCheckoutDatetime) return 0;
+
+	const checkout = new Date(expectedCheckoutDatetime);
+	if (Number.isNaN(checkout.getTime())) return 0;
+
+	const now = new Date();
+	const diff = now.getTime() - checkout.getTime();
+	return diff > 0 ? diff : 0;
 }
 
 function refreshRooms() {

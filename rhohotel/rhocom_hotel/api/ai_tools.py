@@ -312,6 +312,91 @@ def get_payment_summary(date=None):
 		return {"error": str(e)}
 
 
+def get_guest_payment_total(guest_query, include_pos=True):
+	"""Total amount paid so far by a guest resolved by name/ID/customer mapping."""
+	try:
+		q = str(guest_query or "").strip()
+		if len(q) < 2:
+			return {"error": "Guest query must be at least 2 characters."}
+
+		guest_filters = [
+			["name", "=", q],
+			["hotel_guest_name", "=", q],
+			["name", "like", f"%{q}%"],
+			["hotel_guest_name", "like", f"%{q}%"],
+		]
+		guest_rows = frappe.get_all(
+			"Hotel Guest",
+			or_filters=guest_filters,
+			fields=["name", "hotel_guest_name", "customer"],
+			order_by="modified desc",
+			limit_page_length=20,
+		)
+		if not guest_rows:
+			return {"error": f"No guest found for '{q}'."}
+
+		# Prioritize exact name display matches when available.
+		q_lower = q.lower()
+		exact_match = next(
+			(
+				g
+				for g in guest_rows
+				if (g.get("name") or "").lower() == q_lower
+				or (g.get("hotel_guest_name") or "").lower() == q_lower
+			),
+			None,
+		)
+		target = exact_match or guest_rows[0]
+
+		aliases = {x for x in [target.get("name"), target.get("hotel_guest_name"), target.get("customer")] if x}
+		if not aliases:
+			return {"error": f"No customer/guest alias found for '{q}'."}
+
+		alias_list = sorted(aliases)
+		placeholders = ", ".join(["%s"] * len(alias_list))
+
+		payment_row = frappe.db.sql(
+			f"""
+			SELECT COALESCE(SUM(paid_amount), 0) AS total
+			FROM `tabPayment Entry`
+			WHERE docstatus = 1
+			  AND payment_type = 'Receive'
+			  AND party_type = 'Customer'
+			  AND party IN ({placeholders})
+			""",
+			tuple(alias_list),
+			as_dict=True,
+		)
+		payment_entry_total = flt((payment_row[0] or {}).get("total", 0))
+
+		pos_total = 0.0
+		if include_pos:
+			pos_row = frappe.db.sql(
+				f"""
+				SELECT COALESCE(SUM(paid_amount), 0) AS total
+				FROM `tabPOS Invoice`
+				WHERE docstatus = 1
+				  AND customer IN ({placeholders})
+				""",
+				tuple(alias_list),
+				as_dict=True,
+			)
+			pos_total = flt((pos_row[0] or {}).get("total", 0))
+
+		return {
+			"guest": target.get("hotel_guest_name") or target.get("name"),
+			"guest_id": target.get("name"),
+			"customer": target.get("customer") or target.get("name"),
+			"aliases_checked": alias_list,
+			"payment_entry_total": payment_entry_total,
+			"pos_paid_total": pos_total,
+			"total_paid": payment_entry_total + pos_total,
+		}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_guest_payment_total: {e}", "AI Tool Error")
+		return {"error": str(e)}
+
+
 # ── Guest Search ──────────────────────────────────────────────────────────────
 
 def search_guests(query, limit=10):

@@ -27,8 +27,9 @@
       <div>
         <h3 class="text-sm font-bold text-gray-900 mb-3">Select Room to Change</h3>
         <div v-if="!rooms.length" class="text-xs text-gray-400 py-4 text-center border border-gray-100 rounded-lg">No rooms in reservation</div>
+        <div v-else-if="!changeableRooms.length" class="text-xs text-gray-400 py-4 text-center border border-gray-100 rounded-lg">All rooms are currently checked in and cannot be changed.</div>
         <div v-else class="space-y-2">
-          <div v-for="r in rooms" :key="r.room_number"
+          <div v-for="r in changeableRooms" :key="r.room_number"
             class="rounded-xl border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors"
             :class="selectedOldRoom === r.room_number ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:border-gray-300'"
             @click="selectedOldRoom = r.room_number">
@@ -96,10 +97,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { callMethodForm } from '@/lib/api'
 
-const props = defineProps({ reservation: { type: Object, required: true } })
+const props = defineProps({
+  reservation: { type: Object, required: true },
+  preselectedRoom: { type: String, default: '' },
+})
 const emit = defineEmits(['close', 'done'])
 
 const rooms = computed(() => props.reservation?.rooms || [])
+const changeableRooms = computed(() => rooms.value.filter(r => !r.check_in_reference && String(r.status || '').toLowerCase() !== 'checked in'))
 const availableRooms = ref([])
 const selectedOldRoom = ref('')
 const selectedNewRoom = ref('')
@@ -136,9 +141,11 @@ async function loadRooms() {
 onMounted(loadRooms)
 
 watch(
-  rooms,
+  changeableRooms,
   (list) => {
-    if (Array.isArray(list) && list.length === 1) {
+    if (props.preselectedRoom) {
+      selectedOldRoom.value = props.preselectedRoom
+    } else if (Array.isArray(list) && list.length === 1) {
       selectedOldRoom.value = list[0].room_number || ''
     }
   },

@@ -42,8 +42,8 @@
           <button v-if="reservation.docstatus === 0" :disabled="actionLoading" @click="emit('submit-reservation')"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">Submit Reservation</button>
           <button @click="showPaymentModal = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
-          <button @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
-          <button @click="showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
+          <button v-if="!hasAnyCheckedIn" @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
+          <button @click="changeRoomTargetRoom = ''; showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
           <button v-if="showTopCreateInvoice"
             :disabled="actionLoading" @click="emit('create-invoice')"
             class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40">Create Invoice</button>
@@ -122,9 +122,12 @@
               </tr>
               <tr v-for="row in rooms" :key="row.name || row.idx" class="border-t border-gray-100">
                 <td class="px-3 py-2 text-xs text-gray-700">
-                  
-                  {{ row.room_number || '—' }}
-                  
+                  <button
+                    v-if="row.check_in_reference"
+                    @click="goCheckInDetail(row)"
+                    class="font-semibold text-blue-600 hover:underline"
+                  >{{ row.room_number || '—' }}</button>
+                  <span v-else>{{ row.room_number || '—' }}</span>
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ row.room_type || '—' }}</td>
                 <td class="px-3 py-2 text-xs text-gray-500 text-right">
@@ -157,6 +160,11 @@
                         v-else
                         class="inline-flex px-2 py-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded"
                       >Checked In</span>
+                      <button
+                        v-if="row.check_in_reference"
+                        @click="goCheckInDetail(row)"
+                        class="px-2 py-1 text-xs font-semibold text-green-600 bg-green-50 border border-green-100 rounded hover:bg-green-100"
+                      >View Check In</button>
                     </template>
                     <button v-else-if="canCheckInReservation" @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
                     <span
@@ -380,7 +388,7 @@
       <div v-if="showChangeRoomModal" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
         <div class="min-h-screen flex items-start justify-center py-8 px-4">
           <div class="bg-white rounded-2xl shadow-2xl w-full" style="max-width:900px;">
-            <ChangeRoom :reservation="reservation" @close="showChangeRoomModal = false" @done="handleModalDone" />
+            <ChangeRoom :reservation="reservation" :preselected-room="changeRoomTargetRoom" @close="showChangeRoomModal = false" @done="handleModalDone" />
           </div>
         </div>
       </div>
@@ -486,6 +494,7 @@ const emit = defineEmits([
 
 const showAdjustModal = ref(false)
 const showChangeRoomModal = ref(false)
+const changeRoomTargetRoom = ref('')
 const showPaymentModal = ref(false)
 const showPrintModal = ref(false)
 const printFormat = ref('summary')
@@ -515,6 +524,7 @@ function handlePaymentDone() {
 
 const rooms = computed(() => props.reservation?.rooms || [])
 const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn(row)))
+const hasAnyCheckedIn = computed(() => rooms.value.some((row) => isRoomCheckedIn(row)))
 const isCancelled = computed(() => Number(props.reservation?.docstatus || 0) === 2 || String(props.reservation?.status || props.reservation?.reservation_status || '').toLowerCase() === 'cancelled')
 const canCheckInReservation = computed(() => Number(props.reservation?.docstatus || 0) === 1 && !isCancelled.value && pendingRooms.value.length > 0)
 const canSingleTopCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length === 1)
@@ -633,6 +643,11 @@ function isRoomCheckedIn(row) {
 function goCheckOut(row) {
   if (!row?.check_in_reference) return
   router.push('/check-outs/' + row.check_in_reference)
+}
+
+function goCheckInDetail(row) {
+  if (!row?.check_in_reference) return
+  router.push({ name: 'CheckInDetail', params: { id: row.check_in_reference } })
 }
 
 async function checkIn(row) {
