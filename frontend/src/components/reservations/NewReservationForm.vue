@@ -59,29 +59,9 @@
             <option>Split</option>
           </select>
         </div>
-        <div v-if="form.group_billing_mode === 'Central'" class="relative" ref="customerPickerRef">
-          <p class="text-xs text-gray-500 mb-1.5">Master Payer (Customer) <span class="text-red-500">*</span></p>
-          <input
-            v-model="customerSearch"
-            type="text"
-            placeholder="Search customer by name…"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none"
-            @input="onCustomerSearch"
-            @focus="customerDropdownOpen = true"
-          />
-          <div v-if="customerDropdownOpen && filteredCustomers.length > 0"
-            class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-            <div
-              v-for="c in filteredCustomers"
-              :key="c.name"
-              @mousedown.prevent="selectCustomer(c)"
-              class="px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 text-gray-700">
-              {{ c.customer_name || c.name }}
-            </div>
-            <div v-if="filteredCustomers.length === 0 && customerSearch"
-              class="px-3 py-2 text-xs text-gray-400">No customers found.</div>
-          </div>
-          <p v-if="form.group_master_customer" class="mt-1 text-xs text-green-600">✓ {{ form.group_master_customer }}</p>
+        <div v-if="form.group_billing_mode === 'Central'">
+          <p class="text-xs text-gray-500 mb-1.5">Master Payer (Customer)</p>
+          <input v-model="form.group_master_customer" type="text" placeholder="Customer name" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
         </div>
       </div>
     </div>
@@ -180,7 +160,7 @@
           <p class="text-xs text-gray-500 mb-1.5">Rate Code</p>
           <select v-model="selectedRateCode" @change="onRateCodeChange" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
             <option value="">Default rate</option>
-            <option v-for="r in eligibleRateCodes" :key="r.name" :value="r.name">{{ r.rate_code }}{{ r.rate_amount ? ' (' + Number(r.rate_amount).toLocaleString() + ')' : '' }}</option>
+            <option v-for="r in eligibleRateCodes" :key="r.name" :value="r.name">{{ r.rate_code }} – {{ r.rate_type }}</option>
           </select>
         </div>
         <div class="relative" ref="roomPickerRef">
@@ -354,8 +334,7 @@ const props = defineProps({ type: { type: String, required: true } })
 const emit = defineEmits(['close', 'saved'])
 const router = useRouter()
 
-const reservationTypes = ['Individual', 'Corporate', 'Group', 'House Use', 'Complimentary', 'OTA']
-const reservationType = ref(reservationTypes.includes(props.type) ? props.type : 'Individual')
+const reservationType = ref(props.type === 'Corporate' ? 'Corporate' : 'Individual')
 const form = ref({
   from_date: '',
   to_date: '',
@@ -395,45 +374,6 @@ const selectedRateCode = ref('')
 const eligibleRateCodes = ref([])
 const roomBlocks = ref([])
 
-// Customer search for group master payer
-const customerSearch = ref('')
-const customerDropdownOpen = ref(false)
-const customerPickerRef = ref(null)
-const allCustomers = ref([])
-const filteredCustomers = computed(() => {
-  const q = customerSearch.value.trim().toLowerCase()
-  if (!q) return allCustomers.value.slice(0, 20)
-  return allCustomers.value.filter(c => (c.customer_name || c.name).toLowerCase().includes(q)).slice(0, 20)
-})
-
-async function loadCustomers() {
-  try {
-    const rows = await callMethod('frappe.client.get_list', {
-      doctype: 'Customer',
-      fields: ['name', 'customer_name'],
-      order_by: 'customer_name asc',
-      limit_page_length: 500,
-    })
-    allCustomers.value = Array.isArray(rows) ? rows : []
-  } catch { allCustomers.value = [] }
-}
-
-function onCustomerSearch() {
-  customerDropdownOpen.value = true
-}
-
-function selectCustomer(c) {
-  form.value.group_master_customer = c.customer_name || c.name
-  customerSearch.value = c.customer_name || c.name
-  customerDropdownOpen.value = false
-}
-
-function handleCustomerClickOutside(e) {
-  if (customerPickerRef.value && !customerPickerRef.value.contains(e.target)) {
-    customerDropdownOpen.value = false
-  }
-}
-
 const filteredAvailableRooms = computed(() => {
   const q = roomSearch.value.trim().toLowerCase()
   if (!q) return availableRooms.value
@@ -457,15 +397,8 @@ function handleClickOutside(e) {
   }
 }
 
-onMounted(() => {
-  document.addEventListener('mousedown', handleClickOutside)
-  document.addEventListener('mousedown', handleCustomerClickOutside)
-  loadCustomers()
-})
-onUnmounted(() => {
-  document.removeEventListener('mousedown', handleClickOutside)
-  document.removeEventListener('mousedown', handleCustomerClickOutside)
-})
+onMounted(() => document.addEventListener('mousedown', handleClickOutside))
+onUnmounted(() => document.removeEventListener('mousedown', handleClickOutside))
 
 const corporateGuestsResource = createResource({
   url: 'frappe.client.get_list',
@@ -524,38 +457,28 @@ async function loadEligibleRateCodes() {
     const codes = await callMethod('rhohotel.rhocom_hotel.utils.billing_routing.get_eligible_rate_codes', {
       reservation_type: reservationType.value,
       check_in_date: form.value.from_date || undefined,
-      room_type: selectedRoomType.value || undefined,
-      nights: nightsCount.value || undefined,
     })
     eligibleRateCodes.value = Array.isArray(codes) ? codes : []
-    if (selectedRateCode.value && !eligibleRateCodes.value.some((r) => r.name === selectedRateCode.value)) {
-      selectedRateCode.value = ''
-    }
   } catch {
     eligibleRateCodes.value = []
-    selectedRateCode.value = ''
   }
 }
 
 watch(
-  () => [reservationType.value, form.value.from_date, form.value.to_date, selectedRoomType.value],
+  () => [reservationType.value, form.value.from_date],
   () => loadEligibleRateCodes(),
   { immediate: true },
 )
 
-async function onRateCodeChange() {
+function onRateCodeChange() {
   // When a rate code changes, apply its meal plan to all existing room rows
   const rateDoc = eligibleRateCodes.value.find((r) => r.name === selectedRateCode.value)
-  if (form.value.from_date && form.value.to_date && nightsCount.value > 0) {
-    await loadAvailableRooms()
-  }
+  if (!rateDoc) return
   selectedRooms.value = selectedRooms.value.map((room) => ({
     ...room,
-    rate_per_night: getPricedRoomRate(room),
-    room_total: Math.max(0, (getPricedRoomRate(room) * nightsCount.value) - getRoomDiscount(room)),
-    rate_code: rateDoc ? rateDoc.name : '',
-    meal_plan_snapshot: rateDoc ? (rateDoc.meal_plan || '') : '',
-    cancellation_policy_snapshot: rateDoc ? (rateDoc.cancellation_policy || '') : '',
+    rate_code: rateDoc.name,
+    meal_plan_snapshot: rateDoc.meal_plan || '',
+    cancellation_policy_snapshot: rateDoc.cancellation_policy || '',
   }))
 }
 
@@ -588,11 +511,6 @@ function getRoomAmount(room) {
   return Number(room?.room_total ?? room?.total_amount ?? room?.amount ?? fallbackAmount)
 }
 
-function getPricedRoomRate(room) {
-  const pricedRoom = availableRooms.value.find((r) => r.name === room.name)
-  return pricedRoom ? getRoomRate(pricedRoom) : getRoomRate(room)
-}
-
 const subTotal = computed(() => selectedRooms.value.reduce((acc, room) => acc + (getRoomRate(room) * nightsCount.value), 0))
 const discountAmount = computed(() => {
   const discount = Number(form.value.discount || 0)
@@ -603,7 +521,7 @@ const discountAmount = computed(() => {
 const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
 
 watch(
-  () => [form.value.from_date, form.value.to_date, selectedRoomType.value, selectedRateCode.value],
+  () => [form.value.from_date, form.value.to_date, selectedRoomType.value],
   () => {
     availableRooms.value = []
     selectedRoom.value = []
@@ -644,7 +562,6 @@ async function loadAvailableRooms() {
       check_in_dt: form.value.from_date,
       check_out_dt: form.value.to_date,
       room_type: selectedRoomType.value || undefined,
-      rate_code: selectedRateCode.value || undefined,
     })
     availableRooms.value = Array.isArray(rows) ? rows : []
   } catch {
@@ -679,10 +596,7 @@ function removeRoom(roomName) {
 }
 
 function goToNewGuest() {
-  router.push({
-    path: '/guests/new',
-    query: { return_to: 'new_reservation', type: reservationType.value },
-  })
+  router.push('/guests/new')
 }
 
 function validateForm() {

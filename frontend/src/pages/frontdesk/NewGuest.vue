@@ -407,7 +407,7 @@ async function createGuest() {
 
     await uploadIdDocument(created.name)
 
-    // Route back to the correct context
+    // Issue #15: If we came from check-in page, route back there
     if (route.query.return_to === 'checkin') {
       router.push({
         path: '/check-ins/new',
@@ -418,16 +418,6 @@ async function createGuest() {
           nights: route.query.nights || '',
           check_in_dt: route.query.check_in_dt || '',
         },
-      })
-    } else if (route.query.return_to === 'new_reservation') {
-      router.push({
-        name: 'NewReservation',
-        query: { type: route.query.type || 'Individual' },
-      })
-    } else if (route.query.return_to === 'saved_reservation' && route.query.reservation_id) {
-      router.push({
-        name: 'SavedReservation',
-        params: { id: route.query.reservation_id },
       })
     } else {
       router.push({ name: 'GuestProfile', params: { id: created.name } })

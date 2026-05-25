@@ -58,16 +58,10 @@ async function loadReservation() {
         }))
       : []
 
-    const paidAmount = (Array.isArray(doc.payment_entries) ? doc.payment_entries : [])
-      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0)
-    const totalAmount = parseFloat(doc.total_amount || doc.net_total || 0)
-
     reservation.value = {
       ...doc,
       status: doc.reservation_status || doc.status || 'Draft',
       rooms,
-      paid_amount: paidAmount,
-      balance: Math.max(0, totalAmount - paidAmount),
     }
   } catch (error) {
     reservation.value = {}
@@ -84,35 +78,7 @@ function openPayments() {
 
 function goToCheckIn() {
   const id = getReservationId()
-  const res = reservation.value
-  const rooms = res?.rooms || []
-  const firstRoom = rooms.find(r => !r.check_in_reference) || rooms[0]
-
-  const query = {}
-  if (id) query.reservation = id
-  if (firstRoom?.room_number) query.room = firstRoom.room_number
-  if (firstRoom?.room_type) query.room_type = firstRoom.room_type
-
-  const guestName = res?.primary_guest_name || res?.customer || ''
-  if (guestName) query.guest_name = guestName
-  if (res?.hotel_guest || res?.corporate_guest) query.guest = res.hotel_guest || res.corporate_guest
-
-  const nights = firstRoom?.number_of_nights || res?.number_of_nights
-  if (nights) query.nights = nights
-  if (res?.to_date) query.checkout_date = res.to_date
-
-  const resDiscountType = res?.discount_type || 'None'
-  if (resDiscountType && resDiscountType !== 'None') {
-    query.discount_type = resDiscountType
-    query.discount = res?.discount || 0
-  }
-
-  const payments = Array.isArray(res?.payment_entries) ? res.payment_entries : []
-  const advancePaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
-  if (advancePaid > 0) query.advance_paid = advancePaid
-  if (res?.sales_invoice) query.sales_invoice = res.sales_invoice
-
-  router.push({ name: 'NewCheckIn', query })
+  router.push({ name: 'NewCheckIn', query: id ? { reservation: id } : undefined })
 }
 
 function goToIndividualCheckIn(row) {

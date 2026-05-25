@@ -1,0 +1,153 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:page_title",
+ "creation": "2026-05-22 04:01:14.525290",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "hotel",
+  "page_type",
+  "page_title",
+  "slug",
+  "published",
+  "hero_label",
+  "hero_title",
+  "hero_subtitle",
+  "cta_label",
+  "cta_url",
+  "intro_secondary_image",
+  "intro_image",
+  "hero_image",
+  "intro_kicker",
+  "intro_title",
+  "intro_text",
+  "sections",
+  "sort_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "hotel",
+   "fieldtype": "Link",
+   "label": "Hotel",
+   "options": "Hotel Profile"
+  },
+  {
+   "fieldname": "page_type",
+   "fieldtype": "Select",
+   "label": "Page Type",
+   "options": "Home\nRooms\nExperiences\nDining\nSpa\nGym\nEvents\nContact\nBooking\nAbout"
+  },
+  {
+   "fieldname": "page_title",
+   "fieldtype": "Data",
+   "label": "Page Title",
+   "unique": 1
+  },
+  {
+   "fieldname": "slug",
+   "fieldtype": "Data",
+   "label": "Slug"
+  },
+  {
+   "default": "0",
+   "fieldname": "published",
+   "fieldtype": "Check",
+   "label": "Published"
+  },
+  {
+   "fieldname": "hero_label",
+   "fieldtype": "Data",
+   "label": "Hero Label"
+  },
+  {
+   "fieldname": "hero_title",
+   "fieldtype": "Data",
+   "label": "Hero Title"
+  },
+  {
+   "fieldname": "hero_subtitle",
+   "fieldtype": "Small Text",
+   "label": "Hero Subtitle"
+  },
+  {
+   "fieldname": "hero_image",
+   "fieldtype": "Attach Image",
+   "label": "Hero Image"
+  },
+  {
+   "fieldname": "intro_kicker",
+   "fieldtype": "Data",
+   "label": "Intro Kicker"
+  },
+  {
+   "fieldname": "intro_title",
+   "fieldtype": "Data",
+   "label": "Intro Title"
+  },
+  {
+   "fieldname": "intro_text",
+   "fieldtype": "Text Editor",
+   "label": "Intro Text"
+  },
+  {
+   "fieldname": "intro_image",
+   "fieldtype": "Attach Image",
+   "label": "Intro Image"
+  },
+  {
+   "fieldname": "intro_secondary_image",
+   "fieldtype": "Attach Image",
+   "label": "Intro Secondary Image"
+  },
+  {
+   "fieldname": "cta_label",
+   "fieldtype": "Data",
+   "label": "Cta Label"
+  },
+  {
+   "fieldname": "cta_url",
+   "fieldtype": "Data",
+   "label": "Cta Url"
+  },
+  {
+   "fieldname": "sections",
+   "fieldtype": "Table",
+   "label": "Sections",
+   "options": "Hotel Page Section"
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-22 10:43:43.187428",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel Website Page",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

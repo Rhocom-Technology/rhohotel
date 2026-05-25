@@ -33,37 +33,6 @@
       </div>
     </div>
 
-    <!-- Invoice Status Banner -->
-    <div v-if="reservation.sales_invoice" class="mb-5 rounded-xl border px-5 py-4"
-      :class="invoiceIsPaid ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="text-xs font-bold" :class="invoiceIsPaid ? 'text-green-700' : 'text-amber-700'">
-          Invoice {{ reservation.sales_invoice }} —
-          <span v-if="invoiceIsPaid">Fully/Partially Paid (₦{{ Number(invoicePaidAmount).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }} paid)</span>
-          <span v-else>Unpaid</span>
-        </span>
-      </div>
-      <p class="text-xs" :class="invoiceIsPaid ? 'text-green-600' : 'text-amber-600'">
-        <span v-if="!invoiceIsPaid">After applying this adjustment, the existing invoice will be <strong>cancelled</strong> and a new invoice will be created with the updated amount.</span>
-        <span v-else-if="totalImpact > 0.01">After applying this adjustment, an <strong>additional charge invoice</strong> of {{ formatCurrency(totalImpact) }} will be created to cover the extended stay.</span>
-        <span v-else-if="totalImpact < -0.01">After applying this adjustment, you will need to <strong>manually create a credit note</strong> against the existing invoice for the reduced amount.</span>
-        <span v-else>The invoice total matches the new stay amount — no invoice change required.</span>
-      </p>
-    </div>
-
-    <!-- Invoice Adjust Result -->
-    <div v-if="invoiceResult" class="mb-5 rounded-xl border px-5 py-4"
-      :class="invoiceResult.status === 'cancelled_and_recreated' || invoiceResult.status === 'recreated' || invoiceResult.status === 'adjustment_created' ? 'bg-green-50 border-green-200' : invoiceResult.status === 'reduction_manual' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'">
-      <p class="text-xs font-bold mb-1"
-        :class="['cancelled_and_recreated','recreated','adjustment_created'].includes(invoiceResult.status) ? 'text-green-700' : invoiceResult.status === 'reduction_manual' ? 'text-amber-700' : 'text-gray-700'">
-        Invoice Update: {{ invoiceResultLabel }}
-      </p>
-      <p v-if="invoiceResult.sales_invoice" class="text-xs text-green-600">New invoice created: <strong>{{ invoiceResult.sales_invoice }}</strong></p>
-      <p v-if="invoiceResult.cancelled_invoice" class="text-xs text-gray-500">Previous invoice cancelled: {{ invoiceResult.cancelled_invoice }}</p>
-      <p v-if="invoiceResult.adjustment_invoice" class="text-xs text-green-600">Adjustment invoice created: <strong>{{ invoiceResult.adjustment_invoice }}</strong> ({{ formatCurrency(invoiceResult.difference) }})</p>
-      <p v-if="invoiceResult.message" class="text-xs text-amber-600">{{ invoiceResult.message }}</p>
-    </div>
-
     <!-- Body -->
       <div v-if="reservation.docstatus !== 1" class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-700">
         ⚠️ This reservation must be submitted before adjusting the stay.
@@ -230,7 +199,7 @@
       <button @click="$emit('close')" class="px-5 py-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
       <button :disabled="submitting || !canApply" @click="apply"
         class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">
-        {{ submitting ? 'Applying…' : (reservation.sales_invoice ? 'Apply & Update Invoice' : 'Apply Stay Adjustment') }}
+        {{ submitting ? 'Applying…' : 'Apply Stay Adjustment' }}
       </button>
     </div>
 
@@ -238,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
@@ -253,46 +222,6 @@ const discountValue = ref(Number(props.reservation.discount || 0))
 const adjustmentNotes = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
-
-// Invoice status
-const invoiceGrandTotal = ref(0)
-const invoiceOutstanding = ref(0)
-const invoiceResult = ref(null)
-
-const invoicePaidAmount = computed(() => invoiceGrandTotal.value - invoiceOutstanding.value)
-const invoiceIsPaid = computed(() => invoicePaidAmount.value > 0.01)
-
-const invoiceResultLabel = computed(() => {
-  if (!invoiceResult.value) return ''
-  const map = {
-    cancelled_and_recreated: 'Previous invoice cancelled — new invoice created',
-    recreated: 'Invoice recreated with updated amount',
-    adjustment_created: 'Adjustment invoice created for extension charge',
-    reduction_manual: 'Manual credit note required',
-    no_change: 'No invoice change needed',
-    no_invoice: 'No invoice was linked',
-  }
-  return map[invoiceResult.value.status] || invoiceResult.value.status
-})
-
-async function fetchInvoiceStatus() {
-  if (!props.reservation.sales_invoice) return
-  try {
-    const inv = await callMethodForm('frappe.client.get_value', {
-      doctype: 'Sales Invoice',
-      filters: props.reservation.sales_invoice,
-      fieldname: JSON.stringify(['grand_total', 'outstanding_amount']),
-    })
-    if (inv) {
-      invoiceGrandTotal.value = parseFloat(inv.grand_total || 0)
-      invoiceOutstanding.value = parseFloat(inv.outstanding_amount || 0)
-    }
-  } catch { /* ignore — display fallback */ }
-}
-
-onMounted(() => {
-  fetchInvoiceStatus()
-})
 
 // Earliest valid checkout: one day after check-in
 const minCheckoutDate = computed(() => {
@@ -366,7 +295,7 @@ const canApply = computed(() => hasDateChanges.value && isRangeValid.value)
 
 async function apply() {
   if (!canApply.value) return
-  submitting.value = true; errorMsg.value = ''; invoiceResult.value = null
+  submitting.value = true; errorMsg.value = ''
   try {
     const params = {
       reservation_name: props.reservation.name,
@@ -379,28 +308,6 @@ async function apply() {
       'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.adjust_reservation',
       params,
     )
-
-    // Reconcile the linked invoice based on payment status
-    if (props.reservation.sales_invoice) {
-      try {
-        const result = await callMethodForm(
-          'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.adjust_invoice_for_reservation',
-          { reservation_name: props.reservation.name },
-        )
-        invoiceResult.value = result
-        // If manual credit note required, don't auto-close — let user read the message
-        if (result?.status === 'reduction_manual') {
-          submitting.value = false
-          return
-        }
-      } catch (invErr) {
-        // Invoice adjustment failed — still succeeded with dates, show warning
-        invoiceResult.value = { status: 'error', message: String(invErr?.message || 'Invoice update failed. Please amend manually.') }
-        submitting.value = false
-        return
-      }
-    }
-
     emit('done'); emit('close')
   } catch (error) {
     errorMsg.value = String(error?.message || 'Adjustment failed.')

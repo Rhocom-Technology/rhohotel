@@ -69,15 +69,11 @@
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600" />
         </div>
         <div style="flex:1;min-width:120px;">
-          <p class="text-xs text-gray-500 mb-1.5">Reservation Type</p>
+          <p class="text-xs text-gray-500 mb-1.5">Source</p>
           <select v-model="filterSource" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-            <option value="">All Types</option>
+            <option value="">All Sources</option>
             <option value="Individual">Individual</option>
             <option value="Corporate">Corporate</option>
-            <option value="Group">Group</option>
-            <option value="House Use">House Use</option>
-            <option value="Complimentary">Complimentary</option>
-            <option value="OTA">OTA</option>
           </select>
         </div>
         <div class="flex items-center gap-2 pb-0.5">
@@ -186,7 +182,7 @@
     <!-- New Reservation Type Selector Modal -->
     <Teleport to="body">
       <div v-if="showNewReservation" class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.55);" @click.self="showNewReservation = false">
-        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full mx-4" style="max-width:680px;">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full mx-4" style="max-width:400px;">
           <h2 class="text-lg font-bold text-gray-900 mb-2">New Reservation</h2>
           <p class="text-xs text-gray-400 mb-6">Select the reservation type to continue.</p>
           <div class="grid grid-cols-2 gap-4">
@@ -207,47 +203,7 @@
               <Building2 class="w-8 h-8 text-gray-400 group-hover:text-blue-500" />
               <div class="text-center">
                 <p class="text-sm font-bold text-gray-900">Corporate</p>
-                <p class="text-xs text-gray-400 mt-0.5">Company account</p>
-              </div>
-            </button>
-            <button
-              @click="startNewReservation('Group')"
-              class="flex flex-col items-center gap-3 p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
-            >
-              <Building2 class="w-8 h-8 text-gray-400 group-hover:text-blue-500" />
-              <div class="text-center">
-                <p class="text-sm font-bold text-gray-900">Group</p>
-                <p class="text-xs text-gray-400 mt-0.5">Room block booking</p>
-              </div>
-            </button>
-            <button
-              @click="startNewReservation('House Use')"
-              class="flex flex-col items-center gap-3 p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
-            >
-              <Building2 class="w-8 h-8 text-gray-400 group-hover:text-blue-500" />
-              <div class="text-center">
-                <p class="text-sm font-bold text-gray-900">House Use</p>
-                <p class="text-xs text-gray-400 mt-0.5">Internal stay</p>
-              </div>
-            </button>
-            <button
-              @click="startNewReservation('Complimentary')"
-              class="flex flex-col items-center gap-3 p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
-            >
-              <User class="w-8 h-8 text-gray-400 group-hover:text-blue-500" />
-              <div class="text-center">
-                <p class="text-sm font-bold text-gray-900">Complimentary</p>
-                <p class="text-xs text-gray-400 mt-0.5">Comp room stay</p>
-              </div>
-            </button>
-            <button
-              @click="startNewReservation('OTA')"
-              class="flex flex-col items-center gap-3 p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
-            >
-              <Building2 class="w-8 h-8 text-gray-400 group-hover:text-blue-500" />
-              <div class="text-center">
-                <p class="text-sm font-bold text-gray-900">OTA</p>
-                <p class="text-xs text-gray-400 mt-0.5">Online channel</p>
+                <p class="text-xs text-gray-400 mt-0.5">Bulk group booking</p>
               </div>
             </button>
           </div>

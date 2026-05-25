@@ -6,8 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "rate_code",
-  "room_type",
-  "rate_amount",
+  "rate_type",
   "description",
   "column_break_1",
   "market_segment",
@@ -38,25 +37,16 @@
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
+   "unique": 1,
    "description": "Short alphanumeric code identifying this rate plan (e.g. BAR, CORP-ACME, WKD-PKG). Used for rate lookups and snapshots on reservations."
   },
   {
-   "fieldname": "room_type",
-   "fieldtype": "Link",
-   "label": "Room Type",
-   "options": "Hotel Room Type",
+   "fieldname": "rate_type",
+   "fieldtype": "Data",
+   "label": "Rate Type",
    "reqd": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1,
-   "description": "Room type this rate applies to."
-  },
-  {
-   "fieldname": "rate_amount",
-   "fieldtype": "Currency",
-   "label": "Rate Amount",
-   "reqd": 1,
-   "in_list_view": 1,
-   "description": "Nightly (or hourly) rate charged for this room type under this rate plan."
+   "description": "Human-readable rate category name (e.g. Best Available Rate, Corporate Rate, Weekend Package). Displayed on folios and reports."
   },
   {
    "fieldname": "description",

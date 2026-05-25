@@ -150,7 +150,7 @@
             </div>
             <div class="flex items-center justify-between text-xs mb-1.5">
               <span class="text-gray-500">Open tables</span>
-              <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-600 rounded-full">{{ shiftStats.open_tables ?? 0 }} active</span>
+              <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-600 rounded-full">1 active</span>
             </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Unposted room charges</span>
