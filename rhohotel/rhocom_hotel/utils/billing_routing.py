@@ -197,14 +197,21 @@ def resolve_payer(reservation_name, charge_category="Room"):
     """
     res = _get_reservation(reservation_name)
     rtype = res.reservation_type or "Individual"
-    charge_category = charge_category or "Room"
 
     # ------------------------------------------------------------------
-    # Hard-coded overrides for types that have unambiguous routing.
+    # Hard-coded overrides for types that have unambiguous routing
     # ------------------------------------------------------------------
 
     if rtype == "House Use":
-        # Internal use: route all charges internally unless a future policy says otherwise.
+        # Internal use – no customer billing; route to cost centre
+        return {
+            "customer": None,
+            "payer_type": "Internal (Cost Centre)",
+            "cost_center": res.internal_cost_center or None,
+        }
+
+    if rtype == "Complimentary":
+        # Complimentary – no customer billing
         return {
             "customer": None,
             "payer_type": "Internal (Cost Centre)",
@@ -255,7 +262,11 @@ def resolve_payer(reservation_name, charge_category="Room"):
         if payer_type == "OTA Virtual Card":
             # For OTA Collect model, we bill to the OTA's own customer account.
             # Look up the Market Place's linked customer if available.
-            ota_customer = _get_marketplace_customer(res.ota_channel)
+            ota_customer = None
+            if res.ota_channel:
+                ota_customer = frappe.db.get_value(
+                    "Market Place", res.ota_channel, "customer"
+                )
             return {
                 "customer": ota_customer or _get_check_in_guest_customer(res),
                 "payer_type": "OTA Virtual Card",
@@ -270,7 +281,7 @@ def resolve_payer(reservation_name, charge_category="Room"):
             }
 
     # ------------------------------------------------------------------
-    # Operational defaults when no explicit routing rule is configured.
+    # Default fallback: guest pays
     # ------------------------------------------------------------------
     if rtype == "Complimentary" and charge_category == "Room":
         return {
@@ -320,23 +331,20 @@ def resolve_payer(reservation_name, charge_category="Room"):
 
 
 @frappe.whitelist()
-def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None, nights=None):
+def get_eligible_rate_codes(reservation_type, check_in_date=None):
     """
     Return Hotel Room Rate records eligible for the given reservation type / source channel.
 
     Args:
         reservation_type: Individual, Corporate, Group, OTA, House Use, Complimentary
         check_in_date:    Date string for validity window filtering (optional)
-        room_type:        Optional Hotel Room Type to require a tariff for
-        nights:           Optional stay length for min/max stay checks
 
     Returns:
-        list[dict] with rate_code, market_segment, meal_plan, description
+        list[dict] with rate_code, rate_type, market_segment, meal_plan, description
     """
     from frappe.utils import getdate, nowdate
 
     today = getdate(check_in_date or nowdate())
-    stay_nights = int(nights or 0)
 
     # Map reservation type to channel eligibility field
     channel_field_map = {
@@ -363,25 +371,17 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
     rates = frappe.get_all(
         "Hotel Room Rate",
         filters=filters,
-        fields=["name", "rate_code", "market_segment", "meal_plan",
-                "description", "valid_from", "valid_to", "cancellation_policy",
-                "min_stay", "max_stay", "room_type", "rate_amount"],
+        fields=["name", "rate_code", "rate_type", "market_segment", "meal_plan",
+                "description", "valid_from", "valid_to", "cancellation_policy"],
         order_by="rate_code asc",
     )
 
-    # Filter by validity window and room type
+    # Filter by validity window
     eligible = []
     for r in rates:
         if r.valid_from and getdate(r.valid_from) > today:
             continue
         if r.valid_to and getdate(r.valid_to) < today:
-            continue
-        if stay_nights and r.min_stay and stay_nights < int(r.min_stay):
-            continue
-        if stay_nights and r.max_stay and stay_nights > int(r.max_stay):
-            continue
-        # If the rate is bound to a specific room type, only include it when it matches
-        if room_type and r.room_type and r.room_type != room_type:
             continue
         eligible.append(r)
 

@@ -230,7 +230,7 @@
       <button @click="$emit('close')" class="px-5 py-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
       <button :disabled="submitting || !canApply" @click="apply"
         class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">
-        {{ submitting ? 'Applying…' : (reservation.sales_invoice ? 'Apply & Update Invoice' : 'Apply Stay Adjustment') }}
+        {{ submitting ? 'Applying…' : 'Apply Stay Adjustment' }}
       </button>
     </div>
 
@@ -238,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
@@ -366,7 +366,7 @@ const canApply = computed(() => hasDateChanges.value && isRangeValid.value)
 
 async function apply() {
   if (!canApply.value) return
-  submitting.value = true; errorMsg.value = ''; invoiceResult.value = null
+  submitting.value = true; errorMsg.value = ''
   try {
     const params = {
       reservation_name: props.reservation.name,

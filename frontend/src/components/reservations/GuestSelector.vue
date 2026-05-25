@@ -75,7 +75,6 @@
         </div>
       </div>
     </div>
-    </Teleport>
   </div>
 </template>
 
@@ -95,22 +94,6 @@ const root = ref(null)
 const dropdown = ref(null)
 const searchInput = ref(null)
 const open = ref(false)
-const dropdownStyle = ref({})
-
-function updateDropdownPosition() {
-  if (!root.value) return
-  const rect = root.value.getBoundingClientRect()
-  dropdownStyle.value = {
-    top: `${rect.bottom + window.scrollY + 4}px`,
-    left: `${rect.left + window.scrollX}px`,
-    minWidth: '280px',
-  }
-}
-
-function toggleOpen() {
-  if (!open.value) updateDropdownPosition()
-  open.value = !open.value
-}
 const query = ref('')
 const results = ref([])
 const searching = ref(false)

@@ -9,7 +9,7 @@
         <div class="px-8 pt-8 pb-4 flex items-start justify-between border-b border-gray-100">
           <div>
             <h2 class="text-2xl font-bold text-gray-900">Room {{ room.room_number }}</h2>
-            <p class="text-xs text-gray-400 mt-0.5">{{ isReserved ? 'Reserved room — upcoming arrival' : 'Occupied room stay control modal' }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">Occupied room stay control modal</p>
           </div>
           <button @click="$emit('close')"
             class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm flex-shrink-0">✕</button>
@@ -19,10 +19,9 @@
 
           <!-- Status Banner -->
           <div class="rounded-xl border px-5 py-4"
-            :class="isReady ? 'bg-green-50 border-green-100' : isReserved ? 'bg-purple-50 border-purple-100' : room.overdue ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'">
+            :class="isReady ? 'bg-green-50 border-green-100' : room.overdue ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'">
             <div class="flex items-center gap-2 mb-2">
               <span v-if="isReady" class="px-2.5 py-0.5 text-xs font-bold bg-green-100 text-green-600 rounded-full">READY</span>
-              <span v-else-if="isReserved" class="px-2.5 py-0.5 text-xs font-bold bg-purple-100 text-purple-600 rounded-full">RESERVED</span>
               <span v-else class="px-2.5 py-0.5 text-xs font-bold bg-blue-100 text-blue-600 rounded-full">{{ room.status?.toUpperCase() }}</span>
               <span class="px-2.5 py-0.5 text-xs font-bold rounded-full"
                 :class="room.housekeeping_status === 'Clean' || room.housekeeping_status === 'Inspected' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'">
@@ -32,28 +31,8 @@
             </div>
             <p class="text-xs text-gray-500 leading-relaxed">
               <span v-if="isReady">Room is vacant and clean — ready for a new check-in.</span>
-              <span v-else-if="isReserved">This room has an upcoming reservation. Open the reservation to initiate check-in or view guest details.</span>
               <span v-else>Guest is in-house. Review stay details, invoice position, outstanding amount, and departure actions from this modal.</span>
             </p>
-          </div>
-
-          <!-- Reserved Room Info -->
-          <div v-if="isReserved">
-            <h3 class="text-sm font-bold text-gray-900 mb-3">Upcoming Reservation</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-              <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
-                <p class="text-xs text-gray-400 mb-1">Expected Guest</p>
-                <p class="text-sm font-bold text-gray-900">{{ room.current_guest || room.reserved_for || '—' }}</p>
-              </div>
-              <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
-                <p class="text-xs text-gray-400 mb-1">Arrival Date</p>
-                <p class="text-sm font-bold text-gray-900">{{ room.reservation_arrival || room.check_in_date || '—' }}</p>
-              </div>
-              <div v-if="room.reservation" class="bg-purple-50 rounded-xl border border-purple-100 px-4 py-3">
-                <p class="text-xs text-gray-400 mb-1">Reservation ID</p>
-                <p class="text-sm font-bold text-purple-700">{{ room.reservation }}</p>
-              </div>
-            </div>
           </div>
 
           <!-- Room Details -->
@@ -163,7 +142,7 @@
                 @click="goCheckInFromReservation">Check In Guest</button>
               <button v-if="!isReady && !isReserved" class="px-4 py-2.5 text-xs font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
                 @click="goCheckout">Check-out</button>
-              <button v-if="!isReady && !isReserved" class="px-4 py-2.5 text-xs font-bold text-white bg-teal-500 rounded-lg hover:bg-teal-600 transition-colors"
+              <button v-if="!isReady" class="px-4 py-2.5 text-xs font-bold text-white bg-teal-500 rounded-lg hover:bg-teal-600 transition-colors"
                 @click="goCheckin">Open Check-in</button>
               <button class="px-4 py-2.5 text-xs font-bold text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 transition-colors"
                 @click="goMaintenance">Maintenance Request</button>
@@ -195,8 +174,6 @@ const isReady = computed(() =>
   props.room.status === 'Vacant' &&
   (props.room.housekeeping_status === 'Clean' || props.room.housekeeping_status === 'Inspected')
 )
-
-const isReserved = computed(() => props.room.status === 'Reserved')
 
 // Check-in detail (fetched when modal opens if there is an active check-in)
 const checkinDetail = ref(null)

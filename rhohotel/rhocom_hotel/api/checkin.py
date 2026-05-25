@@ -72,8 +72,7 @@ def get_checkin_detail(name):
     try:
         invoices = frappe.db.sql("""
             SELECT name AS invoice, grand_total AS amount, outstanding_amount, is_return,
-                   posting_date, status,
-                   COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice') AS invoice_type
+                   posting_date, status, 'Sales Invoice' AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
@@ -725,8 +724,7 @@ def get_checkout_detail(check_in_name):
     try:
         si_rows = frappe.db.sql("""
             SELECT name AS invoice_id, grand_total AS amount, outstanding_amount, is_return,
-                   posting_date, status,
-                   COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice') AS invoice_type
+                   posting_date, status, 'Sales Invoice' AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC

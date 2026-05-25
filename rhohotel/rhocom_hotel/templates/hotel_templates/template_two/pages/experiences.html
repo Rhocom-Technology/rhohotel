@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#2C3E35' }};
+  --web-secondary: {{ hotel.secondary_color or '#BFA37E' }};
+  --web-accent: {{ hotel.accent_color or '#8E6E5E' }};
+">
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
+
+  {% set experiences_media = page_media.get("experiences", {}) %}
+  {% set general_media = page_media.get("general", {}) %}
+
+  {% set experiences_hero_images = experiences_media.get("hero_image", []) %}
+  {% set experiences_main_images = experiences_media.get("main_image", []) %}
+  {% set experiences_side_images = experiences_media.get("side_image", []) %}
+  {% set experiences_card_images = experiences_media.get("card_image", []) %}
+  {% set experiences_background_images = experiences_media.get("background_image", []) %}
+  {% set experiences_cta_images = experiences_media.get("cta_image", []) %}
+
+  {% set general_background_images = general_media.get("background_image", []) %}
+  {% set general_cta_images = general_media.get("cta_image", []) %}
+
+  {% if experiences_hero_images|length > 0 %}
+    {% set experiences_hero_image = experiences_hero_images[0].image %}
+    {% set experiences_hero_alt = experiences_hero_images[0].alt_text or "Experiences" %}
+  {% else %}
+    {% set experiences_hero_image = "" %}
+    {% set experiences_hero_alt = "Experiences" %}
+  {% endif %}
+
+  {% if experiences_main_images|length > 0 %}
+    {% set experiences_main_image = experiences_main_images[0].image %}
+    {% set experiences_main_alt = experiences_main_images[0].alt_text or "Leisure Designed Around Calm" %}
+  {% else %}
+    {% set experiences_main_image = "" %}
+    {% set experiences_main_alt = "Leisure Designed Around Calm" %}
+  {% endif %}
+
+  {% if experiences_side_images|length > 0 %}
+    {% set experiences_side_image = experiences_side_images[0].image %}
+    {% set experiences_side_alt = experiences_side_images[0].alt_text or "Leisure detail" %}
+  {% else %}
+    {% set experiences_side_image = "" %}
+    {% set experiences_side_alt = "Leisure detail" %}
+  {% endif %}
+
+  {% if experiences_background_images|length > 0 %}
+    {% set experiences_background_image = experiences_background_images[0].image %}
+  {% elif general_background_images|length > 0 %}
+    {% set experiences_background_image = general_background_images[0].image %}
+  {% else %}
+    {% set experiences_background_image = "" %}
+  {% endif %}
+
+  {% if experiences_cta_images|length > 0 %}
+    {% set experiences_cta_image = experiences_cta_images[0].image %}
+    {% set experiences_cta_alt = experiences_cta_images[0].alt_text or "Design Your Stay Around What You Love" %}
+  {% elif general_cta_images|length > 0 %}
+    {% set experiences_cta_image = general_cta_images[0].image %}
+    {% set experiences_cta_alt = general_cta_images[0].alt_text or "Design Your Stay Around What You Love" %}
+  {% else %}
+    {% set experiences_cta_image = "" %}
+    {% set experiences_cta_alt = "Design Your Stay Around What You Love" %}
+  {% endif %}
+
+  <header class="web-page-hero">
+    {% if experiences_hero_image %}
+      <img
+        src="{{ experiences_hero_image }}"
+        alt="{{ experiences_hero_alt }}"
+        class="web-page-hero-bg"
+      />
+    {% else %}
+      <div class="web-page-hero-bg web-image-placeholder">
+        <i class="fa-solid fa-water-ladder"></i>
+      </div>
+    {% endif %}
+
+    <div class="container">
+      <div class="web-breadcrumb-label">Beyond the Room</div>
+
+      <h1>Experiences</h1>
+
+      <p>
+        Discover the moments that make a stay feel complete: calm lounges, restful corners,
+        poolside ease, attentive service, and beautiful hospitality details.
+      </p>
+    </div>
+  </header>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row align-items-center g-5">
+
+        <div class="col-lg-6">
+          <div class="web-editorial-image">
+            {% if experiences_main_image %}
+              <img
+                src="{{ experiences_main_image }}"
+                alt="{{ experiences_main_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-water-ladder"></i>
+              </div>
+            {% endif %}
+
+            {% if experiences_side_image %}
+              <img
+                src="{{ experiences_side_image }}"
+                alt="{{ experiences_side_alt }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-image-placeholder-small">
+                <i class="fa-solid fa-couch"></i>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="web-kicker">Hotel Mood</div>
+
+          <h2 class="web-section-title">
+            Leisure Designed Around Calm
+          </h2>
+
+          <p class="web-section-text">
+            {{ hotel.hotel_name or "Our hotel" }} is designed for more than overnight stays.
+            From quiet mornings to relaxed evenings, each space helps guests slow down, feel comfortable,
+            and enjoy the rhythm of a thoughtful hotel experience.
+          </p>
+
+          <div class="web-actions mt-4">
+            <a href="/hotel/booking" class="web-btn-solid">Reserve Now</a>
+            <a href="/hotel/contact" class="web-btn-ghost">Ask a Question</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="text-center">
+        <div class="web-kicker">Curated Experiences</div>
+
+        <h2 class="web-section-title">
+          Choose Your Kind of Stay
+        </h2>
+
+        <p class="web-section-subtitle">
+          Whether your visit is quiet, social, romantic, wellness-focused, or business-friendly,
+          the hotel experience can be shaped around the kind of stay you want.
+        </p>
+      </div>
+
+      <div class="row g-4">
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            {% if experiences_card_images|length > 0 %}
+              <img
+                src="{{ experiences_card_images[0].image }}"
+                alt="{{ experiences_card_images[0].alt_text or 'Pool Day' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-water-ladder"></i>
+              </div>
+            {% endif %}
+
+            <div class="web-tile-content">
+              <h3>Pool Day</h3>
+              <p>Relax outdoors with calm service, refreshing drinks, and a restful setting for slow afternoons.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+          <div class="web-tile-card">
+            {% if experiences_card_images|length > 1 %}
+              <img
+                src="{{ experiences_card_images[1].image }}"
+                alt="{{ experiences_card_images[1].alt_text or 'Evening Lounge' }}"
+              />
+            {% else %}
+              <div class="web-image-placeholder">
+                <i class="fa-solid fa-couch"></i>
+              </div>
+            {% endif %}
+
+            <div class="web-tile-content">
+              <h3>Evening Lounge</h3>
+              <p>Enjoy warm lighting, comfortable seating, quiet conversation, and a relaxed evening mood.</p>
+            </div>
+          </div>
+        </div>
+
+        {% if hotel.enable_spa or hotel.enable_gym %}
+          <div class="col-lg-4 col-md-6">
+            <div class="web-tile-card">
+              {% if experiences_card_images|length > 2 %}
+                <img
+                  src="{{ experiences_card_images[2].image }}"
+                  alt="{{ experiences_card_images[2].alt_text or 'Wellness Day' }}"
+                />
+              {% else %}
+                <div class="web-image-placeholder">
+                  <i class="fa-solid fa-spa"></i>
+                </div>
+              {% endif %}
+
+              <div class="web-tile-content">
+                <h3>Wellness Day</h3>
+                <p>Pair movement, rest, pool time, and wellness moments for a more balanced hotel stay.</p>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if hotel.enable_dining %}
+          <div class="col-lg-4 col-md-6">
+            <a href="/hotel/dining" class="d-block">
+              <div class="web-tile-card">
+                {% if experiences_card_images|length > 3 %}
+                  <img
+                    src="{{ experiences_card_images[3].image }}"
+                    alt="{{ experiences_card_images[3].alt_text or 'Dining Experience' }}"
+                  />
+                {% else %}
+                  <div class="web-image-placeholder">
+                    <i class="fa-solid fa-utensils"></i>
+                  </div>
+                {% endif %}
+
+                <div class="web-tile-content">
+                  <h3>Dining Experience</h3>
+                  <p>Enjoy breakfast, relaxed meals, lounge drinks, and private dining moments during your stay.</p>
+                </div>
+              </div>
+            </a>
+          </div>
+        {% endif %}
+
+        {% if hotel.enable_events %}
+          <div class="col-lg-4 col-md-6">
+            <a href="/hotel/events" class="d-block">
+              <div class="web-tile-card">
+                {% if experiences_card_images|length > 4 %}
+                  <img
+                    src="{{ experiences_card_images[4].image }}"
+                    alt="{{ experiences_card_images[4].alt_text or 'Events and Halls' }}"
+                  />
+                {% else %}
+                  <div class="web-image-placeholder">
+                    <i class="fa-solid fa-champagne-glasses"></i>
+                  </div>
+                {% endif %}
+
+                <div class="web-tile-content">
+                  <h3>Gatherings</h3>
+                  <p>Host meetings, celebrations, receptions, and private moments in thoughtful hotel spaces.</p>
+                </div>
+              </div>
+            </a>
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </section>
+
+  {% if experiences_background_image %}
+    <section
+      class="web-fixed-band"
+      style="background-image: url('{{ experiences_background_image }}');"
+    >
+  {% else %}
+    <section class="web-fixed-band">
+  {% endif %}
+    <div class="container">
+      <div class="web-fixed-box">
+        <div class="web-kicker">Slow Living</div>
+
+        <h2 class="web-section-title text-white">
+          Let the Hotel Become Part of the Memory
+        </h2>
+
+        <p>
+          A stay is more than a room when every space supports rest, ease, conversation,
+          service, and the small details guests remember.
+        </p>
+
+        <a href="/hotel/booking" class="web-btn-primary">
+          Reserve Experience
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-5">
+          <div class="web-kicker">Guest Rhythm</div>
+
+          <h2 class="web-section-title">
+            How the Day Can Flow
+          </h2>
+
+          <p class="web-section-text">
+            From arrival to night rest, the experience page helps guests imagine a complete stay,
+            not just a place to sleep.
+          </p>
+        </div>
+
+        <div class="col-lg-7">
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-sun"></i>
+            </div>
+            <div>
+              <h3>Morning</h3>
+              <p>Start with breakfast, quiet planning, fresh air, and a comfortable pace for the day ahead.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-water"></i>
+            </div>
+            <div>
+              <h3>Afternoon</h3>
+              <p>Spend time by the pool, settle into the lounge, or enjoy the calm corners of the hotel.</p>
+            </div>
+          </div>
+
+          {% if hotel.enable_spa or hotel.enable_gym %}
+            <div class="web-feature-line">
+              <div class="web-feature-icon">
+                <i class="fa-solid fa-spa"></i>
+              </div>
+              <div>
+                <h3>Wellness</h3>
+                <p>
+                  {% if hotel.enable_spa and hotel.enable_gym %}
+                    Use the spa and gym to balance movement, rest, recovery, and quiet self-care.
+                  {% elif hotel.enable_spa %}
+                    Visit the spa for relaxing treatments and peaceful wellness moments.
+                  {% else %}
+                    Use the gym to keep your routine active while away from home.
+                  {% endif %}
+                </p>
+              </div>
+            </div>
+          {% endif %}
+
+          {% if hotel.enable_dining %}
+            <div class="web-feature-line">
+              <div class="web-feature-icon">
+                <i class="fa-solid fa-martini-glass-citrus"></i>
+              </div>
+              <div>
+                <h3>Evening</h3>
+                <p>Move into dinner, drinks, soft lighting, and relaxed conversations after the day slows down.</p>
+              </div>
+            </div>
+          {% endif %}
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-moon"></i>
+            </div>
+            <div>
+              <h3>Night</h3>
+              <p>Return to a calm room prepared for privacy, comfort, proper rest, and an easy morning after.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="web-cta-split">
+        <div class="row g-0 align-items-center">
+          <div class="col-lg-5">
+            {% if experiences_cta_image %}
+              <img
+                src="{{ experiences_cta_image }}"
+                alt="{{ experiences_cta_alt }}"
+                class="web-cta-image rounded"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
+                <i class="fa-solid fa-concierge-bell"></i>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="col-lg-7">
+            <div class="web-cta-content">
+              <div class="web-kicker">Reserve With Us</div>
+
+              <h2>Design Your Stay Around What You Love</h2>
+
+              <p>
+                Choose your room, plan your pace, and let {{ hotel.hotel_name or "our hotel" }}
+                support the stay with warm service, practical comfort, and memorable hospitality.
+              </p>
+
+              <div class="web-actions">
+                <a href="/hotel/booking" class="web-btn-primary">Book Now</a>
+                <a href="/hotel/contact" class="web-btn-outline">Contact Hotel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+  
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+</body>
+</html>
