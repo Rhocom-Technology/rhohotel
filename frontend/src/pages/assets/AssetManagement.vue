@@ -145,11 +145,6 @@
           <p class="text-xs text-gray-500">View and manage all registered assets.</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 transition-colors"
-          @click="$router.push('/assets-mgmt/repair')">
-          <p class="text-xs font-bold text-gray-900 mb-1">Asset Repair</p>
-          <p class="text-xs text-gray-500">Track repair requests and approvals.</p>
-        </div>
-        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 transition-colors"
           @click="$router.push('/assets-mgmt/maintenance')">
           <p class="text-xs font-bold text-gray-900 mb-1">Asset Maintenance</p>
           <p class="text-xs text-gray-500">Manage preventive maintenance schedules.</p>

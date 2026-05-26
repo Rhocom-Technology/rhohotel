@@ -2,7 +2,17 @@
   <div class="space-y-5">
     <!-- Header -->
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Night Audit Summary Report</h1>
+      <!-- <h1 class="text-2xl font-bold text-gray-900">Night Audit Summary Report</h1> -->
+        <div class="flex justify-between items-center gap-3 flex-wrap">
+          
+        <h1 class="text-2xl font-bold text-gray-900">Night Audit Summary Report</h1>
+       <button
+          @click="downloadReport"
+          class="bg-green-600 text-white px-4 py-2 rounded-lg">
+          Download
+        </button>
+  
+    </div>
       <p class="text-xs text-gray-400 mt-1">
         Daily revenue, payments, room movement, occupancy, exceptions and audit transaction summary.
       </p>
@@ -709,4 +719,19 @@ function statusClass(status) {
 onMounted(() => {
   fetchReport()
 })
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    audit_date: filters.value.audit_date || '',
+    revenue_type: filters.value.revenue_type || '',
+    pos_profile: filters.value.pos_profile || '',
+    status: filters.value.status || '',
+    search: searchQuery.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_night_audit_summary_report?${params.toString()}`,
+    '_blank'
+  )
+}
 </script>

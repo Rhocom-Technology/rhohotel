@@ -1,10 +1,18 @@
 <template>
   <div class="space-y-5">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Corporate Account Statement</h1>
-      <p class="text-xs text-gray-400 mt-1">
-        Customer account ledger showing invoices, payments, debits, credits and running balances.
-      </p>
+
+      <div class="flex justify-between items-center gap-3 flex-wrap">
+
+              <h1 class="text-2xl font-bold text-gray-900">Corporate Account Statement</h1>
+            <button
+                @click="downloadReport"
+                class="bg-green-600 text-white px-4 py-2 rounded-lg">
+                Download
+              </button>
+
+    </div>
+
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
@@ -634,4 +642,19 @@ function transactionClass(type) {
 onMounted(() => {
   fetchReport()
 })
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    customer: filters.value.customer || '',
+    transaction_type: filters.value.transaction_type || '',
+    search: searchQuery.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_corporate_account_statement_report?${params.toString()}`,
+    '_blank'
+  )
+}
 </script>

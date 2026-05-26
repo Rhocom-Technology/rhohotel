@@ -8,13 +8,18 @@
     "field_order": [
         "request_details_section",
         "location_type",
-        "room",
-        "location",
         "issue_type",
+        "reported_by",
+        "witness_employee",
         "priority",
         "column_break_nyvj",
+        "room",
+        "asset_location",
+        "asset",
+        "location",
         "status",
-        "reported_by",
+        "requesting_department",
+        "witness_department",
         "reported_at",
         "issue_section",
         "issue_description",
@@ -41,7 +46,7 @@
             "in_list_view": 0,
             "in_standard_filter": 1,
             "label": "Location Type",
-            "options": "Room\nOther Location",
+            "options": "Room\nAsset Location\nOther Location",
             "reqd": 1
         },
         {
@@ -55,6 +60,26 @@
             "depends_on": "eval:doc.location_type === 'Room'",
             "mandatory_depends_on": "eval:doc.location_type === 'Room'"
         },
+        {
+            "fieldname": "asset_location",
+            "fieldtype": "Link",
+            "options": "Location",
+            "in_filter": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "label": "Asset Location",
+            "depends_on": "eval:doc.location_type === 'Asset Location'",
+            "mandatory_depends_on": "eval:doc.location_type === 'Asset Location'"
+        },
+        {
+  "fieldname": "asset",
+  "fieldtype": "Link",
+  "label": "Asset",
+  "options": "Asset",
+  "in_list_view": 1,
+  "in_standard_filter": 1,
+  "ignore_user_permissions": 1
+},
         {
             "fieldname": "location",
             "fieldtype": "Data",
@@ -108,7 +133,32 @@
             "in_list_view": 1,
             "label": "Reported By",
             "options": "Employee",
-            "reqd": 1
+            "reqd": 1,
+            "ignore_user_permissions": 1
+        },
+        {
+            "fieldname": "witness_employee",
+            "fieldtype": "Link",
+            "label": "Supervisor / Witness",
+            "options": "Employee",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "reqd": 1,
+            "ignore_user_permissions": 1
+        },
+       {
+            "fieldname": "requesting_department",
+            "fieldtype": "Link",
+            "label": "Requesting Department",
+            "options": "Department",
+            "read_only": 1
+        },
+        {
+            "fieldname": "witness_department",
+            "fieldtype": "Link",
+            "label": "Witness Department",
+            "options": "Department",
+            "read_only": 1
         },
         {
             "fieldname": "reported_at",
@@ -116,6 +166,7 @@
             "in_filter": 1,
             "in_list_view": 1,
             "in_standard_filter": 1,
+            "default":"Now",
             "label": "Reported At",
             "reqd": 1
         },
@@ -222,6 +273,12 @@
             "share": 1,
             "write": 1
         },
+        {
+  "role": "Employee",
+  "read": 1,
+  "report": 1,
+  "print": 1
+},
         {
             "create": 1,
             "delete": 0,

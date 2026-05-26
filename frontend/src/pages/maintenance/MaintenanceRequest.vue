@@ -134,6 +134,7 @@
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Location</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Issue Type</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Reported By</th>
+              <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Witness</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Reported At</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Priority</th>
               <th class="text-left text-xs font-semibold text-gray-400 px-4 py-3">Approved</th>
@@ -151,7 +152,14 @@
                 <p class="text-xs text-gray-400 mt-0.5">{{ req.location_type || '—' }}</p>
               </td>
               <td class="px-4 py-4 text-xs text-gray-600">{{ req.issue_type }}</td>
-              <td class="px-4 py-4 text-xs text-gray-600">{{ req.reported_by_name || req.reported_by || '—' }}</td>
+              <td class="px-4 py-4">
+                <p class="text-xs text-gray-700">{{ req.reported_by_name || req.reported_by || '—' }}</p>
+                <p v-if="req.requesting_department" class="text-[10px] text-gray-400 mt-0.5">{{ req.requesting_department }}</p>
+              </td>
+              <td class="px-4 py-4">
+                <p class="text-xs text-gray-700">{{ req.witness_employee_name || req.witness_employee || '—' }}</p>
+                <p v-if="req.witness_department" class="text-[10px] text-gray-400 mt-0.5">{{ req.witness_department }}</p>
+              </td>
               <td class="px-4 py-4 text-xs text-gray-500">{{ formatDate(req.reported_at) }}</td>
               <td class="px-4 py-4">
                 <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="priorityClass(req.priority)">
@@ -176,7 +184,7 @@
               </td>
             </tr>
             <tr v-if="requests.length === 0">
-              <td colspan="9" class="text-center py-12 text-xs text-gray-400">No maintenance requests found</td>
+              <td colspan="10" class="text-center py-12 text-xs text-gray-400">No maintenance requests found</td>
             </tr>
           </tbody>
         </table>
@@ -231,17 +239,13 @@ const total = ref(0)
 const totalPages = ref(1)
 
 const statsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_request_dashboard', auto: false })
-const listResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_request_list', auto: false })
+const listResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_request_list', auto: false })
 
 async function fetchStats() {
   statsLoading.value = true
-  try {
-    stats.value = await statsResource.fetch()
-  } catch (e) {
-    console.error('[MRList] stats error:', e)
-  } finally {
-    statsLoading.value = false
-  }
+  try { stats.value = await statsResource.fetch() }
+  catch (e) { console.error('[MRList] stats error:', e) }
+  finally { statsLoading.value = false }
 }
 
 async function fetchRequests(newPage = 1) {
@@ -249,12 +253,12 @@ async function fetchRequests(newPage = 1) {
   listLoading.value = true
   try {
     const res = await listResource.fetch({
-      search: search.value || null,
-      filter_priority: filterPriority.value || null,
-      filter_status: filterStatus.value || null,
+      search:           search.value || null,
+      filter_priority:  filterPriority.value || null,
+      filter_status:    filterStatus.value || null,
       filter_issue_type: filterIssueType.value || null,
-      page: page.value,
-      page_size: pageSize.value
+      page:             page.value,
+      page_size:        pageSize.value,
     })
     requests.value = res?.requests || []
     total.value = res?.total || 0
@@ -288,29 +292,29 @@ function formatDate(dt) {
 
 function priorityClass(p) {
   return {
-    'Critical': 'bg-red-100 text-red-600',
-    'High':     'bg-orange-100 text-orange-500',
-    'Medium':   'bg-yellow-100 text-yellow-600',
-    'Low':      'bg-blue-50 text-blue-500',
+    Critical: 'bg-red-100 text-red-600',
+    High:     'bg-orange-100 text-orange-500',
+    Medium:   'bg-yellow-100 text-yellow-600',
+    Low:      'bg-blue-50 text-blue-500',
   }[p] || 'bg-gray-100 text-gray-500'
 }
 
 function statusClass(s) {
   return {
-    'Pending':     'bg-blue-50 text-blue-600 border-blue-200',
-    'Approved':    'bg-green-50 text-green-600 border-green-200',
+    Pending:       'bg-blue-50 text-blue-600 border-blue-200',
+    Approved:      'bg-green-50 text-green-600 border-green-200',
     'In Progress': 'bg-purple-50 text-purple-600 border-purple-200',
-    'Completed':   'bg-green-50 text-green-600 border-green-200',
-    'Rejected':    'bg-red-50 text-red-500 border-red-200',
-    'Cancelled':   'bg-red-50 text-red-500 border-red-200',
+    Completed:     'bg-green-50 text-green-600 border-green-200',
+    Rejected:      'bg-red-50 text-red-500 border-red-200',
+    Cancelled:     'bg-red-50 text-red-500 border-red-200',
   }[s] || 'bg-gray-50 text-gray-500 border-gray-200'
 }
 
 function approvedClass(a) {
   return {
-    'Approved': 'text-green-600',
-    'Rejected': 'text-red-500',
-    'Pending':  'text-gray-400',
+    Approved: 'text-green-600',
+    Rejected: 'text-red-500',
+    Pending:  'text-gray-400',
   }[a] || 'text-gray-400'
 }
 

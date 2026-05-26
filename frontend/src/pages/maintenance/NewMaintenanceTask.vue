@@ -19,29 +19,21 @@
     <!-- Header -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
-        <h2 class="text-sm font-bold text-gray-900">Task Setup Control</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Create corrective or preventive work, assign technicians, and prepare the task for execution.</p>
+        <h2 class="text-sm font-bold text-gray-900">New Maintenance Task</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Create a standalone corrective, preventive, or routine task and assign it to a technician.</p>
       </div>
       <div class="flex items-center gap-2">
         <button @click="router.push('/maintenance/list')"
           class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
           Cancel
         </button>
-        <button @click="createTask(false)" :disabled="creating"
-          class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5">
-          <svg v-if="creating === 'draft'" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-          </svg>
-          {{ creating === 'draft' ? 'Saving...' : 'Save Draft' }}
-        </button>
-        <button @click="createTask(true)" :disabled="creating"
+        <button @click="createTask" :disabled="!!creating"
           class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-1.5">
-          <svg v-if="creating === 'create'" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+          <svg v-if="creating" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          {{ creating === 'create' ? 'Creating...' : 'Create Task' }}
+          {{ creating ? 'Creating...' : 'Create Task' }}
         </button>
       </div>
     </div>
@@ -80,6 +72,7 @@
                 class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
                 :class="attempted && !form.priority ? 'border-red-300 bg-red-50' : 'border-gray-200'">
                 <option value="">Select priority</option>
+                <option value="Critical">Critical</option>
                 <option value="High">High</option>
                 <option value="Medium">Medium</option>
                 <option value="Low">Low</option>
@@ -94,17 +87,19 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Location <span class="text-red-400">*</span></p>
-              <input v-model="form.location" type="text" placeholder="Enter location"
+              <input v-model="form.location" type="text" placeholder="e.g. Room 204, Generator Room, Laundry..."
                 class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
                 :class="attempted && !form.location ? 'border-red-300 bg-red-50' : 'border-gray-200'" />
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Maintenance Request</p>
-              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">Linked after creation (optional)</div>
+              <p class="text-xs text-gray-500 mb-1.5">Maintenance Request <span class="text-gray-400">(optional)</span></p>
+              <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">
+                Auto-linked if created from a request
+              </div>
             </div>
           </div>
           <div>
-            <p class="text-xs text-gray-500 mb-1.5">Issue / Task Description</p>
+            <p class="text-xs text-gray-500 mb-1.5">Task Description</p>
             <textarea v-model="form.task_description" rows="3"
               placeholder="Describe fault, maintenance need, symptoms, or inspection reason..."
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
@@ -113,7 +108,7 @@
 
         <!-- Assignment -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Assignment Section</h3>
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Assignment</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Assigned Technician <span class="text-red-400">*</span></p>
@@ -122,13 +117,12 @@
                 :class="attempted && !form.assigned_technician ? 'border-red-300 bg-red-50' : 'border-gray-200'">
                 <option value="">Select technician</option>
                 <option v-for="t in technicians" :key="t.name" :value="t.name">
-                  {{ t.technician_name }}
-                  {{ t.availability !== 'Available' ? `(${t.availability})` : '' }}
+                  {{ t.technician_name }}{{ t.availability !== 'Available' ? ` (${t.availability})` : '' }}
                 </option>
               </select>
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Supervisor</p>
+              <p class="text-xs text-gray-500 mb-1.5">Supervisor / Witness</p>
               <select v-model="form.supervisor"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600">
                 <option value="">Select supervisor</option>
@@ -150,21 +144,39 @@
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
           </div>
+
+          <!-- Asset -->
+          <div class="mt-4">
+            <p class="text-xs text-gray-500 mb-1.5">Asset <span class="text-gray-400">(optional)</span></p>
+            <select v-model="form.asset"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700">
+              <option value="">— no specific asset —</option>
+              <option v-for="a in assets" :key="a.name" :value="a.name">
+                {{ a.asset_name || a.name }}{{ a.asset_category ? ` · ${a.asset_category}` : '' }}
+              </option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">Link to a specific ERPNext asset if this task relates to one.</p>
+          </div>
         </div>
 
-        <!-- Parts Planning -->
+        <!-- Parts Used / Collected from Store -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Parts / Material Planning <span class="text-xs font-normal text-gray-400">(optional)</span></h3>
+          <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-900">Parts Used / Collected from Store</h3>
+            <p class="text-xs text-gray-400 mt-0.5">Items to be issued from the store for this task <span class="text-gray-300">(optional)</span></p>
+          </div>
           <div class="overflow-x-auto">
             <table class="w-full">
               <thead>
                 <tr class="border-b border-gray-100">
-                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-1/4">Item</th>
-                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-14">Qty</th>
-                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-20">UOM</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Item</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">Qty</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">UOM</th>
                   <th class="text-left text-xs font-medium text-gray-500 pb-2">Warehouse</th>
-                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Store Impact</th>
-                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">Cost</th>
+                   <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">
+                      Available Qty
+                    </th>
+                  
                   <th class="pb-2 w-6"></th>
                 </tr>
               </thead>
@@ -181,39 +193,111 @@
                   </td>
                   <td class="py-2.5 pr-2">
                     <input v-model.number="part.qty" type="number" min="0.001"
-                      class="w-14 px-2 py-1.5 text-xs border border-gray-200 rounded text-center" />
+                      class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center" />
                   </td>
                   <td class="py-2.5 pr-2">
                     <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
                   </td>
                   <td class="py-2.5 pr-2">
-                    <input v-model="part.warehouse" type="text" placeholder="Warehouse"
-                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded" />
-                  </td>
-                  <td class="py-2.5 pr-2">
-                    <select v-model="part.store_impact" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
-                      <option value="Reduce Stock">Reduce Stock</option>
-                      <option value="No Impact">No Impact</option>
-                      <option value="Return to Store">Return to Store</option>
+                    <select v-model="part.warehouse"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
+                      <option value="">— select warehouse —</option>
+                      <option v-for="w in warehouses" :key="w.name" :value="w.name">
+                        {{ w.warehouse_name || w.name }}
+                      </option>
                     </select>
                   </td>
                   <td class="py-2.5 pr-2">
-                    <input v-model.number="part.cost" type="number" min="0"
-                      class="w-24 px-2 py-1.5 text-xs border border-gray-200 rounded" />
+                    <div class="px-2 py-1.5 text-xs text-gray-500">
+                      {{ part.available_qty || 0 }}
+                    </div>
                   </td>
                   <td class="py-2.5">
                     <button @click="partsUsed.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
                   </td>
                 </tr>
                 <tr v-if="partsUsed.length === 0">
-                  <td colspan="7" class="py-4 text-center text-xs text-gray-400">No parts added.</td>
+                  <td colspan="6" class="py-4 text-center text-xs text-gray-400">No parts added yet.</td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="7" class="pt-3">
-                    <button @click="partsUsed.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '', cost: 0, store_impact: 'Reduce Stock' })"
-                      class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Row</button>
+                  <td colspan="6" class="pt-3">
+                    <button @click="partsUsed.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '', available_qty: 0, stock_entry: '' })"
+                      class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Part</button>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Parts Returned to Store -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-900">Parts Returned to Store</h3>
+            <p class="text-xs text-gray-400 mt-0.5">Items to be returned to the warehouse after task completion <span class="text-gray-300">(optional)</span></p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Item</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">Qty</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">UOM</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Warehouse</th>
+                   <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">
+                    Available Qty
+                  </th>
+                  
+                  <th class="pb-2 w-6"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50">
+                <tr v-for="(part, idx) in partsReturned" :key="idx">
+                  <td class="py-2.5 pr-2">
+                    <select v-model="part.item_code" @change="onPartSelect(part)"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
+                      <option value="">— select item —</option>
+                      <option v-for="item in stockItems" :key="item.name" :value="item.name">
+                        {{ item.item_name || item.name }}
+                      </option>
+                    </select>
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <input v-model.number="part.qty" type="number" min="0.001"
+                      class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center" />
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
+                  </td>
+                  <td class="py-2.5 pr-2">
+                    <select v-model="part.warehouse"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
+                      <option value="">— select warehouse —</option>
+                      <option v-for="w in warehouses" :key="w.name" :value="w.name">
+                        {{ w.warehouse_name || w.name }}
+                      </option>
+                    </select>
+                  </td>
+                  <td class="py-2.5 pr-2">
+                  <div class="px-2 py-1.5 text-xs text-gray-500">
+                    {{ part.available_qty || 0 }}
+                  </div>
+                </td>
+                  <td class="py-2.5">
+                    <button @click="partsReturned.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
+                  </td>
+                </tr>
+                <tr v-if="partsReturned.length === 0">
+                  <td colspan="6" class="py-4 text-center text-xs text-gray-400">No parts to return yet.</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6" class="pt-3">
+                    <button @click="partsReturned.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '',  available_qty: 0,stock_entry: ''})"
+                      class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Returned Part</button>
                   </td>
                 </tr>
               </tfoot>
@@ -223,7 +307,7 @@
 
         <!-- Checklist -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Maintenance Checklist Template</h3>
+          <h3 class="text-sm font-bold text-gray-900 mb-4">Checklist</h3>
           <div class="flex items-center gap-6 flex-wrap">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" v-model="form.fault_diagnosed" class="w-4 h-4 accent-blue-500" />
@@ -235,10 +319,13 @@
             </label>
           </div>
         </div>
+
       </div>
 
       <!-- Right -->
       <div class="space-y-4">
+
+        <!-- Status Setup -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Status Setup</h3>
           <div class="mb-3">
@@ -257,7 +344,7 @@
               <span class="text-xs text-gray-700">Require supervisor verification on completion</span>
             </label>
           </div>
-          <div class="mb-3">
+          <div>
             <p class="text-xs text-gray-500 mb-1.5">Preparation Notes</p>
             <textarea v-model="form.completion_notes" rows="4"
               placeholder="Instructions, escalation note, or safety warning for technician..."
@@ -265,9 +352,9 @@
           </div>
         </div>
 
-        <!-- Live preview -->
+        <!-- Live Preview -->
         <div class="bg-blue-50 rounded-xl border border-blue-100 p-4">
-          <h4 class="text-xs font-bold text-blue-700 mb-3">New Task Preview</h4>
+          <h4 class="text-xs font-bold text-blue-700 mb-3">Task Preview</h4>
           <div class="space-y-1.5">
             <div class="flex justify-between">
               <span class="text-xs text-blue-500">Task Type</span>
@@ -275,10 +362,7 @@
             </div>
             <div class="flex justify-between">
               <span class="text-xs text-blue-500">Priority</span>
-              <span class="text-xs font-semibold"
-                :class="{'text-red-600': form.priority === 'High', 'text-yellow-600': form.priority === 'Medium', 'text-blue-800': form.priority === 'Low' || !form.priority}">
-                {{ form.priority || '—' }}
-              </span>
+              <span class="text-xs font-semibold" :class="priorityTextClass(form.priority)">{{ form.priority || '—' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-xs text-blue-500">Location</span>
@@ -289,12 +373,24 @@
               <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ technicianLabel || '—' }}</span>
             </div>
             <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Supervisor</span>
+              <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ supervisorLabel || '—' }}</span>
+            </div>
+            <div class="flex justify-between">
               <span class="text-xs text-blue-500">Status</span>
               <span class="text-xs font-medium text-blue-800">{{ form.status }}</span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-xs text-blue-500">Parts</span>
+            <div class="flex justify-between pt-1 border-t border-blue-200">
+              <span class="text-xs text-blue-500">Parts Used</span>
               <span class="text-xs font-medium text-blue-800">{{ partsUsed.filter(p => p.item_code).length }} item(s)</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-xs text-blue-500">Parts Returned</span>
+              <span class="text-xs font-medium text-blue-800">{{ partsReturned.filter(p => p.item_code).length }} item(s)</span>
+            </div>
+            <div v-if="form.asset" class="flex justify-between">
+              <span class="text-xs text-blue-500">Asset</span>
+              <span class="text-xs font-medium text-blue-800 truncate max-w-[140px]">{{ form.asset }}</span>
             </div>
           </div>
         </div>
@@ -308,6 +404,13 @@
             </li>
           </ul>
         </div>
+
+        <!-- Note about workflow -->
+        <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+          <p class="text-xs text-gray-500 font-medium mb-1">ℹ️ Note</p>
+          <p class="text-xs text-gray-400">Tasks created here start in <strong>Draft</strong> state. The technician must use the Frappe desk workflow to move through Store Approval → Witness → Hotel Manager before the task can be completed.</p>
+        </div>
+
       </div>
     </div>
   </div>
@@ -319,12 +422,15 @@ import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 
 const router = useRouter()
-const creating = ref(false) // 'draft' | 'create' | false
+const creating = ref(false)
 const attempted = ref(false)
 const technicians = ref([])
 const supervisors = ref([])
 const stockItems = ref([])
+const warehouses = ref([])
+const assets = ref([])
 const partsUsed = ref([])
+const partsReturned = ref([])
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 const toasts = ref([])
@@ -338,38 +444,42 @@ function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) 
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 const form = ref({
-  task_type: '',
-  priority: 'Medium',
-  status: 'Open',
-  location: '',
-  task_description: '',
+  task_type:           '',
+  priority:            'Medium',
+  status:              'Open',
+  location:            '',
+  task_description:    '',
   assigned_technician: '',
-  supervisor: '',
-  start_time: '',
-  end_time: '',
+  supervisor:          '',
+  start_time:          '',
+  end_time:            '',
   inspection_required: true,
-  fault_diagnosed: false,
-  test_run_passed: false,
-  completion_notes: '',
+  fault_diagnosed:     false,
+  test_run_passed:     false,
+  completion_notes:    '',
+  asset:               '',
 })
 
-// ─── Computed helpers ─────────────────────────────────────────────────────────
-const technicianLabel = computed(() => {
-  const t = technicians.value.find(x => x.name === form.value.assigned_technician)
-  return t?.technician_name || null
-})
+// ─── Computed ─────────────────────────────────────────────────────────────────
+const technicianLabel = computed(() =>
+  technicians.value.find(x => x.name === form.value.assigned_technician)?.technician_name || null
+)
+
+const supervisorLabel = computed(() =>
+  supervisors.value.find(x => x.name === form.value.supervisor)?.employee_name || null
+)
 
 const validationErrors = computed(() => {
   if (!attempted.value) return []
   const errors = []
-  if (!form.value.task_type) errors.push('Task type is required')
-  if (!form.value.priority) errors.push('Priority is required')
-  if (!form.value.location) errors.push('Location is required')
+  if (!form.value.task_type)           errors.push('Task type is required')
+  if (!form.value.priority)            errors.push('Priority is required')
+  if (!form.value.location)            errors.push('Location is required')
   if (!form.value.assigned_technician) errors.push('Assigned technician is required')
   return errors
 })
 
-// ─── Part item select: auto-fill UOM ─────────────────────────────────────────
+// ─── Part select: auto-fill UOM ───────────────────────────────────────────────
 function onPartSelect(part) {
   const item = stockItems.value.find(i => i.name === part.item_code)
   if (item) {
@@ -379,57 +489,58 @@ function onPartSelect(part) {
 }
 
 // ─── Resources ────────────────────────────────────────────────────────────────
-const techResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_technicians_for_task', auto: false })
-const supResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_supervisors_for_task', auto: false })
-const itemsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
+const techResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_technicians_for_task', auto: false })
+const supResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_supervisors_for_task', auto: false })
+const itemsResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
+const whResource      = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_warehouses_for_parts', auto: false })
+const assetRes        = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_assets_for_request', auto: false })
 const createResource_ = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.create_maintenance_task', auto: false })
 
 async function loadDropdowns() {
-  const [tRes, sRes, iRes] = await Promise.all([
+  const [tRes, sRes, iRes, wRes, aRes] = await Promise.all([
     techResource.fetch(),
     supResource.fetch(),
     itemsResource.fetch(),
+    whResource.fetch(),
+    assetRes.fetch(),
   ])
   technicians.value = tRes || []
   supervisors.value = sRes || []
-  stockItems.value = iRes || []
+  stockItems.value  = iRes || []
+  warehouses.value  = wRes || []
+  assets.value      = aRes || []
 }
 
-// ─── Create task ──────────────────────────────────────────────────────────────
-async function createTask(navigate = true) {
+// ─── Create ───────────────────────────────────────────────────────────────────
+async function createTask() {
   attempted.value = true
   if (validationErrors.value.length) {
-    validationErrors.value.forEach(e => showToast(e, 'error'))
+    validationErrors.value.forEach(e => showToast(e, 'warning'))
     return
   }
 
-  creating.value = navigate ? 'create' : 'draft'
+  creating.value = true
   try {
     const res = await createResource_.fetch({
-      task_data: form.value,
-      parts_used: partsUsed.value.filter(p => p.item_code)
+      task_data:      form.value,
+      parts_used:     partsUsed.value.filter(p => p.item_code),
+      parts_returned: partsReturned.value.filter(p => p.item_code),
     })
-    console.log('[NewMaintenanceTask] create:', res)
     if (res?.success && res?.task_name) {
       showToast('Task created: ' + res.task_name, 'success')
-      setTimeout(() => {
-        if (navigate) {
-          router.replace({ name: 'MaintenanceTask', params: { id: res.task_name } })
-        } else {
-          router.replace('/maintenance/list')
-        }
-      }, 600)
+      setTimeout(() => router.replace({ name: 'MaintenanceTask', params: { id: res.task_name } }), 600)
     } else {
-      const errMsg = res?.error || JSON.stringify(res)
-      console.error('[NewMaintenanceTask] failed:', errMsg)
-      showToast('Failed to create: ' + errMsg)
+      showToast('Failed to create: ' + (res?.error || JSON.stringify(res)))
     }
   } catch (e) {
-    console.error('[NewMaintenanceTask] exception:', e)
     showToast('Error: ' + (e?.message || String(e)))
   } finally {
     creating.value = false
   }
+}
+
+function priorityTextClass(p) {
+  return { Critical: 'text-red-600', High: 'text-orange-500', Medium: 'text-yellow-600', Low: 'text-blue-500' }[p] || 'text-blue-800'
 }
 
 onMounted(loadDropdowns)

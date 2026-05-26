@@ -23,7 +23,17 @@
   "column_break_fkpz",
   "paystack_secret_key",
   "consumable_warehouse_section",
-  "consumable_warehouse"
+  "consumable_warehouse",
+
+  "reports_print_formats_section",
+"daily_occupancy_print_format",
+"guest_stay_history_print_format",
+"night_audit_print_format",
+"pos_sales_print_format",
+"housekeeping_productivity_print_format",
+"corporate_billing_print_format",
+"corporate_account_statement_print_format",
+"asset_maintenance_print_format"
  ],
  "fields": [
   {
@@ -122,7 +132,62 @@
    "fieldname": "enable_late_checkout_charges",
    "fieldtype": "Check",
    "label": "Enable Late Check-out Charges"
-  }
+  },
+
+  
+  {
+  "fieldname": "reports_print_formats_section",
+  "fieldtype": "Section Break",
+  "label": "Reports / Print Formats"
+},
+{
+  "fieldname": "daily_occupancy_print_format",
+  "fieldtype": "Link",
+  "label": "Daily Occupancy Report Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "guest_stay_history_print_format",
+  "fieldtype": "Link",
+  "label": "Guest Stay History Report Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "night_audit_print_format",
+  "fieldtype": "Link",
+  "label": "Night Audit Summary Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "pos_sales_print_format",
+  "fieldtype": "Link",
+  "label": "POS Sales Performance Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "housekeeping_productivity_print_format",
+  "fieldtype": "Link",
+  "label": "Housekeeping Productivity Report Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "corporate_billing_print_format",
+  "fieldtype": "Link",
+  "label": "Corporate Billing Statement Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "corporate_account_statement_print_format",
+  "fieldtype": "Link",
+  "label": "Corporate Account Statement Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "asset_maintenance_print_format",
+  "fieldtype": "Link",
+  "label": "Asset Maintenance Report Print Format",
+  "options": "Print Format"
+}
  ],
  "issingle": 1,
  "links": [],

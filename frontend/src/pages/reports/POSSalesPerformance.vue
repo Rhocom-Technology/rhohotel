@@ -2,7 +2,17 @@
   <div class="space-y-5">
     <!-- Page Header -->
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">POS Sales Performance</h1>
+      <!-- <h1 class="text-2xl font-bold text-gray-900">POS Sales Performance</h1> -->
+       <div class="flex justify-between items-center gap-3 flex-wrap">
+          
+        <h1 class="text-2xl font-bold text-gray-900">POS Sales Performance</h1>
+       <button
+          @click="downloadReport"
+          class="bg-green-600 text-white px-4 py-2 rounded-lg">
+          Download
+        </button>
+        </div>
+  
       <p class="text-xs text-gray-400 mt-1">
         Comprehensive sales, payments, cashier, shift, room-posting and item performance overview.
       </p>
@@ -793,4 +803,20 @@ function statusClass(status) {
 onMounted(() => {
   fetchReport()
 })
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    pos_profile: filters.value.pos_profile || '',
+    cashier: filters.value.cashier || '',
+    payment_mode: filters.value.payment_mode || '',
+    search: searchQuery.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_pos_sales_performance_report?${params.toString()}`,
+    '_blank'
+  )
+}
 </script>

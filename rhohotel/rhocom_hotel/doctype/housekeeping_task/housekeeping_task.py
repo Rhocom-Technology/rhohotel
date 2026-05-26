@@ -71,6 +71,32 @@ class HousekeepingTask(Document):
     #     self.create_stock_entry()
     #     self.update_room_inventory()
     
+    def on_submit(self):
+        if self.status != "Completed":
+            self.db_set("status", "Completed", update_modified=False)
+
+        if not self.stock_entry:
+            self.create_stock_entry()
+            self.update_room_inventory()
+
+        if self.room:
+            frappe.db.set_value(
+                "Hotel Room",
+                self.room,
+                "housekeeping_status",
+                "Clean",
+                update_modified=False
+            )
+
+        frappe.publish_realtime("rhohotel_front_desk_update")
+
+
+    def on_cancel(self):
+        if self.stock_entry:
+            se = frappe.get_doc("Stock Entry", self.stock_entry)
+            if se.docstatus == 1:
+                se.cancel()
+    
     def validate_inventory_changes(self):
         """
         Comprehensive validation for inventory changes.

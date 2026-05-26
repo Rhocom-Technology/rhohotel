@@ -38,8 +38,8 @@
         <div>
           <h2 class="text-sm font-bold text-gray-900">{{ req.name }}</h2>
           <p class="text-xs text-gray-400 mt-0.5">
-            {{ req.issue_type }} •
-            {{ req.location_type === 'Room' ? (req.room_number || req.room) : req.location }} •
+            {{ req.issue_type }} ·
+            {{ locationDisplay(req) }} ·
             <span :class="priorityTextClass(req.priority)">{{ req.priority }}</span>
           </p>
         </div>
@@ -68,7 +68,7 @@
 
           <!-- Approve -->
           <button v-if="req.approved === 'Pending' && req.status === 'Pending' && !editMode"
-            @click="showApproveModal = true"
+            @click="openApproveModal"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
             Approve
           </button>
@@ -94,9 +94,7 @@
         <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusBadgeClass(req.status)">{{ req.status }}</span>
         <div class="flex items-center gap-1.5">
           <span class="text-xs text-gray-400">Location:</span>
-          <span class="text-xs font-medium text-gray-700">
-            {{ req.location_type === 'Room' ? '🏨 ' + (req.room_number || req.room || '—') : '📍 ' + (req.location || '—') }}
-          </span>
+          <span class="text-xs font-medium text-gray-700">{{ locationDisplay(req) }}</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span class="text-xs text-gray-400">Priority:</span>
@@ -104,9 +102,7 @@
         </div>
         <div class="flex items-center gap-1.5">
           <span class="text-xs text-gray-400">Approved:</span>
-          <span class="text-xs font-semibold" :class="approvedClass(req.approved)">
-            {{ req.approved }}
-          </span>
+          <span class="text-xs font-semibold" :class="approvedClass(req.approved)">{{ req.approved }}</span>
         </div>
         <div v-if="req.approved_on" class="flex items-center gap-1.5">
           <span class="text-xs text-gray-400">Approved at:</span>
@@ -132,8 +128,10 @@
         <!-- Left -->
         <div class="space-y-4">
 
-          <!-- VIEW -->
+          <!-- VIEW mode -->
           <template v-if="!editMode">
+
+            <!-- Request Details -->
             <div class="bg-white rounded-xl border border-gray-200 p-5">
               <h3 class="text-sm font-bold text-gray-900 mb-4">Request Details</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-4">
@@ -150,42 +148,79 @@
                   <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs font-semibold" :class="priorityTextClass(req.priority)">{{ req.priority }}</div>
                 </div>
               </div>
+
+              <!-- Location -->
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
                 <div>
                   <p class="text-xs text-gray-400 mb-1">Location Type</p>
                   <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ req.location_type }}</div>
                 </div>
                 <div>
-                  <p class="text-xs text-gray-400 mb-1">{{ req.location_type === 'Room' ? 'Room' : 'Location' }}</p>
+                  <p class="text-xs text-gray-400 mb-1">
+                    {{ req.location_type === 'Room' ? 'Room' : req.location_type === 'Asset Location' ? 'Asset Location' : 'Location' }}
+                  </p>
                   <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
                     <template v-if="req.location_type === 'Room'">
                       {{ req.room_number || '—' }}<span v-if="req.room" class="text-gray-400 ml-1">({{ req.room }})</span>
+                    </template>
+                    <template v-else-if="req.location_type === 'Asset Location'">
+                      {{ req.asset_location || '—' }}
                     </template>
                     <template v-else>{{ req.location || '—' }}</template>
                   </div>
                 </div>
               </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+              <!-- People -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
                 <div>
                   <p class="text-xs text-gray-400 mb-1">Reported By</p>
                   <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ req.reported_by_name || req.reported_by || '—' }}</div>
                 </div>
                 <div>
+                  <p class="text-xs text-gray-400 mb-1">Requesting Department</p>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ req.requesting_department || '—' }}</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
+                <div>
+                  <p class="text-xs text-gray-400 mb-1">Supervisor / Witness</p>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                    {{ witnessName || req.witness_employee || '—' }}
+                  </div>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-400 mb-1">Witness Department</p>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ req.witness_department || '—' }}</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div v-if="req.asset">
+                <p class="text-xs text-gray-400 mb-1">Asset</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700 font-medium">{{ req.asset }}</div>
+              </div>
+              <div>
                   <p class="text-xs text-gray-400 mb-1">Reported At</p>
                   <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ formatDate(req.reported_at) }}</div>
+                </div>
+                <div v-if="req.assigned_technician">
+                  <p class="text-xs text-gray-400 mb-1">Assigned Technician</p>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ req.technician_name || req.assigned_technician }}</div>
                 </div>
               </div>
             </div>
 
+            <!-- Issue Description -->
             <div class="bg-white rounded-xl border border-gray-200 p-5">
               <h3 class="text-sm font-bold text-gray-900 mb-3">Issue Description</h3>
               <div v-if="req.issue_description" class="bg-gray-50 rounded-lg px-3 py-3 text-xs text-gray-700 leading-relaxed"
                 v-html="req.issue_description"></div>
               <p v-else class="text-xs text-gray-400 italic">No description provided.</p>
             </div>
+
           </template>
 
-          <!-- EDIT MODE -->
+          <!-- EDIT mode -->
           <template v-else>
             <div class="bg-white rounded-xl border border-blue-200 p-5">
               <div class="flex items-center gap-2 mb-4">
@@ -202,10 +237,15 @@
                     :class="editForm.location_type === 'Room' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
                     🏨 Room
                   </button>
+                  <button @click="editForm.location_type = 'Asset Location'"
+                    class="flex-1 text-xs font-medium transition-colors border-l border-gray-200"
+                    :class="editForm.location_type === 'Asset Location' ? 'bg-purple-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
+                    🔧 Asset Location
+                  </button>
                   <button @click="editForm.location_type = 'Other Location'"
                     class="flex-1 text-xs font-medium transition-colors border-l border-gray-200"
                     :class="editForm.location_type === 'Other Location' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'">
-                    📍 Other Location
+                    📍 Other
                   </button>
                 </div>
               </div>
@@ -218,6 +258,11 @@
                     <option value="">— select room —</option>
                     <option v-for="r in rooms" :key="r.name" :value="r.name">{{ r.room_number || r.name }}</option>
                   </select>
+                </div>
+                <div v-else-if="editForm.location_type === 'Asset Location'">
+                  <p class="text-xs text-gray-500 mb-1.5">Asset Location <span class="text-red-400">*</span></p>
+                  <input v-model="editForm.asset_location" type="text" placeholder="e.g. Generator Room, Pump Room..."
+                    class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300" />
                 </div>
                 <div v-else>
                   <p class="text-xs text-gray-500 mb-1.5">Location <span class="text-red-400">*</span></p>
@@ -234,6 +279,7 @@
                   </select>
                 </div>
               </div>
+
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
                 <div>
                   <p class="text-xs text-gray-500 mb-1.5">Priority <span class="text-red-400">*</span></p>
@@ -252,12 +298,23 @@
                   </select>
                 </div>
               </div>
-              <div style="display:grid;grid-template-columns:1fr;gap:12px;" class="mb-4">
-                <div>
-                  <p class="text-xs text-gray-500 mb-1.5">Reported At <span class="text-red-400">*</span></p>
-                  <input v-model="editForm.reported_at" type="datetime-local"
-                    class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                </div>
+
+              <div class="mb-4">
+                <p class="text-xs text-gray-500 mb-1.5">Reported At <span class="text-red-400">*</span></p>
+                <input v-model="editForm.reported_at" type="datetime-local"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              </div>
+
+
+              <div class="mb-4">
+                <p class="text-xs text-gray-500 mb-1.5">Asset <span class="text-gray-400">(optional)</span></p>
+                <select v-model="editForm.asset"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700">
+                  <option value="">— no specific asset —</option>
+                  <option v-for="a in assets" :key="a.name" :value="a.name">
+                    {{ a.asset_name || a.name }}{{ a.asset_category ? ` · ${a.asset_category}` : '' }}
+                  </option>
+                </select>
               </div>
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Issue Description</p>
@@ -289,7 +346,7 @@
             </div>
           </div>
 
-          <!-- Mark Complete (when task is done but request not yet completed) -->
+          <!-- Mark Complete -->
           <div v-if="req.approved === 'Approved' && req.status !== 'Completed' && !editMode"
             class="bg-white rounded-xl border border-gray-200 p-5">
             <button @click="markComplete" :disabled="completing"
@@ -300,9 +357,7 @@
               </svg>
               {{ completing ? 'Completing...' : '✓ Mark Request as Completed' }}
             </button>
-            <p class="text-xs text-gray-400 mt-1.5 text-center">
-              Mark request as completed once the maintenance work is done.
-            </p>
+            <p class="text-xs text-gray-400 mt-1.5 text-center">Mark request as completed once the maintenance work is done.</p>
           </div>
 
           <div v-if="req.status === 'Completed'" class="bg-green-50 rounded-xl border border-green-200 p-4 text-center">
@@ -325,7 +380,9 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-xs text-gray-400">Location Type</span>
-                <span class="text-xs font-medium text-gray-700">{{ req.location_type === 'Room' ? '🏨 Room' : '📍 Other' }}</span>
+                <span class="text-xs font-medium text-gray-700">
+                  {{ req.location_type === 'Room' ? '🏨 Room' : req.location_type === 'Asset Location' ? '🔧 Asset' : '📍 Other' }}
+                </span>
               </div>
               <div class="flex justify-between">
                 <span class="text-xs text-gray-400">Issue Type</span>
@@ -333,9 +390,23 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-xs text-gray-400">Location</span>
-                <span class="text-xs font-medium text-gray-700">
-                  {{ req.location_type === 'Room' ? (req.room_number || req.room || '—') : (req.location || '—') }}
-                </span>
+                <span class="text-xs font-medium text-gray-700 text-right max-w-[140px] truncate">{{ locationDisplay(req) }}</span>
+              </div>
+              <div class="flex justify-between pt-1 border-t border-gray-100">
+                <span class="text-xs text-gray-400">Reported By</span>
+                <span class="text-xs text-gray-600 text-right max-w-[140px] truncate">{{ req.reported_by_name || req.reported_by || '—' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Dept</span>
+                <span class="text-xs text-gray-600 text-right max-w-[140px] truncate">{{ req.requesting_department || '—' }}</span>
+              </div>
+              <div class="flex justify-between pt-1 border-t border-gray-100">
+                <span class="text-xs text-gray-400">Witness</span>
+                <span class="text-xs text-gray-600 text-right max-w-[140px] truncate">{{ witnessName || req.witness_employee || '—' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Witness Dept</span>
+                <span class="text-xs text-gray-600 text-right max-w-[140px] truncate">{{ req.witness_department || '—' }}</span>
               </div>
               <div class="flex justify-between pt-1 border-t border-gray-100">
                 <span class="text-xs text-gray-400">Approved</span>
@@ -348,6 +419,10 @@
               <div v-if="req.technician_name" class="flex justify-between">
                 <span class="text-xs text-gray-400">Technician</span>
                 <span class="text-xs font-medium text-gray-700">{{ req.technician_name }}</span>
+              </div>
+              <div v-if="req.asset" class="flex justify-between">
+                <span class="text-xs text-gray-400">Asset</span>
+                <span class="text-xs font-medium text-gray-700 truncate max-w-[130px]">{{ req.asset }}</span>
               </div>
               <div v-if="req.linked_task" class="flex justify-between">
                 <span class="text-xs text-gray-400">Task</span>
@@ -365,7 +440,7 @@
             <p class="text-xs font-semibold text-gray-700 mb-3">Actions</p>
 
             <button v-if="req.approved === 'Pending' && req.status === 'Pending' && !editMode"
-              @click="showApproveModal = true"
+              @click="openApproveModal"
               class="w-full py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700">
               ✓ Approve Request
             </button>
@@ -392,17 +467,14 @@
               <span class="text-xs text-red-700">Rejected</span>
             </div>
 
-            <div v-if="req.approved === 'Pending' && req.status === 'Pending'" class="px-3 py-2.5 bg-yellow-50 rounded-lg border border-yellow-100">
-              <p class="text-xs text-yellow-700">Not yet approved.</p>
-            </div>
-
             <!-- Workflow hint -->
             <div class="px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 mt-2">
               <p class="text-xs text-gray-500 font-medium mb-1">Workflow</p>
-              <p class="text-xs text-gray-400">1. Assign technician &amp; approve</p>
+              <p class="text-xs text-gray-400">1. Assign technician &amp; witness, approve</p>
               <p class="text-xs text-gray-400 mt-0.5">2. Maintenance Task auto-created</p>
-              <p class="text-xs text-gray-400 mt-0.5">3. Technician completes &amp; submits task</p>
-              <p class="text-xs text-gray-400 mt-0.5">4. Mark request as Completed</p>
+              <p class="text-xs text-gray-400 mt-0.5">3. Technician completes work</p>
+              <p class="text-xs text-gray-400 mt-0.5">4. Witness verifies → Manager approves</p>
+              <p class="text-xs text-gray-400 mt-0.5">5. Request marked Completed</p>
             </div>
           </div>
 
@@ -415,12 +487,12 @@
     <Teleport to="body">
       <div v-if="showApproveModal" class="fixed inset-0 z-50 flex items-center justify-center"
         style="background:rgba(0,0,0,0.55);" @click.self="showApproveModal = false">
-        <div class="bg-white rounded-2xl shadow-2xl w-full mx-4 overflow-y-auto" style="max-width:460px;max-height:90vh;">
+        <div class="bg-white rounded-2xl shadow-2xl w-full mx-4 overflow-y-auto" style="max-width:480px;max-height:90vh;">
           <div class="p-6">
             <div class="flex items-start justify-between mb-5">
               <div>
                 <h2 class="text-base font-bold text-gray-900">Approve Request</h2>
-                <p class="text-xs text-gray-400 mt-1">Assign a technician and approve this request. A Maintenance Task will be created automatically.</p>
+                <p class="text-xs text-gray-400 mt-1">Assign a technician and supervisor/witness, then approve. A Maintenance Task will be created automatically.</p>
               </div>
               <button @click="showApproveModal = false" class="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
@@ -434,6 +506,21 @@
                   {{ t.technician_name }}{{ t.availability !== 'Available' ? ` (${t.availability})` : '' }}
                 </option>
               </select>
+            </div>
+
+            <div class="mb-5">
+              <p class="text-xs text-gray-500 mb-1.5">Supervisor / Witness <span class="text-red-400">*</span></p>
+              <select v-model="approveForm.witness_employee"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600">
+                <option value="">— select supervisor / witness —</option>
+                <option v-for="e in employees" :key="e.name" :value="e.name">
+                  {{ e.employee_name }}{{ e.department ? ` · ${e.department}` : '' }}
+                </option>
+              </select>
+              <p v-if="approveForm.witness_employee" class="text-xs text-green-600 mt-1">
+                ✓ Pre-filled from request — change if needed
+              </p>
+              <p v-else class="text-xs text-gray-400 mt-1">This person will verify the completed work before the Hotel Manager approves.</p>
             </div>
 
             <div class="flex items-center justify-end gap-2">
@@ -456,7 +543,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { createResource } from 'frappe-ui'
 
@@ -475,9 +562,16 @@ const req = ref(null)
 const technicians = ref([])
 const rooms = ref([])
 const employees = ref([])
+const assets = ref([])
 
 const editForm = ref({})
-const approveForm = ref({ assigned_technician: '' })
+const approveForm = ref({ assigned_technician: '', witness_employee: '' })
+
+// Resolve witness name from employees list
+const witnessName = computed(() => {
+  if (!req.value?.witness_employee) return null
+  return employees.value.find(e => e.name === req.value.witness_employee)?.employee_name || null
+})
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 const toasts = ref([])
@@ -490,22 +584,22 @@ function showToast(message, type = 'error', duration = 5000) {
 function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) }
 
 // ─── Resources ────────────────────────────────────────────────────────────────
-const reqResource          = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_maintenance_request', auto: false })
-const approveResource      = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.approve_request', auto: false })
-const rejectResource       = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.reject_request', auto: false })
-const updateResource       = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.update_maintenance_request', auto: false })
-const completeResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.complete_maintenance_request', auto: false })
-const techResource         = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_technicians_for_request', auto: false })
-const roomsResource        = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_rooms_for_request', auto: false })
-const employeesResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_employees_for_request', auto: false })
+const reqResource      = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_maintenance_request', auto: false })
+const approveResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.approve_request', auto: false })
+const rejectResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.reject_request', auto: false })
+const updateResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.update_maintenance_request', auto: false })
+const completeResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.complete_maintenance_request', auto: false })
+const techResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_technicians_for_request', auto: false })
+const roomsResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_rooms_for_request', auto: false })
+const employeesResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_employees_for_request', auto: false })
+const assetsResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_assets_for_request', auto: false })
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
 async function loadRequest() {
   loading.value = true
   loadError.value = null
   try {
-    const res = await reqResource.fetch({ request_name: requestId })
-    req.value = res
+    req.value = await reqResource.fetch({ request_name: requestId })
   } catch (e) {
     loadError.value = e?.message || String(e)
   } finally {
@@ -513,7 +607,7 @@ async function loadRequest() {
   }
 }
 
-// ─── Mark request complete ────────────────────────────────────────────────────
+// ─── Mark complete ────────────────────────────────────────────────────────────
 async function markComplete() {
   if (!confirm('Mark this request as Completed?')) return
   completing.value = true
@@ -526,16 +620,28 @@ async function markComplete() {
 }
 
 // ─── Approve ──────────────────────────────────────────────────────────────────
+function openApproveModal() {
+  // Pre-fill witness from the existing request so user doesn't have to re-select
+  approveForm.value = {
+    assigned_technician: req.value.assigned_technician || '',
+    witness_employee:    req.value.witness_employee    || '',
+  }
+  showApproveModal.value = true
+}
+
 async function approveRequest() {
   if (!approveForm.value.assigned_technician) {
-    showToast('Please select a technician', 'warning')
-    return
+    showToast('Please select a technician', 'warning'); return
+  }
+  if (!approveForm.value.witness_employee) {
+    showToast('Please select a Supervisor / Witness', 'warning'); return
   }
   approving.value = true
   try {
     const res = await approveResource.fetch({
       request_name: requestId,
-      assigned_technician: approveForm.value.assigned_technician
+      assigned_technician: approveForm.value.assigned_technician,
+      witness_employee: approveForm.value.witness_employee,
     })
     if (res?.success) {
       showToast('Request approved', 'success')
@@ -557,16 +663,18 @@ async function rejectRequest() {
 }
 
 // ─── Edit mode ────────────────────────────────────────────────────────────────
-async function enterEdit() {
+function enterEdit() {
   editForm.value = {
-    location_type: req.value.location_type || 'Room',
-    room: req.value.room || '',
-    location: req.value.location || '',
-    issue_type: req.value.issue_type || '',
-    priority: req.value.priority || 'Medium',
-    reported_by: req.value.reported_by || '',
-    reported_at: req.value.reported_at ? req.value.reported_at.slice(0, 16) : '',
+    location_type:     req.value.location_type || 'Room',
+    room:              req.value.room || '',
+    asset_location:    req.value.asset_location || '',
+    location:          req.value.location || '',
+    issue_type:        req.value.issue_type || '',
+    priority:          req.value.priority || 'Medium',
+    reported_by:       req.value.reported_by || '',
+    reported_at:       req.value.reported_at ? req.value.reported_at.slice(0, 16) : '',
     issue_description: req.value.issue_description || '',
+    asset:             req.value.asset || '',
   }
   editMode.value = true
 }
@@ -576,6 +684,9 @@ function cancelEdit() { editMode.value = false; editForm.value = {} }
 async function saveEdit() {
   if (editForm.value.location_type === 'Room' && !editForm.value.room) {
     showToast('Room is required', 'warning'); return
+  }
+  if (editForm.value.location_type === 'Asset Location' && !editForm.value.asset_location) {
+    showToast('Asset Location is required', 'warning'); return
   }
   if (editForm.value.location_type === 'Other Location' && !editForm.value.location) {
     showToast('Location is required', 'warning'); return
@@ -593,31 +704,37 @@ async function saveEdit() {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function locationDisplay(r) {
+  if (!r) return '—'
+  if (r.location_type === 'Room') return '🏨 ' + (r.room_number || r.room || '—')
+  if (r.location_type === 'Asset Location') return '🔧 ' + (r.asset_location || '—')
+  return '📍 ' + (r.location || '—')
+}
+
 function formatDate(dt) {
   if (!dt) return '—'
   return new Date(dt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-function priorityTextClass(p) { return { Critical: 'text-red-600', High: 'text-orange-500', Medium: 'text-yellow-600', Low: 'text-blue-500' }[p] || 'text-gray-600' }
+
+function priorityTextClass(p) {
+  return { Critical: 'text-red-600', High: 'text-orange-500', Medium: 'text-yellow-600', Low: 'text-blue-500' }[p] || 'text-gray-600'
+}
+
 function statusBadgeClass(s) {
   return {
-    Pending: 'bg-blue-100 text-blue-600',
-    Approved: 'bg-green-100 text-green-600',
-    'In Progress': 'bg-purple-100 text-purple-600',
-    Completed: 'bg-green-100 text-green-600',
-    Rejected: 'bg-red-100 text-red-500',
-    Cancelled: 'bg-red-100 text-red-500',
+    Pending: 'bg-blue-100 text-blue-600', Approved: 'bg-green-100 text-green-600',
+    'In Progress': 'bg-purple-100 text-purple-600', Completed: 'bg-green-100 text-green-600',
+    Rejected: 'bg-red-100 text-red-500', Cancelled: 'bg-red-100 text-red-500',
   }[s] || 'bg-gray-100 text-gray-500'
 }
+
 function statusTextClass(s) {
   return {
-    Pending: 'text-blue-600',
-    Approved: 'text-green-600',
-    'In Progress': 'text-purple-600',
-    Completed: 'text-green-600',
-    Rejected: 'text-red-500',
-    Cancelled: 'text-red-500',
+    Pending: 'text-blue-600', Approved: 'text-green-600', 'In Progress': 'text-purple-600',
+    Completed: 'text-green-600', Rejected: 'text-red-500', Cancelled: 'text-red-500',
   }[s] || 'text-gray-600'
 }
+
 function approvedClass(a) {
   return { Approved: 'text-green-600', Rejected: 'text-red-500', Pending: 'text-gray-400' }[a] || 'text-gray-400'
 }
@@ -625,10 +742,11 @@ function approvedClass(a) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await loadRequest()
-  const [tRes, rRes, eRes] = await Promise.all([techResource.fetch(), roomsResource.fetch(), employeesResource.fetch()])
+  const [tRes, rRes, eRes, aRes] = await Promise.all([techResource.fetch(), roomsResource.fetch(), employeesResource.fetch(), assetsResource.fetch()])
   technicians.value = tRes || []
   rooms.value = rRes || []
   employees.value = eRes || []
+  assets.value = aRes || []
 })
 </script>
 

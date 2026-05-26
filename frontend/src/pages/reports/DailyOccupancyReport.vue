@@ -1,7 +1,21 @@
 <template>
   <div class="space-y-5">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Daily Occupancy Report</h1>
+      <div class="flex justify-between items-center gap-3 flex-wrap">
+
+              <h1 class="text-2xl font-bold text-gray-900">Daily Occupancy Report</h1>
+            <button
+                @click="downloadReport"
+                class="bg-green-600 text-white px-4 py-2 rounded-lg">
+                Download
+              </button>
+     
+
+        
+    </div>
+
+
+
       <p class="text-xs text-gray-400 mt-1">
         Report-style page with operational, billing, payment status, and creator tracking columns.
       </p>
@@ -600,5 +614,23 @@ function exportReport() {
 
 function printReport() {
   window.print()
+}
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    date_from: filters.value.dateFrom || '',
+    date_to: filters.value.dateTo || '',
+    room: filters.value.room || '',
+    floor: filters.value.floor || '',
+    status: filters.value.status || '',
+    payment: filters.value.payment || '',
+    search: searchQuery.value || '',
+    overdue_only: showOverdueOnly.value ? '1' : '0',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_daily_occupancy_report?${params.toString()}`,
+    '_blank'
+  )
 }
 </script>

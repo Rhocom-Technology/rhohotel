@@ -38,33 +38,29 @@
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div>
-            <h2 class="text-sm font-bold text-gray-900">Task Control</h2>
-            <p class="text-xs text-gray-400 mt-0.5">Manage issue reporting, diagnosis, work execution, and technician completion.</p>
+            <h2 class="text-sm font-bold text-gray-900">{{ task.name }}</h2>
+            <p class="text-xs text-gray-400 mt-0.5">{{ task.task_type }} · {{ task.location || '—' }} · <span :class="priorityTextClass(task.priority)">{{ task.priority }}</span></p>
           </div>
-          <!-- Docstatus badge -->
+          <!-- Workflow state badge -->
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
-            :class="{
-              'bg-yellow-100 text-yellow-700': task.docstatus === 0,
-              'bg-green-100 text-green-700':   task.docstatus === 1,
-              'bg-red-100 text-red-600':        task.docstatus === 2,
-            }">
-            <span class="w-1.5 h-1.5 rounded-full"
-              :class="{
-                'bg-yellow-500': task.docstatus === 0,
-                'bg-green-500':  task.docstatus === 1,
-                'bg-red-500':    task.docstatus === 2,
-              }"></span>
-            {{ task.docstatus === 0 ? 'Draft' : task.docstatus === 1 ? 'Submitted' : 'Cancelled' }}
+            :class="workflowBadgeClass(task.workflow_state)">
+            <span class="w-1.5 h-1.5 rounded-full" :class="workflowDotClass(task.workflow_state)"></span>
+            {{ task.workflow_state || (task.docstatus === 1 ? 'Completed' : 'Draft') }}
           </span>
         </div>
         <div class="flex items-center gap-2">
           <button @click="router.push('/maintenance/list')"
             class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
-            Cancel
+            Task List
+          </button>
+          <button v-if="task.maintenance_request"
+            @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: task.maintenance_request } })"
+            class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
+            View Request
           </button>
 
-          <!-- Draft actions -->
-          <template v-if="task.docstatus === 0">
+          <!-- Draft actions — only available when workflow_state is In Progress -->
+          <template v-if="task.docstatus === 0 && isEditable">
             <button @click="saveDraft" :disabled="saving"
               class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5">
               <svg v-if="saving" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
@@ -73,23 +69,24 @@
               </svg>
               {{ saving ? 'Saving...' : 'Save Draft' }}
             </button>
-            <button @click="completeTask" :disabled="submitting"
-              class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-1.5">
-              <svg v-if="submitting" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              {{ submitting ? 'Submitting...' : 'Complete Task' }}
-            </button>
           </template>
 
-          <!-- Submitted actions -->
-          <template v-else-if="task.docstatus === 1">
-            <button @click="cancelTask"
-              class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">
-              Cancel Task
-            </button>
+          <!-- Submitted / completed -->
+          <template v-if="task.docstatus === 1">
+            <span class="px-3 py-2 text-xs font-semibold text-green-600 bg-green-50 border border-green-200 rounded-lg">
+              ✓ Completed
+            </span>
           </template>
+        </div>
+      </div>
+
+      <!-- Workflow state info banner -->
+      <div v-if="task.docstatus === 0 && task.workflow_state && task.workflow_state !== 'In Progress'"
+        class="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-3 flex items-center gap-3">
+        <span class="text-yellow-500 text-base">⏳</span>
+        <div>
+          <p class="text-xs font-semibold text-yellow-800">Pending Approval — {{ task.workflow_state }}</p>
+          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited. Actions are taken in the Frappe desk by the approver.</p>
         </div>
       </div>
 
@@ -99,16 +96,65 @@
         <!-- Left -->
         <div class="space-y-4">
 
+          <!-- Request origin (read-only, auto-filled from request) -->
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-bold text-gray-900">Request Origin</h3>
+              <span class="px-2 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500 rounded-full">Read-only · auto-filled from request</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-3">
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Reported By</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ task.reported_by_name || task.reported_by || '—' }}
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Requesting Department</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ task.requesting_department_name || task.requesting_department || '—' }}
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Issue Type</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ task.issue_type || '—' }}
+                </div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Supervisor / Witness</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ task.supervisor_name || task.supervisor || '—' }}
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Witness Department</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ task.witness_department_name || task.witness_department || '—' }}
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Location Type</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ task.request_location_type || '—' }}
+                </div>
+              </div>
+            </div>
+              <div v-if="task.asset" class="mt-3">
+                <p class="text-xs text-gray-400 mb-1.5">Asset</p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  <span class="font-medium">{{ task.asset_name || task.asset }}</span>
+                  <span v-if="task.asset_name" class="text-gray-400 ml-1.5 font-mono text-[10px]">{{ task.asset }}</span>
+                </div>
+              </div>
+          </div>
+
           <!-- Task Details -->
           <div class="bg-white rounded-xl border border-gray-200 p-5">
             <h3 class="text-sm font-bold text-gray-900 mb-4">Task Details</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Task ID</p>
-                <div class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 font-mono">
-                  {{ task.name }}
-                </div>
-              </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="mb-3">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Task Type</p>
                 <select v-model="form.task_type" :disabled="isReadOnly"
@@ -121,82 +167,40 @@
                 </select>
               </div>
               <div>
-                <p class="text-xs text-gray-500 mb-1.5">Priority</p>
-                <select v-model="form.priority" :disabled="isReadOnly"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                  :class="{'bg-gray-100': isReadOnly}">
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
+                <p class="text-xs text-gray-400 mb-1.5">Priority <span class="text-gray-300">(read-only)</span></p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs font-semibold" :class="priorityTextClass(task.priority)">
+                  {{ task.priority || '—' }}
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-400 mb-1.5">Location <span class="text-gray-300">(read-only)</span></p>
+                <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">{{ task.location || '—' }}</div>
               </div>
             </div>
+
             <!-- Linked request -->
             <div v-if="task.maintenance_request" class="mt-3 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
-              <span class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">From Request</span>
-              <span class="text-xs text-blue-700 font-medium">{{ task.maintenance_request }}</span>
-              <span v-if="task.request_title" class="text-xs text-blue-500">— {{ task.request_title }}</span>
+              <span class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Linked Request</span>
+              <span class="text-xs text-blue-700 font-medium cursor-pointer hover:underline"
+                @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: task.maintenance_request } })">
+                {{ task.maintenance_request }}
+              </span>
+              <span v-if="task.request_title" class="text-xs text-blue-400 truncate max-w-xs">— {{ task.request_title }}</span>
+            </div>
+
+            <!-- Task Description (read-only, from request) -->
+            <div class="mt-3">
+              <p class="text-xs text-gray-400 mb-1.5">Task Description <span class="text-gray-300">(read-only)</span></p>
+              <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-600 leading-relaxed min-h-[60px]">
+                {{ task.task_description || '—' }}
+              </div>
             </div>
           </div>
 
-          <!-- Location & Description -->
+          <!-- Timing & Work -->
           <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 class="text-sm font-bold text-gray-900 mb-4">Location & Description</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Location</p>
-                <input v-model="form.location" :disabled="isReadOnly" type="text"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  :class="{'bg-gray-100': isReadOnly}" />
-              </div>
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Linked Request</p>
-                <div v-if="task.maintenance_request"
-                  class="px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 font-medium cursor-pointer hover:underline"
-                  @click="router.push({ name: 'SavedMaintenanceRequest', params: { id: task.maintenance_request } })">
-                  {{ task.maintenance_request }}
-                </div>
-                <div v-else class="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-400 italic">None</div>
-              </div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Issue / Task Description</p>
-              <textarea v-model="form.task_description" :disabled="isReadOnly" rows="3"
-                placeholder="Describe fault, incident, or maintenance task details..."
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-                :class="{'bg-gray-100': isReadOnly}"></textarea>
-            </div>
-          </div>
-
-          <!-- Assignment -->
-          <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 class="text-sm font-bold text-gray-900 mb-4">Assignment Section</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-4">
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Assigned Technician</p>
-                <select v-model="form.assigned_technician" :disabled="isReadOnly"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                  :class="{'bg-gray-100': isReadOnly}">
-                  <option value="">— select technician —</option>
-                  <option v-for="t in technicians" :key="t.name" :value="t.name">
-                    {{ t.technician_name }}
-                    {{ t.availability !== 'Available' ? `(${t.availability})` : '' }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <p class="text-xs text-gray-500 mb-1.5">Supervisor</p>
-                <select v-model="form.supervisor" :disabled="isReadOnly"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                  :class="{'bg-gray-100': isReadOnly}">
-                  <option value="">— select supervisor —</option>
-                  <option v-for="s in supervisors" :key="s.name" :value="s.name">
-                    {{ s.employee_name }}{{ s.designation ? ` · ${s.designation}` : '' }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <h3 class="text-sm font-bold text-gray-900 mb-4">Timing & Work</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-3">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Start Time</p>
                 <input v-model="form.start_time" :disabled="isReadOnly" type="datetime-local"
@@ -210,24 +214,55 @@
                   :class="{'bg-gray-100': isReadOnly}" />
               </div>
             </div>
+            <div class="mb-3">
+              <p class="text-xs text-gray-500 mb-1.5">Work Performed <span v-if="!isReadOnly" class="text-red-400">*</span></p>
+              <textarea v-model="form.work_performed" :disabled="isReadOnly" rows="3"
+                placeholder="Describe what was done..."
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                :class="{'bg-gray-100': isReadOnly}"></textarea>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Completion Notes</p>
+              <textarea v-model="form.completion_notes" :disabled="isReadOnly" rows="3"
+                placeholder="Diagnosis, repair actions, testing result, follow-up..."
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                :class="{'bg-gray-100': isReadOnly}"></textarea>
+            </div>
           </div>
 
-          <!-- Parts / Material Usage -->
+          <!-- Parts Used / Collected from Store -->
           <div class="bg-white rounded-xl border border-gray-200 p-5">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="text-sm font-bold text-gray-900">Parts / Material Usage</h3>
+              <div>
+                <h3 class="text-sm font-bold text-gray-900">Parts Used / Collected from Store</h3>
+                <p class="text-xs text-gray-400 mt-0.5">Items issued from store for this task</p>
+              </div>
+              <!-- Parts approval status badge -->
+              <span v-if="task.parts_approval_status && task.parts_approval_status !== 'Not Requested'"
+                class="px-2.5 py-1 text-xs font-semibold rounded-full"
+                :class="partsApprovalClass(task.parts_approval_status)">
+                {{ task.parts_approval_status }}
+              </span>
             </div>
+
+            <!-- Parts approval info -->
+            <div v-if="task.parts_approved_by" class="mb-3 px-3 py-2 bg-green-50 border border-green-100 rounded-lg flex items-center gap-2">
+              <span class="text-green-500 text-xs">✓</span>
+              <span class="text-xs text-green-700">Approved by <strong>{{ task.parts_approved_by }}</strong> on {{ formatDate(task.parts_approved_on) }}</span>
+            </div>
+
             <div class="overflow-x-auto">
               <table class="w-full">
                 <thead>
                   <tr class="border-b border-gray-100">
-                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-1/4">Item</th>
-                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-14">Qty</th>
-                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-20">UOM</th>
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2">Item</th>
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">Qty</th>
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">UOM</th>
                     <th class="text-left text-xs font-medium text-gray-500 pb-2">Warehouse</th>
-                    <th class="text-left text-xs font-medium text-gray-500 pb-2">Store Impact</th>
-                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">Cost</th>
-                    <th v-if="!isReadOnly" class="pb-2 w-6"></th>
+                     <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">
+                      Available Qty
+                    </th>
+                    <th v-if="isEditable" class="pb-2 w-6"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
@@ -236,7 +271,7 @@
                       <select v-model="part.item_code" :disabled="isReadOnly"
                         class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
                         :class="{'bg-gray-100': isReadOnly}"
-                        @change="onPartSelect(part)">
+                        @change="onPartSelect(part, stockItems)">
                         <option value="">— select item —</option>
                         <option v-for="item in stockItems" :key="item.name" :value="item.name">
                           {{ item.item_name || item.name }}
@@ -245,150 +280,354 @@
                     </td>
                     <td class="py-2.5 pr-2">
                       <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="0.001"
-                        class="w-14 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
+                        class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
                         :class="{'bg-gray-100': isReadOnly}" />
                     </td>
                     <td class="py-2.5 pr-2">
                       <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <input v-model="part.warehouse" :disabled="isReadOnly" type="text" placeholder="Warehouse"
-                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}" />
-                    </td>
-                    <td class="py-2.5 pr-2">
-                      <select v-model="part.store_impact" :disabled="isReadOnly"
+                      <select v-model="part.warehouse" :disabled="isReadOnly"
                         class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
                         :class="{'bg-gray-100': isReadOnly}">
-                        <option value="Reduce Stock">Reduce Stock</option>
-                        <option value="No Impact">No Impact</option>
-                        <option value="Return to Store">Return to Store</option>
+                        <option value="">— select warehouse —</option>
+                        <option v-for="w in warehouses" :key="w.name" :value="w.name">
+                          {{ w.warehouse_name || w.name }}
+                        </option>
                       </select>
                     </td>
-                    <td class="py-2.5 pr-2">
-                      <input v-model.number="part.cost" :disabled="isReadOnly" type="number" min="0"
-                        class="w-24 px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}" />
+                    
+                     <td class="py-2.5 pr-2">
+                      <div class="px-2 py-1.5 text-xs text-gray-500">
+                        {{ part.available_qty || 0 }}
+                      </div>
                     </td>
-                    <td v-if="!isReadOnly" class="py-2.5">
+                   
+                    <td v-if="isEditable" class="py-2.5">
                       <button @click="partsUsed.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
                     </td>
                   </tr>
                   <tr v-if="partsUsed.length === 0">
-                    <td :colspan="isReadOnly ? 6 : 7" class="py-4 text-center text-xs text-gray-400">
+                    <td :colspan="isEditable ? 6 : 5" class="py-4 text-center text-xs text-gray-400">
                       No parts added yet.
                     </td>
                   </tr>
                 </tbody>
-                <tfoot v-if="!isReadOnly">
+                <tfoot v-if="isEditable">
                   <tr>
-                    <td colspan="7" class="pt-3">
-                      <button @click="partsUsed.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '', cost: 0, store_impact: 'Reduce Stock' })"
+                    <td colspan="6" class="pt-3">
+                      <button @click="partsUsed.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '',available_qty: 0, stock_entry: '' })"
                         class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Part</button>
                     </td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-            <p v-if="task.stock_entry" class="text-xs text-gray-400 mt-3">
-              Stock Entry: <span class="font-mono text-gray-600">{{ task.stock_entry }}</span>
-            </p>
+
+            <!-- Material Issue Stock Entry link -->
+            <div v-if="task.material_issue_stock_entry" class="mt-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg flex items-center gap-2">
+              <span class="text-xs text-gray-400">Material Issue:</span>
+              <span class="text-xs font-mono font-semibold text-gray-700">{{ task.material_issue_stock_entry }}</span>
+            </div>
           </div>
 
-          <!-- Maintenance Checklist -->
+          <!-- Parts Returned to Store -->
           <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 class="text-sm font-bold text-gray-900 mb-4">Maintenance Checklist</h3>
+            <div class="mb-4">
+              <h3 class="text-sm font-bold text-gray-900">Parts Returned to Store</h3>
+              <p class="text-xs text-gray-400 mt-0.5">Items returned back to warehouse after task completion</p>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b border-gray-100">
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2">Item</th>
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">Qty</th>
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">UOM</th>
+                    <th class="text-left text-xs font-medium text-gray-500 pb-2">Warehouse</th>
+                     <th class="text-left text-xs font-medium text-gray-500 pb-2 w-24">
+                    Available Qty
+                  </th>
+                   
+                    <th v-if="isEditable" class="pb-2 w-6"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                  <tr v-for="(part, idx) in partsReturned" :key="idx">
+                    <td class="py-2.5 pr-2">
+                      <select v-model="part.item_code" :disabled="isReadOnly"
+                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                        :class="{'bg-gray-100': isReadOnly}"
+                        @change="onPartSelect(part, stockItems)">
+                        <option value="">— select item —</option>
+                        <option v-for="item in stockItems" :key="item.name" :value="item.name">
+                          {{ item.item_name || item.name }}
+                        </option>
+                      </select>
+                    </td>
+                    <td class="py-2.5 pr-2">
+                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="0.001"
+                        class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
+                        :class="{'bg-gray-100': isReadOnly}" />
+                    </td>
+                    <td class="py-2.5 pr-2">
+                      <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
+                    </td>
+                    <td class="py-2.5 pr-2">
+                      <select v-model="part.warehouse" :disabled="isReadOnly"
+                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                        :class="{'bg-gray-100': isReadOnly}">
+                        <option value="">— select warehouse —</option>
+                        <option v-for="w in warehouses" :key="w.name" :value="w.name">
+                          {{ w.warehouse_name || w.name }}
+                        </option>
+                      </select>
+                    </td>
+                    <td class="py-2.5 pr-2">
+                      <div class="px-2 py-1.5 text-xs text-gray-500">
+                        {{ part.available_qty || 0 }}
+                      </div>
+                    </td>
+                    <td v-if="isEditable" class="py-2.5">
+                      <button @click="partsReturned.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
+                    </td>
+                  </tr>
+                  <tr v-if="partsReturned.length === 0">
+                    <td :colspan="isEditable ? 6 : 5" class="py-4 text-center text-xs text-gray-400">
+                      No parts returned yet.
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot v-if="isEditable">
+                  <tr>
+                    <td colspan="6" class="pt-3">
+                      <button @click="partsReturned.push({ item_code: '', item_name: '', qty: 1, uom: '', warehouse: '', cost: 0 })"
+                        class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Returned Part</button>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <!-- Material Return Stock Entry link -->
+            <div v-if="task.material_return_stock_entry" class="mt-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg flex items-center gap-2">
+              <span class="text-xs text-gray-400">Material Return:</span>
+              <span class="text-xs font-mono font-semibold text-gray-700">{{ task.material_return_stock_entry }}</span>
+            </div>
+          </div>
+
+          <!-- Checklist -->
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-bold text-gray-900 mb-4">Checklist</h3>
             <div class="flex items-center gap-6 flex-wrap">
-              <label class="flex items-center gap-2 cursor-pointer">
+              <label class="flex items-center gap-2" :class="isReadOnly ? 'opacity-60' : 'cursor-pointer'">
                 <input type="checkbox" v-model="form.fault_diagnosed" :disabled="isReadOnly" class="w-4 h-4 accent-green-500" />
                 <span class="text-xs text-gray-700">Fault diagnosed</span>
               </label>
-              <label class="flex items-center gap-2 cursor-pointer">
+              <label class="flex items-center gap-2" :class="isReadOnly ? 'opacity-60' : 'cursor-pointer'">
                 <input type="checkbox" v-model="form.test_run_passed" :disabled="isReadOnly" class="w-4 h-4 accent-green-500" />
                 <span class="text-xs text-gray-700">Test run passed</span>
               </label>
-              <label v-if="form.inspection_required" class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" v-model="form.supervisor_verified" :disabled="isReadOnly" class="w-4 h-4 accent-blue-500" />
-                <span class="text-xs text-gray-700">Supervisor verified</span>
+              <label class="flex items-center gap-2 opacity-60">
+                <input type="checkbox" v-model="form.inspection_required" disabled class="w-4 h-4" />
+                <span class="text-xs text-gray-500">Inspection required <span class="text-gray-400">(read-only)</span></span>
               </label>
             </div>
           </div>
+
         </div>
 
         <!-- Right: Status panel -->
         <div class="space-y-4">
+
+          <!-- Task Summary -->
           <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 class="text-sm font-bold text-gray-900 mb-4">Status Update</h3>
-            <div class="mb-3">
-              <p class="text-xs text-gray-500 mb-1.5">Current Task Status</p>
-              <select v-model="form.status" :disabled="isReadOnly"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
-                :class="{'bg-gray-100': isReadOnly}">
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Hold">On Hold</option>
-                <option value="Done">Done</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <p class="text-xs text-gray-500 mb-1.5">Inspection Required</p>
-              <label class="flex items-center gap-2 cursor-pointer bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200"
-                :class="{'opacity-60 pointer-events-none': isReadOnly}">
-                <input type="checkbox" v-model="form.inspection_required" :disabled="isReadOnly" class="w-4 h-4 accent-green-500" />
-                <span class="text-xs text-gray-700">Yes, supervisor must verify repair</span>
-              </label>
-            </div>
-            <div class="mb-3">
-              <p class="text-xs text-gray-500 mb-1.5">Work Performed</p>
-              <textarea v-model="form.work_performed" :disabled="isReadOnly" rows="3"
-                placeholder="Describe what was done..."
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-                :class="{'bg-gray-100': isReadOnly}"></textarea>
-            </div>
-            <div class="mb-3">
-              <p class="text-xs text-gray-500 mb-1.5">Completion Notes</p>
-              <textarea v-model="form.completion_notes" :disabled="isReadOnly" rows="4"
-                placeholder="Diagnosis, repair actions, testing result, or follow-up recommendation..."
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-                :class="{'bg-gray-100': isReadOnly}"></textarea>
-            </div>
-            <div v-if="isReadOnly" class="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
-              <span class="text-blue-400">🔒</span>
-              <p class="text-xs text-blue-600">This task has been submitted and is read-only.</p>
+            <h3 class="text-sm font-bold text-gray-900 mb-4">Task Summary</h3>
+            <div class="space-y-2.5">
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-400">Workflow State</span>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full" :class="workflowBadgeClass(task.workflow_state)">
+                  {{ task.workflow_state || '—' }}
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Status</span>
+                <span class="text-xs font-semibold" :class="statusTextClass(task.status)">{{ task.status }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Type</span>
+                <span class="text-xs font-medium text-gray-700">{{ form.task_type || '—' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Priority</span>
+                <span class="text-xs font-semibold" :class="priorityTextClass(task.priority)">{{ task.priority || '—' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Technician</span>
+                <span class="text-xs font-medium text-gray-700 text-right max-w-[140px] truncate">{{ task.technician_name || '—' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Supervisor</span>
+                <span class="text-xs font-medium text-gray-700 text-right max-w-[140px] truncate">{{ task.supervisor_name || '—' }}</span>
+              </div>
+              <div class="border-t border-gray-100 pt-2 flex justify-between">
+                <span class="text-xs text-gray-400">Parts Used</span>
+                <span class="text-xs font-medium text-gray-700">{{ partsUsed.filter(p => p.item_code).length }} item(s)</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-xs text-gray-400">Parts Returned</span>
+                <span class="text-xs font-medium text-gray-700">{{ partsReturned.filter(p => p.item_code).length }} item(s)</span>
+              </div>
+              <div v-if="task.parts_approval_status && task.parts_approval_status !== 'Not Requested'" class="flex justify-between">
+                <span class="text-xs text-gray-400">Parts Approval</span>
+                <span class="text-xs font-semibold" :class="partsApprovalTextClass(task.parts_approval_status)">
+                  {{ task.parts_approval_status }}
+                </span>
+              </div>
             </div>
           </div>
 
-          <!-- Quick Summary -->
-          <div class="bg-blue-50 rounded-xl border border-blue-100 p-4">
-            <h4 class="text-xs font-bold text-blue-700 mb-3">Task Summary</h4>
-            <div class="space-y-1.5">
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Type</span>
-                <span class="text-xs font-medium text-blue-800">{{ form.task_type || '—' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Status</span>
-                <span class="text-xs font-medium text-blue-800">{{ form.status || '—' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Priority</span>
-                <span class="text-xs font-semibold"
-                  :class="{'text-red-600': form.priority === 'High', 'text-yellow-600': form.priority === 'Medium', 'text-blue-800': form.priority === 'Low'}">
-                  {{ form.priority || '—' }}
+         <!-- Actions -->
+<!-- Actions -->
+<div v-if="task.docstatus === 0" class="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+  <p class="text-xs font-semibold text-gray-700 mb-1">
+    Actions
+  </p>
+
+  <!-- Save Draft -->
+  <button
+    v-if="isEditable"
+    @click="saveDraft"
+    :disabled="saving"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+
+    <svg
+      v-if="saving"
+      class="animate-spin w-3 h-3"
+      fill="none"
+      viewBox="0 0 24 24">
+      <circle
+        class="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        stroke-width="4"/>
+      <path
+        class="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v8H4z"/>
+    </svg>
+
+    {{ saving ? 'Saving...' : 'Save Draft' }}
+  </button>
+
+  <!-- Draft -> In Progress -->
+  <button
+    v-if="task.workflow_state === 'Draft'"
+    @click="applyWorkflow('Start Task')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700">
+    Start Task
+  </button>
+
+  <!-- In Progress -> Store -->
+  <button
+    v-if="task.workflow_state === 'In Progress' && partsUsed.length > 0"
+    @click="applyWorkflow('Send to Store')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-orange-600 rounded-xl hover:bg-orange-700">
+    Send to Store
+  </button>
+
+  <!-- In Progress -> Witness -->
+  <button
+    v-if="task.workflow_state === 'In Progress' && partsUsed.length === 0"
+    @click="applyWorkflow('Send to Witness')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700">
+    Send to Witness
+  </button>
+
+  <!-- Store Approval -->
+  <button
+    v-if="task.workflow_state === 'Pending Store Approval'"
+    @click="applyWorkflow('Approve Store Items')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700">
+    Approve Store Items
+  </button>
+
+  <!-- Witness Approval -->
+  <button
+    v-if="task.workflow_state === 'Pending Witness Approval'"
+    @click="applyWorkflow('Verify Work')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700">
+    Verify Work
+  </button>
+
+  <!-- Hotel Manager Approval -->
+  <button
+    v-if="task.workflow_state === 'Pending Hotel Manager Approval'"
+    @click="applyWorkflow('Complete Task')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-green-700 rounded-xl hover:bg-green-800">
+    Complete Task
+  </button>
+
+  <!-- Reject -->
+  <button
+    v-if="[
+      'Pending Store Approval',
+      'Pending Witness Approval',
+      'Pending Hotel Manager Approval'
+    ].includes(task.workflow_state)"
+    @click="applyWorkflow('Reject')"
+    class="w-full py-2.5 text-xs font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700">
+    Reject
+  </button>
+
+  <p class="text-xs text-gray-400 text-center">
+    The workflow handles Store → Witness → Manager approval.
+  </p>
+</div>
+
+          <!-- Read-only notice -->
+          <div v-if="isReadOnly && task.docstatus === 0" class="bg-yellow-50 rounded-xl border border-yellow-100 p-4">
+            <p class="text-xs font-semibold text-yellow-800 mb-1">🔒 Awaiting Approval</p>
+            <p class="text-xs text-yellow-600">This task is in <strong>{{ task.workflow_state }}</strong> state. Editing is locked until the current approver takes action in the Frappe desk.</p>
+          </div>
+
+          <div v-if="task.docstatus === 1" class="bg-green-50 rounded-xl border border-green-100 p-4">
+            <p class="text-xs font-semibold text-green-800 mb-1">✓ Task Completed</p>
+            <p class="text-xs text-green-600">This task has been submitted and is now read-only.</p>
+            <div v-if="task.material_issue_stock_entry || task.material_return_stock_entry" class="mt-2 space-y-1">
+              <p v-if="task.asset" class="text-xs text-green-700">
+                Asset: <span class="font-medium">{{ task.asset_name || task.asset }}</span>
+              </p>
+              <p v-if="task.material_issue_stock_entry" class="text-xs text-green-700">
+                Issue: <span class="font-mono">{{ task.material_issue_stock_entry }}</span>
+              </p>
+              <p v-if="task.material_return_stock_entry" class="text-xs text-green-700">
+                Return: <span class="font-mono">{{ task.material_return_stock_entry }}</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Workflow guide -->
+          <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <p class="text-xs font-semibold text-gray-700 mb-3">Workflow Steps</p>
+            <div class="space-y-2">
+              <div v-for="step in workflowSteps" :key="step.state"
+                class="flex items-center gap-2.5">
+                <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                  :class="getStepClass(step.state)">
+                  {{ getStepIcon(step.state) }}
                 </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-xs text-blue-500">Technician</span>
-                <span class="text-xs font-medium text-blue-800 text-right max-w-[140px] truncate">
-                  {{ technicianLabel || task.technician_name || '—' }}
-                </span>
-              </div>
-              <div class="flex justify-between pt-1 border-t border-blue-200">
-                <span class="text-xs text-blue-500">Parts</span>
-                <span class="text-xs font-medium text-blue-800">{{ partsUsed.filter(p => p.item_code).length }} item(s)</span>
+                <div>
+                  <p class="text-xs font-medium text-gray-700">{{ step.label }}</p>
+                  <p class="text-[10px] text-gray-400">{{ step.role }}</p>
+                </div>
               </div>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -408,39 +647,38 @@ const taskId = route.params.id
 const loading = ref(true)
 const loadError = ref(null)
 const saving = ref(false)
-const submitting = ref(false)
 const task = ref(null)
-const technicians = ref([])
-const supervisors = ref([])
 const stockItems = ref([])
+const warehouses = ref([])
 const partsUsed = ref([])
+const partsReturned = ref([])
 
-// ─── Form ─────────────────────────────────────────────────────────────────────
 const form = ref({
   task_type: '',
-  priority: '',
-  status: '',
-  assigned_technician: '',
-  supervisor: '',
   start_time: '',
   end_time: '',
-  location: '',
-  task_description: '',
   work_performed: '',
   completion_notes: '',
   inspection_required: false,
   fault_diagnosed: false,
   test_run_passed: false,
-  supervisor_verified: false,
 })
 
-const isReadOnly = computed(() => task.value?.docstatus !== 0)
+// Task is editable only when docstatus=0 AND workflow_state is Draft or In Progress
+const isEditable = computed(() =>
+  task.value?.docstatus === 0 &&
+  ['Draft', 'In Progress'].includes(task.value?.workflow_state)
+)
+const isReadOnly = computed(() => !isEditable.value)
 
-const technicianLabel = computed(() => {
-  if (!form.value.assigned_technician) return null
-  const t = technicians.value.find(x => x.name === form.value.assigned_technician)
-  return t?.technician_name || null
-})
+const workflowSteps = [
+  { state: 'Draft',                        label: 'Draft',                      role: 'Technician' },
+  { state: 'In Progress',                  label: 'In Progress',                role: 'Technician' },
+  { state: 'Pending Store Approval',       label: 'Pending Store Approval',     role: 'Stock Manager' },
+  { state: 'Pending Witness Approval',     label: 'Pending Witness Approval',   role: 'Supervisor / Witness' },
+  { state: 'Pending Hotel Manager Approval', label: 'Hotel Manager Approval',   role: 'Hotel Manager' },
+  { state: 'Completed',                    label: 'Completed',                  role: 'System' },
+]
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 const toasts = ref([])
@@ -453,32 +691,12 @@ function showToast(message, type = 'error', duration = 4500) {
 function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) }
 
 // ─── Resources ────────────────────────────────────────────────────────────────
-const taskResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_maintenance_task',
-  auto: false
-})
-const saveResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.save_maintenance_task',
-  auto: false
-})
-const submitResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.submit_maintenance_task',
-  auto: false
-})
-const cancelResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.cancel_maintenance_task',
-  auto: false
-})
-const techResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_technicians_for_task',
-  auto: false
-})
-const supResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_supervisors_for_task',
-  auto: false
-})
-const itemsResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts',
+const taskResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_maintenance_task', auto: false })
+const saveResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.save_maintenance_task', auto: false })
+const itemsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
+const whResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_warehouses_for_parts', auto: false })
+const workflowResource = createResource({
+  url: 'frappe.model.workflow.apply_workflow',
   auto: false
 })
 
@@ -488,26 +706,17 @@ async function loadTask() {
   loadError.value = null
   try {
     const res = await taskResource.fetch({ task_name: taskId })
-    console.log('[MaintenanceTask] get_maintenance_task:', res)
     task.value = res
 
-    // Populate form
     form.value = {
-      task_type: res.task_type || '',
-      priority: res.priority || 'Medium',
-      status: res.status || 'Open',
-      assigned_technician: res.assigned_technician || '',
-      supervisor: res.supervisor || '',
-      start_time: res.start_time ? res.start_time.slice(0, 16) : '',
-      end_time: res.end_time ? res.end_time.slice(0, 16) : '',
-      location: res.location || '',
-      task_description: res.task_description || '',
-      work_performed: res.work_performed || '',
-      completion_notes: res.completion_notes || '',
+      task_type:         res.task_type || '',
+      start_time:        res.start_time ? res.start_time.slice(0, 16) : '',
+      end_time:          res.end_time ? res.end_time.slice(0, 16) : '',
+      work_performed:    res.work_performed || '',
+      completion_notes:  res.completion_notes || '',
       inspection_required: Boolean(res.inspection_required),
-      fault_diagnosed: Boolean(res.fault_diagnosed),
-      test_run_passed: Boolean(res.test_run_passed),
-      supervisor_verified: Boolean(res.supervisor_verified),
+      fault_diagnosed:   Boolean(res.fault_diagnosed),
+      test_run_passed:   Boolean(res.test_run_passed),
     }
 
     partsUsed.value = (res.parts_used || []).map(p => ({
@@ -516,38 +725,73 @@ async function loadTask() {
       qty: p.qty || 1,
       uom: p.uom || '',
       warehouse: p.warehouse || '',
-      cost: p.cost || 0,
-      store_impact: p.store_impact || 'Reduce Stock',
+      available_qty: p.available_qty || 0,
+stock_entry: p.stock_entry || ''
+    }))
+
+    partsReturned.value = (res.parts_returned || []).map(p => ({
+      item_code: p.item_code || '',
+      item_name: p.item_name || '',
+      qty: p.qty || 1,
+      uom: p.uom || '',
+      warehouse: p.warehouse || '',
+      available_qty: p.available_qty || 0,
+stock_entry: p.stock_entry || ''
     }))
 
   } catch (e) {
-    console.error('[MaintenanceTask] load error:', e)
     loadError.value = e?.message || String(e)
   } finally {
     loading.value = false
   }
 }
 
-// ─── Load dropdowns ───────────────────────────────────────────────────────────
 async function loadDropdowns() {
-  const [techRes, supRes, itemRes] = await Promise.all([
-    techResource.fetch(),
-    supResource.fetch(),
-    itemsResource.fetch()
+  const [itemRes, whRes] = await Promise.all([
+    itemsResource.fetch(),
+    whResource.fetch(),
   ])
-  technicians.value = techRes || []
-  supervisors.value = supRes || []
   stockItems.value = itemRes || []
+  warehouses.value = whRes || []
 }
 
-// ─── Part select: auto-fill UOM ───────────────────────────────────────────────
-function onPartSelect(part) {
-  const item = stockItems.value.find(i => i.name === part.item_code)
+function onPartSelect(part, items = stockItems.value) {
+  const item = items.find(i => i.name === part.item_code)
+
   if (item) {
     part.item_name = item.item_name || item.name
     part.uom = item.stock_uom || ''
+    part.available_qty = item.available_qty || item.actual_qty || 0
+  } else {
+    part.item_name = ''
+    part.uom = ''
+    part.available_qty = 0
   }
 }
+
+async function applyWorkflow(action) {
+  saving.value = true
+
+  try {
+    const workflowDoc = {
+      ...task.value,
+      doctype: 'Maintenance Task'
+    }
+
+    await workflowResource.fetch({
+      doc: JSON.stringify(workflowDoc),
+      action: action
+    })
+
+    showToast(`${action} successful`, 'success')
+    await loadTask()
+  } catch (e) {
+    showToast(e?.messages?.[0] || e?.message || String(e), 'error')
+  } finally {
+    saving.value = false
+  }
+}
+
 
 // ─── Save draft ───────────────────────────────────────────────────────────────
 async function saveDraft() {
@@ -556,9 +800,9 @@ async function saveDraft() {
     const res = await saveResource.fetch({
       task_name: taskId,
       task_data: form.value,
-      parts_used: partsUsed.value.filter(p => p.item_code)
+      parts_used: partsUsed.value.filter(p => p.item_code),
+      parts_returned: partsReturned.value.filter(p => p.item_code),
     })
-    console.log('[MaintenanceTask] saveDraft:', res)
     if (res?.success) {
       showToast('Task saved', 'success')
       await loadTask()
@@ -566,68 +810,91 @@ async function saveDraft() {
       showToast('Failed to save: ' + (res?.error || 'Unknown error'))
     }
   } catch (e) {
-    console.error('[MaintenanceTask] saveDraft error:', e)
     showToast('Error: ' + (e?.message || String(e)))
   } finally {
     saving.value = false
   }
 }
 
-// ─── Complete / submit ────────────────────────────────────────────────────────
-async function completeTask() {
-  // Client-side guard
-  if (!form.value.assigned_technician) {
-    showToast('Assign a technician before completing', 'warning')
-    return
-  }
-  if (!form.value.work_performed?.trim()) {
-    showToast('Describe the work performed before completing', 'warning')
-    return
-  }
-
-  // Save first, then submit
-  submitting.value = true
-  try {
-    const saveRes = await saveResource.fetch({
-      task_name: taskId,
-      task_data: { ...form.value, status: 'Done' },
-      parts_used: partsUsed.value.filter(p => p.item_code)
-    })
-    if (!saveRes?.success) {
-      showToast('Save failed: ' + (saveRes?.error || 'Unknown error'))
-      return
-    }
-
-    const res = await submitResource.fetch({ task_name: taskId })
-    console.log('[MaintenanceTask] completeTask:', res)
-    if (res?.success) {
-      showToast('Task completed and submitted', 'success')
-      await loadTask()
-    } else {
-      showToast('Failed to submit: ' + (res?.error || 'Unknown error'))
-    }
-  } catch (e) {
-    console.error('[MaintenanceTask] completeTask error:', e)
-    showToast('Error: ' + (e?.message || String(e)))
-  } finally {
-    submitting.value = false
-  }
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatDate(dt) {
+  if (!dt) return '—'
+  return new Date(dt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-// ─── Cancel submitted task ────────────────────────────────────────────────────
-async function cancelTask() {
-  if (!confirm('Are you sure you want to cancel this submitted task?')) return
-  try {
-    const res = await cancelResource.fetch({ task_name: taskId })
-    if (res?.success) {
-      showToast('Task cancelled', 'warning')
-      await loadTask()
-    } else {
-      showToast('Failed to cancel: ' + (res?.error || ''))
-    }
-  } catch (e) {
-    showToast('Error: ' + (e?.message || String(e)))
-  }
+function priorityTextClass(p) {
+  return { Critical: 'text-red-600', High: 'text-orange-500', Medium: 'text-yellow-600', Low: 'text-blue-500' }[p] || 'text-gray-600'
+}
+
+function statusTextClass(s) {
+  return {
+    'Open':        'text-gray-600',
+    'In Progress': 'text-blue-600',
+    'Done':        'text-green-600',
+    'Hold':        'text-yellow-600',
+    'Cancelled':   'text-red-500',
+  }[s] || 'text-gray-600'
+}
+
+function workflowBadgeClass(ws) {
+  return {
+    'Draft':                          'bg-gray-100 text-gray-600',
+    'In Progress':                    'bg-blue-100 text-blue-700',
+    'Pending Store Approval':         'bg-orange-100 text-orange-700',
+    'Pending Witness Approval':       'bg-purple-100 text-purple-700',
+    'Pending Hotel Manager Approval': 'bg-yellow-100 text-yellow-700',
+    'Completed':                      'bg-green-100 text-green-700',
+    'Rejected':                       'bg-red-100 text-red-600',
+  }[ws] || 'bg-gray-100 text-gray-600'
+}
+
+function workflowDotClass(ws) {
+  return {
+    'Draft':                          'bg-gray-400',
+    'In Progress':                    'bg-blue-500',
+    'Pending Store Approval':         'bg-orange-500',
+    'Pending Witness Approval':       'bg-purple-500',
+    'Pending Hotel Manager Approval': 'bg-yellow-500',
+    'Completed':                      'bg-green-500',
+    'Rejected':                       'bg-red-500',
+  }[ws] || 'bg-gray-400'
+}
+
+function partsApprovalClass(s) {
+  return {
+    'Approved':         'bg-green-100 text-green-700',
+    'Pending Approval': 'bg-yellow-100 text-yellow-700',
+    'Rejected':         'bg-red-100 text-red-600',
+    'Not Requested':    'bg-gray-100 text-gray-500',
+  }[s] || 'bg-gray-100 text-gray-500'
+}
+
+function partsApprovalTextClass(s) {
+  return {
+    'Approved':         'text-green-600',
+    'Pending Approval': 'text-yellow-600',
+    'Rejected':         'text-red-500',
+  }[s] || 'text-gray-500'
+}
+
+function getStepClass(state) {
+  const current = task.value?.workflow_state
+  const order = ['Draft', 'In Progress', 'Pending Store Approval', 'Pending Witness Approval', 'Pending Hotel Manager Approval', 'Completed']
+  const ci = order.indexOf(current)
+  const si = order.indexOf(state)
+  if (state === current) return 'bg-blue-500 text-white'
+  if (si < ci || current === 'Completed') return 'bg-green-500 text-white'
+  return 'bg-gray-200 text-gray-400'
+}
+
+function getStepIcon(state) {
+  const current = task.value?.workflow_state
+  const order = ['Draft', 'In Progress', 'Pending Store Approval', 'Pending Witness Approval', 'Pending Hotel Manager Approval', 'Completed']
+  const ci = order.indexOf(current)
+  const si = order.indexOf(state)
+  if (state === current) return '→'
+  if (si < ci || current === 'Completed') return '✓'
+  return (si + 1).toString()
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

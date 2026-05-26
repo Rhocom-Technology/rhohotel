@@ -2,11 +2,24 @@
   <div class="space-y-5">
     <!-- Page Header -->
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Housekeeping Productivity Report</h1>
+      <!-- <h1 class="text-2xl font-bold text-gray-900">Housekeeping Productivity Report</h1> -->
+
+      <div class="flex justify-between items-center gap-3 flex-wrap">
+          
+        <h1 class="text-2xl font-bold text-gray-900">Housekeeping Productivity Report</h1>
+       <button
+          @click="downloadReport"
+          class="bg-green-600 text-white px-4 py-2 rounded-lg">
+          Download
+        </button>
+  
+    </div>
       <p class="text-xs text-gray-400 mt-1">
         Comprehensive room cleaning, inspection, attendant productivity, floor performance and maintenance overview.
       </p>
     </div>
+
+    
 
     <div v-if="errorMessage" class="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
       <p class="text-xs font-bold text-red-700">Unable to load report</p>
@@ -752,4 +765,20 @@ function scoreTextColor(score) {
 onMounted(() => {
   fetchReport()
 })
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    housekeeper: filters.value.housekeeper || '',
+    floor: filters.value.floor || '',
+    status: filters.value.status || '',
+    search: searchQuery.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_housekeeping_productivity_report?${params.toString()}`,
+    '_blank'
+  )
+}
 </script>

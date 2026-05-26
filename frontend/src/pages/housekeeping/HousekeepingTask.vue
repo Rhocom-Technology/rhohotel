@@ -187,8 +187,10 @@
         </div>
 
         <!-- Inventory Update -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <!-- <div class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Inventory Update Section</h3>
+
+          
           <table class="w-full">
             <thead>
               <tr class="border-b border-gray-100">
@@ -202,7 +204,7 @@
             <tbody class="divide-y divide-gray-50">
               <tr v-for="(invItem, index) in inventoryItems" :key="index">
                 <td class="py-2.5 pr-3">
-                  <!-- Select pulling from ERPNext Item doctype -->
+             
                   <div class="relative">
                     <select
                       v-model="invItem.item"
@@ -258,7 +260,169 @@
               </tr>
             </tfoot>
           </table>
-        </div>
+        </div> -->
+
+         <!-- Inventory Update -->
+        <!-- Inventory Update -->
+<div class="bg-white rounded-xl border border-gray-200 p-5">
+
+  <!-- Read-only room inventory -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <h3 class="text-sm font-bold text-gray-900">Room Inventory Before Task</h3>
+        <p class="text-xs text-gray-400 mt-0.5">
+          Read-only list of items currently recorded in this room before this task.
+        </p>
+      </div>
+
+      <span class="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+        Read Only
+      </span>
+    </div>
+
+    <div class="overflow-x-auto border border-gray-100 rounded-lg">
+      <table class="w-full">
+        <thead>
+          <tr class="bg-gray-50 border-b border-gray-100">
+            <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Item</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-3 py-2 w-24">Qty</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-3 py-2 w-24">UOM</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-gray-50">
+          <tr v-for="item in roomInventoryBefore" :key="item.item">
+            <td class="px-3 py-2.5 text-xs text-gray-700">
+              {{ item.item_name || item.item }}
+            </td>
+            <td class="px-3 py-2.5 text-xs text-gray-700">
+              {{ item.quantity || item.qty || 0 }}
+            </td>
+            <td class="px-3 py-2.5 text-xs text-gray-500">
+              {{ item.uom || '—' }}
+            </td>
+          </tr>
+
+          <tr v-if="roomInventoryBefore.length === 0">
+            <td colspan="3" class="px-3 py-4 text-center text-xs text-gray-400">
+              No inventory recorded for this room.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Editable inventory changes -->
+  <div>
+    <h3 class="text-sm font-bold text-gray-900 mb-1">
+      Inventory Update Section
+    </h3>
+    <p class="text-xs text-gray-400 mb-4">
+      Record what changed during this task. Added/Replaced items will reduce store stock on submit.
+    </p>
+
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="text-left text-xs font-medium text-gray-500 pb-2 w-2/5">Item</th>
+          <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">Qty</th>
+          <th class="text-left text-xs font-medium text-gray-500 pb-2">Change Type</th>
+          <th class="text-left text-xs font-medium text-gray-500 pb-2">Reason</th>
+          <th v-if="!isSubmitted" class="pb-2 w-6"></th>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y divide-gray-50">
+        <tr v-for="(inv, idx) in inventoryItems" :key="idx">
+          <td class="py-2.5 pr-3">
+            <select
+              v-model="inv.item"
+              :disabled="isSubmitted"
+              class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+              :class="{ 'bg-gray-100': isSubmitted }"
+            >
+              <option value="">— select item —</option>
+              <option v-for="si in systemItems" :key="si.name" :value="si.name">
+                {{ si.item_name && si.item_name !== si.name ? `${si.item_name} (${si.name})` : si.name }}
+              </option>
+            </select>
+          </td>
+
+          <td class="py-2.5 pr-3">
+            <input
+              v-model.number="inv.quantity_changed"
+              :disabled="isSubmitted"
+              type="number"
+              min="1"
+              class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
+              :class="{ 'bg-gray-100': isSubmitted }"
+            />
+          </td>
+
+          <td class="py-2.5 pr-3">
+            <select
+              v-model="inv.change_type"
+              :disabled="isSubmitted"
+              class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+              :class="{ 'bg-gray-100': isSubmitted }"
+            >
+              <option value="Added">Added</option>
+              <option value="Removed">Removed</option>
+              <option value="Replaced">Replaced</option>
+            </select>
+
+            <p class="text-[10px] text-gray-400 mt-1">
+              <span v-if="inv.change_type === 'Added'">Stock will reduce.</span>
+              <span v-else-if="inv.change_type === 'Replaced'">Stock will reduce.</span>
+              <span v-else-if="inv.change_type === 'Removed'">Room inventory only. Stock will not reduce.</span>
+            </p>
+          </td>
+
+          <td class="py-2.5 pr-2">
+            <input
+              v-model="inv.reason"
+              :disabled="isSubmitted"
+              type="text"
+              placeholder="Reason"
+              class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+              :class="{ 'bg-gray-100': isSubmitted }"
+            />
+          </td>
+
+          <td v-if="!isSubmitted" class="py-2.5">
+            <button
+              @click="removeInventoryItem(idx)"
+              class="text-red-400 hover:text-red-600"
+            >
+              ✕
+            </button>
+          </td>
+        </tr>
+
+        <tr v-if="inventoryItems.length === 0">
+          <td colspan="5" class="py-4 text-center text-xs text-gray-400">
+            No inventory changes added yet.
+          </td>
+        </tr>
+      </tbody>
+
+      <tfoot v-if="!isSubmitted">
+        <tr>
+          <td colspan="5" class="pt-3">
+            <button
+              @click="addInventoryItem"
+              class="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              + Add Item
+            </button>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
 
         <!-- Housekeeping Checklist -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -475,6 +639,7 @@ const loadingItems = ref(false)
 const newChecklistItem = ref('')
 const systemItems = ref([])
 const submitAttempted = ref(false)
+const roomInventoryBefore = ref([])
 
 // ─── Toast system ──────────────────────────────────────────────────────────────
 const toasts = ref([])
@@ -555,8 +720,18 @@ const taskResource = createResource({
         checklist_template: task.checklist_template || ''
       }
 
+      // if (task.room) roomResource.fetch({ room_name: task.room })
+      // inventoryItems.value = task.room_inventory_changes?.length ? [...task.room_inventory_changes] : []
       if (task.room) roomResource.fetch({ room_name: task.room })
-      inventoryItems.value = task.room_inventory_changes?.length ? [...task.room_inventory_changes] : []
+
+      inventoryItems.value = task.room_inventory_changes?.length
+        ? [...task.room_inventory_changes]
+        : []
+
+      roomInventoryBefore.value = task.room_inventory_before?.length
+        ? [...task.room_inventory_before]
+        : []
+
 
       if (task.checklist_items?.length) {
         checklistItems.value = task.checklist_items.map(i => ({
@@ -764,86 +939,136 @@ async function saveTask() {
 // ─── Submit ────────────────────────────────────────────────────────────────────
 const submitTaskResource = createResource({ url: 'rhohotel.rhocom_hotel.api.housekeeping.submit_task', auto: false })
 
+
+// async function submitTask() {
+//   submitAttempted.value = true
+//   const errors = []
+
+//   // 1. Status must be Completed
+//   if (formData.value.status !== 'Completed') {
+//     errors.push(`Status must be "Completed" before submitting (currently "${formData.value.status}")`)
+//   }
+
+//   // 2. Assigned staff required
+//   if (!formData.value.employee) {
+//     errors.push('Assigned staff is required')
+//   }
+
+//   // 3. Start time required
+//   if (!formData.value.start_time) {
+//     errors.push('Start time is required')
+//   }
+
+//   // 4. End time required
+//   if (!formData.value.end_time) {
+//     errors.push('End time is required')
+//   }
+
+//   // 5. End time must be after start time
+//   if (formData.value.start_time && formData.value.end_time && formData.value.end_time <= formData.value.start_time) {
+//     errors.push('End time must be after start time')
+//   }
+
+//   // 6. Notes required
+//   if (!formData.value.notes?.trim()) {
+//     errors.push('Task notes are required')
+//   }
+
+//   // 7. Mandatory checklist items
+//   const incomplete = checklistItems.value.filter(i => i.is_mandatory && !i.is_completed)
+//   if (incomplete.length > 0) {
+//     errors.push(`${incomplete.length} mandatory checklist item(s) not yet completed`)
+//   }
+
+//   if (errors.length > 0) {
+//     errors.forEach(e => showToast(e, 'error', 5000))
+//     return
+//   }
+
+//   // Save first to persist any unsaved changes, then submit
+//   submitting.value = true
+//   try {
+//     // Persist current state before submitting
+//     const saveRes = await saveTaskResource.fetch({
+//       task_name: taskId,
+//       task_data: formData.value,
+//       inventory_items: inventoryItems.value,
+//       checklist_items: checklistItems.value
+//     })
+//     if (!saveRes?.success) {
+//       const errMsg = saveRes?.error || 'Failed to save before submit'
+//       console.error('[TaskControl] pre-submit save failed:', errMsg)
+//       showToast('Save failed: ' + errMsg, 'error')
+//       return
+//     }
+
+//     const response = await submitTaskResource.fetch({ task_name: taskId })
+//     console.log('[TaskControl] submitTask response:', response)
+//     if (response?.success) {
+//       submitAttempted.value = false
+//       showToast('Task submitted successfully', 'success')
+//       taskResource.reload()
+//     } else {
+//       const errMsg = response?.error || JSON.stringify(response)
+//       console.error('[TaskControl] submitTask failed:', errMsg)
+//       showToast('Failed to submit: ' + errMsg, 'error')
+//     }
+//   } catch (err) {
+//     console.error('[TaskControl] submitTask exception:', err)
+//     showToast('Failed to submit: ' + (err?.message || String(err)), 'error')
+//   } finally {
+//     submitting.value = false
+//   }
+// }
+
+
+
+
 async function submitTask() {
   submitAttempted.value = true
-  const errors = []
 
-  // 1. Status must be Completed
-  if (formData.value.status !== 'Completed') {
-    errors.push(`Status must be "Completed" before submitting (currently "${formData.value.status}")`)
-  }
-
-  // 2. Assigned staff required
-  if (!formData.value.employee) {
-    errors.push('Assigned staff is required')
-  }
-
-  // 3. Start time required
-  if (!formData.value.start_time) {
-    errors.push('Start time is required')
-  }
-
-  // 4. End time required
-  if (!formData.value.end_time) {
-    errors.push('End time is required')
-  }
-
-  // 5. End time must be after start time
-  if (formData.value.start_time && formData.value.end_time && formData.value.end_time <= formData.value.start_time) {
-    errors.push('End time must be after start time')
-  }
-
-  // 6. Notes required
   if (!formData.value.notes?.trim()) {
-    errors.push('Task notes are required')
-  }
-
-  // 7. Mandatory checklist items
-  const incomplete = checklistItems.value.filter(i => i.is_mandatory && !i.is_completed)
-  if (incomplete.length > 0) {
-    errors.push(`${incomplete.length} mandatory checklist item(s) not yet completed`)
-  }
-
-  if (errors.length > 0) {
-    errors.forEach(e => showToast(e, 'error', 5000))
+    showToast('Task notes are required', 'error')
     return
   }
 
-  // Save first to persist any unsaved changes, then submit
+  if (formData.value.status !== 'Completed') {
+    formData.value.status = 'Completed'
+  }
+
   submitting.value = true
+
   try {
-    // Persist current state before submitting
     const saveRes = await saveTaskResource.fetch({
       task_name: taskId,
       task_data: formData.value,
       inventory_items: inventoryItems.value,
       checklist_items: checklistItems.value
     })
+
     if (!saveRes?.success) {
-      const errMsg = saveRes?.error || 'Failed to save before submit'
-      console.error('[TaskControl] pre-submit save failed:', errMsg)
-      showToast('Save failed: ' + errMsg, 'error')
+      showToast('Save failed: ' + (saveRes?.error || 'Unknown error'), 'error')
       return
     }
 
-    const response = await submitTaskResource.fetch({ task_name: taskId })
-    console.log('[TaskControl] submitTask response:', response)
+    const response = await submitTaskResource.fetch({
+      task_name: taskId,
+      notes: formData.value.notes
+    })
+
     if (response?.success) {
-      submitAttempted.value = false
       showToast('Task submitted successfully', 'success')
       taskResource.reload()
     } else {
-      const errMsg = response?.error || JSON.stringify(response)
-      console.error('[TaskControl] submitTask failed:', errMsg)
-      showToast('Failed to submit: ' + errMsg, 'error')
+      showToast('Failed to submit: ' + (response?.error || JSON.stringify(response)), 'error')
     }
-  } catch (err) {
-    console.error('[TaskControl] submitTask exception:', err)
-    showToast('Failed to submit: ' + (err?.message || String(err)), 'error')
+  } catch (e) {
+    showToast('Failed to submit: ' + (e?.message || String(e)), 'error')
   } finally {
     submitting.value = false
   }
 }
+
 
 // ─── Cancel ────────────────────────────────────────────────────────────────────
 const cancelTaskResource = createResource({ url: 'rhohotel.rhocom_hotel.api.housekeeping.cancel_task', auto: false })

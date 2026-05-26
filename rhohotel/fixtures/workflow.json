@@ -118,5 +118,169 @@
   "workflow_data": "[{\"type\":\"state\",\"dimensions\":{\"width\":85,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":38.96875,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":88.9375,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":38.96875,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":104.55590349075982,\"y\":-111.11704312114985,\"z\":0},\"id\":\"2\",\"position\":{\"x\":104.55590349075982,\"y\":-111.11704312114985}},{\"type\":\"state\",\"dimensions\":{\"width\":162,\"height\":74},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":77.5,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":166,\"y\":33.5,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":77.5,\"y\":78,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":33.5,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":391.8628336755646,\"y\":-79.53264887063655,\"z\":0},\"id\":\"3\",\"position\":{\"x\":391.8628336755646,\"y\":-79.53264887063655}},{\"type\":\"state\",\"dimensions\":{\"width\":117,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":54.921875,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":120.859375,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":54.921875,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":250.6055270362765,\"y\":192.3211755646817,\"z\":0},\"id\":\"4\",\"position\":{\"x\":250.6055270362765,\"y\":192.3211755646817}},{\"type\":\"state\",\"dimensions\":{\"width\":111,\"height\":53},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":51.78125,\"y\":-11,\"width\":7,\"height\":7},{\"id\":\"right\",\"position\":\"right\",\"x\":114.5625,\"y\":23,\"width\":7,\"height\":7},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":51.78125,\"y\":57,\"width\":7,\"height\":7},{\"id\":\"left\",\"position\":\"left\",\"x\":-11,\"y\":23,\"width\":7,\"height\":7}]},\"computedPosition\":{\"x\":586.6265400410678,\"y\":194.05324264202602,\"z\":0},\"id\":\"5\",\"position\":{\"x\":586.6265400410678,\"y\":194.05324264202602}},{\"type\":\"action\",\"dimensions\":{\"width\":140,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":67.109375,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":136.234375,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":67.109375,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":199.74366872005479,\"y\":-101.11704312114985,\"z\":0},\"id\":\"action-1\",\"position\":{\"x\":199.74366872005479,\"y\":-101.11704312114985},\"data\":{\"from_id\":\"2\",\"to_id\":\"3\"}},{\"type\":\"action\",\"dimensions\":{\"width\":78,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":36.125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":74.25,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":36.125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":162.55490246406555,\"y\":85.59495208761115,\"z\":0},\"id\":\"action-2\",\"position\":{\"x\":162.55490246406555,\"y\":85.59495208761115},\"data\":{\"from_id\":\"3\",\"to_id\":\"4\"}},{\"type\":\"action\",\"dimensions\":{\"width\":64,\"height\":33},\"handleBounds\":{\"source\":[{\"id\":\"top\",\"position\":\"top\",\"x\":28.953125,\"y\":-2,\"width\":6,\"height\":6},{\"id\":\"right\",\"position\":\"right\",\"x\":59.90625,\"y\":13.5,\"width\":6,\"height\":6},{\"id\":\"bottom\",\"position\":\"bottom\",\"x\":28.953125,\"y\":29,\"width\":6,\"height\":6},{\"id\":\"left\",\"position\":\"left\",\"x\":-2,\"y\":13.5,\"width\":6,\"height\":6}]},\"computedPosition\":{\"x\":653.8279859685146,\"y\":60.47997946611906,\"z\":0},\"id\":\"action-3\",\"position\":{\"x\":653.8279859685146,\"y\":60.47997946611906},\"data\":{\"from_id\":\"3\",\"to_id\":\"5\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"2\",\"target\":\"action-1\",\"updatable\":true,\"animated\":true,\"id\":\"vueflow__edge-2right-action-1left\",\"sourceX\":200.49340349075982,\"sourceY\":-84.61704312114985,\"targetX\":197.74366872005479,\"targetY\":-84.61704312114985},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"action-1\",\"target\":\"3\",\"updatable\":true,\"animated\":true,\"id\":\"vueflow__edge-action-1right-3left\",\"sourceX\":341.97804372005476,\"sourceY\":-84.61704312114985,\"targetX\":380.8628336755646,\"targetY\":-42.53264887063655,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"bottom\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"3\",\"target\":\"action-2\",\"updatable\":true,\"animated\":true,\"id\":\"vueflow__edge-3bottom-action-2left\",\"sourceX\":472.8628336755646,\"sourceY\":5.4673511293634505,\"targetX\":160.55490246406555,\"targetY\":102.09495208761115},{\"sourceHandle\":\"right\",\"targetHandle\":\"top\",\"type\":\"transition\",\"source\":\"action-2\",\"target\":\"4\",\"updatable\":true,\"animated\":true,\"id\":\"vueflow__edge-action-2right-4top\",\"sourceX\":242.80490246406555,\"sourceY\":102.09495208761115,\"targetX\":309.0274020362765,\"targetY\":181.3211755646817,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}},{\"sourceHandle\":\"right\",\"targetHandle\":\"left\",\"type\":\"transition\",\"source\":\"3\",\"target\":\"action-3\",\"updatable\":true,\"animated\":true,\"id\":\"vueflow__edge-3right-action-3left\",\"sourceX\":564.8628336755646,\"sourceY\":-42.53264887063655,\"targetX\":651.8279859685146,\"targetY\":76.97997946611906},{\"sourceHandle\":\"right\",\"targetHandle\":\"top\",\"type\":\"transition\",\"source\":\"action-3\",\"target\":\"5\",\"updatable\":true,\"animated\":true,\"id\":\"vueflow__edge-action-3right-5top\",\"sourceX\":719.7342359685146,\"sourceY\":76.97997946611906,\"targetX\":641.9077900410678,\"targetY\":183.05324264202602,\"markerEnd\":{\"type\":\"arrow\",\"width\":15,\"height\":15,\"strokeWidth\":1.5,\"color\":\"#687178\"}}]",
   "workflow_name": "Bill Transfer Workflow",
   "workflow_state_field": "workflow_state"
- }
+ },
+{
+  "docstatus": 0,
+  "doctype": "Workflow",
+  "name": "Maintenance Task Workflow",
+  "workflow_name": "Maintenance Task Workflow",
+  "document_type": "Maintenance Task",
+  "workflow_state_field": "workflow_state",
+  "is_active": 1,
+  "send_email_alert": 0,
+  "override_status": 0,
+  "states": [
+    {
+      "state": "Draft",
+      "doc_status": "0",
+      "allow_edit": "Maintenance Technician",
+      "update_field": "status",
+      "update_value": "Open",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "In Progress",
+      "doc_status": "0",
+      "allow_edit": "Maintenance Technician",
+      "update_field": "status",
+      "update_value": "In Progress",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Store Approval",
+      "doc_status": "0",
+      "allow_edit": "Stock Manager",
+      "update_field": "status",
+      "update_value": "Pending Store Approval",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Witness Approval",
+      "doc_status": "0",
+      "allow_edit": "All",
+      "update_field": "status",
+      "update_value": "Pending Witness Approval",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Hotel Manager Approval",
+      "doc_status": "0",
+      "allow_edit": "Hotel Manager",
+      "update_field": "status",
+      "update_value": "Pending Hotel Manager Approval",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Completed",
+      "doc_status": "1",
+      "allow_edit": "System Manager",
+      "update_field": "status",
+      "update_value": "Done",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Rejected",
+      "doc_status": "0",
+      "allow_edit": "Hotel Manager",
+      "update_field": "status",
+      "update_value": "Cancelled",
+      "parentfield": "states",
+      "parenttype": "Workflow"
+    }
+  ],
+  "transitions": [
+    {
+      "state": "Draft",
+      "action": "Start Task",
+      "next_state": "In Progress",
+      "allowed": "Maintenance Technician",
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    },
+   {
+  "state": "In Progress",
+  "action": "Send to Store",
+  "next_state": "Pending Store Approval",
+  "allowed": "Maintenance Technician",
+  "condition": "doc.parts_used and doc.start_time and doc.end_time and doc.work_performed",
+  "allow_self_approval": 1,
+  "parentfield": "transitions",
+  "parenttype": "Workflow"
+},
+    {
+  "state": "In Progress",
+  "action": "Send to Witness",
+  "next_state": "Pending Witness Approval",
+  "allowed": "Maintenance Technician",
+  "condition": "not doc.parts_used and doc.start_time and doc.end_time and doc.work_performed",
+  "allow_self_approval": 1,
+  "parentfield": "transitions",
+  "parenttype": "Workflow"
+},
+    {
+      "state": "Pending Store Approval",
+      "action": "Approve Store Items",
+      "next_state": "Pending Witness Approval",
+      "allowed": "Stock Manager",
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Witness Approval",
+      "action": "Verify Work",
+      "next_state": "Pending Hotel Manager Approval",
+      "allowed": "All",
+      "condition": "frappe.db.get_value('Employee', doc.supervisor, 'user_id') == frappe.session.user",
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Hotel Manager Approval",
+      "action": "Complete Task",
+      "next_state": "Completed",
+      "allowed": "Hotel Manager",
+      "condition": null,
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Store Approval",
+      "action": "Reject",
+      "next_state": "Rejected",
+      "allowed": "Stock Manager",
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Witness Approval",
+      "action": "Reject",
+      "next_state": "Rejected",
+      "allowed": "All",
+      "condition": "frappe.db.get_value('Employee', doc.supervisor, 'user_id') == frappe.session.user",
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    },
+    {
+      "state": "Pending Hotel Manager Approval",
+      "action": "Reject",
+      "next_state": "Rejected",
+      "allowed": "Hotel Manager",
+      "allow_self_approval": 1,
+      "parentfield": "transitions",
+      "parenttype": "Workflow"
+    }
+  ]
+}
 ]

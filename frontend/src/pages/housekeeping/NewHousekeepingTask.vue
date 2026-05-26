@@ -118,62 +118,160 @@
           </div>
         </div>
 
-        <!-- Inventory -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Inventory Changes <span class="text-xs font-normal text-gray-400">(optional)</span></h3>
-          <table class="w-full">
-            <thead>
-              <tr class="border-b border-gray-100">
-                <th class="text-left text-xs font-medium text-gray-500 pb-2 w-2/5">Item</th>
-                <th class="text-left text-xs font-medium text-gray-500 pb-2 w-16">Qty</th>
-                <th class="text-left text-xs font-medium text-gray-500 pb-2">Change Type</th>
-                <th class="text-left text-xs font-medium text-gray-500 pb-2">Reason</th>
-                <th class="pb-2 w-6"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-50">
-              <tr v-for="(inv, idx) in inventoryItems" :key="idx">
-                <td class="py-2.5 pr-3">
-                  <select v-model="inv.item" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
-                    <option value="">— select item —</option>
-                    <option v-for="si in systemItems" :key="si.name" :value="si.name">
-                      {{ si.item_name && si.item_name !== si.name ? `${si.item_name} (${si.name})` : si.name }}
-                    </option>
-                  </select>
-                </td>
-                <td class="py-2.5 pr-3">
-                  <input v-model.number="inv.quantity_changed" type="number" min="1"
-                    class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center" />
-                </td>
-                <td class="py-2.5 pr-3">
-                  <select v-model="inv.change_type" class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
-                    <option value="Added">Added</option>
-                    <option value="Removed">Removed</option>
-                    <option value="Replaced">Replaced</option>
-                  </select>
-                </td>
-                <td class="py-2.5 pr-2">
-                  <input v-model="inv.reason" type="text" placeholder="Reason"
-                    class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded" />
-                </td>
-                <td class="py-2.5">
-                  <button @click="inventoryItems.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
-                </td>
-              </tr>
-              <tr v-if="inventoryItems.length === 0">
-                <td colspan="5" class="py-4 text-center text-xs text-gray-400">No items added yet.</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="5" class="pt-3">
-                  <button @click="inventoryItems.push({ item: '', quantity_changed: 1, change_type: 'Added', reason: '' })"
-                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Item</button>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+        
+
+       <!-- Room Inventory Management -->
+<div class="bg-white rounded-xl border border-gray-200 p-5">
+
+  <!-- Room Inventory Before Task -->
+  <div class="mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h3 class="text-sm font-bold text-gray-900">Room Inventory Before Task</h3>
+        <p class="text-xs text-gray-400 mt-0.5">
+          Read-only list of items currently recorded in this room before this task.
+        </p>
+      </div>
+
+      <span class="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+        Read Only
+      </span>
+    </div>
+
+    <div class="overflow-x-auto border border-gray-100 rounded-lg">
+      <table class="w-full">
+        <thead>
+          <tr class="bg-gray-50 border-b border-gray-100">
+            <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Item</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-3 py-2 w-24">Qty</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-3 py-2 w-24">UOM</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-gray-50">
+          <tr v-for="item in roomInventoryBefore" :key="item.item">
+            <td class="px-3 py-2.5 text-xs text-gray-700">
+              {{ item.item_name || item.item }}
+            </td>
+            <td class="px-3 py-2.5 text-xs text-gray-700">
+              {{ item.quantity || item.qty || 0 }}
+            </td>
+            <td class="px-3 py-2.5 text-xs text-gray-500">
+              {{ item.uom || '—' }}
+            </td>
+          </tr>
+
+          <tr v-if="roomInventoryBefore.length === 0">
+            <td colspan="3" class="px-3 py-4 text-center text-xs text-gray-400">
+              {{ form.room ? 'No inventory recorded for this room.' : 'Select a room to view inventory.' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+        <!-- Inventory Update Section -->
+        <div>
+          <h3 class="text-sm font-bold text-gray-900 mb-1">Inventory Update Section</h3>
+          <p class="text-xs text-gray-400 mb-4">
+            Record what changed during this task. Added/Replaced items will reduce store stock on submit.
+          </p>
+
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-2/5">Item</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-20">Qty</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2 w-56">Change Type</th>
+                  <th class="text-left text-xs font-medium text-gray-500 pb-2">Reason</th>
+                  <th class="pb-2 w-6"></th>
+                </tr>
+              </thead>
+
+              <tbody class="divide-y divide-gray-50">
+                <tr v-for="(inv, idx) in inventoryItems" :key="idx">
+                  <td class="py-2.5 pr-3">
+                    <select
+                      v-model="inv.item"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                    >
+                      <option value="">— select item —</option>
+                      <option v-for="si in systemItems" :key="si.name" :value="si.name">
+                        {{ si.item_name && si.item_name !== si.name ? `${si.item_name} (${si.name})` : si.name }}
+                      </option>
+                    </select>
+                  </td>
+
+                  <td class="py-2.5 pr-3">
+                    <input
+                      v-model.number="inv.quantity_changed"
+                      type="number"
+                      min="1"
+                      class="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
+                    />
+                  </td>
+
+                  <td class="py-2.5 pr-3">
+                    <select
+                      v-model="inv.change_type"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                    >
+                      <option value="Added">Added</option>
+                      <option value="Removed">Removed</option>
+                      <option value="Replaced">Replaced</option>
+                    </select>
+
+                    <p class="text-[10px] text-gray-400 mt-1">
+                      <span v-if="inv.change_type === 'Added'">Stock will reduce.</span>
+                      <span v-else-if="inv.change_type === 'Replaced'">Stock will reduce.</span>
+                      <span v-else-if="inv.change_type === 'Removed'">Room inventory only. Stock will not reduce.</span>
+                    </p>
+                  </td>
+
+                  <td class="py-2.5 pr-2">
+                    <input
+                      v-model="inv.reason"
+                      type="text"
+                      placeholder="Reason"
+                      class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                    />
+                  </td>
+
+                  <td class="py-2.5">
+                    <button
+                      @click="inventoryItems.splice(idx, 1)"
+                      class="text-red-400 hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+
+                <tr v-if="inventoryItems.length === 0">
+                  <td colspan="5" class="py-4 text-center text-xs text-gray-400">
+                    No inventory changes added yet.
+                  </td>
+                </tr>
+              </tbody>
+
+              <tfoot>
+                <tr>
+                  <td colspan="5" class="pt-3">
+                    <button
+                      @click="inventoryItems.push({ item: '', quantity_changed: 1, change_type: 'Added', reason: '' })"
+                      class="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      + Add Item
+                    </button>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
+      </div>
 
         <!-- Checklist -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -232,6 +330,18 @@
               + Add
             </button>
           </div>
+        </div>
+
+        <!-- notes -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 class="text-sm font-bold text-gray-900 mb-4">Task Notes<span class="text-red-400">*</span></h3>
+          <textarea
+            v-model="form.notes"
+            rows="4"
+            placeholder="Enter completion note, missing item, damage, lost item, guest request, or maintenance issue..."
+            class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+            :class="attempted && !form.notes ? 'border-red-300 bg-red-50' : 'border-gray-200'"
+          ></textarea>
         </div>
 
       </div>
@@ -310,6 +420,8 @@ const loadingChecklist = ref(false)
 const newChecklistItem = ref('')
 const selectedTemplate = ref('')
 const systemItems = ref([])
+const roomInventoryBefore = ref([])
+const loadingRoomInventory = ref(false)
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 const toasts = ref([])
@@ -381,6 +493,38 @@ const selectedRoomLabel = computed(() => {
   const r = roomsList.value.find(r => r.name === form.value.room)
   return r ? (r.room_number || r.name) : form.value.room
 })
+
+watch(
+  () => form.value.room,
+  async (roomName) => {
+    roomInventoryBefore.value = []
+
+    if (!roomName) return
+
+    loadingRoomInventory.value = true
+
+    try {
+      const csrfToken = window.frappe?.csrf_token || ''
+      const res = await fetch(
+        `/api/method/rhohotel.rhocom_hotel.api.housekeeping.get_room_inventory?room_name=${encodeURIComponent(roomName)}`,
+        {
+          headers: {
+            'X-Frappe-CSRF-Token': csrfToken
+          }
+        }
+      )
+
+      const json = await res.json()
+      roomInventoryBefore.value = json?.message || []
+    } catch (e) {
+      console.error('[NewTask] get_room_inventory error:', e)
+      showToast('Could not load room inventory', 'warning')
+    } finally {
+      loadingRoomInventory.value = false
+    }
+  },
+  { immediate: true }
+)
 
 // ─── Checklist ────────────────────────────────────────────────────────────────
 async function loadTemplate() {

@@ -1,7 +1,18 @@
 <template>
   <div class="space-y-5">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Corporate Billing Statement</h1>
+     
+
+      <div class="flex justify-between items-center gap-3 flex-wrap">
+
+              <h1 class="text-2xl font-bold text-gray-900">Corporate Billing Statement</h1>
+            <button
+                @click="downloadReport"
+                class="bg-green-600 text-white px-4 py-2 rounded-lg">
+                Download
+              </button>
+
+    </div>
       <p class="text-xs text-gray-400 mt-1">
         Corporate account balances, invoices, payments, aging, credit limits and outstanding billing overview.
       </p>
@@ -657,4 +668,20 @@ function statusClass(status) {
 onMounted(() => {
   fetchReport()
 })
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    company: filters.value.company || '',
+    status: filters.value.status || '',
+    aging_bucket: filters.value.aging_bucket || '',
+    search: searchQuery.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_corporate_billing_statement_report?${params.toString()}`,
+    '_blank'
+  )
+}
 </script>

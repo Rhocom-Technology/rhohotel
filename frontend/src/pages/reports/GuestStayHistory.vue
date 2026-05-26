@@ -1,7 +1,17 @@
 <template>
   <div class="space-y-5">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Guest Stay History</h1>
+
+      <div class="flex justify-between items-center gap-3 flex-wrap">
+
+        <h1 class="text-2xl font-bold text-gray-900">Guest Stay History</h1>
+       <button
+          @click="downloadReport"
+          class="bg-green-600 text-white px-4 py-2 rounded-lg">
+          Download
+        </button>
+  
+    </div>
       <p class="text-xs text-gray-400 mt-1">
         Track guest stay records, repeat visits, revenue, balances, source channels, and guest preferences.
       </p>
@@ -620,5 +630,23 @@ function exportReport() {
 
 function printReport() {
   window.print()
+}
+
+
+function downloadReport() {
+  const params = new URLSearchParams({
+    date_from: filters.value.dateFrom || '',
+    date_to: filters.value.dateTo || '',
+    guest_type: filters.value.guestType || '',
+    room_type: filters.value.roomType || '',
+    payment: filters.value.payment || '',
+    source: filters.value.source || '',
+    search: searchQuery.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_guest_stay_history_report?${params.toString()}`,
+    '_blank'
+  )
 }
 </script>

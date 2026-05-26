@@ -615,12 +615,192 @@ def get_task_inventory(task_name):
 #         frappe.db.rollback()
 #         return {"success": False, "error": str(e)}
 
+# @frappe.whitelist()
+# def get_task_details(task_name=None, status=None, employee=None, priority=None):
+#     """
+#     Get filtered housekeeping tasks with room details + child table data
+#     """
+#     filters = {}
+#     if task_name:
+#         filters["name"] = task_name
+#     if status:
+#         filters["status"] = status
+#     if employee:
+#         filters["employee"] = employee
+#     if priority:
+#         filters["priority"] = priority
+
+#     tasks = frappe.get_all(
+#         "Housekeeping Task",
+#         fields=[
+#             "name", "room", "task_type", "status", "priority", "employee",
+#             "start_time", "end_time", "notes", "docstatus", "checklist_template"
+#         ],
+#         filters=filters,
+#         order_by="modified desc",
+#         limit_page_length=100
+#     )
+
+#     for task in tasks:
+#         # Room details
+#         if task.get("room"):
+#             room_details = frappe.db.get_value(
+#                 "Hotel Room",
+#                 task["room"],
+#                 ["room_number", "room_type", "floor", "status", "housekeeping_status"],
+#                 as_dict=1
+#             )
+#             task["room_inventory_before"] = frappe.get_all(
+#                 "Hotel Room Inventory",
+#                 filters={"parent": task["room"]},
+#                 fields=["item", "item_name", "quantity", "uom"],
+#                 order_by="idx asc"
+#             )
+#             else:
+#                 task["room_inventory_before"] = []
+            
+#             if room_details:
+#                 task["room_number"] = room_details.get("room_number")
+#                 task["room_type"] = room_details.get("room_type")
+#                 task["floor"] = room_details.get("floor")
+#                 task["room_status"] = room_details.get("status")
+#                 task["housekeeping_status"] = room_details.get("housekeeping_status")
+
+#         # ── FIX 1: Load inventory child table ──────────────────────────────
+#         task["room_inventory_changes"] = frappe.get_all(
+#             "Housekeeping Task Inventory Change",
+#             filters={"parent": task["name"]},
+#             fields=["item", "quantity_changed", "change_type", "reason", "uom"],
+#             order_by="idx asc"
+#         )
+
+#         # ── Load checklist child table ──────────────────────────────────────
+#         task["checklist_items"] = frappe.get_all(
+#             "Task Checklist Item",
+#             filters={"parent": task["name"]},
+#             fields=["item_description", "is_mandatory", "is_completed", "sequence", "notes"],
+#             order_by="sequence asc, idx asc"
+#         )
+        
+        
+
+#     return tasks
+
+# @frappe.whitelist()
+# def get_task_details(task_name=None, status=None, employee=None, priority=None):
+#     """
+#     Get filtered housekeeping tasks with room details + child table data
+#     """
+
+#     filters = {}
+
+#     if task_name:
+#         filters["name"] = task_name
+
+#     if status:
+#         filters["status"] = status
+
+#     if employee:
+#         filters["employee"] = employee
+
+#     if priority:
+#         filters["priority"] = priority
+
+#     tasks = frappe.get_all(
+#         "Housekeeping Task",
+#         fields=[
+#             "name",
+#             "room",
+#             "task_type",
+#             "status",
+#             "priority",
+#             "employee",
+#             "start_time",
+#             "end_time",
+#             "notes",
+#             "docstatus",
+#             "checklist_template"
+#         ],
+#         filters=filters,
+#         order_by="modified desc",
+#         limit_page_length=100
+#     )
+
+#     for task in tasks:
+
+#         # ── Room details ─────────────────────────────────────────────
+#         if task.get("room"):
+
+#             room_details = frappe.db.get_value(
+#                 "Hotel Room",
+#                 task["room"],
+#                 [
+#                     "room_number",
+#                     "room_type",
+#                     "floor",
+#                     "status",
+#                     "housekeeping_status"
+#                 ],
+#                 as_dict=1
+#             )
+
+#             task["room_inventory_before"] = frappe.get_all(
+#                 "Hotel Room Inventory",
+#                 filters={"parent": task["room"]},
+#                 fields=[
+#                     "item",
+#                     "item_name",
+#                     "quantity",
+#                     "uom"
+#                 ],
+#                 order_by="idx asc"
+#             )
+
+#             if room_details:
+#                 task["room_number"] = room_details.get("room_number")
+#                 task["room_type"] = room_details.get("room_type")
+#                 task["floor"] = room_details.get("floor")
+#                 task["room_status"] = room_details.get("status")
+#                 task["housekeeping_status"] = room_details.get("housekeeping_status")
+
+#         else:
+#             task["room_inventory_before"] = []
+
+#         # ── Inventory changes child table ───────────────────────────
+#         task["room_inventory_changes"] = frappe.get_all(
+#             "Housekeeping Task Inventory Change",
+#             filters={"parent": task["name"]},
+#             fields=[
+#                 "item",
+#                 "quantity_changed",
+#                 "change_type",
+#                 "reason",
+#                 "uom"
+#             ],
+#             order_by="idx asc"
+#         )
+
+#         # ── Checklist child table ───────────────────────────────────
+#         task["checklist_items"] = frappe.get_all(
+#             "Task Checklist Item",
+#             filters={"parent": task["name"]},
+#             fields=[
+#                 "item_description",
+#                 "is_mandatory",
+#                 "is_completed",
+#                 "sequence",
+#                 "notes"
+#             ],
+#             order_by="sequence asc, idx asc"
+#         )
+
+#     return tasks
+
+
 @frappe.whitelist()
 def get_task_details(task_name=None, status=None, employee=None, priority=None):
-    """
-    Get filtered housekeeping tasks with room details + child table data
-    """
     filters = {}
+
     if task_name:
         filters["name"] = task_name
     if status:
@@ -642,7 +822,6 @@ def get_task_details(task_name=None, status=None, employee=None, priority=None):
     )
 
     for task in tasks:
-        # Room details
         if task.get("room"):
             room_details = frappe.db.get_value(
                 "Hotel Room",
@@ -650,14 +829,27 @@ def get_task_details(task_name=None, status=None, employee=None, priority=None):
                 ["room_number", "room_type", "floor", "status", "housekeeping_status"],
                 as_dict=1
             )
+
+            task["room_inventory_before"] = frappe.get_all(
+                "Hotel Room Inventory Item",
+                filters={"parent": task["room"]},
+                fields=["item", "quantity"],
+                order_by="idx asc"
+            )
+
+            for inv in task["room_inventory_before"]:
+                inv["item_name"] = frappe.db.get_value("Item", inv.get("item"), "item_name") or inv.get("item")
+                inv["uom"] = frappe.db.get_value("Item", inv.get("item"), "stock_uom") or ""
+
             if room_details:
                 task["room_number"] = room_details.get("room_number")
                 task["room_type"] = room_details.get("room_type")
                 task["floor"] = room_details.get("floor")
                 task["room_status"] = room_details.get("status")
                 task["housekeeping_status"] = room_details.get("housekeeping_status")
+        else:
+            task["room_inventory_before"] = []
 
-        # ── FIX 1: Load inventory child table ──────────────────────────────
         task["room_inventory_changes"] = frappe.get_all(
             "Housekeeping Task Inventory Change",
             filters={"parent": task["name"]},
@@ -665,7 +857,6 @@ def get_task_details(task_name=None, status=None, employee=None, priority=None):
             order_by="idx asc"
         )
 
-        # ── Load checklist child table ──────────────────────────────────────
         task["checklist_items"] = frappe.get_all(
             "Task Checklist Item",
             filters={"parent": task["name"]},
@@ -674,7 +865,6 @@ def get_task_details(task_name=None, status=None, employee=None, priority=None):
         )
 
     return tasks
-
 
 # @frappe.whitelist()
 # def update_task(task_name, task_data, inventory_items=None, checklist_items=None):
@@ -755,6 +945,26 @@ def get_task_details(task_name=None, status=None, employee=None, priority=None):
 #         frappe.db.rollback()
 #         return {"success": False, "error": str(e)}
 
+@frappe.whitelist()
+def get_room_inventory(room_name):
+    if not room_name:
+        return []
+
+    items = frappe.get_all(
+        "Hotel Room Inventory Item",
+        filters={"parent": room_name},
+        fields=["item", "quantity"],
+        order_by="idx asc"
+    )
+
+    for item in items:
+        item["item_name"] = frappe.db.get_value("Item", item.get("item"), "item_name") or item.get("item")
+        item["uom"] = frappe.db.get_value("Item", item.get("item"), "stock_uom") or ""
+
+    return items
+    
+    
+    
 
 @frappe.whitelist()
 def update_task(task_name, task_data, inventory_items=None, checklist_items=None):
@@ -830,21 +1040,45 @@ def update_task(task_name, task_data, inventory_items=None, checklist_items=None
  
 
  
+# @frappe.whitelist()
+# def submit_task(task_name):
+#     """
+#     Submit a housekeeping task
+#     """
+#     try:
+#         task = frappe.get_doc("Housekeeping Task", task_name)
+#         task.flags.ignore_permissions = True
+#         task.submit()
+#         frappe.db.commit()
+#         return {"success": True, "message": "Task submitted successfully"}
+#     except Exception as e:
+#         frappe.db.rollback()
+#         return {"success": False, "error": str(e)}
+
+
 @frappe.whitelist()
 def submit_task(task_name):
-    """
-    Submit a housekeeping task
-    """
     try:
         task = frappe.get_doc("Housekeeping Task", task_name)
+
+        if task.docstatus == 1:
+            return {"success": False, "error": "Task is already submitted"}
+
+        task.status = "Completed"
         task.flags.ignore_permissions = True
         task.submit()
+
         frappe.db.commit()
-        return {"success": True, "message": "Task submitted successfully"}
+        return {
+            "success": True,
+            "message": "Task submitted successfully",
+            "stock_entry": task.stock_entry
+        }
+
     except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "submit_task error")
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
-
 
 @frappe.whitelist()
 def cancel_task(task_name):

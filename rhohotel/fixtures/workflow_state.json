@@ -43,5 +43,40 @@
   "name": "Pending Approval",
   "style": "",
   "workflow_state_name": "Pending Approval"
- }
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "name": "Pending Store Approval",
+  "workflow_state_name": "Pending Store Approval",
+  "style": "Warning"
+},
+{
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "name": "Pending Witness Approval",
+  "workflow_state_name": "Pending Witness Approval",
+  "style": "Info"
+},
+{
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "name": "Pending Hotel Manager Approval",
+  "workflow_state_name": "Pending Hotel Manager Approval",
+  "style": "Info"
+},
+{
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "name": "Completed",
+  "workflow_state_name": "Completed",
+  "style": "Success"
+},
+{
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "name": "In Progress",
+  "workflow_state_name": "In Progress",
+  "style": "Warning"
+}
 ]

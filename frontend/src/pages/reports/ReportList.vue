@@ -185,7 +185,7 @@ const reports = ref([
     category: 'Front Desk',
     description: 'Used by management for daily performance review and occupancy decision making.',
     exportNote: 'Export: PDF / Excel',
-    route: '/reports/daily-occupancy',
+    route: '/reports/daily-occupancy-report',
   },
   {
     name: 'Guest Stay History Report',
@@ -193,7 +193,7 @@ const reports = ref([
     category: 'Guest Management',
     description: 'Supports loyalty, complementary decisions, and guest relationship analysis.',
     exportNote: 'Export: PDF',
-    route: '/reports/guest-stay-history',
+    route: '/reports/guest-stay-history-report',
   },
   {
     name: 'Night Audit Summary',
@@ -201,7 +201,7 @@ const reports = ref([
     category: 'Billing',
     description: 'Generated after end-of-day processing and used for finance control and review.',
     exportNote: 'Export: PDF / Excel',
-    route: '/reports/night-audit',
+    route: '/reports/night-audit-summary-report',
   },
   {
     name: 'POS Sales Performance',
@@ -209,7 +209,7 @@ const reports = ref([
     category: 'Point of Sale',
     description: 'Tracks restaurant, bar, room-posted sales, and helps management evaluate sales performance.',
     exportNote: 'Export: Excel',
-    route: '/reports/pos-sales',
+    route: '/reports/pos-sales-report',
   },
   {
     name: 'Housekeeping Productivity Report',
@@ -217,7 +217,7 @@ const reports = ref([
     category: 'Housekeeping',
     description: 'Supports supervisor review, staffing decisions, and daily housekeeping control.',
     exportNote: 'Export: PDF / Excel',
-    route: '/reports/housekeeping-productivity',
+    route: '/reports/house-keeping-productivity-report',
   },
   {
     name: 'Corporate Billing Statement',
@@ -225,16 +225,16 @@ const reports = ref([
     category: 'Billing',
     description: 'Used for client follow-up, receivables monitoring, and corporate collections.',
     exportNote: 'Export: PDF',
-    route: '/reports/corporate-account-statement',
+    route: '/reports/corporate-billing-statement',
   },
   {
-    name: 'Asset Maintenance Report',
-    subtitle: 'Asset faults, maintenance tasks, technician assignments, and issue resolution summary',
-    category: 'Asset Management',
-    description: 'Pending validation of latest maintenance entries before final publication.',
-    exportNote: 'Export: Excel',
-    route: '/reports/asset-maintenance',
-  },
+  name: 'Corporate Account Statement',
+  subtitle: 'Customer account ledger showing invoices, payments, debits, credits and running balances',
+  category: 'Billing',
+  description: 'Provides customer-level account summaries, transaction history, outstanding balances, and receivable tracking for corporate clients.',
+  exportNote: 'Export: PDF / Excel',
+  route: '/reports/corporate-account-statement',
+},
 ])
 
 const filteredReports = computed(() => {

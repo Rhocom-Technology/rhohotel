@@ -11,8 +11,7 @@
         "quantity",
         "uom",
         "warehouse",
-        "cost",
-        "store_impact",
+        "available_qty",
         "stock_entry"
     ],
     "fields": [
@@ -22,7 +21,8 @@
             "in_list_view": 1,
             "label": "Item Code",
             "options": "Item",
-            "reqd": 1
+            "reqd": 1,
+            "columns": 2
         },
         {
             "fetch_from": "item_code.item_name",
@@ -30,7 +30,8 @@
             "fieldtype": "Data",
             "in_list_view": 1,
             "label": "Item Name",
-            "read_only": 1
+            "read_only": 1,
+            "columns": 1
         },
         {
             "default": "1",
@@ -47,28 +48,24 @@
             "in_list_view": 1,
             "label": "UOM",
             "options": "UOM",
-            "reqd": 1
+            "reqd": 1,
+            "columns": 2
         },
         {
             "fieldname": "warehouse",
             "fieldtype": "Link",
             "in_list_view": 1,
             "label": "Warehouse",
-            "options": "Warehouse"
+            "options": "Warehouse",
+            "columns": 1
         },
         {
-            "fieldname": "cost",
-            "fieldtype": "Currency",
+            "fieldname": "available_qty",
+            "fieldtype": "Float",
             "in_list_view": 1,
-            "label": "Cost"
-        },
-        {
-            "default": "Reduce Stock",
-            "fieldname": "store_impact",
-            "fieldtype": "Select",
-            "in_list_view": 1,
-            "label": "Store Impact",
-            "options": "\nReduce Stock\nNo Impact\nReturn to Store"
+            "label": "Available Quantity",
+            "read_only": 1,
+            "columns": 1
         },
         {
             "fieldname": "stock_entry",
