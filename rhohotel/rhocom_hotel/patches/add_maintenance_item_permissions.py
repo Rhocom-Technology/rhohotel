@@ -42,7 +42,6 @@
 
 #     frappe.db.commit()
 
-
 import frappe
 
 
@@ -54,7 +53,8 @@ ROLES = [
 
 def execute():
     for role in ROLES:
-        ensure_role(role)
+        if role == "Maintenance Technician":
+            ensure_role(role)
 
         add_perm("Item", role)
         add_perm("Warehouse", role)
