@@ -43,7 +43,6 @@
 #     frappe.db.commit()
 
 
-
 import frappe
 
 
@@ -55,10 +54,23 @@ ROLES = [
 
 def execute():
     for role in ROLES:
+        ensure_role(role)
+
         add_perm("Item", role)
         add_perm("Warehouse", role)
         add_perm("UOM", role)
         add_perm("Bin", role)
+
+
+def ensure_role(role):
+    if frappe.db.exists("Role", role):
+        return
+
+    frappe.get_doc({
+        "doctype": "Role",
+        "role_name": role,
+        "desk_access": 1
+    }).insert(ignore_permissions=True)
 
 
 def add_perm(doctype, role):
@@ -87,5 +99,3 @@ def add_perm(doctype, role):
         perm.select = 0
 
     perm.insert(ignore_permissions=True)
-
-    frappe.db.commit()
