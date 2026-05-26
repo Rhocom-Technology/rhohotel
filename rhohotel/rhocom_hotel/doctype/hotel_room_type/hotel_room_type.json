@@ -102,6 +102,28 @@
       "label": "Room Images",
       "options": "Hotel Room Images",
       "reqd": 0
+    },
+    {
+      "fieldname": "show_on_home",
+      "fieldtype": "Check",
+      "label": "Show On Home",
+      "default": 0
+    },
+    {
+      "fieldname": "show_on_website",
+      "fieldtype": "Check",
+      "label": "Show On Website",
+      "default": 0
+    },
+    {
+      "fieldname": "short_description",
+      "fieldtype": "Small Text",
+      "label": "Short Description"
+    },
+    {
+      "fieldname": "website_description",
+      "fieldtype": "Small Text",
+      "label": "Website Description"
     }
   ],
   "links": [],
