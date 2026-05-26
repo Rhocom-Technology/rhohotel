@@ -41,7 +41,7 @@
             v-model="filters.customer"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
           >
-            <option value="">All Customers</option>
+            <option value="">All Corporate Customers</option>
             <option
               v-for="customer in customers"
               :key="customer.name"
@@ -127,7 +127,7 @@
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-indigo-500">
-        <p class="text-xs text-gray-400 mb-1">Customers</p>
+        <p class="text-xs text-gray-400 mb-1">Corporate Customers</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.customer_count) }}</p>
         <p class="text-[10px] text-indigo-600 mt-1">accounts</p>
       </div>
@@ -178,7 +178,7 @@
 
           <tr v-if="!accountSummary.length">
             <td colspan="5" class="px-5 py-8 text-center text-xs text-gray-400">
-              No account summary found.
+             No corporate customer summary found.
             </td>
           </tr>
         </tbody>
@@ -186,7 +186,7 @@
 
       <div class="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
         <p class="text-xs text-gray-400">
-          Showing {{ accountSummary.length }} of {{ accountTotal }} accounts
+        Showing {{ accountSummary.length }} of {{ accountTotal }} corporate customer accounts
         </p>
 
         <div class="flex items-center gap-1">

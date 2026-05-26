@@ -78,9 +78,13 @@ def _get_customer_display(customer):
 
 	return customer
 
-
 def _get_sales_invoice_rows(date_from, date_to, customer=None, search=None):
 	if not _has_doctype("Sales Invoice"):
+		return []
+
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
 		return []
 
 	posting_date_field = _get_field("Sales Invoice", ["posting_date"])
@@ -98,20 +102,31 @@ def _get_sales_invoice_rows(date_from, date_to, customer=None, search=None):
 		params["date_from"] = date_from
 		params["date_to"] = date_to
 
+	if customer_field:
+		conditions.append("{0} IN %(corporate_customers)s".format(customer_field))
+		params["corporate_customers"] = tuple(corporate_customers)
+
 	if customer and customer_field:
 		conditions.append("{0} = %(customer)s".format(customer_field))
 		params["customer"] = customer
 
 	if search:
 		search_fields = ["name"]
+
 		for field in [customer_field, customer_name_field, remarks_field]:
 			if field and field not in search_fields:
 				search_fields.append(field)
 
-		conditions.append("(" + " OR ".join(["{0} LIKE %(search)s".format(f) for f in search_fields]) + ")")
+		conditions.append(
+			"(" + " OR ".join(
+				["{0} LIKE %(search)s".format(f) for f in search_fields]
+			) + ")"
+		)
+
 		params["search"] = "%{0}%".format(search)
 
 	select_fields = ["name"]
+
 	for field in [
 		posting_date_field,
 		customer_field,
@@ -153,7 +168,9 @@ def _get_sales_invoice_rows(date_from, date_to, customer=None, search=None):
 				"party_name": cust_name or _get_customer_display(cust),
 				"transaction_type": "Sales Invoice",
 				"reference": inv.get("name"),
-				"description": inv.get(remarks_field) if remarks_field else "Corporate billing invoice",
+				"description": inv.get(remarks_field)
+				if remarks_field
+				else "Corporate billing invoice",
 				"debit": amount,
 				"credit": 0,
 				"outstanding": outstanding,
@@ -164,8 +181,14 @@ def _get_sales_invoice_rows(date_from, date_to, customer=None, search=None):
 	return rows
 
 
+
 def _get_payment_rows(date_from, date_to, customer=None, search=None):
 	if not _has_doctype("Payment Entry"):
+		return []
+
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
 		return []
 
 	posting_date_field = _get_field("Payment Entry", ["posting_date"])
@@ -187,20 +210,31 @@ def _get_payment_rows(date_from, date_to, customer=None, search=None):
 	if party_type_field:
 		conditions.append("{0} = 'Customer'".format(party_type_field))
 
+	if party_field:
+		conditions.append("{0} IN %(corporate_customers)s".format(party_field))
+		params["corporate_customers"] = tuple(corporate_customers)
+
 	if customer and party_field:
 		conditions.append("{0} = %(customer)s".format(party_field))
 		params["customer"] = customer
 
 	if search:
 		search_fields = ["name"]
+
 		for field in [party_field, party_name_field, reference_no_field, remarks_field]:
 			if field and field not in search_fields:
 				search_fields.append(field)
 
-		conditions.append("(" + " OR ".join(["{0} LIKE %(search)s".format(f) for f in search_fields]) + ")")
+		conditions.append(
+			"(" + " OR ".join(
+				["{0} LIKE %(search)s".format(f) for f in search_fields]
+			) + ")"
+		)
+
 		params["search"] = "%{0}%".format(search)
 
 	select_fields = ["name"]
+
 	for field in [
 		posting_date_field,
 		party_field,
@@ -246,7 +280,9 @@ def _get_payment_rows(date_from, date_to, customer=None, search=None):
 				if reference_no_field
 				else "Payment received",
 				"debit": 0,
-				"credit": flt(pay.get(paid_amount_field)) if paid_amount_field else 0,
+				"credit": flt(pay.get(paid_amount_field))
+				if paid_amount_field
+				else 0,
 				"outstanding": 0,
 				"source": "Payment Entry",
 			}
@@ -255,83 +291,61 @@ def _get_payment_rows(date_from, date_to, customer=None, search=None):
 	return rows
 
 
-def _get_opening_balance(date_from, customer=None):
-	opening = 0
 
-	if _has_doctype("Sales Invoice"):
-		posting_date_field = _get_field("Sales Invoice", ["posting_date"])
-		customer_field = _get_field("Sales Invoice", ["customer"])
-		grand_total_field = _get_field("Sales Invoice", ["grand_total", "rounded_total"])
 
-		if posting_date_field and grand_total_field:
-			conditions = ["docstatus = 1", "{0} < %(date_from)s".format(posting_date_field)]
-			params = {"date_from": date_from}
+def _get_corporate_customers():
+	if not _has_doctype("Hotel Guest"):
+		return []
 
-			if customer and customer_field:
-				conditions.append("{0} = %(customer)s".format(customer_field))
-				params["customer"] = customer
+	guest_type_field = _get_field("Hotel Guest", ["guest_type"])
+	customer_field = _get_field("Hotel Guest", ["customer"])
 
-			opening += flt(
-				frappe.db.sql(
-					"""
-				SELECT SUM({amount_field})
-				FROM `tabSales Invoice`
-				WHERE {conditions}
-				""".format(
-						amount_field=grand_total_field,
-						conditions=" AND ".join(conditions),
-					),
-					params,
-				)[0][0]
-				or 0
-			)
+	if not guest_type_field or not customer_field:
+		return []
 
-	if _has_doctype("Payment Entry"):
-		posting_date_field = _get_field("Payment Entry", ["posting_date"])
-		party_field = _get_field("Payment Entry", ["party"])
-		party_type_field = _get_field("Payment Entry", ["party_type"])
-		paid_amount_field = _get_field("Payment Entry", ["paid_amount", "received_amount"])
+	try:
+		rows = frappe.db.sql(
+			"""
+			SELECT DISTINCT `{customer_field}` AS customer
+			FROM `tabHotel Guest`
+			WHERE `{guest_type_field}` = 'Corporate'
+			  AND IFNULL(`{customer_field}`, '') != ''
+			""".format(
+				customer_field=customer_field,
+				guest_type_field=guest_type_field
+			),
+			as_dict=True,
+		)
 
-		if posting_date_field and paid_amount_field:
-			conditions = ["docstatus = 1", "{0} < %(date_from)s".format(posting_date_field)]
-			params = {"date_from": date_from}
+		return [row.customer for row in rows if row.customer]
 
-			if party_type_field:
-				conditions.append("{0} = 'Customer'".format(party_type_field))
+	except Exception:
+		return []
 
-			if customer and party_field:
-				conditions.append("{0} = %(customer)s".format(party_field))
-				params["customer"] = customer
-
-			opening -= flt(
-				frappe.db.sql(
-					"""
-				SELECT SUM({amount_field})
-				FROM `tabPayment Entry`
-				WHERE {conditions}
-				""".format(
-						amount_field=paid_amount_field,
-						conditions=" AND ".join(conditions),
-					),
-					params,
-				)[0][0]
-				or 0
-			)
-
-	return opening
 
 
 def _get_customers():
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
+		return []
+
 	if not _has_doctype("Customer"):
 		return []
 
 	try:
 		return frappe.db.sql(
 			"""
-			SELECT name, customer_name
+			SELECT
+				name,
+				customer_name
 			FROM `tabCustomer`
+			WHERE name IN %(customers)s
 			ORDER BY customer_name ASC, name ASC
 			""",
+			{
+				"customers": tuple(corporate_customers)
+			},
 			as_dict=True,
 		)
 	except Exception:
@@ -350,6 +364,13 @@ def get_corporate_account_statement(
 ):
 	date_from = _date_or_default(date_from, add_days(nowdate(), -30))
 	date_to = _date_or_default(date_to, nowdate())
+ 
+	corporate_customers = _get_corporate_customers()
+
+	if customer and customer not in corporate_customers:
+		customer = "__invalid__"
+ 
+	
 
 	invoice_rows = _get_sales_invoice_rows(date_from, date_to, customer, search)
 	payment_rows = _get_payment_rows(date_from, date_to, customer, search)
@@ -414,3 +435,88 @@ def get_corporate_account_statement(
 			"customer_count": len(account_map),
 		},
 	}
+
+
+def _get_opening_balance(date_from, customer=None):
+	opening = 0
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
+		return 0
+
+	if customer and customer not in corporate_customers:
+		return 0
+
+	if _has_doctype("Sales Invoice"):
+		posting_date_field = _get_field("Sales Invoice", ["posting_date"])
+		customer_field = _get_field("Sales Invoice", ["customer"])
+		grand_total_field = _get_field("Sales Invoice", ["grand_total", "rounded_total"])
+
+		if posting_date_field and grand_total_field and customer_field:
+			conditions = [
+				"docstatus = 1",
+				"{0} < %(date_from)s".format(posting_date_field),
+				"{0} IN %(corporate_customers)s".format(customer_field),
+			]
+			params = {
+				"date_from": date_from,
+				"corporate_customers": tuple(corporate_customers),
+			}
+
+			if customer:
+				conditions.append("{0} = %(customer)s".format(customer_field))
+				params["customer"] = customer
+
+			opening += flt(
+				frappe.db.sql(
+					"""
+					SELECT SUM({amount_field})
+					FROM `tabSales Invoice`
+					WHERE {conditions}
+					""".format(
+						amount_field=grand_total_field,
+						conditions=" AND ".join(conditions),
+					),
+					params,
+				)[0][0] or 0
+			)
+
+	if _has_doctype("Payment Entry"):
+		posting_date_field = _get_field("Payment Entry", ["posting_date"])
+		party_field = _get_field("Payment Entry", ["party"])
+		party_type_field = _get_field("Payment Entry", ["party_type"])
+		paid_amount_field = _get_field("Payment Entry", ["paid_amount", "received_amount"])
+
+		if posting_date_field and paid_amount_field and party_field:
+			conditions = [
+				"docstatus = 1",
+				"{0} < %(date_from)s".format(posting_date_field),
+				"{0} IN %(corporate_customers)s".format(party_field),
+			]
+			params = {
+				"date_from": date_from,
+				"corporate_customers": tuple(corporate_customers),
+			}
+
+			if party_type_field:
+				conditions.append("{0} = 'Customer'".format(party_type_field))
+
+			if customer:
+				conditions.append("{0} = %(customer)s".format(party_field))
+				params["customer"] = customer
+
+			opening -= flt(
+				frappe.db.sql(
+					"""
+					SELECT SUM({amount_field})
+					FROM `tabPayment Entry`
+					WHERE {conditions}
+					""".format(
+						amount_field=paid_amount_field,
+						conditions=" AND ".join(conditions),
+					),
+					params,
+				)[0][0] or 0
+			)
+
+	return opening

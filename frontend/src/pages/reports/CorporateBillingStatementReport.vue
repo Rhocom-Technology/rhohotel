@@ -31,9 +31,9 @@
         </div>
 
         <div style="min-width:180px;">
-          <p class="text-xs text-gray-500 mb-1.5">Company</p>
+          <p class="text-xs text-gray-500 mb-1.5"> Corporate Customer</p>
           <select v-model="filters.company" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-            <option value="">All Companies</option>
+            <option value="">All Corporate Customers</option>
             <option v-for="company in companies" :key="company" :value="company">{{ company }}</option>
           </select>
         </div>
@@ -109,7 +109,7 @@
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-indigo-500">
-        <p class="text-xs text-gray-400 mb-1">Companies</p>
+      <p class="text-xs text-gray-400 mb-1">Corporate Customers</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.company_count) }}</p>
         <p class="text-[10px] text-indigo-600 mt-1">accounts</p>
       </div>
@@ -151,15 +151,15 @@
 
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 class="text-sm font-bold text-gray-900">Corporate Account Summary</h3>
-          <p class="text-xs text-gray-400">Company-level billing performance</p>
+          <h3 class="text-sm font-bold text-gray-900">Corporate Customer Summary</h3>
+          <p class="text-xs text-gray-400">Corporate customer billing performance</p>
         </div>
 
         <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
           <div class="flex items-end gap-3 flex-wrap">
             <div class="flex-1 min-w-[220px]">
-              <p class="text-xs text-gray-500 mb-1.5">Search Company</p>
-              <input v-model="companySummaryFilters.search" type="text" placeholder="Search company..." class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+             <p class="text-xs text-gray-500 mb-1.5">Search Corporate Customer</p>
+              <input v-model="companySummaryFilters.search" type="text" placeholder="Search corporate customer..." class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <div style="min-width:160px;">
@@ -204,7 +204,7 @@
 
             <tr v-if="!companySummary.length">
               <td colspan="5" class="px-5 py-8 text-center text-xs text-gray-400">
-                No company summary found.
+                No corporate customer summary found.
               </td>
             </tr>
           </tbody>

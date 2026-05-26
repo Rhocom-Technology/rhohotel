@@ -140,22 +140,37 @@ def get_corporate_billing_statement(
 	rows = []
 	companies = set()
 
-	if not _has_doctype("Sales Invoice"):
+	def empty_response():
 		return {
 			"rows": [],
 			"companies": [],
 			"company_summary": [],
 			"company_summary_total": 0,
 			"company_summary_page": 1,
-			"company_summary_page_size": 10,
+			"company_summary_page_size": int(company_page_size or 10),
 			"company_summary_total_pages": 1,
 			"aging_breakdown": [],
 			"aging_breakdown_total": 0,
 			"aging_breakdown_page": 1,
-			"aging_breakdown_page_size": 10,
+			"aging_breakdown_page_size": int(aging_page_size or 10),
 			"aging_breakdown_total_pages": 1,
-			"summary": {},
+			"summary": {
+				"total_billing": 0,
+				"total_paid": 0,
+				"outstanding": 0,
+				"overdue": 0,
+				"invoice_count": 0,
+				"company_count": 0,
+			},
 		}
+
+	if not _has_doctype("Sales Invoice"):
+		return empty_response()
+
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
+		return empty_response()
 
 	customer_field = _get_field("Sales Invoice", ["customer"])
 	customer_name_field = _get_field("Sales Invoice", ["customer_name"])
@@ -196,8 +211,12 @@ def get_corporate_billing_statement(
 		params["date_from"] = date_from
 		params["date_to"] = date_to
 
-	if company and company_field:
-		conditions.append("{0} = %(company)s".format(company_field))
+	if customer_field:
+		conditions.append("{0} IN %(corporate_customers)s".format(customer_field))
+		params["corporate_customers"] = tuple(corporate_customers)
+
+	if company and customer_field:
+		conditions.append("{0} = %(company)s".format(customer_field))
 		params["company"] = company
 
 	if search:
@@ -214,6 +233,7 @@ def get_corporate_billing_statement(
 				search_fields.append(field)
 
 		search_sql = []
+
 		for field in search_fields:
 			search_sql.append("{0} LIKE %(search)s".format(field))
 
@@ -267,11 +287,11 @@ def get_corporate_billing_statement(
 		else:
 			outstanding_amount = billed_amount - paid_amount
 
-		raw_company = inv.get(company_field) if company_field else ""
 		customer = inv.get(customer_field) if customer_field else ""
 		customer_name = inv.get(customer_name_field) if customer_name_field else ""
+		raw_company = inv.get(company_field) if company_field else ""
 
-		company_name = raw_company or customer_name or customer or "Unknown"
+		company_name = customer_name or raw_company or customer or "Unknown"
 
 		guest = ""
 		if guest_field:
@@ -285,6 +305,7 @@ def get_corporate_billing_statement(
 			reference = inv.get(remarks_field) or ""
 
 		days_overdue = 0
+
 		if due_date:
 			days_overdue = date_diff(nowdate(), due_date)
 
@@ -297,13 +318,14 @@ def get_corporate_billing_statement(
 		if aging_bucket and bucket != aging_bucket:
 			continue
 
-		companies.add(company_name)
+		companies.add(customer)
 
 		rows.append(
 			{
 				"invoice": invoice_name,
 				"date": str(invoice_date) if invoice_date else "",
 				"company": company_name,
+				"customer": customer,
 				"guest": guest,
 				"reference": reference,
 				"due_date": str(due_date) if due_date else "",
@@ -318,16 +340,22 @@ def get_corporate_billing_statement(
 	total_billing = sum(flt(row.get("billed_amount")) for row in rows)
 	total_paid = sum(flt(row.get("paid_amount")) for row in rows)
 	total_outstanding = sum(flt(row.get("outstanding_amount")) for row in rows)
-	total_overdue = sum(flt(row.get("outstanding_amount")) for row in rows if row.get("status") == "Overdue")
+	total_overdue = sum(
+		flt(row.get("outstanding_amount"))
+		for row in rows
+		if row.get("status") == "Overdue"
+	)
 
 	company_map = {}
 
 	for row in rows:
-		company_name = row.get("company") or "Unknown"
+		customer_id = row.get("customer") or row.get("company") or "Unknown"
+		company_name = row.get("company") or customer_id
 
-		if company_name not in company_map:
-			company_map[company_name] = {
+		if customer_id not in company_map:
+			company_map[customer_id] = {
 				"company": company_name,
+				"customer": customer_id,
 				"invoices": 0,
 				"billed": 0,
 				"paid": 0,
@@ -335,34 +363,47 @@ def get_corporate_billing_statement(
 				"status": "Paid",
 			}
 
-		company_map[company_name]["invoices"] += 1
-		company_map[company_name]["billed"] += flt(row.get("billed_amount"))
-		company_map[company_name]["paid"] += flt(row.get("paid_amount"))
-		company_map[company_name]["outstanding"] += flt(row.get("outstanding_amount"))
+		company_map[customer_id]["invoices"] += 1
+		company_map[customer_id]["billed"] += flt(row.get("billed_amount"))
+		company_map[customer_id]["paid"] += flt(row.get("paid_amount"))
+		company_map[customer_id]["outstanding"] += flt(row.get("outstanding_amount"))
 
-	for company_name in company_map:
-		if company_map[company_name]["outstanding"] > 0:
-			company_map[company_name]["status"] = "Outstanding"
+	for customer_id in company_map:
+		if company_map[customer_id]["outstanding"] > 0:
+			company_map[customer_id]["status"] = "Outstanding"
 
 	company_summary = list(company_map.values())
 
 	if company_summary_search:
 		q = str(company_summary_search).lower()
-		company_summary = [item for item in company_summary if q in str(item.get("company") or "").lower()]
+		company_summary = [
+			item for item in company_summary
+			if q in str(item.get("company") or "").lower()
+			or q in str(item.get("customer") or "").lower()
+		]
 
 	if company_summary_status == "Outstanding":
-		company_summary = [item for item in company_summary if flt(item.get("outstanding")) > 0]
+		company_summary = [
+			item for item in company_summary
+			if flt(item.get("outstanding")) > 0
+		]
 	elif company_summary_status == "Paid":
-		company_summary = [item for item in company_summary if flt(item.get("outstanding")) <= 0]
+		company_summary = [
+			item for item in company_summary
+			if flt(item.get("outstanding")) <= 0
+		]
 
 	if company_summary_min_outstanding:
 		company_summary = [
-			item
-			for item in company_summary
+			item for item in company_summary
 			if flt(item.get("outstanding")) >= flt(company_summary_min_outstanding)
 		]
 
-	company_summary = sorted(company_summary, key=lambda x: flt(x.get("outstanding")), reverse=True)
+	company_summary = sorted(
+		company_summary,
+		key=lambda x: flt(x.get("outstanding")),
+		reverse=True
+	)
 
 	aging_map = {}
 
@@ -371,13 +412,25 @@ def get_corporate_billing_statement(
 		aging_map[bucket] = aging_map.get(bucket, 0) + flt(row.get("outstanding_amount"))
 
 	aging_breakdown = sorted(
-		[{"bucket": bucket, "amount": amount} for bucket, amount in aging_map.items()],
+		[
+			{"bucket": bucket, "amount": amount}
+			for bucket, amount in aging_map.items()
+		],
 		key=lambda x: flt(x.get("amount")),
 		reverse=True,
 	)
 
-	company_summary_page = _paginate(company_summary, company_page, company_page_size)
-	aging_breakdown_page = _paginate(aging_breakdown, aging_page, aging_page_size)
+	company_summary_page = _paginate(
+		company_summary,
+		company_page,
+		company_page_size
+	)
+
+	aging_breakdown_page = _paginate(
+		aging_breakdown,
+		aging_page,
+		aging_page_size
+	)
 
 	return {
 		"rows": rows,
@@ -398,6 +451,31 @@ def get_corporate_billing_statement(
 			"outstanding": total_outstanding,
 			"overdue": total_overdue,
 			"invoice_count": len(rows),
-			"company_count": len(companies),
+			"company_count": len(company_map),
 		},
 	}
+
+def _get_corporate_customers():
+    if not _has_doctype("Hotel Guest"):
+        return []
+
+    guest_type_field = _get_field("Hotel Guest", ["guest_type"])
+    customer_field = _get_field("Hotel Guest", ["customer"])
+
+    if not guest_type_field or not customer_field:
+        return []
+
+    rows = frappe.db.sql(
+        """
+        SELECT DISTINCT `{customer_field}` AS customer
+        FROM `tabHotel Guest`
+        WHERE `{guest_type_field}` = 'Corporate'
+          AND IFNULL(`{customer_field}`, '') != ''
+        """.format(
+            customer_field=customer_field,
+            guest_type_field=guest_type_field
+        ),
+        as_dict=True
+    )
+
+    return [row.customer for row in rows if row.customer]
