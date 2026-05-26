@@ -1,0 +1,194 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:slug",
+ "creation": "2026-05-21 17:50:59.654447",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "hotel_name",
+  "slug",
+  "published",
+  "active_template",
+  "logo",
+  "favicon",
+  "tagline",
+  "hero_title",
+  "hero_subtitle",
+  "hero_video",
+  "hero_image",
+  "primary_color",
+  "secondary_color",
+  "accent_color",
+  "address",
+  "phone",
+  "email",
+  "whatsapp",
+  "currency",
+  "enable_spa",
+  "enable_dining",
+  "enable_gym",
+  "enable_events",
+  "social_links"
+ ],
+ "fields": [
+  {
+   "fieldname": "hotel_name",
+   "fieldtype": "Data",
+   "label": "Hotel Name",
+   "unique": 1
+  },
+  {
+   "fieldname": "slug",
+   "fieldtype": "Data",
+   "label": "Slug",
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "published",
+   "fieldtype": "Check",
+   "label": "Published"
+  },
+  {
+   "fieldname": "active_template",
+   "fieldtype": "Link",
+   "label": "Active Template",
+   "options": "Hotel Template"
+  },
+  {
+   "fieldname": "logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo"
+  },
+  {
+   "fieldname": "favicon",
+   "fieldtype": "Attach Image",
+   "label": "Favicon"
+  },
+  {
+   "fieldname": "tagline",
+   "fieldtype": "Data",
+   "label": "Tagline"
+  },
+  {
+   "fieldname": "primary_color",
+   "fieldtype": "Color",
+   "label": "Primary Color"
+  },
+  {
+   "fieldname": "secondary_color",
+   "fieldtype": "Color",
+   "label": "Secondary Color"
+  },
+  {
+   "fieldname": "accent_color",
+   "fieldtype": "Color",
+   "label": "Accent Color"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email"
+  },
+  {
+   "fieldname": "whatsapp",
+   "fieldtype": "Data",
+   "label": "Whatsapp"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Select",
+   "label": "Currency",
+   "options": "NGN\nUSD\nGBP\nEUR"
+  },
+  {
+   "fieldname": "social_links",
+   "fieldtype": "Table",
+   "label": "Social Links",
+   "options": "Hotel Social Link"
+  },
+  {
+   "fieldname": "hero_title",
+   "fieldtype": "Data",
+   "label": "Hero Title"
+  },
+  {
+   "fieldname": "hero_subtitle",
+   "fieldtype": "Data",
+   "label": "Hero Subtitle"
+  },
+  {
+   "fieldname": "hero_video",
+   "fieldtype": "Attach",
+   "label": "Hero Video"
+  },
+  {
+   "fieldname": "hero_image",
+   "fieldtype": "Attach Image",
+   "label": "Hero Image"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_spa",
+   "fieldtype": "Check",
+   "label": "Enable Spa"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_dining",
+   "fieldtype": "Check",
+   "label": "Enable Dining"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_gym",
+   "fieldtype": "Check",
+   "label": "Enable Gym"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_events",
+   "fieldtype": "Check",
+   "label": "Enable Events"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-05-22 13:17:33.522610",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Hotel Profile",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
