@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#2C3E35' }};
+  --web-secondary: {{ hotel.secondary_color or '#BFA37E' }};
+  --web-accent: {{ hotel.accent_color or '#8E6E5E' }};
+">
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
+
+  {% set rooms_media = page_media.get("rooms", {}) %}
+  {% set general_media = page_media.get("general", {}) %}
+
+  {% set rooms_hero_images = rooms_media.get("hero_image", []) %}
+  {% set rooms_background_images = rooms_media.get("background_image", []) %}
+  {% set rooms_cta_images = rooms_media.get("cta_image", []) %}
+
+  {% set general_background_images = general_media.get("background_image", []) %}
+  {% set general_cta_images = general_media.get("cta_image", []) %}
+
+  {% if rooms_hero_images|length > 0 %}
+    {% set rooms_hero_image = rooms_hero_images[0].image %}
+    {% set rooms_hero_alt = rooms_hero_images[0].alt_text or "Rooms & Suites" %}
+  {% else %}
+    {% set rooms_hero_image = "" %}
+    {% set rooms_hero_alt = "Rooms & Suites" %}
+  {% endif %}
+
+  {% if rooms_background_images|length > 0 %}
+    {% set rooms_background_image = rooms_background_images[0].image %}
+  {% elif general_background_images|length > 0 %}
+    {% set rooms_background_image = general_background_images[0].image %}
+  {% else %}
+    {% set rooms_background_image = "" %}
+  {% endif %}
+
+  {% if rooms_cta_images|length > 0 %}
+    {% set rooms_cta_image = rooms_cta_images[0].image %}
+    {% set rooms_cta_alt = rooms_cta_images[0].alt_text or "Reserve a Room With the Right Mood" %}
+  {% elif general_cta_images|length > 0 %}
+    {% set rooms_cta_image = general_cta_images[0].image %}
+    {% set rooms_cta_alt = general_cta_images[0].alt_text or "Reserve a Room With the Right Mood" %}
+  {% else %}
+    {% set rooms_cta_image = "" %}
+    {% set rooms_cta_alt = "Reserve a Room With the Right Mood" %}
+  {% endif %}
+
+  <header class="web-page-hero">
+    {% if rooms_hero_image %}
+      <img
+        src="{{ rooms_hero_image }}"
+        alt="{{ rooms_hero_alt }}"
+        class="web-page-hero-bg"
+      />
+    {% else %}
+      <div class="web-page-hero-bg web-image-placeholder">
+        <i class="fa-solid fa-bed"></i>
+      </div>
+    {% endif %}
+
+    <div class="container">
+      <div class="web-breadcrumb-label">Stay in Comfort</div>
+
+      <h1>Rooms & Suites</h1>
+
+      <p>
+        Choose a room that matches your stay, whether you are visiting for rest, business,
+        privacy, family time, or a special occasion.
+      </p>
+    </div>
+  </header>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="text-center">
+        <div class="web-kicker">Room Collection</div>
+
+        <h2 class="web-section-title">
+          Find the Right Space to Stay
+        </h2>
+
+        <p class="web-section-subtitle">
+          Browse available room types, compare comfort details, view room features, and continue to booking when you are ready.
+        </p>
+      </div>
+
+      {% if rooms %}
+        {% for room in rooms %}
+          <div class="web-room-wide-card">
+            <div class="web-room-wide-image">
+              {% if room.display_image %}
+                <img
+                  src="{{ room.display_image }}"
+                  alt="{{ room.display_name }}"
+                  class="rounded"
+                />
+              {% else %}
+                <div class="web-image-placeholder">
+                  <i class="fa-solid fa-bed"></i>
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="web-room-wide-content">
+              <div class="web-kicker">
+                {% if room.display_price %}
+                  From {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(room.display_price|float) }} / night
+                {% else %}
+                  Available on request
+                {% endif %}
+              </div>
+
+              <h3>{{ room.display_name }}</h3>
+
+              <p class="web-section-text">
+                {{ room.short_description or room.website_description or room.description or "A comfortable room prepared for rest, privacy, convenience, and a pleasant hotel stay." }}
+              </p>
+
+              <div class="web-pill-list">
+                {% if room.amenities %}
+                  {% for item in room.amenities[:6] %}
+                    <span>
+                      {{ item.amenity_name or item.amenity or item.item or item.name }}
+                    </span>
+                  {% endfor %}
+                {% else %}
+                  {% if room.max_adult %}
+                    <span>{{ room.max_adult }} Adult{% if room.max_adult|int > 1 %}s{% endif %}</span>
+                  {% endif %}
+
+                  {% if room.max_child %}
+                    <span>{{ room.max_child }} Child{% if room.max_child|int > 1 %}ren{% endif %}</span>
+                  {% endif %}
+
+                  {% if room.extra_bed_capacity %}
+                    <span>Extra Bed Available</span>
+                  {% endif %}
+
+                  <span>Room Service</span>
+                  <span>Comfort Stay</span>
+                {% endif %}
+              </div>
+
+              <div class="web-actions">
+                <button
+                  class="web-btn-solid"
+                  type="button"
+                  data-bs-toggle="modal"
+                  data-bs-target="#{{ room.modal_id }}"
+                >
+                  View Details
+                </button>
+
+                <a href="/hotel/booking" class="web-btn-ghost">
+                  Book Room
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-center py-5">
+          <h3>No room types currently available</h3>
+          <p class="web-section-text">
+            Room types added in the system will appear here once they are available for the website.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="row g-5">
+        <div class="col-lg-5">
+          <div class="web-kicker">Room Details</div>
+
+          <h2 class="web-section-title">
+            Included With Every Stay
+          </h2>
+
+          <p class="web-section-text">
+            Every room is supported with thoughtful service, comfortable spaces, and practical details that help guests feel settled.
+          </p>
+        </div>
+
+        <div class="col-lg-7">
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-wifi"></i>
+            </div>
+            <div>
+              <h3>Reliable Connectivity</h3>
+              <p>Stay connected for work, communication, entertainment, and everyday browsing during your visit.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-bell-concierge"></i>
+            </div>
+            <div>
+              <h3>Guest Support</h3>
+              <p>Our team is available to support room requests, comfort needs, and general guest assistance.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-shield-heart"></i>
+            </div>
+            <div>
+              <h3>Privacy and Comfort</h3>
+              <p>Rooms are arranged to give guests a calm, private, and restful environment throughout their stay.</p>
+            </div>
+          </div>
+
+          <div class="web-feature-line">
+            <div class="web-feature-icon">
+              <i class="fa-solid fa-mug-hot"></i>
+            </div>
+            <div>
+              <h3>Dining Support</h3>
+              <p>Enjoy breakfast options, room service support, and easy access to hotel dining where available.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if rooms_background_image %}
+    <section
+      class="web-fixed-band"
+      style="background-image: url('{{ rooms_background_image }}');"
+    >
+  {% else %}
+    <section class="web-fixed-band">
+  {% endif %}
+    <div class="container">
+      <div class="web-fixed-box">
+        <div class="web-kicker">Rest</div>
+
+        <h2 class="web-section-title text-white">
+          Rooms Designed for Slow Mornings
+        </h2>
+
+        <p>
+          Wake up to calm interiors, soft bedding, warm service, and a room atmosphere that makes every stay feel considered.
+        </p>
+
+        <a href="/hotel/booking" class="web-btn-primary">
+          Reserve Experience
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="web-section js-bg-order">
+    <div class="container">
+      <div class="web-cta-split">
+        <div class="row g-0 align-items-center">
+          <div class="col-lg-5">
+            {% if rooms_cta_image %}
+              <img
+                src="{{ rooms_cta_image }}"
+                alt="{{ rooms_cta_alt }}"
+                class="web-cta-image rounded"
+              />
+            {% else %}
+              <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
+                <i class="fa-solid fa-headset"></i>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="col-lg-7">
+            <div class="web-cta-content">
+              <div class="web-kicker">Reserve With Us</div>
+
+              <h2>Reserve a Room With the Right Mood</h2>
+
+              <p>
+                Select your dates, choose a room type, review your stay, and continue to the booking process when you are ready.
+              </p>
+
+              <div class="web-actions">
+                <a href="/hotel/booking" class="web-btn-primary">Book Now</a>
+                <a href="/hotel/contact" class="web-btn-outline">Contact Hotel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if rooms %}
+    {% for room in rooms %}
+      <div class="modal fade" id="{{ room.modal_id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+          <div class="modal-content web-modal-content">
+            <div class="row g-0">
+              <div class="col-lg-6">
+                {% if room.display_image %}
+                  <img
+                    src="{{ room.display_image }}"
+                    alt="{{ room.display_name }}"
+                    class="web-modal-image"
+                  />
+                {% else %}
+                  <div class="web-image-placeholder web-modal-image">
+                    <i class="fa-solid fa-bed"></i>
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-lg-6">
+                <div class="web-modal-body">
+                  <button type="button" class="btn-close float-end" data-bs-dismiss="modal"></button>
+
+                  <h2 class="web-modal-title">
+                    {{ room.display_name }}
+                  </h2>
+
+                  <p class="web-section-text">
+                    {{ room.website_description or room.short_description or room.description or "This room is prepared to give guests a comfortable, private, and restful hotel experience with practical features for a smooth stay." }}
+                  </p>
+
+                  <ul class="web-room-feature-list">
+                    {% if room.amenities %}
+                      {% for item in room.amenities %}
+                        <li>
+                          <i class="fa-solid fa-check"></i>
+                          {{ item.amenity_name or item.amenity or item.item or item.name }}
+                        </li>
+                      {% endfor %}
+                    {% else %}
+                      <li>
+                        <i class="fa-solid fa-check"></i>
+                        Comfortable sleeping arrangement and relaxing room layout
+                      </li>
+
+                      <li>
+                        <i class="fa-solid fa-check"></i>
+                        Guest support, housekeeping, and room service assistance
+                      </li>
+
+                      {% if room.max_adult or room.max_child %}
+                        <li>
+                          <i class="fa-solid fa-check"></i>
+                          Suitable for
+                          {% if room.max_adult %}{{ room.max_adult }} adult{% if room.max_adult|int > 1 %}s{% endif %}{% endif %}
+                          {% if room.max_child %} and {{ room.max_child }} child{% if room.max_child|int > 1 %}ren{% endif %}{% endif %}
+                        </li>
+                      {% endif %}
+                    {% endif %}
+
+                    {% if room.display_price %}
+                      <li>
+                        <i class="fa-solid fa-check"></i>
+                        Estimated rate: {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(room.display_price|float) }} / night
+                      </li>
+                    {% endif %}
+                  </ul>
+
+                  <a href="/hotel/booking" class="web-btn-solid">
+                    Book {{ room.display_name }}
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+
+  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+</body>
+</html>

@@ -280,6 +280,7 @@ frappe_csrf_exempt_methods = [
 	"rhohotel.search_available_rooms.search_available_rooms",
 	"rhohotel.hotel_booking.create_booking",
 	"rhohotel.hotel_booking.create_payment_link",
+    "rhohotel.rhocom_hotel.api.website.submit_contact_message",
 ]
 
 frappe.csrf_exempt_methods = frappe_csrf_exempt_methods
@@ -345,4 +346,6 @@ website_route_rules = [
 	{"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
 	{"from_route": "/front-desk", "to_route": "front-desk"},
 	{"from_route": "/front-desk/", "to_route": "front-desk"},
+    # Hotel website pages
+    {"from_route": "/hotel/<page>", "to_route": "hotel"},
 ]
