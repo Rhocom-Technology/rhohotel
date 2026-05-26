@@ -539,6 +539,7 @@ def extend_stay(check_in_name, number_of_nights):
 		current_checkout_dt,
 		new_checkout_dt,
 		exclude_checkin=check_in_doc.name,
+		exclude_canonical=check_in_doc.canonical_reservation or check_in_doc.reservation or None,
 	)
 
 	# Create a new Sales Invoice for the extension
@@ -765,6 +766,7 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 			current_dt,
 			new_dt,
 			exclude_checkin=doc.name,
+			exclude_canonical=doc.canonical_reservation or doc.reservation or None,
 		)
 
 	amount = flt(doc.rate_amount) * diff_nights

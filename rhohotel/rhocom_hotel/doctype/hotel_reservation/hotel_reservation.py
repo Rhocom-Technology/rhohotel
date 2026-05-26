@@ -1445,7 +1445,10 @@ def create_invoice_for_reservation_room(reservation_name, room_row_name):
     si.insert(ignore_permissions=True)
     si.submit()
 
-    # Persist invoice reference on the room row
+    # Persist invoice reference on the room row.
+    # Update both the in-memory row AND the DB so doc.save() does not overwrite
+    # the value back to None when it serialises the child table.
+    room_row.split_invoice = si.name
     frappe.db.set_value("Hotel Reservation Room", room_row_name, "split_invoice", si.name)
 
     # Add to reservation invoice ledger

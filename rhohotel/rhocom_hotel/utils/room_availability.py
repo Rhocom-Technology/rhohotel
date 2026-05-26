@@ -288,10 +288,11 @@ def assert_room_available(
 
     # --- Defensive guard: Hotel Room.status ---
     # If the room is marked "Occupied" in the Hotel Room record but no active
-    # check-in record was found (stale data or race condition), still block the
-    # booking to prevent double-occupancy.
+    # check-in record was found (stale data or race condition), block only
+    # immediate/current arrivals. Future reservations should not be rejected
+    # solely from a transient occupied status snapshot.
     room_status = frappe.db.get_value("Hotel Room", room_number, "status")
-    if room_status == "Occupied":
+    if room_status == "Occupied" and check_in_dt <= datetime.now():
         frappe.throw(
             _(
                 "{0} is currently occupied. Please check out the current guest "

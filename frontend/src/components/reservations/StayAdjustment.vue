@@ -106,13 +106,13 @@
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" class="mb-4">
           <div>
-            <p class="text-xs text-gray-500 mb-1.5">New Check-in Date</p>
-            <input v-model="newCheckinDate" type="date"
+            <p class="text-xs text-gray-500 mb-1.5">New Check-in Date/Time</p>
+            <input v-model="newCheckinDate" type="datetime-local"
               class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <p class="text-xs text-gray-500 mb-1.5">New Check-out Date</p>
-            <input v-model="newCheckoutDate" type="date"
+            <p class="text-xs text-gray-500 mb-1.5">New Check-out Date/Time</p>
+            <input v-model="newCheckoutDate" type="datetime-local"
               :min="minCheckoutDate"
               class="w-full px-3 py-2.5 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
@@ -246,8 +246,9 @@ const emit = defineEmits(['close', 'done'])
 
 const adjustmentType = ref('Extend Stay')
 const adjustmentReason = ref('Guest Request')
-const newCheckoutDate = ref(asISODate(props.reservation.to_date))
-const newCheckinDate = ref(asISODate(props.reservation.from_date))
+const defaultCheckoutTime = ref('12:00')
+const newCheckoutDate = ref(asDateTimeLocal(props.reservation.to_date))
+const newCheckinDate = ref(asDateTimeLocal(props.reservation.from_date))
 const discountType = ref(props.reservation.discount_type || 'Percentage')
 const discountValue = ref(Number(props.reservation.discount || 0))
 const adjustmentNotes = ref('')
@@ -292,14 +293,34 @@ async function fetchInvoiceStatus() {
 
 onMounted(() => {
   fetchInvoiceStatus()
+  fetchDefaultCheckoutTime()
 })
+
+async function fetchDefaultCheckoutTime() {
+  try {
+    const serverTime = await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings.get_default_check_out_time',
+      {},
+    )
+    const normalized = normalizeServerTime(serverTime)
+    if (normalized) {
+      defaultCheckoutTime.value = normalized
+      newCheckinDate.value = applyTimeToDate(newCheckinDate.value, normalized)
+      newCheckoutDate.value = applyTimeToDate(newCheckoutDate.value, normalized)
+    }
+  } catch {
+    // Fall back to local default when settings are unavailable
+    newCheckinDate.value = applyTimeToDate(newCheckinDate.value, defaultCheckoutTime.value)
+    newCheckoutDate.value = applyTimeToDate(newCheckoutDate.value, defaultCheckoutTime.value)
+  }
+}
 
 // Earliest valid checkout: one day after check-in
 const minCheckoutDate = computed(() => {
   if (!newCheckinDate.value) return ''
   const d = parseDateOnly(newCheckinDate.value)
   d.setDate(d.getDate() + 1)
-  return formatISODate(d)
+  return `${formatISODate(d)}T${defaultCheckoutTime.value}`
 })
 
 // Correct rate per night: subtotal / number_of_nights
@@ -370,8 +391,8 @@ async function apply() {
   try {
     const params = {
       reservation_name: props.reservation.name,
-      new_check_in: newCheckinDate.value,
-      new_checkout: newCheckoutDate.value,
+      new_check_in: asISODate(newCheckinDate.value),
+      new_checkout: asISODate(newCheckoutDate.value),
       new_discount_type: discountType.value,
       new_discount: discountValue.value,
     }
@@ -423,6 +444,31 @@ function asISODate(value) {
   if (!value) return ''
   if (typeof value === 'string') return value.slice(0, 10)
   return formatISODate(value)
+}
+
+function asDateTimeLocal(value) {
+  if (!value) return ''
+  if (typeof value === 'string') {
+    const cleaned = value.trim().replace(' ', 'T')
+    if (cleaned.includes('T')) return cleaned.slice(0, 16)
+    return `${cleaned.slice(0, 10)}T${defaultCheckoutTime.value}`
+  }
+  return `${formatISODate(value)}T${defaultCheckoutTime.value}`
+}
+
+function applyTimeToDate(value, hhmm) {
+  if (!value) return ''
+  return `${asISODate(value)}T${hhmm}`
+}
+
+function normalizeServerTime(value) {
+  if (!value) return ''
+  const text = String(value).trim()
+  const parts = text.split(':')
+  if (parts.length < 2) return ''
+  const hh = String(parts[0]).padStart(2, '0')
+  const mm = String(parts[1]).padStart(2, '0')
+  return `${hh}:${mm}`
 }
 
 function parseDateOnly(value) {

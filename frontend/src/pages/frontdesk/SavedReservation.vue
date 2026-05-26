@@ -365,10 +365,33 @@ async function createInvoice() {
         'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_pending_split_invoices',
         { reservation_name: reservation.value.name },
       )
+
+      const createdRows = Array.isArray(result?.created) ? result.created : []
       const failedCount = Number(result?.failed_count || 0)
       if (failedCount > 0) {
         errorMessage.value = `Created ${Number(result?.created_count || 0)} invoice(s); ${failedCount} room(s) failed. Check room guests and try again.`
       }
+
+      // Reload first so we have the latest server state.
+      await loadReservation()
+
+      // Defensive fallback: if the server did not return split_invoice on every
+      // created room row (e.g. Frappe's doc.save() race), patch them in-memory
+      // so the per-room Create Invoice buttons hide immediately.
+      if (createdRows.length && Array.isArray(reservation.value?.rooms)) {
+        const invoiceByRoomRow = new Map(
+          createdRows
+            .filter((entry) => entry?.room_row_name && entry?.sales_invoice)
+            .map((entry) => [entry.room_row_name, entry.sales_invoice]),
+        )
+        reservation.value.rooms = reservation.value.rooms.map((room) => {
+          if (room?.split_invoice) return room
+          const splitInvoice = invoiceByRoomRow.get(room?.name)
+          return splitInvoice ? { ...room, split_invoice: splitInvoice } : room
+        })
+      }
+
+      return
     } else {
       await callMethod(
         'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.create_invoice_for_reservation',

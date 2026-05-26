@@ -19,7 +19,10 @@ if "frappe" not in sys.modules:
 	frappe_stub._ = lambda text: text
 	frappe_stub.throw = _default_throw
 	frappe_stub.get_all = lambda *args, **kwargs: []
-	frappe_stub.db = types.SimpleNamespace(sql=lambda *args, **kwargs: [])
+	frappe_stub.db = types.SimpleNamespace(
+		sql=lambda *args, **kwargs: [],
+		get_value=lambda *args, **kwargs: None,
+	)
 	frappe_stub.whitelist = _whitelist
 
 	utils_stub = types.ModuleType("frappe.utils")
@@ -98,15 +101,10 @@ class TestRoomAvailability(unittest.TestCase):
 			captured["filters"] = filters
 			return rooms
 
-		sql_calls = [
-			[],  # checked-in rooms (Hotel Room Check In)
-			[],  # canonical rooms (Hotel Reservation Room child table)
-		]
-
 		with (
 			patch.dict(sys.modules, {"rhohotel.api": faked_api}),
 			patch.object(ra.frappe, "get_all", side_effect=fake_get_all),
-			patch.object(ra.frappe.db, "sql", side_effect=sql_calls),
+			patch.object(ra.frappe.db, "sql", return_value=[]),
 			patch.object(ra, "date_diff", return_value=2),
 		):
 			available = ra.get_available_rooms(
@@ -130,6 +128,28 @@ class TestRoomAvailability(unittest.TestCase):
 		):
 			with self.assertRaises(ValueError):
 				ra.get_available_rooms("2026-04-12", "2026-04-12")
+
+	def test_assert_room_available_occupied_room_blocks_current_arrival(self):
+		with (
+			patch.object(ra, "check_checkin_conflict", return_value=None),
+			patch.object(ra, "check_canonical_reservation_conflict", return_value=None),
+			patch.object(ra.frappe.db, "get_value", return_value="Occupied"),
+			patch.object(ra.frappe, "throw", side_effect=RuntimeError("occupied now")),
+		):
+			with self.assertRaises(RuntimeError):
+				ra.assert_room_available("R-101", datetime.now(), datetime.now())
+
+	def test_assert_room_available_occupied_room_allows_future_arrival(self):
+		throw_mock = Mock()
+		with (
+			patch.object(ra, "check_checkin_conflict", return_value=None),
+			patch.object(ra, "check_canonical_reservation_conflict", return_value=None),
+			patch.object(ra.frappe.db, "get_value", return_value="Occupied"),
+			patch.object(ra.frappe, "throw", throw_mock),
+		):
+			ra.assert_room_available("R-101", "2099-01-01", "2099-01-02")
+
+		throw_mock.assert_not_called()
 
 
 if __name__ == "__main__":

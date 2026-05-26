@@ -533,9 +533,29 @@ const singleTopCheckInRoom = computed(() => (canSingleTopCheckIn.value ? pending
 const reservationType = computed(() => String(props.reservation?.reservation_type || '').trim().toLowerCase())
 const groupBillingMode = computed(() => String(props.reservation?.group_billing_mode || '').trim().toLowerCase())
 const isSplitGroup = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('split'))
+const invoiceLedger = computed(() => {
+  const reservationInvoices = Array.isArray(props.reservation?.reservation_invoices)
+    ? props.reservation.reservation_invoices
+    : []
+  const fallbackInvoices = Array.isArray(props.reservation?.linked_invoices)
+    ? props.reservation.linked_invoices
+    : []
+  return reservationInvoices.length ? reservationInvoices : fallbackInvoices
+})
+
+const splitInvoiceLedgerCount = computed(() => invoiceLedger.value
+  .filter((invoice) => Number(invoice?.is_return || 0) === 0)
+  .length)
+
+const allSplitRoomsInvoicedByLedger = computed(() => {
+  if (!isSplitGroup.value || rooms.value.length === 0) return false
+  return splitInvoiceLedgerCount.value >= rooms.value.length
+})
+
 const invoicedRowNames = reactive(new Set())
 function isRowInvoiced(row) {
-  return Boolean(row?.split_invoice) || invoicedRowNames.has(row?.name)
+  if (allSplitRoomsInvoicedByLedger.value) return true
+  return Boolean(row?.split_invoice || row?.sales_invoice) || invoicedRowNames.has(row?.name)
 }
 const splitInvoicePendingRooms = computed(() => (isSplitGroup.value ? rooms.value.filter((row) => !isRowInvoiced(row)) : []))
 const showTopCreateInvoice = computed(() => !isSplitGroup.value && !props.reservation?.sales_invoice && Number(props.reservation?.docstatus || 0) === 1)
@@ -581,16 +601,6 @@ const paymentLedger = computed(() => {
     ? props.reservation.payment_entries
     : []
   return reservationPayments.length ? reservationPayments : fallbackPayments
-})
-
-const invoiceLedger = computed(() => {
-  const reservationInvoices = Array.isArray(props.reservation?.reservation_invoices)
-    ? props.reservation.reservation_invoices
-    : []
-  const fallbackInvoices = Array.isArray(props.reservation?.linked_invoices)
-    ? props.reservation.linked_invoices
-    : []
-  return reservationInvoices.length ? reservationInvoices : fallbackInvoices
 })
 
 const computedBalance = computed(() => {

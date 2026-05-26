@@ -148,10 +148,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { callMethodForm } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const newCheckout = ref('')
+const defaultCheckoutTime = ref('12:00')
 const discountType = ref('None')
 const newDiscount = ref(0)
 const submitting = ref(false)
@@ -179,6 +181,47 @@ const adjustmentType = computed(() => {
   if (newNights.value < props.checkIn.number_of_nights) return 'Reduction'
   return 'Same'
 })
+
+onMounted(async () => {
+  await fetchDefaultCheckoutTime()
+  newCheckout.value = applyDefaultTime(props.checkIn.expected_check_out_datetime)
+})
+
+async function fetchDefaultCheckoutTime() {
+  try {
+    const serverTime = await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings.get_default_check_out_time',
+      {},
+    )
+    const normalized = normalizeServerTime(serverTime)
+    if (normalized) defaultCheckoutTime.value = normalized
+  } catch {
+    // Keep fallback time when settings fetch fails
+  }
+}
+
+function applyDefaultTime(value) {
+  const datePart = asISODate(value)
+  if (!datePart) return ''
+  return `${datePart}T${defaultCheckoutTime.value}`
+}
+
+function asISODate(value) {
+  if (!value) return ''
+  const cleaned = String(value).trim().replace(' ', 'T')
+  return cleaned.slice(0, 10)
+}
+
+function normalizeServerTime(value) {
+  if (!value) return ''
+  const text = String(value).trim()
+  const parts = text.split(':')
+  if (parts.length < 2) return ''
+  const hh = String(parts[0]).padStart(2, '0')
+  const mm = String(parts[1]).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
 async function submit() {
   if (!newCheckout.value || adjustmentType.value === 'Same') return
   submitting.value = true; error.value = ''
