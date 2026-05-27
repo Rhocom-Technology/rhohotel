@@ -22,6 +22,48 @@ import { useRoute, useRouter } from 'vue-router'
 import SavedReservationDetails from '@/components/reservations/SavedReservation.vue'
 import { callMethod } from '@/lib/api'
 
+// Utility: Check if a guest exists by name or id
+async function ensureGroupMasterPayerExists(payerName, payerDetails = {}) {
+  if (!payerName) return null;
+  // Try to get the guest by name
+  try {
+    const guest = await callMethod('frappe.client.get_value', {
+      doctype: 'Hotel Guest',
+      filters: { guest_name: payerName },
+      fieldname: ['name'],
+    });
+    if (guest && guest.name) {
+      return guest.name;
+    }
+  } catch (e) {
+    // Not found, will create
+  }
+  // Create new guest
+  try {
+    const newGuest = await callMethod('frappe.client.insert', {
+      doc: {
+        doctype: 'Hotel Guest',
+        guest_name: payerName,
+        ...payerDetails,
+      },
+    });
+    return newGuest.name;
+  } catch (e) {
+    throw new Error('Could not create group master payer: ' + (e?.message || e));
+  }
+}
+
+// Utility: Update reservation with group master payer
+async function updateReservationGroupMaster(reservationName, groupMasterName) {
+  if (!reservationName || !groupMasterName) return;
+  await callMethod('frappe.client.set_value', {
+    doctype: 'Hotel Reservation',
+    name: reservationName,
+    fieldname: 'group_master_customer',
+    value: groupMasterName,
+  });
+}
+
 const route = useRoute()
 const router = useRouter()
 

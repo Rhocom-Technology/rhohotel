@@ -1,6 +1,8 @@
 import sys
 import types
 import unittest
+import inspect
+import re
 from datetime import date
 from unittest.mock import Mock, patch
 
@@ -25,6 +27,9 @@ if "frappe" not in sys.modules:
     utils_stub.flt = lambda value: float(value or 0)
     utils_stub.date_diff = lambda a, b: (a - b).days
     utils_stub.now_datetime = lambda: "2026-04-10 12:00:00"
+    utils_stub.add_days = lambda value, days=0: value
+    utils_stub.cint = lambda value: int(value or 0)
+    utils_stub.get_datetime = lambda value: value
 
     model_stub = types.ModuleType("frappe.model")
     model_document_stub = types.ModuleType("frappe.model.document")
@@ -47,6 +52,8 @@ from rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation import (
     STATUS_CONFIRMED,
     STATUS_DRAFT,
     STATUS_EXPIRED,
+    STATUS_HOLD,
+    STATUS_NO_SHOW,
 )
 from rhohotel.rhocom_hotel.doctype.hotel_reservation import hotel_reservation as hr_module
 
@@ -65,6 +72,53 @@ class FakeRoom:
 
 
 class TestHotelReservation(unittest.TestCase):
+    def test_whitelisted_api_methods_have_named_tests(self):
+        """
+        Coverage guard:
+        - Detect whitelisted API methods from hotel_reservation.py source.
+        - Require at least one test method name mapped to each API method.
+
+        When a new whitelisted API method is added, this test fails until
+        a matching entry is added below and tests are implemented.
+        """
+        source = inspect.getsource(hr_module)
+        whitelisted_methods = set(
+            re.findall(r"@frappe\.whitelist\(\)\s*\ndef\s+([a-zA-Z_][a-zA-Z0-9_]*)\(", source)
+        )
+
+        # Explicit map keeps this guard intentional and reviewable.
+        expected_test_name_fragments = {
+            "adjust_reservation": ["adjust_reservation"],
+            "change_room_in_reservation": ["change_room"],
+            "check_in_reservation_room": ["check_in_reservation_room"],
+            "bulk_check_in_reservation": ["bulk_check_in_reservation"],
+            "create_invoice_for_reservation": ["create_invoice_for_reservation"],
+            "get_payment_summary_for_reservation": ["get_payment_summary_for_reservation"],
+            "get_outstanding_invoices_for_reservation": ["get_outstanding_invoices_for_reservation"],
+            "adjust_invoice_for_reservation": ["adjust_invoice_for_reservation"],
+            "create_invoice_for_reservation_room": ["create_invoice_for_reservation_room"],
+            "create_pending_split_invoices": ["create_pending_split_invoices"],
+            "collect_payment_for_reservation": ["collect_payment_for_reservation"],
+            "cancel_reservation": ["cancel_reservation"],
+        }
+
+        self.assertEqual(
+            whitelisted_methods,
+            set(expected_test_name_fragments.keys()),
+            "Whitelisted API method set changed. Add mapping + unit tests for new methods.",
+        )
+
+        test_names = [name for name in dir(self.__class__) if name.startswith("test_")]
+        missing = []
+        for method_name, fragments in expected_test_name_fragments.items():
+            if not any(any(fragment in test_name for fragment in fragments) for test_name in test_names):
+                missing.append(method_name)
+
+        self.assertFalse(
+            missing,
+            f"Missing reservation API tests for: {', '.join(sorted(missing))}",
+        )
+
     def _base_doc(self):
         doc = HotelReservation()
         doc.name = "RES-TEST-0001"
@@ -266,7 +320,7 @@ class TestHotelReservation(unittest.TestCase):
                 return new_room
             raise RuntimeError(f"Unexpected get_doc call: {doctype} {name}")
 
-        def fake_get_value(doctype, filters, fieldname):
+        def fake_get_value(doctype, filters, fieldname, **kwargs):
             if doctype == "Sales Invoice":
                 return "INV-0001"
             return None
@@ -372,6 +426,286 @@ class TestHotelReservation(unittest.TestCase):
         self.assertEqual(result.get("created_count"), 2)
         self.assertEqual(result.get("already_invoiced_count"), 1)
         self.assertEqual(result.get("failed_count"), 0)
+
+    def test_adjust_reservation_updates_dates_and_totals(self):
+        doc = types.SimpleNamespace(
+            from_date="2026-04-10",
+            to_date="2026-04-12",
+            discount_type="None",
+            discount=0,
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
+            _recalculate_room_totals=Mock(),
+            _recalculate_totals=Mock(),
+            save=Mock(),
+            discount_amount=0,
+            total_amount=200,
+        )
+
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+        if not hasattr(hr_module.frappe.db, "commit"):
+            hr_module.frappe.db.commit = lambda *args, **kwargs: None
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module.frappe.db, "commit"),
+        ):
+            result = hr_module.adjust_reservation(
+                "RES-TEST-0001",
+                new_checkout="2026-04-14",
+                new_check_in="2026-04-10",
+                new_discount_type="Percentage",
+                new_discount=5,
+            )
+
+        self.assertEqual(result.get("status"), "success")
+        self.assertEqual(result.get("new_nights"), 4)
+        self.assertEqual(doc.discount_type, "Percentage")
+        self.assertEqual(doc.discount, 5)
+        doc._recalculate_room_totals.assert_called_once()
+        doc._recalculate_totals.assert_called_once()
+        doc.save.assert_called_once_with(ignore_permissions=True)
+
+    def test_check_in_reservation_room_returns_error_for_missing_row(self):
+        doc = types.SimpleNamespace(name="RES-TEST-0001", rooms=[])
+        with patch.object(hr_module.frappe, "get_doc", return_value=doc):
+            result = hr_module.check_in_reservation_room("RES-TEST-0001", "ROW-MISSING")
+
+        self.assertEqual(result.get("status"), "error")
+        self.assertIn("Room row not found", result.get("message", ""))
+
+    def test_check_in_reservation_room_returns_error_when_guest_not_resolved(self):
+        row = Row(
+            name="ROW-1",
+            room_number="R-101",
+            room_type="Deluxe",
+            status="Confirmed",
+            check_in_reference="",
+            number_of_nights=2,
+            rate_per_night=5000,
+            hotel_guest=None,
+            occupant_name="",
+            guest_name="",
+        )
+        doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            rooms=[row],
+            number_of_nights=2,
+            primary_guest_name="",
+            reservation_type="Individual",
+            source_channel="",
+            discount_type="None",
+            discount=0,
+        )
+
+        fake_room_availability = types.SimpleNamespace(assert_room_available=Mock())
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+
+        def fake_get_value(doctype, filters, fieldname=None, as_dict=False):
+            return None
+
+        with (
+            patch.dict(sys.modules, {"rhohotel.rhocom_hotel.utils.room_availability": fake_room_availability}),
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value),
+        ):
+            result = hr_module.check_in_reservation_room("RES-TEST-0001", "ROW-1")
+
+        self.assertEqual(result.get("status"), "error")
+        self.assertIn("No guest linked", result.get("message", ""))
+
+    def test_bulk_check_in_reservation_rejects_ineligible_status(self):
+        doc = types.SimpleNamespace(reservation_status=STATUS_DRAFT)
+        with patch.object(hr_module.frappe, "get_doc", return_value=doc):
+            result = hr_module.bulk_check_in_reservation("RES-TEST-0001")
+
+        self.assertEqual(result.get("status"), "error")
+        self.assertIn("check-in eligible", result.get("message", ""))
+
+    def test_create_invoice_for_reservation_returns_existing_invoice(self):
+        doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            reservation_type="Individual",
+            group_billing_mode="",
+            sales_invoice="INV-EXIST-0001",
+        )
+
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+        if not hasattr(hr_module.frappe.db, "commit"):
+            hr_module.frappe.db.commit = lambda *args, **kwargs: None
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module, "_upsert_reservation_invoice_row", return_value=False),
+        ):
+            result = hr_module.create_invoice_for_reservation("RES-TEST-0001")
+
+        self.assertEqual(result.get("sales_invoice"), "INV-EXIST-0001")
+        self.assertTrue(result.get("already_exists"))
+
+    def test_get_payment_summary_for_reservation_without_invoices(self):
+        doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            net_total=750,
+            total_amount=750,
+            payment_entry=None,
+            get=lambda fieldname: [],
+        )
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module, "_get_reservation_invoice_names", return_value=[]),
+        ):
+            result = hr_module.get_payment_summary_for_reservation("RES-TEST-0001")
+
+        self.assertEqual(result.get("paid_amount"), 0)
+        self.assertEqual(result.get("invoice_total"), 0)
+        self.assertEqual(result.get("outstanding_amount"), 0)
+        self.assertEqual(result.get("balance"), 750)
+
+    def test_get_outstanding_invoices_for_reservation_filters_zero_amount(self):
+        doc = types.SimpleNamespace(name="RES-TEST-0001", get=lambda fieldname: [])
+        invoice_map = {
+            "INV-1": {"name": "INV-1", "outstanding_amount": 120},
+            "INV-2": {"name": "INV-2", "outstanding_amount": 0},
+        }
+
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+
+        def fake_get_value(doctype, name, fieldname=None, as_dict=False):
+            return invoice_map.get(name)
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module, "_get_reservation_invoice_names", return_value=["INV-1", "INV-2"]),
+            patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value),
+        ):
+            result = hr_module.get_outstanding_invoices_for_reservation("RES-TEST-0001")
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].get("name"), "INV-1")
+
+    def test_adjust_invoice_for_reservation_returns_no_invoice_when_unlinked(self):
+        doc = types.SimpleNamespace(name="RES-TEST-0001", sales_invoice="")
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module, "_get_reservation_invoice_names", return_value=[]),
+        ):
+            result = hr_module.adjust_invoice_for_reservation("RES-TEST-0001")
+
+        self.assertEqual(result.get("status"), "no_invoice")
+
+    def test_create_invoice_for_reservation_room_returns_existing_split_invoice(self):
+        row = Row(name="ROW-1", split_invoice="INV-SPLIT-001")
+        doc = types.SimpleNamespace(
+            reservation_type="Group",
+            group_billing_mode="Split Billing",
+            rooms=[row],
+        )
+
+        with patch.object(hr_module.frappe, "get_doc", return_value=doc):
+            result = hr_module.create_invoice_for_reservation_room("RES-TEST-0001", "ROW-1")
+
+        self.assertEqual(result.get("sales_invoice"), "INV-SPLIT-001")
+        self.assertTrue(result.get("already_exists"))
+
+    def test_collect_payment_for_reservation_requires_mode_of_payment(self):
+        doc = types.SimpleNamespace(name="RES-TEST-0001")
+        outstanding_row = types.SimpleNamespace(name="INV-1", outstanding_amount=100)
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module, "_get_reservation_invoice_names", return_value=["INV-1"]),
+            patch.object(hr_module.frappe, "get_all", return_value=[outstanding_row], create=True),
+        ):
+            with self.assertRaises(RuntimeError):
+                hr_module.collect_payment_for_reservation(
+                    "RES-TEST-0001",
+                    payment_info={"paid_amount": 100},
+                )
+
+    def test_cancel_reservation_returns_already_cancelled(self):
+        doc = types.SimpleNamespace(docstatus=2)
+        with patch.object(hr_module.frappe, "get_doc", return_value=doc):
+            result = hr_module.cancel_reservation("RES-TEST-0001")
+
+        self.assertEqual(result.get("status"), "already_cancelled")
+
+    def test_cancel_reservation_updates_draft_status(self):
+        doc = types.SimpleNamespace(
+            docstatus=0,
+            reservation_status="Confirmed",
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
+            _release_rooms=Mock(),
+            save=Mock(),
+        )
+
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+        if not hasattr(hr_module.frappe.db, "commit"):
+            hr_module.frappe.db.commit = lambda *args, **kwargs: None
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module.frappe.db, "commit"),
+        ):
+            result = hr_module.cancel_reservation("RES-TEST-0001", reason="Guest request")
+
+        self.assertEqual(result.get("status"), "success")
+        self.assertEqual(doc.reservation_status, STATUS_CANCELLED)
+        doc._release_rooms.assert_called_once()
+        doc.save.assert_called_once_with(ignore_permissions=True)
+
+    def test_process_reservation_lifecycle_marks_expired_and_no_show(self):
+        expired_doc = types.SimpleNamespace(
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
+            reservation_status=STATUS_HOLD,
+            _release_rooms=Mock(),
+            save=Mock(),
+        )
+        no_show_doc = types.SimpleNamespace(
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
+            reservation_status=STATUS_CONFIRMED,
+            _release_rooms=Mock(),
+            save=Mock(),
+        )
+
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+        if not hasattr(hr_module.frappe.db, "commit"):
+            hr_module.frappe.db.commit = lambda *args, **kwargs: None
+
+        def fake_get_all(doctype, filters=None, fields=None):
+            status = (filters or {}).get("reservation_status")
+            if status == STATUS_HOLD:
+                return [types.SimpleNamespace(name="RES-EXP-1")]
+            if status == STATUS_CONFIRMED:
+                return [types.SimpleNamespace(name="RES-NOSHOW-1")]
+            return []
+
+        def fake_get_doc(doctype, name):
+            if name == "RES-EXP-1":
+                return expired_doc
+            if name == "RES-NOSHOW-1":
+                return no_show_doc
+            raise RuntimeError(f"Unexpected document: {name}")
+
+        with (
+            patch.object(hr_module.frappe, "get_all", side_effect=fake_get_all, create=True),
+            patch.object(hr_module.frappe, "get_doc", side_effect=fake_get_doc),
+            patch.object(hr_module.frappe.db, "commit") as commit_mock,
+        ):
+            result = hr_module.process_reservation_lifecycle()
+
+        self.assertEqual(result, {"expired": 1, "no_show": 1})
+        self.assertEqual(expired_doc.reservation_status, STATUS_EXPIRED)
+        self.assertEqual(no_show_doc.reservation_status, STATUS_NO_SHOW)
+        expired_doc._release_rooms.assert_called_once()
+        no_show_doc._release_rooms.assert_called_once()
+        commit_mock.assert_called_once()
 
 
 if __name__ == "__main__":
