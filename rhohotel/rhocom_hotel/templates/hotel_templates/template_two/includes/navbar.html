@@ -2,7 +2,7 @@
   <div class="container">
     <div class="web-nav-shell w-100">
       <div class="d-flex align-items-center">
-        <a class="navbar-brand me-auto" href="/hotel">
+        <a class="navbar-brand me-auto" href="/">
           {% if hotel.logo %}
             <img src="{{ hotel.logo }}" alt="{{ hotel.hotel_name }}" style="max-height: 48px;">
           {% else %}
@@ -17,42 +17,42 @@
         <div class="collapse navbar-collapse" id="mainNavbar">
           <ul class="navbar-nav mx-auto mb-2 mb-xl-0">
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'home' %}active{% endif %}" href="/hotel">Home</a>
+              <a class="nav-link {% if current_page == 'home' %}active{% endif %}" href="/">Home</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'rooms' %}active{% endif %}" href="/hotel/rooms">Rooms</a>
+              <a class="nav-link {% if current_page == 'rooms' %}active{% endif %}" href="/rooms">Rooms</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'experiences' %}active{% endif %}" href="/hotel/experiences">Experiences</a>
+              <a class="nav-link {% if current_page == 'experiences' %}active{% endif %}" href="/experiences">Experiences</a>
             </li>
             {% if hotel.enable_dining %}
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'dining' %}active{% endif %}" href="/hotel/dining">Dining</a>
+              <a class="nav-link {% if current_page == 'dining' %}active{% endif %}" href="/dining">Dining</a>
             </li>
             {% endif %}
             {% if hotel.enable_spa %}
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'spa' %}active{% endif %}" href="/hotel/spa">Spa</a>
+              <a class="nav-link {% if current_page == 'spa' %}active{% endif %}" href="/spa">Spa</a>
             </li>
             {% endif %}
             {% if hotel.enable_gym %}
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'gym' %}active{% endif %}" href="/hotel/gym">Gym</a>
+              <a class="nav-link {% if current_page == 'gym' %}active{% endif %}" href="/gym">Gym</a>
             </li>
             {% endif %}
             {% if hotel.enable_events %}
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'events' %}active{% endif %}" href="/hotel/events">Events & Halls</a>
+              <a class="nav-link {% if current_page == 'events' %}active{% endif %}" href="/events">Events & Halls</a>
             </li>
             {% endif %}
             <li class="nav-item">
-              <a class="nav-link {% if current_page == 'contact' %}active{% endif %}" href="/hotel/contact">Contact</a>
+              <a class="nav-link {% if current_page == 'contact' %}active{% endif %}" href="/contact">Contact</a>
             </li>
           </ul>
 
           <!-- RIGHT SIDE: Book Now + Auth -->
           <div class="d-flex align-items-center gap-3">
-            <a href="/hotel/booking" class="web-nav-btn">Book Now</a>
+            <a href="/booking" class="web-nav-btn">Book Now</a>
 
             <!-- AUTH SECTION -->
             {% if frappe.session.user and frappe.session.user != "Guest" %}
@@ -84,7 +84,7 @@
                     </a>
                   </li>
                   <li>
-                    <a class="dropdown-item" href="/hotel/dashboard">
+                    <a class="dropdown-item" href="/dashboard">
                       <i class="fa-solid fa-gauge me-2"></i> Dashboard
                     </a>
                   </li>
