@@ -349,3 +349,5 @@ website_route_rules = [
     # Hotel website pages
     {"from_route": "/hotel/<page>", "to_route": "hotel"},
 ]
+
+home_page = "hotel"

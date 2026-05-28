@@ -2,7 +2,6 @@
   <div class="container">
     <div class="web-nav-shell w-100">
       <div class="d-flex align-items-center">
-
         <a class="navbar-brand me-auto" href="/hotel">
           {% if hotel.logo %}
             <img src="{{ hotel.logo }}" alt="{{ hotel.hotel_name }}" style="max-height: 48px;">
@@ -17,54 +16,96 @@
 
         <div class="collapse navbar-collapse" id="mainNavbar">
           <ul class="navbar-nav mx-auto mb-2 mb-xl-0">
-
             <li class="nav-item">
               <a class="nav-link {% if current_page == 'home' %}active{% endif %}" href="/hotel">Home</a>
             </li>
-
             <li class="nav-item">
               <a class="nav-link {% if current_page == 'rooms' %}active{% endif %}" href="/hotel/rooms">Rooms</a>
             </li>
-
             <li class="nav-item">
               <a class="nav-link {% if current_page == 'experiences' %}active{% endif %}" href="/hotel/experiences">Experiences</a>
             </li>
-
             {% if hotel.enable_dining %}
-              <li class="nav-item">
-                <a class="nav-link {% if current_page == 'dining' %}active{% endif %}" href="/hotel/dining">Dining</a>
-              </li>
+            <li class="nav-item">
+              <a class="nav-link {% if current_page == 'dining' %}active{% endif %}" href="/hotel/dining">Dining</a>
+            </li>
             {% endif %}
-
             {% if hotel.enable_spa %}
-              <li class="nav-item">
-                <a class="nav-link {% if current_page == 'spa' %}active{% endif %}" href="/hotel/spa">Spa</a>
-              </li>
+            <li class="nav-item">
+              <a class="nav-link {% if current_page == 'spa' %}active{% endif %}" href="/hotel/spa">Spa</a>
+            </li>
             {% endif %}
-
             {% if hotel.enable_gym %}
-              <li class="nav-item">
-                <a class="nav-link {% if current_page == 'gym' %}active{% endif %}" href="/hotel/gym">Gym</a>
-              </li>
+            <li class="nav-item">
+              <a class="nav-link {% if current_page == 'gym' %}active{% endif %}" href="/hotel/gym">Gym</a>
+            </li>
             {% endif %}
-
             {% if hotel.enable_events %}
-              <li class="nav-item">
-                <a class="nav-link {% if current_page == 'events' %}active{% endif %}" href="/hotel/events">Events & Halls</a>
-              </li>
+            <li class="nav-item">
+              <a class="nav-link {% if current_page == 'events' %}active{% endif %}" href="/hotel/events">Events & Halls</a>
+            </li>
             {% endif %}
-
             <li class="nav-item">
               <a class="nav-link {% if current_page == 'contact' %}active{% endif %}" href="/hotel/contact">Contact</a>
             </li>
-
           </ul>
 
-          <div class="d-flex">
+          <!-- RIGHT SIDE: Book Now + Auth -->
+          <div class="d-flex align-items-center gap-3">
             <a href="/hotel/booking" class="web-nav-btn">Book Now</a>
+
+            <!-- AUTH SECTION -->
+            {% if frappe.session.user and frappe.session.user != "Guest" %}
+              <!-- Logged in — show user dropdown -->
+              <div class="dropdown">
+                <button
+                  class="btn web-nav-user-btn dropdown-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                >
+                  <span class="web-nav-user-avatar">
+                    {{ frappe.session.user[0].upper() }}
+                  </span>
+                  <span class="web-nav-user-name d-none d-xl-inline">
+                    {{ frappe.session.user.split('@')[0] }}
+                  </span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end web-nav-dropdown">
+                  <li>
+                    <div class="web-nav-dropdown-header">
+                      <div class="web-nav-dropdown-email">{{ frappe.session.user }}</div>
+                    </div>
+                  </li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <a class="dropdown-item" href="/me">
+                      <i class="fa-solid fa-user me-2"></i> My Profile
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item" href="/hotel/dashboard">
+                      <i class="fa-solid fa-gauge me-2"></i> Dashboard
+                    </a>
+                  </li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <a class="dropdown-item web-nav-logout" href="#" onclick="hotelLogout(); return false;">
+                      <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            {% else %}
+              <!-- Guest — show Login button -->
+              <a href="/login" class="web-nav-login-btn">
+                <i class="fa-solid fa-right-to-bracket me-1"></i> Login
+              </a>
+            {% endif %}
+            <!-- END AUTH SECTION -->
+
           </div>
         </div>
-
       </div>
     </div>
   </div>
