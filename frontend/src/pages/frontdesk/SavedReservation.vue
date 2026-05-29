@@ -72,6 +72,17 @@ const actionLoading = ref(false)
 const reservation = ref({})
 const errorMessage = ref('')
 
+function toUserError(error, fallback) {
+  const raw = String(error?.message || '').trim()
+  if (!raw) return fallback
+
+  const technicalPattern = /traceback|frappe\.|pymysql|sql|exception|line\s+\d+|doctype|\n/i
+  if (raw.length > 220 || technicalPattern.test(raw)) {
+    return fallback
+  }
+  return raw
+}
+
 function getPaymentValue(entry) {
   return Number(entry?.amount ?? entry?.paid_amount ?? entry?.allocated_amount ?? 0)
 }
@@ -164,7 +175,7 @@ async function loadReservation() {
     }
   } catch (error) {
     reservation.value = {}
-    errorMessage.value = String(error?.message || 'Could not load reservation details.')
+    errorMessage.value = toUserError(error, 'Could not load reservation details.')
   } finally {
     loading.value = false
   }
@@ -338,7 +349,7 @@ async function saveRoomOccupant(payload) {
 
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not save room occupant.')
+    errorMessage.value = toUserError(error, 'Could not save room occupant.')
   } finally {
     actionLoading.value = false
   }
@@ -362,7 +373,7 @@ async function submitReservation() {
     await callMethod('frappe.client.submit', { doc: docToSubmit })
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not submit reservation.')
+    errorMessage.value = toUserError(error, 'Could not submit reservation.')
   } finally {
     actionLoading.value = false
   }
@@ -386,7 +397,7 @@ async function cancelReservation() {
     )
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not cancel reservation.')
+    errorMessage.value = toUserError(error, 'Could not cancel reservation.')
   } finally {
     actionLoading.value = false
   }
@@ -442,7 +453,7 @@ async function createInvoice() {
     }
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not create invoice.')
+    errorMessage.value = toUserError(error, 'Could not create invoice.')
   } finally {
     actionLoading.value = false
   }

@@ -844,6 +844,17 @@ function formatCurrency(amount) {
   return `₦ ${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 }
 
+function toUserError(error, fallback = 'Could not complete check-in. Please try again.') {
+  const raw = String(error?.message || '').trim()
+  if (!raw) return fallback
+
+  const technicalPattern = /traceback|frappe\.|pymysql|sql|exception|line\s+\d+|doctype|\n/i
+  if (raw.length > 220 || technicalPattern.test(raw)) {
+    return fallback
+  }
+  return raw
+}
+
 // ---- Submit ----
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -897,7 +908,7 @@ async function submitCheckIn() {
       errorMsg.value = 'Unexpected response from server.'
     }
   } catch (e) {
-    errorMsg.value = String(e?.message || 'Network error — please try again.')
+    errorMsg.value = toUserError(e, 'Network error — please try again.')
   } finally {
     submitting.value = false
   }

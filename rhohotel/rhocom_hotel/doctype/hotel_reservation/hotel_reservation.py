@@ -732,7 +732,10 @@ def check_in_reservation_room(reservation_name, room_row_name):
         }
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "check_in_reservation_room failed")
-        return {"status": "error", "message": str(e)}
+        message = str(e) or "Could not check in room. Please try again."
+        if any(token in message.lower() for token in ["traceback", "frappe.", "pymysql", "line ", "sql", "doctype", "\n"]):
+            message = "Could not check in room. Please try again or contact front desk support."
+        return {"status": "error", "message": message}
 
 
 @frappe.whitelist()
