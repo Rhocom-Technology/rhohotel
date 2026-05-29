@@ -54,8 +54,15 @@
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <select v-model="filterClient" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-          <option value="">All Clients</option>
-          <option v-for="c in clients" :key="c" :value="c">{{ c }}</option>
+         <option value="">All Corporate Customers</option>
+
+          <option
+            v-for="c in clients"
+            :key="c.name"
+            :value="c.name"
+          >
+            {{ c.customer_name || c.name }}
+          </option>
         </select>
         <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Statuses</option>
@@ -168,19 +175,39 @@ const loading = ref(false)
 const error = ref('')
 
 const clients = computed(() =>
-  [...new Set(bills.value.map(b => b.client).filter(Boolean))].sort()
+  [...new Map(
+    bills.value
+      .filter(b => b.client_id)
+      .map(b => [b.client_id, {
+        name: b.client_id,
+        customer_name: b.client || b.client_id
+      }])
+  ).values()].sort((a, b) =>
+    String(a.customer_name || '').localeCompare(String(b.customer_name || ''))
+  )
 )
 
 async function fetchBills() {
   loading.value = true
   error.value = ''
+
   try {
     const result = await callMethodForm(
       'rhohotel.rhocom_hotel.api.corporate_billing.get_corporate_bills',
       { page: 1, page_size: 500 }
     )
+
     bills.value = result?.bills || []
-    summary.value = result?.summary || { activeBills: 0, outstandingValue: '₦0', paidThisMonth: '₦0', overdueCount: 0 }
+
+    summary.value = result?.summary || {
+      activeBills: 0,
+      outstandingValue: '₦0',
+      paidThisMonth: '₦0',
+      overdueCount: 0
+    }
+
+    // clients.value = result?.customers || []
+
   } catch (e) {
     error.value = e.message || 'Failed to load bills'
   } finally {
@@ -194,7 +221,7 @@ const filtered = computed(() => {
     const q = search.value.toLowerCase()
     list = list.filter(b => b.billNo.toLowerCase().includes(q) || b.client.toLowerCase().includes(q))
   }
-  if (filterClient.value) list = list.filter(b => b.client === filterClient.value)
+  if (filterClient.value) list = list.filter(b => b.client_id === filterClient.value)
   if (filterStatus.value) list = list.filter(b => b.status === filterStatus.value)
   if (showOverdueOnly.value) list = list.filter(b => b.status === 'Overdue')
   return list
