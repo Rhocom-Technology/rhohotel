@@ -24,43 +24,39 @@
   {% set general_cta_images = general_media.get("cta_image", []) %}
 
   {% if booking_hero_images|length > 0 %}
-    {% set booking_hero_image = booking_hero_images[0].image %}
-    {% set booking_hero_alt = booking_hero_images[0].alt_text or "Booking" %}
+  {% set booking_hero_image = booking_hero_images[0].image %}
+  {% set booking_hero_alt = booking_hero_images[0].alt_text or "Booking" %}
   {% else %}
-    {% set booking_hero_image = "" %}
-    {% set booking_hero_alt = "Booking" %}
+  {% set booking_hero_image = "" %}
+  {% set booking_hero_alt = "Booking" %}
   {% endif %}
 
   {% if booking_background_images|length > 0 %}
-    {% set booking_background_image = booking_background_images[0].image %}
+  {% set booking_background_image = booking_background_images[0].image %}
   {% elif general_background_images|length > 0 %}
-    {% set booking_background_image = general_background_images[0].image %}
+  {% set booking_background_image = general_background_images[0].image %}
   {% else %}
-    {% set booking_background_image = "" %}
+  {% set booking_background_image = "" %}
   {% endif %}
 
   {% if booking_cta_images|length > 0 %}
-    {% set booking_cta_image = booking_cta_images[0].image %}
-    {% set booking_cta_alt = booking_cta_images[0].alt_text or "Reserve With Confidence" %}
+  {% set booking_cta_image = booking_cta_images[0].image %}
+  {% set booking_cta_alt = booking_cta_images[0].alt_text or "Reserve With Confidence" %}
   {% elif general_cta_images|length > 0 %}
-    {% set booking_cta_image = general_cta_images[0].image %}
-    {% set booking_cta_alt = general_cta_images[0].alt_text or "Reserve With Confidence" %}
+  {% set booking_cta_image = general_cta_images[0].image %}
+  {% set booking_cta_alt = general_cta_images[0].alt_text or "Reserve With Confidence" %}
   {% else %}
-    {% set booking_cta_image = "" %}
-    {% set booking_cta_alt = "Reserve With Confidence" %}
+  {% set booking_cta_image = "" %}
+  {% set booking_cta_alt = "Reserve With Confidence" %}
   {% endif %}
 
   <header class="web-page-hero">
     {% if booking_hero_image %}
-      <img
-        src="{{ booking_hero_image }}"
-        alt="{{ booking_hero_alt }}"
-        class="web-page-hero-bg"
-      />
+    <img src="{{ booking_hero_image }}" alt="{{ booking_hero_alt }}" class="web-page-hero-bg" />
     {% else %}
-      <div class="web-page-hero-bg web-image-placeholder">
-        <i class="fa-solid fa-calendar-check"></i>
-      </div>
+    <div class="web-page-hero-bg web-image-placeholder">
+      <i class="fa-solid fa-calendar-check"></i>
+    </div>
     {% endif %}
 
     <div class="container">
@@ -96,9 +92,9 @@
         </button>
 
         {% if hotel.enable_events %}
-          <button type="button" class="web-booking-tab-btn" data-booking-tab="events">
-            <i class="fa-solid fa-champagne-glasses me-2"></i> Halls & Events
-          </button>
+        <button type="button" class="web-booking-tab-btn" data-booking-tab="events">
+          <i class="fa-solid fa-champagne-glasses me-2"></i> Halls & Events
+        </button>
         {% endif %}
       </div>
 
@@ -144,13 +140,13 @@
                         <option value="all">Any available room</option>
 
                         {% if rooms %}
-                          {% for room in rooms %}
-                            <option value="{{ room.name }}">
-                              {{ room.display_name or room.room_type or room.room_name or room.name }}
-                            </option>
-                          {% endfor %}
+                        {% for room in rooms %}
+                        <option value="{{ room.name }}">
+                          {{ room.display_name or room.room_type or room.room_name or room.name }}
+                        </option>
+                        {% endfor %}
                         {% else %}
-                          <option value="">No room types currently available</option>
+                        <option value="">No room types currently available</option>
                         {% endif %}
                       </select>
                     </div>
@@ -184,11 +180,11 @@
                         <option>Airport Pickup</option>
 
                         {% if hotel.enable_spa %}
-                          <option>Spa Package</option>
+                        <option>Spa Package</option>
                         {% endif %}
 
                         {% if hotel.enable_dining %}
-                          <option>Dinner Reservation</option>
+                        <option>Dinner Reservation</option>
                         {% endif %}
 
                         <option>Special Room Setup</option>
@@ -215,55 +211,49 @@
 
             <div id="roomAvailabilityResults" class="row g-4 mt-4">
               {% if rooms %}
-                {% for room in rooms %}
-                  <div class="col-lg-4 col-md-6">
-                    <div class="web-availability-card">
-                      {% if room.display_image %}
-                        <img
-                          src="{{ room.display_image }}"
-                          alt="{{ room.display_name or room.name }}"
-                        >
-                      {% else %}
-                        <div class="web-image-placeholder" style="height: 240px; min-height: 240px;">
-                          <i class="fa-solid fa-bed"></i>
-                        </div>
-                      {% endif %}
-
-                      <div class="web-availability-card-body">
-                        <h4>{{ room.display_name or room.name }}</h4>
-
-                        <div class="web-price-line">
-                          {% if room.display_price %}
-                            From {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(room.display_price|float) }} / night
-                          {% else %}
-                            Rate available on request
-                          {% endif %}
-                        </div>
-
-                        <p class="web-form-help">
-                          {{ room.short_description or "A comfortable room option for a relaxing hotel stay." }}
-                        </p>
-
-                        <button
-                          type="button"
-                          class="web-btn-solid w-100"
-                          onclick="document.getElementById('selectedRoom').value='{{ room.name }}'; document.getElementById('roomType').value='{{ room.name }}';"
-                        >
-                          Select Room
-                        </button>
-                      </div>
-                    </div>
+              {% for room in rooms %}
+              <div class="col-lg-4 col-md-6">
+                <div class="web-availability-card">
+                  {% if room.display_image %}
+                  <img src="{{ room.display_image }}" alt="{{ room.display_name or room.name }}">
+                  {% else %}
+                  <div class="web-image-placeholder" style="height: 240px; min-height: 240px;">
+                    <i class="fa-solid fa-bed"></i>
                   </div>
-                {% endfor %}
-              {% else %}
-                <div class="col-12">
-                  <div class="text-center py-5">
-                    <h3>No room types currently available</h3>
-                    <p class="web-section-text">
-                      Room types added in Hotel Room Type will appear here.
+                  {% endif %}
+
+                  <div class="web-availability-card-body">
+                    <h4>{{ room.display_name or room.name }}</h4>
+
+                    <div class="web-price-line">
+                      {% if room.display_price %}
+                      From {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(room.display_price|float) }} / night
+                      {% else %}
+                      Rate available on request
+                      {% endif %}
+                    </div>
+
+                    <p class="web-form-help">
+                      {{ room.short_description or "A comfortable room option for a relaxing hotel stay." }}
                     </p>
+
+                    <button type="button" class="web-btn-solid w-100"
+                      onclick="document.getElementById('selectedRoom').value='{{ room.name }}'; document.getElementById('roomType').value='{{ room.name }}';">
+                      Select Room
+                    </button>
                   </div>
                 </div>
+              </div>
+              {% endfor %}
+              {% else %}
+              <div class="col-12">
+                <div class="text-center py-5">
+                  <h3>No room types currently available</h3>
+                  <p class="web-section-text">
+                    Room types added in Hotel Room Type will appear here.
+                  </p>
+                </div>
+              </div>
               {% endif %}
             </div>
           </div>
@@ -304,17 +294,20 @@
                   <div class="row g-3">
                     <div class="col-md-6">
                       <label for="roomGuestName">Full Name</label>
-                      <input type="text" id="roomGuestName" name="guest_name" class="form-control" placeholder="Enter full name" required>
+                      <input type="text" id="roomGuestName" name="guest_name" class="form-control"
+                        placeholder="Enter full name" required>
                     </div>
 
                     <div class="col-md-6">
                       <label for="roomGuestEmail">Email Address</label>
-                      <input type="email" id="roomGuestEmail" name="guest_email" class="form-control" placeholder="Enter email" required>
+                      <input type="email" id="roomGuestEmail" name="guest_email" class="form-control"
+                        placeholder="Enter email" required>
                     </div>
 
                     <div class="col-md-6">
                       <label for="roomGuestPhone">Phone Number</label>
-                      <input type="tel" id="roomGuestPhone" name="guest_phone" class="form-control" placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
+                      <input type="tel" id="roomGuestPhone" name="guest_phone" class="form-control"
+                        placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
                     </div>
 
                     <div class="col-md-6">
@@ -328,7 +321,8 @@
 
                     <div class="col-12">
                       <label for="roomNotes">Special Requests</label>
-                      <textarea id="roomNotes" name="special_request" class="form-control" rows="5" placeholder="Any request?"></textarea>
+                      <textarea id="roomNotes" name="special_request" class="form-control" rows="5"
+                        placeholder="Any request?"></textarea>
                     </div>
 
                     <div class="col-12 d-flex flex-column flex-md-row gap-3">
@@ -355,186 +349,202 @@
       </div>
 
       {% if hotel.enable_events %}
-        <div class="web-booking-panel" data-booking-panel="events">
-          <form id="eventBookingForm">
-            <div id="eventStepOne" class="web-booking-step active">
-              <div class="row g-5">
-                <div class="col-lg-5">
-                  <div class="web-kicker">Halls & Events</div>
+      <div class="web-booking-panel" data-booking-panel="events">
+        <form id="eventBookingForm">
+          <div id="eventStepOne" class="web-booking-step active">
+            <div class="row g-5">
+              <div class="col-lg-5">
+                <div class="web-kicker">Halls & Events</div>
 
-                  <h2 class="web-section-title">
-                    Plan Your Gathering
-                  </h2>
+                <h2 class="web-section-title">
+                  Plan Your Gathering
+                </h2>
 
-                  <p class="web-section-text">
-                    Use this form for weddings, conferences, board meetings, birthdays, dinners,
-                    trainings, and private hotel events.
-                  </p>
+                <p class="web-section-text">
+                  Use this form for weddings, conferences, board meetings, birthdays, dinners,
+                  trainings, and private hotel events.
+                </p>
 
-                  <div class="web-success-note mt-4">
-                    <i class="fa-solid fa-circle-info me-2"></i>
-                    Event pricing depends on hall, date, guest size, catering, and setup.
-                  </div>
+                <div class="web-success-note mt-4">
+                  <i class="fa-solid fa-circle-info me-2"></i>
+                  Event pricing depends on hall, date, guest size, catering, and setup.
                 </div>
+              </div>
 
-                <div class="col-lg-7">
-                  <div class="web-form">
-                    <div class="row g-3">
-                      <div class="col-md-6">
-                        <label for="eventName">Full Name</label>
-                        <input type="text" id="eventName" name="event_name" class="form-control" placeholder="Enter full name">
-                      </div>
+              <div class="col-lg-7">
+                <div class="web-form">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label for="eventName">Full Name</label>
+                      <input type="text" id="eventName" name="guest_name" class="form-control"
+                        placeholder="Enter full name" required>
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventEmail">Email Address</label>
-                        <input type="email" id="eventEmail" name="event_email" class="form-control" placeholder="Enter email">
-                      </div>
+                    <div class="col-md-6">
+                      <label for="eventEmail">Email Address</label>
+                      <input type="email" id="eventEmail" name="guest_email" class="form-control"
+                        placeholder="Enter email" required>
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventPhone">Phone Number</label>
-                        <input type="tel" id="eventPhone" name="event_phone" class="form-control" placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
-                      </div>
+                    <div class="col-md-6">
+                      <label for="eventPhone">Phone Number</label>
+                      <input type="tel" id="eventPhone" name="guest_phone" class="form-control"
+                        placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventType">Event Type</label>
-                        <select id="eventType" name="event_type" class="form-select">
-                          <option>Wedding</option>
-                          <option>Conference</option>
-                          <option>Business Meeting</option>
-                          <option>Birthday / Private Party</option>
-                          <option>Dinner / Reception</option>
-                          <option>Training / Seminar</option>
-                        </select>
-                      </div>
+                    <div class="col-md-6">
+                      <label for="eventType">Event Type</label>
+                      <select id="eventType" name="event_type" class="form-select" required>
+                        <option value="">Select event type</option>
+                        <option>Wedding</option>
+                        <option>Conference</option>
+                        <option>Business Meeting</option>
+                        <option>Birthday / Private Party</option>
+                        <option>Dinner / Reception</option>
+                        <option>Training / Seminar</option>
+                        <option>Other</option>
+                      </select>
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventHall">Preferred Hall</label>
-                        <select id="eventHall" name="preferred_hall" class="form-select">
-                          <option>Grand Ballroom</option>
-                          <option>Conference Hall</option>
-                          <option>Executive Boardroom</option>
-                          <option>Restaurant Private Area</option>
-                          <option>Outdoor / Terrace Setup</option>
-                        </select>
-                      </div>
+                    <div class="col-md-6">
+                      <label for="eventHall">Preferred Hall</label>
+                      <select id="eventHall" name="hall" class="form-select" required>
+                        {% if event_halls %}
+                        <option value="">Select hall</option>
+                        {% for hall in event_halls %}
+                        <option value="{{ hall.name }}">
+                          {{ hall.hall_name }}
+                          {% if hall.capacity %}
+                          - up to {{ hall.capacity }} guests
+                          {% endif %}
+                          {% if hall.price %}
+                          - {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(hall.price|float) }}
+                          {% endif %}
+                        </option>
+                        {% endfor %}
+                        {% else %}
+                        <option value="">No event halls currently available</option>
+                        {% endif %}
+                      </select>
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventGuests">Estimated Guests</label>
-                        <input type="number" id="eventGuests" name="estimated_guests" min="1" class="form-control" placeholder="Number of guests">
-                      </div>
+                    <div class="col-md-6">
+                      <label for="eventGuests">Estimated Guests</label>
+                      <input type="number" id="eventGuests" name="estimated_guest" min="1" class="form-control"
+                        placeholder="Number of guests" required>
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventDate">Event Date</label>
-                        <input type="date" id="eventDate" name="event_date" class="form-control">
-                      </div>
+                    <div class="col-md-4">
+                      <label for="eventDate">Event Date</label>
+                      <input type="date" id="eventDate" name="event_date" class="form-control" required>
+                    </div>
 
-                      <div class="col-md-6">
-                        <label for="eventTime">Preferred Time</label>
-                        <input type="time" id="eventTime" name="event_time" class="form-control">
-                      </div>
+                    <div class="col-md-4">
+                      <label for="eventStartTime">Start Time</label>
+                      <input type="time" id="eventStartTime" name="start_time" class="form-control" required>
+                    </div>
 
-                      <div class="col-12">
-                        <label for="eventNotes">Event Notes</label>
-                        <textarea id="eventNotes" name="event_notes" class="form-control" rows="5" placeholder="Tell us about the event, setup, catering, or special requirements."></textarea>
-                      </div>
+                    <div class="col-md-4">
+                      <label for="eventEndTime">End Time</label>
+                      <input type="time" id="eventEndTime" name="end_time" class="form-control" required>
+                    </div>
 
-                      <div class="col-12 d-flex flex-column flex-md-row gap-3">
-                        <button type="submit" class="web-btn-solid">
-                          Send Event Enquiry
-                        </button>
+                    <div class="col-12">
+                      <label for="eventNotes">Event Notes</label>
+                      <textarea id="eventNotes" name="noted" class="form-control" rows="5"
+                        placeholder="Tell us about the event, setup, catering, or special requirements."></textarea>
+                    </div>
 
-                        <a href="/hotel/contact" class="web-btn-ghost">
-                          Contact Hotel
-                        </a>
-                      </div>
+                    <div class="col-12 d-flex flex-column flex-md-row gap-3">
+                      <button type="submit" class="web-btn-solid">
+                        Send Event Enquiry
+                      </button>
 
-                      <div class="col-12">
-                        <p class="web-form-help mb-0">
-                          This event form can later be connected to a dedicated event enquiry or contact message flow.
-                        </p>
-                      </div>
+                      <a href="/contact" class="web-btn-ghost">
+                        Contact Hotel
+                      </a>
+                    </div>
+
+                    <div class="col-12">
+                      <p class="web-form-help mb-0">
+                        Your request will be saved as an event booking enquiry and the hotel team will contact you.
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
+      </div>
       {% endif %}
     </div>
   </section>
 
   {% if booking_background_image %}
-    <section
-      class="web-fixed-band"
-      style="background-image: url('{{ booking_background_image }}');"
-    >
-  {% else %}
+  <section class="web-fixed-band" style="background-image: url('{{ booking_background_image }}');">
+    {% else %}
     <section class="web-fixed-band">
-  {% endif %}
-    <div class="container">
-      <div class="web-fixed-box">
-        <div class="web-kicker">Reservation Support</div>
+      {% endif %}
+      <div class="container">
+        <div class="web-fixed-box">
+          <div class="web-kicker">Reservation Support</div>
 
-        <h2 class="web-section-title text-white">
-          Need Help Before Booking?
-        </h2>
+          <h2 class="web-section-title text-white">
+            Need Help Before Booking?
+          </h2>
 
-        <p>
-          Our team can help confirm room options, stay details, special requests, and availability.
-        </p>
+          <p>
+            Our team can help confirm room options, stay details, special requests, and availability.
+          </p>
 
-        <a href="/hotel/contact" class="web-btn-primary">
-          Contact Hotel
-        </a>
+          <a href="/contact" class="web-btn-primary">
+            Contact Hotel
+          </a>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="web-section js-bg-order">
-    <div class="container">
-      <div class="web-cta-split">
-        <div class="row g-0 align-items-center">
-          <div class="col-lg-5">
-            {% if booking_cta_image %}
-              <img
-                src="{{ booking_cta_image }}"
-                alt="{{ booking_cta_alt }}"
-                class="web-cta-image rounded"
-              />
-            {% else %}
+    <section class="web-section js-bg-order">
+      <div class="container">
+        <div class="web-cta-split">
+          <div class="row g-0 align-items-center">
+            <div class="col-lg-5">
+              {% if booking_cta_image %}
+              <img src="{{ booking_cta_image }}" alt="{{ booking_cta_alt }}" class="web-cta-image rounded" />
+              {% else %}
               <div class="web-image-placeholder web-cta-image web-cta-image-placeholder">
                 <i class="fa-solid fa-headset"></i>
               </div>
-            {% endif %}
-          </div>
+              {% endif %}
+            </div>
 
-          <div class="col-lg-7">
-            <div class="web-cta-content">
-              <div class="web-kicker">Guest Support</div>
+            <div class="col-lg-7">
+              <div class="web-cta-content">
+                <div class="web-kicker">Guest Support</div>
 
-              <h2>Reserve With Confidence</h2>
+                <h2>Reserve With Confidence</h2>
 
-              <p>
-                If you need assistance choosing a room, planning a stay, or arranging a special request,
-                {{ hotel.hotel_name or "our hotel" }} is ready to help.
-              </p>
+                <p>
+                  If you need assistance choosing a room, planning a stay, or arranging a special request,
+                  {{ hotel.hotel_name or "our hotel" }} is ready to help.
+                </p>
 
-              <div class="web-actions">
-                <a href="/hotel/rooms" class="web-btn-primary">View Rooms</a>
-                <a href="/hotel/contact" class="web-btn-outline">Ask a Question</a>
+                <div class="web-actions">
+                  <a href="/rooms" class="web-btn-primary">View Rooms</a>
+                  <a href="/contact" class="web-btn-outline">Ask a Question</a>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+    {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
 
-  {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
-  <script src="/assets/rhohotel/hotel_templates/template_two/js/booking.js"></script>
+    {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+    <script src="/assets/rhohotel/hotel_templates/template_two/js/booking.js"></script>
 </body>
 
 </html>

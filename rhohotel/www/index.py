@@ -1,9 +1,15 @@
 import frappe
 from frappe import _
 
-
 def get_context(context):
-    page = frappe.form_dict.get("page") or "home"
+    path = frappe.local.request.path.strip("/")
+
+    if not path or path == "hotel":
+        page = "home"
+    elif path.startswith("hotel/"):
+        page = path.split("/")[-1]
+    else:
+        page = path
 
     hotel = get_hotel_profile()
     if not hotel:
@@ -41,6 +47,7 @@ def get_context(context):
     context.rooms = get_rooms()
     context.home_rooms = get_home_rooms()
     context.page_media = get_page_media()
+    context.event_halls = get_event_halls()
     context.body_template = (
         f"rhocom_hotel/templates/hotel_templates/{template_code}/pages/{page_map[page]}.html"
     )
@@ -252,3 +259,24 @@ def get_page_media():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Hotel Page Media Fetch Error")
         return {}
+    
+def get_event_halls():
+    try:
+        return frappe.get_all(
+            "Hotel Event Hall",
+            filters={"published": 1},
+            fields=[
+                "name",
+                "hall_name",
+                "slug",
+                "capacity",
+                "price",
+                "description",
+                "main_image",
+                "sort_order"
+            ],
+            order_by="sort_order asc, creation asc",
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Hotel Event Hall Fetch Error")
+        return []

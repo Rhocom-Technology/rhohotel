@@ -1,11 +1,11 @@
 {
  "actions": [],
  "allow_rename": 1,
+ "autoname": "field:hall_name",
  "creation": "2026-05-22 05:41:49.411206",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "hotel",
   "hall_name",
   "slug",
   "description",
@@ -18,15 +18,11 @@
  ],
  "fields": [
   {
-   "fieldname": "hotel",
-   "fieldtype": "Link",
-   "label": "Hotel",
-   "options": "Hotel Profile"
-  },
-  {
    "fieldname": "hall_name",
    "fieldtype": "Data",
-   "label": "Hall Name"
+   "in_list_view": 1,
+   "label": "Hall Name",
+   "unique": 1
   },
   {
    "fieldname": "slug",
@@ -50,17 +46,20 @@
   {
    "fieldname": "capacity",
    "fieldtype": "Int",
+   "in_list_view": 1,
    "label": "Capacity"
   },
   {
    "fieldname": "price",
    "fieldtype": "Currency",
+   "in_standard_filter": 1,
    "label": "Price"
   },
   {
    "default": "0",
    "fieldname": "published",
    "fieldtype": "Check",
+   "in_list_view": 1,
    "label": "Published"
   },
   {
@@ -72,10 +71,11 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-05-22 05:44:45.852002",
+ "modified": "2026-05-28 12:57:11.284729",
  "modified_by": "Administrator",
  "module": "Rhocom Hotel",
  "name": "Hotel Event Hall",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {
