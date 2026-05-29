@@ -57,18 +57,42 @@ def _bill_action(status):
 
 @frappe.whitelist()
 def get_corporate_bills(search=None, client=None, status=None, page=1, page_size=25):
-	"""Return paginated list of corporate Sales Invoices with summary stats."""
 	try:
 		page = int(page or 1)
 	except Exception:
 		page = 1
+
 	try:
 		page_size = int(page_size or 25)
 	except Exception:
 		page_size = 25
 
-	conditions = ["si.docstatus = 1"]
-	params = {}
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
+		return {
+			"bills": [],
+			"customers": [],
+			"total": 0,
+			"page": page,
+			"page_size": page_size,
+			"total_pages": 1,
+			"summary": {
+				"activeBills": 0,
+				"outstandingValue": "₦0.00",
+				"paidThisMonth": "₦0.00",
+				"overdueCount": 0,
+			},
+		}
+
+	conditions = [
+		"si.docstatus = 1",
+		"si.customer IN %(corporate_customers)s",
+	]
+
+	params = {
+		"corporate_customers": tuple(corporate_customers),
+	}
 
 	if search:
 		conditions.append(
@@ -98,6 +122,7 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 	invoices = frappe.db.sql(sql, params, as_dict=True)
 
 	bills = []
+
 	for inv in invoices:
 		grand_total = flt(inv.grand_total)
 		outstanding = flt(inv.outstanding_amount)
@@ -109,6 +134,7 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 		bills.append({
 			"billNo": inv.name,
 			"client": inv.customer_name or inv.customer or "",
+			"client_id": inv.customer or "",
 			"clientNote": inv.remarks or "",
 			"period": _fmt_period(inv.posting_date),
 			"issueDate": _fmt_date(inv.posting_date),
@@ -119,8 +145,8 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 			"action": _bill_action(computed_status),
 		})
 
-	# Stats
 	total_outstanding = sum(flt(inv.outstanding_amount) for inv in invoices)
+
 	overdue_count = sum(
 		1 for inv in invoices
 		if _billing_status(inv.grand_total, inv.outstanding_amount, inv.due_date) == "Overdue"
@@ -128,17 +154,27 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 
 	today = nowdate()
 	month_start = "{}-{}-01".format(today[:4], today[5:7])
+
 	paid_this_month_sql = """
 		SELECT COALESCE(SUM(per.allocated_amount), 0)
 		FROM `tabPayment Entry Reference` per
 		JOIN `tabPayment Entry` pe ON per.parent = pe.name
+		JOIN `tabSales Invoice` si ON per.reference_name = si.name
 		WHERE per.reference_doctype = 'Sales Invoice'
 		  AND pe.docstatus = 1
 		  AND pe.payment_type = 'Receive'
 		  AND pe.posting_date >= %(month_start)s
+		  AND si.customer IN %(corporate_customers)s
 	"""
+
 	paid_this_month = flt(
-		frappe.db.sql(paid_this_month_sql, {"month_start": month_start})[0][0] or 0
+		frappe.db.sql(
+			paid_this_month_sql,
+			{
+				"month_start": month_start,
+				"corporate_customers": tuple(corporate_customers),
+			}
+		)[0][0] or 0
 	)
 
 	summary = {
@@ -148,7 +184,6 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 		"overdueCount": overdue_count,
 	}
 
-	# Pagination
 	total = len(bills)
 	start = (page - 1) * page_size
 	end = start + page_size
@@ -156,13 +191,13 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 
 	return {
 		"bills": bills[start:end],
+		"customers": _get_customers(),
 		"total": total,
 		"page": page,
 		"page_size": page_size,
 		"total_pages": total_pages,
 		"summary": summary,
 	}
-
 
 @frappe.whitelist()
 def get_corporate_bill_detail(invoice_name):
@@ -352,3 +387,64 @@ def record_corporate_payment(
 def get_payment_modes():
 	"""Return list of active modes of payment."""
 	return frappe.get_all("Mode of Payment", filters={"enabled": 1}, fields=["name"], order_by="name asc")
+
+def _get_corporate_customers():
+	if not frappe.db.exists("DocType", "Hotel Guest"):
+		return []
+
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT customer
+		FROM `tabHotel Guest`
+		WHERE guest_type = 'Corporate'
+		  AND IFNULL(customer, '') != ''
+		""",
+		as_dict=True,
+	)
+
+	return [row.customer for row in rows if row.customer]
+
+# def _get_customers():
+# 	corporate_customers = _get_corporate_customers()
+
+# 	if not corporate_customers:
+# 		return []
+
+# 	return frappe.db.sql(
+# 		"""
+# 		SELECT
+# 			name,
+# 			customer_name
+# 		FROM `tabCustomer`
+# 		WHERE name IN %(customers)s
+# 		ORDER BY customer_name ASC, name ASC
+# 		""",
+# 		{
+# 			"customers": tuple(corporate_customers)
+# 		},
+# 		as_dict=True,
+# 	)
+
+def _get_customers():
+	corporate_customers = _get_corporate_customers()
+
+	if not corporate_customers:
+		return []
+
+	return frappe.db.sql(
+		"""
+		SELECT DISTINCT
+			c.name,
+			c.customer_name
+		FROM `tabCustomer` c
+		JOIN `tabSales Invoice` si
+			ON si.customer = c.name
+		WHERE c.name IN %(customers)s
+		  AND si.docstatus = 1
+		ORDER BY c.customer_name ASC, c.name ASC
+		""",
+		{
+			"customers": tuple(corporate_customers)
+		},
+		as_dict=True,
+	)
