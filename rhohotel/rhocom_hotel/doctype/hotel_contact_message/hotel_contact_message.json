@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "field:full_name",
+ "autoname": "HCM-.#####",
  "creation": "2026-05-22 08:46:02.783738",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -51,11 +51,11 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-05-22 13:19:54.164659",
+ "modified": "2026-05-28 11:17:43.792528",
  "modified_by": "Administrator",
  "module": "Rhocom Hotel",
  "name": "Hotel Contact Message",
- "naming_rule": "By fieldname",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
   {

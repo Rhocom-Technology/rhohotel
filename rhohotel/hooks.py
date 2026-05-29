@@ -281,9 +281,18 @@ frappe_csrf_exempt_methods = [
 	"rhohotel.hotel_booking.create_booking",
 	"rhohotel.hotel_booking.create_payment_link",
     "rhohotel.rhocom_hotel.api.website.submit_contact_message",
+    "rhohotel.rhocom_hotel.api.website.submit_event_booking",
 ]
 
 frappe.csrf_exempt_methods = frappe_csrf_exempt_methods
+
+
+ignore_csrf = [
+    "rhohotel.search_available_rooms.search_available_rooms",
+    "rhohotel.hotel_booking.create_booking",
+    "rhohotel.hotel_booking.create_payment_link",
+    "rhohotel.rhocom_hotel.api.website.submit_contact_message",
+]
 
 
 after_request = "rhohotel.api.add_cors_headers"
@@ -346,6 +355,19 @@ website_route_rules = [
 	{"from_route": "/front-desk/<path:app_path>", "to_route": "front-desk"},
 	{"from_route": "/front-desk", "to_route": "front-desk"},
 	{"from_route": "/front-desk/", "to_route": "front-desk"},
-    # Hotel website pages
-    {"from_route": "/hotel/<page>", "to_route": "hotel"},
+   
+    {"from_route": "/rooms", "to_route": "index"},
+    {"from_route": "/booking", "to_route": "index"},
+    {"from_route": "/contact", "to_route": "index"},
+    {"from_route": "/experiences", "to_route": "index"},
+    {"from_route": "/dining", "to_route": "index"},
+    {"from_route": "/spa", "to_route": "index"},
+    {"from_route": "/gym", "to_route": "index"},
+    {"from_route": "/events", "to_route": "index"},
+
+    # keep old URLs working for now
+    {"from_route": "/hotel", "to_route": "index"},
+    {"from_route": "/hotel/<page>", "to_route": "index"},
 ]
+
+home_page = "hotel"
