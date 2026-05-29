@@ -370,4 +370,4 @@ website_route_rules = [
     {"from_route": "/hotel/<page>", "to_route": "index"},
 ]
 
-home_page = "hotel"
+home_page = "index"
