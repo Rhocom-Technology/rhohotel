@@ -186,9 +186,9 @@ scheduler_events = {
 # Website Route Rules
 # --------------------
 # Serve the front-desk SPA for all sub-paths so direct URL navigation works
-website_route_rules = [
-    {"from_route": "/frontdesk/<path:name>", "to_route": "front-desk"},
-]
+# website_route_rules = [
+#     {"from_route": "/frontdesk/<path:name>", "to_route": "front-desk"},
+# ]
 
 # Testing
 # -------
@@ -349,6 +349,7 @@ doc_events = {
 
 
 website_route_rules = [
+    {"from_route": "/frontdesk/<path:name>", "to_route": "front-desk"},
     {"from_route": "/frontdesk/<path:app_path>", "to_route": "front-desk"},
     {"from_route": "/frontdesk", "to_route": "front-desk"},
 	{"from_route": "/frontdesk/", "to_route": "front-desk"},
