@@ -204,6 +204,7 @@ function removePortion(idx) {
 watch(() => props.modelValue, (open) => {
   if (open) {
     splitError.value = ''
+     applying.value = false
     const r = props.preSelectedRoom
     if (r?.room && (r?.check_in || r?.id)) {
       // Pre-populate first portion with the already-selected room/guest
@@ -274,65 +275,200 @@ function callFrappeApi(url, params) {
   })
 }
 
-async function applySplit() {
-  if (props.cartItems.length === 0) { splitError.value = 'Cart is empty.'; return }
-  if (portionTotal.value !== props.grandTotal) {
-    splitError.value = `Portions must total ₦${props.grandTotal.toLocaleString()}.`; return
-  }
-  for (const p of portions.value) {
-    if (p.paymentType === 'Post to Room' && !p.checkIn) {
-      splitError.value = 'Select a room for all "Post to Room" portions.'; return
-    }
-  }
+// async function applySplit() {
+//   if (props.cartItems.length === 0) { splitError.value = 'Cart is empty.'; return }
+//   if (portionTotal.value !== props.grandTotal) {
+//     splitError.value = `Portions must total ₦${props.grandTotal.toLocaleString()}.`; return
+//   }
+//   for (const p of portions.value) {
+//     if (p.paymentType === 'Post to Room' && !p.checkIn) {
+//       splitError.value = 'Select a room for all "Post to Room" portions.'; return
+//     }
+//   }
 
+//   applying.value = true
+//   splitError.value = ''
+
+//   // The draft should be deleted once (on the first API call that completes)
+//   let draftToDelete = props.existingDraft || null
+
+//   try {
+//     for (const portion of portions.value) {
+//       if (Number(portion.amount) <= 0) continue
+//       const ratio = Number(portion.amount) / props.grandTotal
+//       const portionItems = JSON.stringify(props.cartItems.map(i => ({
+//         item_code: i.item_code || i.id,
+//         qty: i.qty,
+//         price: Math.round(i.price * ratio * 100) / 100,
+//       })))
+
+//       if (portion.paymentType === 'Post to Room') {
+//         await callFrappeApi('rhohotel.rhocom_hotel.api.pos.post_bill_to_room', {
+//           items: portionItems,
+//           check_in: portion.checkIn,
+//           service_charge: 0,
+//           discount_amount: 0,
+//           kitchen_note: props.kitchenNote || null,
+//           pos_profile: props.posProfile || null,
+//           existing_draft: draftToDelete,
+//         })
+//       } else {
+//         await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_pos_invoice', {
+//           items: portionItems,
+//           mode_of_payment: portion.paymentType === 'POS' ? 'POS' : 'Cash',
+//           customer: portion.target || null,
+//           service_charge: 0,
+//           discount_amount: 0,
+//           kitchen_note: props.kitchenNote || null,
+//           pos_profile: props.posProfile || null,
+//           existing_draft: draftToDelete,
+//         })
+//       }
+//       draftToDelete = null  // only delete once — first successful call handles it
+//     }
+//     emit('confirmed', { split: true })
+//     emit('update:modelValue', false)
+//   } catch (err) {
+//     splitError.value = err.message || 'Failed to process split bill'
+//   } finally {
+//     applying.value = false
+//   }
+// }
+
+
+
+// async function applySplit() {
+//   console.log('applySplit called, applying:', applying.value)
+//   if (applying.value) return
+//   applying.value = true  // block double-tap immediately
+
+//   splitError.value = ''
+
+//   if (props.cartItems.length === 0) {
+//     splitError.value = 'Cart is empty.'
+//     applying.value = false
+//     return
+//   }
+
+//   if (portionTotal.value !== props.grandTotal) {
+//     splitError.value = `Portions must total ₦${props.grandTotal.toLocaleString()}.`
+//     applying.value = false
+//     return
+//   }
+
+//   for (const p of portions.value) {
+//     if (p.paymentType === 'Post to Room' && !p.checkIn) {
+//       splitError.value = 'Select a room for all "Post to Room" portions.'
+//       applying.value = false
+//       return
+//     }
+//   }
+
+//   try {
+//     const fullItems = JSON.stringify(props.cartItems.map(i => ({
+//       item_code: i.item_code || i.id,
+//       qty: i.qty,
+//       price: i.price,
+//     })))
+
+//     const splitPortions = JSON.stringify(
+//       portions.value
+//         .filter(p => Number(p.amount) > 0)
+//         .map(p => ({
+//           amount: Number(p.amount),
+//           paymentType: p.paymentType,
+//           target: p.target || null,
+//           checkIn: p.checkIn || null,
+//           room: p.selectedRoom?.room || null,
+//           guest: p.selectedRoom?.guest || null,
+//         }))
+//     )
+
+//     await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_split_pos_invoice', {
+//       items: fullItems,
+//       portions: splitPortions,
+//       customer: null,
+//       service_charge: props.serviceCharge || 0,
+//       discount_amount: props.discountAmount || 0,
+//       kitchen_note: props.kitchenNote || null,
+//       pos_profile: props.posProfile || null,
+//       existing_draft: props.existingDraft || null,
+//     })
+
+// applying.value = false
+//     emit('confirmed', { split: true })
+//     emit('update:modelValue', false)
+//   } catch (err) {
+//     splitError.value = err.message || 'Failed to process split bill'
+//     applying.value = false  // only reset on error; success closes the modal
+//   }
+// }
+
+async function applySplit() {
+  if (applying.value) return
   applying.value = true
   splitError.value = ''
 
-  // The draft should be deleted once (on the first API call that completes)
-  let draftToDelete = props.existingDraft || null
+  if (props.cartItems.length === 0) {
+    splitError.value = 'Cart is empty.'
+    applying.value = false
+    return
+  }
+
+  if (portionTotal.value !== props.grandTotal) {
+    splitError.value = `Portions must total ₦${props.grandTotal.toLocaleString()}.`
+    applying.value = false
+    return
+  }
+
+  for (const p of portions.value) {
+    if (p.paymentType === 'Post to Room' && !p.checkIn) {
+      splitError.value = 'Select a room for all "Post to Room" portions.'
+      applying.value = false
+      return
+    }
+  }
 
   try {
-    for (const portion of portions.value) {
-      if (Number(portion.amount) <= 0) continue
-      const ratio = Number(portion.amount) / props.grandTotal
-      const portionItems = JSON.stringify(props.cartItems.map(i => ({
-        item_code: i.item_code || i.id,
-        qty: i.qty,
-        price: Math.round(i.price * ratio * 100) / 100,
-      })))
+    const fullItems = JSON.stringify(props.cartItems.map(i => ({
+      item_code: i.item_code || i.id,
+      qty: i.qty,
+      price: i.price,
+    })))
 
-      if (portion.paymentType === 'Post to Room') {
-        await callFrappeApi('rhohotel.rhocom_hotel.api.pos.post_bill_to_room', {
-          items: portionItems,
-          check_in: portion.checkIn,
-          service_charge: 0,
-          discount_amount: 0,
-          kitchen_note: props.kitchenNote || null,
-          pos_profile: props.posProfile || null,
-          existing_draft: draftToDelete,
-        })
-      } else {
-        await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_pos_invoice', {
-          items: portionItems,
-          mode_of_payment: portion.paymentType === 'POS' ? 'POS' : 'Cash',
-          customer: portion.target || null,
-          service_charge: 0,
-          discount_amount: 0,
-          kitchen_note: props.kitchenNote || null,
-          pos_profile: props.posProfile || null,
-          existing_draft: draftToDelete,
-        })
-      }
-      draftToDelete = null  // only delete once — first successful call handles it
-    }
+    const splitPortions = JSON.stringify(
+      portions.value
+        .filter(p => Number(p.amount) > 0)
+        .map(p => ({
+          amount: Number(p.amount),
+          paymentType: p.paymentType,
+          target: p.target || null,
+          checkIn: p.checkIn || null,
+          room: p.selectedRoom?.room || null,
+          guest: p.selectedRoom?.guest || null,
+        }))
+    )
+
+    await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_split_pos_invoice', {
+      items: fullItems,
+      portions: splitPortions,
+      customer: null,
+      service_charge: props.serviceCharge || 0,
+      discount_amount: props.discountAmount || 0,
+      kitchen_note: props.kitchenNote || null,
+      pos_profile: props.posProfile || null,
+      existing_draft: props.existingDraft || null,
+    })
+
+    applying.value = false
     emit('confirmed', { split: true })
     emit('update:modelValue', false)
   } catch (err) {
     splitError.value = err.message || 'Failed to process split bill'
-  } finally {
     applying.value = false
   }
 }
+
 </script>
 
 <style scoped>
