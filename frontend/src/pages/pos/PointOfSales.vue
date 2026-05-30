@@ -284,7 +284,7 @@
           <p class="text-[11px] text-gray-400 mt-1">Only items in configured kitchen item groups are sent.</p>
           <!-- Send to Kitchen Now -->
           <button @click="sendToKitchenNow"
-            :disabled="sendingKitchenNow || cart.length === 0"
+           :disabled="sendingKitchenNow || cart.length === 0 || !hasKitchenItems"
             class="btn-hover mt-2 w-full py-2 text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             :class="Object.keys(kitchenSentMap).length > 0
               ? 'text-orange-700 bg-orange-50 border border-orange-300 hover:bg-orange-100'
@@ -637,27 +637,48 @@ const occupiedRoomsResource = createResource({
 })
 
 // ── API: Bill-To search ────────────────────────────────────────────
+// REPLACE with:
 const billToResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
-  params: { query: '' },
   auto: false,
 })
 
+// let billToTimer = null
+// watch(billToSearch, (q) => {
+//   clearTimeout(billToTimer)
+//   billToTimer = setTimeout(() => {
+//     billToResource.params = { query: q }
+//     billToResource.reload()
+//   }, 300)
+// })
+
+// // Load default results (including Walk In) when the Bill-To input gains focus
+// watch(billToFocused, (focused) => {
+//   if (focused && !billToSearch.value) {
+//     billToResource.params = { query: '' }
+//     billToResource.reload()
+//   }
+// })
+
+
+const clearingCart = ref(false)
+
+// REPLACE with:
 let billToTimer = null
+
+function reloadBillTo(q) {
+  try {
+    billToResource.submit({ query: q || '' })
+  } catch (_) {}
+}
+
 watch(billToSearch, (q) => {
   clearTimeout(billToTimer)
-  billToTimer = setTimeout(() => {
-    billToResource.params = { query: q }
-    billToResource.reload()
-  }, 300)
+  billToTimer = setTimeout(() => reloadBillTo(q), 300)
 })
 
-// Load default results (including Walk In) when the Bill-To input gains focus
 watch(billToFocused, (focused) => {
-  if (focused && !billToSearch.value) {
-    billToResource.params = { query: '' }
-    billToResource.reload()
-  }
+  if (focused && !billToSearch.value) reloadBillTo('')
 })
 
 // ── Computed: categories ───────────────────────────────────────────
@@ -760,6 +781,10 @@ const kitchenSentIds = computed(() => {
   return sent
 })
 
+const hasKitchenItems = computed(() =>
+  cart.value.some(i => kitchenItemGroups.value.has(i.category))
+)
+
 // ── Bill-To interaction ────────────────────────────────────────────
 function delayBlur(field) {
   setTimeout(() => {
@@ -777,12 +802,11 @@ function selectBillTo(guest) {
   }
 }
 
+// REPLACE with:
 function clearBillTo() {
   selectedBillTo.value = null
   billToSearch.value = ''
   roomNumber.value = ''
-  billToResource.params = { query: '' }
-  billToResource.reload()
 }
 
 function selectRoomFromNumber(r) {
@@ -1200,6 +1224,22 @@ onMounted(() => {
   restorePosState()
 })
 
+// function clearCart() {
+//   cart.value = []
+//   selectedKitchenItemMap.value = {}
+//   kitchenSentMap.value = {}
+//   selectedBillTo.value = null
+//   roomNumber.value = ''
+//   kitchenNote.value = ''
+//   billToSearch.value = ''
+//   discountInput.value = ''
+//   showDiscountPanel.value = false
+//   resumedDraftInvoice.value = null
+//   try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}
+// }
+
+
+// REPLACE with:
 function clearCart() {
   cart.value = []
   selectedKitchenItemMap.value = {}
@@ -1314,10 +1354,21 @@ function onChargeNow() {
   })
 }
 
-function onSplitConfirmed() {
+// function onSplitConfirmed() {
+//   console.log('onSplitConfirmed called')
+//   clearCart()
+//   menuResource.reload()
+//   chargeSuccess.value = 'Split bill processed successfully'
+//   setTimeout(() => { chargeSuccess.value = '' }, 4000)
+// }
+
+function onSplitConfirmed(data) {
   clearCart()
   menuResource.reload()
   chargeSuccess.value = 'Split bill processed successfully'
+  if (data?.pos_invoice) {
+    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(data.pos_invoice)}&trigger_print=1`, '_blank')
+  }
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
 
