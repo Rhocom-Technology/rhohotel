@@ -276,6 +276,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { callMethod } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -337,29 +338,12 @@ async function checkAvailability() {
   avError.value = ''
   avResults.value = null
   try {
-    const body = new URLSearchParams({
+    const rows = await callMethod('rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms', {
       check_in_dt: avCheckIn.value,
       check_out_dt: avCheckOut.value,
+      room_type: avRoomType.value || undefined,
     })
-    if (avRoomType.value) body.append('room_type', avRoomType.value)
-
-    const res = await fetch(
-      '/api/method/rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Frappe-CSRF-Token': window.csrf_token || '',
-        },
-        body: body.toString(),
-      }
-    )
-    const data = await res.json()
-    if (data.exc) {
-      avError.value = 'Failed to fetch availability. Please try again.'
-    } else {
-      avResults.value = data.message || []
-    }
+    avResults.value = Array.isArray(rows) ? rows : []
   } catch (e) {
     avError.value = 'Network error — please check connection.'
     console.error(e)
@@ -374,22 +358,10 @@ async function loadRooms() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.room.get_room_inventory', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Frappe-CSRF-Token': window.csrf_token || ''
-      }
-    })
-    const data = await res.json()
-    if (data.exc) {
-      loadError.value = 'Failed to load room inventory.'
-    } else {
-      const msg = data.message || {}
-      rooms.value = msg.rooms || []
-      roomTypeOptions.value = msg.room_types || []
-      floorOptions.value = msg.floors || []
-    }
+    const msg = await callMethod('rhohotel.rhocom_hotel.api.room.get_room_inventory') || {}
+    rooms.value = msg.rooms || []
+    roomTypeOptions.value = msg.room_types || []
+    floorOptions.value = msg.floors || []
   } catch (e) {
     loadError.value = 'Network error — please check connection.'
     console.error(e)
