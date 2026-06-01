@@ -668,7 +668,9 @@ async function loadAvailableRooms() {
           room_number: preRoom,
           room_type: preRoomType || '',
           floor: '',
-          default_rate: 0,
+          default_rate: getNumericRate(route.query.rate_amount),
+          rate_per_night: getNumericRate(route.query.rate_amount),
+          rate: getNumericRate(route.query.rate_amount),
         }
         availableRooms.value = [injected, ...availableRooms.value]
         form.room_number = preRoom
@@ -698,8 +700,19 @@ function onRoomSelect() {
   if (room) {
     form.room_type = room.room_type
     selectedRoomType.value = room.room_type
-    if (room.default_rate) form.rate_amount = room.default_rate
+    const rate = getRoomRate(room)
+    if (rate > 0) form.rate_amount = rate
   }
+}
+
+function getNumericRate(value) {
+  const rate = Number(value || 0)
+  return Number.isFinite(rate) ? rate : 0
+}
+
+function getRoomRate(room) {
+  const rateFields = [room?.default_rate, room?.rate_per_night, room?.rate, room?.rate_amount]
+  return rateFields.map(getNumericRate).find(rate => rate > 0) || 0
 }
 
 // ---- Form ----

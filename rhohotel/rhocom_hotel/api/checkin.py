@@ -502,19 +502,18 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
         )
         rooms = [r for r in rooms if r.name not in unavailable]
 
-    # --- 3. Attach default tariff rate ---
+    # --- 3. Attach default room rate ---
+    from rhohotel.api import get_room_rate
+
     tariff_map = {}
     for room in rooms:
         rt = room.get("room_type")
         if rt and rt not in tariff_map:
-            tariff = frappe.get_all(
-                "Hotel Room Tariff",
-                filters={"room_type": rt, "is_active": 1},
-                fields=["rate_amount"],
-                limit=1,
-            )
-            tariff_map[rt] = tariff[0].rate_amount if tariff else 0
-        room["default_rate"] = tariff_map.get(rt, 0)
+            tariff_map[rt] = get_room_rate(rt) or 0
+        rate = tariff_map.get(rt, 0)
+        room["default_rate"] = rate
+        room["rate_per_night"] = rate
+        room["rate"] = rate
 
     return rooms
 
