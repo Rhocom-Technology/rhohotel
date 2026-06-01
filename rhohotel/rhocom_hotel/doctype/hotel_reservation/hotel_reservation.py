@@ -915,8 +915,8 @@ def _find_or_create_customer_for_reservation(doc):
             "doctype": "Customer",
             "customer_name": doc.primary_guest_name or doc.corporate_guest or doc.name,
             "customer_type": "Company" if doc.reservation_type == "Corporate" else "Individual",
-            "customer_group": selling_settings.default_customer_group,
-            "territory": selling_settings.default_territory,
+            "customer_group": selling_settings.customer_group,
+            "territory": selling_settings.territory,
             "mobile_number": doc.primary_guest_phone or "",
             "email_id": doc.primary_guest_email or "",
         }

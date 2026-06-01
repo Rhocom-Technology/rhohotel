@@ -276,12 +276,37 @@ scheduler_events = {
 # 	},
 # }
 
+# frappe_csrf_exempt_methods = [
+# 	"rhohotel.search_available_rooms.search_available_rooms",
+# 	"rhohotel.hotel_booking.create_booking",
+# 	"rhohotel.hotel_booking.create_payment_link",
+#     "rhohotel.rhocom_hotel.api.website.submit_contact_message",
+#     "rhohotel.rhocom_hotel.api.website.submit_event_booking",
+# ]
+
+# frappe.csrf_exempt_methods = frappe_csrf_exempt_methods
+
+
+# ignore_csrf = [
+#     "rhohotel.search_available_rooms.search_available_rooms",
+#     "rhohotel.hotel_booking.create_booking",
+#     "rhohotel.hotel_booking.create_payment_link",
+#     "rhohotel.rhocom_hotel.api.website.submit_contact_message",
+# ]
+
+
+
 frappe_csrf_exempt_methods = [
-	"rhohotel.search_available_rooms.search_available_rooms",
-	"rhohotel.hotel_booking.create_booking",
-	"rhohotel.hotel_booking.create_payment_link",
+    "rhohotel.search_available_rooms.search_available_rooms",
+    "rhohotel.hotel_booking.create_booking",
+    "rhohotel.hotel_booking.create_payment_link",
     "rhohotel.rhocom_hotel.api.website.submit_contact_message",
     "rhohotel.rhocom_hotel.api.website.submit_event_booking",
+    "rhohotel.hotel_api.check_online_availability",
+    "rhohotel.hotel_api.submit_online_reservation",
+    "rhohotel.hotel_api.create_reservation_payment_link",
+    "rhohotel.hotel_api.verify_reservation_payment",
+    "rhohotel.hotel_api.paystack_webhook",
 ]
 
 frappe.csrf_exempt_methods = frappe_csrf_exempt_methods
@@ -292,6 +317,11 @@ ignore_csrf = [
     "rhohotel.hotel_booking.create_booking",
     "rhohotel.hotel_booking.create_payment_link",
     "rhohotel.rhocom_hotel.api.website.submit_contact_message",
+    "rhohotel.hotel_api.check_online_availability",
+    "rhohotel.hotel_api.submit_online_reservation",
+    "rhohotel.hotel_api.create_reservation_payment_link",
+    "rhohotel.hotel_api.verify_reservation_payment",
+    "rhohotel.hotel_api.paystack_webhook",
 ]
 
 
@@ -372,3 +402,7 @@ website_route_rules = [
 ]
 
 home_page = "index"
+
+
+
+
