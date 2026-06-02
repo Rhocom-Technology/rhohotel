@@ -7,6 +7,77 @@ import requests
 from frappe.utils import cint, date_diff, flt, getdate, nowdate
 
 
+@frappe.whitelist(allow_guest=True)
+def room_list_with_rates():
+    room_types = frappe.get_all(
+        "Hotel Room Type",
+        filters={"is_active": 1},
+        fields=[
+            "name",
+            "room_type",
+            "capacity",
+            "base_adult",
+            "max_adult",
+            "base_child",
+            "max_child",
+            "extra_bed_capacity",
+            "show_on_home",
+            "show_on_website",
+        ],
+    )
+
+    # Fetch only default rates
+    all_rates = frappe.get_all(
+        "Hotel Room Rate",
+        filters={"is_active": 1, "is_default": 1},
+        fields=[
+            "room_type",
+            "rate_code",
+            "rate_amount",
+            "description",
+            "market_segment",
+            "plan",
+            "meal_plan",
+            "cancellation_policy",
+            "min_stay",
+            "max_stay",
+        ],
+    )
+
+    default_rate_map = {r["room_type"]: r for r in all_rates}
+
+    result = []
+
+    for rt in room_types:
+        rt_name = rt["name"]
+        doc = frappe.get_doc("Hotel Room Type", rt_name)
+
+        amenities = [
+            {"item": row.item, "billable": row.billable}
+            for row in (doc.amenities or [])
+        ]
+        inventory = [
+            {"item": row.item, "quantity": row.quantity}
+            for row in (doc.standard_inventory or [])
+        ]
+        images = [
+            {"image": row.image, "caption": row.caption}
+            for row in (doc.hotel_room_images or [])
+        ]
+
+        result.append({
+            **rt,
+            "short_description":   doc.short_description   or "",
+            "website_description": doc.website_description or "",
+            "amenities":           amenities,
+            "standard_inventory":  inventory,
+            "images":              images,
+            "rate":                default_rate_map.get(rt_name),
+        })
+
+    return {"success": True, "room_types": result}
+
+
 # ---------------------------------------------------------------------------
 # Helpers – room type / capacity
 # ---------------------------------------------------------------------------
@@ -407,6 +478,53 @@ def _create_payment_entry_for_online_reservation(
 
 
 # ---------------------------------------------------------------------------
+# Expiry – scheduled job to expire unpaid Hold reservations
+# ---------------------------------------------------------------------------
+
+
+def expire_unpaid_online_reservations():
+    """
+    Mark Hold reservations as Expired when their check-in date has passed
+    and payment is still Pending.
+
+    Called by a scheduled job (daily). Releasing expired reservations back to
+    inventory is automatic since get_available_rooms() already excludes
+    'Expired' from its conflict query.
+    """
+    today = nowdate()
+
+    expired = frappe.get_all(
+        "Hotel Reservation",
+        filters={
+            "reservation_status": "Hold",
+            "payment_status":     "Pending",
+            "source_channel":     "Online",
+            "to_date":            ["<", today],
+        },
+        fields=["name"],
+    )
+
+    for res in expired:
+        try:
+            frappe.db.set_value(
+                "Hotel Reservation",
+                res["name"],
+                "reservation_status",
+                "Expired",
+                update_modified=True,
+            )
+            frappe.logger().info(f"Expired unpaid online reservation: {res['name']}")
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"Failed to expire reservation {res['name']}",
+            )
+
+    if expired:
+        frappe.db.commit()
+
+
+# ---------------------------------------------------------------------------
 # Online Reservation - Availability Check
 # ---------------------------------------------------------------------------
 
@@ -463,6 +581,9 @@ def check_online_availability(
     if nights < 1:
         return {"success": False, "message": "Check-out date must be after check-in date."}
 
+    if getdate(check_in_date) < getdate(nowdate()):
+        return {"success": False, "message": "Check-in date cannot be in the past."}
+
     room_type_filter = _normalise_room_type(room_type)
     number_of_rooms  = max(1, cint(number_of_rooms or 1))
     adults           = max(1, cint(adults   or 1))
@@ -496,11 +617,26 @@ def check_online_availability(
         type_map[rt]["available_count"] += 1
 
     for rt_name, rt_data in type_map.items():
-        rt_meta = frappe.db.get_value(
-            "Hotel Room Type", rt_name, ["description", "image"], as_dict=True,
-        ) or {}
-        rt_data["description"] = rt_meta.get("description") or ""
-        rt_data["image"]       = rt_meta.get("image")       or ""
+        doc = frappe.get_doc("Hotel Room Type", rt_name)
+
+        rt_data["short_description"]   = doc.short_description   or ""
+        rt_data["website_description"] = doc.website_description or ""
+        rt_data["capacity"]            = doc.capacity            or 0
+        rt_data["max_adult"]           = doc.max_adult           or 0
+        rt_data["max_child"]           = doc.max_child           or 0
+
+        rt_data["amenities"] = [
+            {"item": row.item, "billable": row.billable}
+            for row in (doc.amenities or [])
+        ]
+        rt_data["images"] = [
+            {"image": row.image, "caption": row.caption}
+            for row in (doc.hotel_room_images or [])
+        ]
+        rt_data["standard_inventory"] = [
+            {"item": row.item, "quantity": row.quantity}
+            for row in (doc.standard_inventory or [])
+        ]
 
     room_types = [
         data for data in type_map.values()
@@ -576,6 +712,10 @@ def submit_online_reservation(
 
     if nights < 1:
         return {"success": False, "message": "Check-out date must be after check-in date."}
+
+    # Check-in date must not be in the past
+    if getdate(check_in_date) < getdate(nowdate()):
+        return {"success": False, "message": "Check-in date cannot be in the past."}
 
     adults   = max(1, cint(adults   or 1))
     children = max(0, cint(children or 0))
