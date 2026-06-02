@@ -29,6 +29,8 @@
     "occupant_phone",
     "occupant_email",
     "links_section",
+    "status",
+    "check_in_time",
     "check_in_reference",
     "checkout_reference",
     "hotel_guest",
@@ -195,6 +197,23 @@
       "fieldtype": "Section Break",
       "label": "Operational References",
       "description": "System-generated links created when the guest checks in or checks out. These are read-only and are used by front-desk and housekeeping workflows to navigate directly to the relevant operational documents."
+    },
+    {
+      "allow_on_submit": 1,
+      "default": "Reserved",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Reserved\nChecked In\nChecked Out\nCancelled",
+      "read_only": 1
+    },
+    {
+      "allow_on_submit": 1,
+      "fieldname": "check_in_time",
+      "fieldtype": "Datetime",
+      "label": "Check-In Time",
+      "read_only": 1
     },
     {
       "allow_on_submit": 1,

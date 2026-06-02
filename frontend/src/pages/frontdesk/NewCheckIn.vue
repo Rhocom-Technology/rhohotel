@@ -228,7 +228,18 @@
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Rate Card</p>
+              <select v-model="form.rate_type" @change="onRateCardSelect"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :disabled="loadingRateCards || !!form.canonical_reservation || !!form.reservation">
+                <option value="">{{ loadingRateCards ? 'Loading...' : 'Standard / Manual Rate' }}</option>
+                <option v-for="rate in rateCards" :key="rate.name" :value="rate.name">
+                  {{ rate.rate_code || rate.name }} — {{ formatCurrency(rate.rate_amount) }}
+                </option>
+              </select>
+            </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Nightly Rate <span class="text-red-400">*</span></p>
               <input type="number" v-model.number="form.rate_amount" min="0"
@@ -381,7 +392,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
 
@@ -436,6 +447,8 @@ async function selectReservation(r) {
   }
   reservationQuery.value = r.name
   showReservationDropdown.value = false
+
+  form.rate_type = ''
 
   if (!form.reservation_source) {
     form.reservation_source = 'Reservation'
@@ -499,6 +512,7 @@ function clearReservation() {
   form.canonical_reservation = ''
   reservationQuery.value = ''
   reservationResults.value = []
+  loadRateCards()
 }
 
 // ---- Guest search ----
@@ -621,6 +635,8 @@ const availableRooms = ref([])
 const loadingRooms = ref(false)
 const selectedRoomType = ref('')
 const roomTypes = ref([])
+const rateCards = ref([])
+const loadingRateCards = ref(false)
 
 async function loadRoomTypes() {
   try {
@@ -691,8 +707,10 @@ async function loadAvailableRooms() {
 function onRoomTypeChange() {
   form.room_number = ''
   form.room_type = selectedRoomType.value
+  form.rate_type = ''
   form.rate_amount = 0
   loadAvailableRooms()
+  loadRateCards({ preserveSelection: false })
 }
 
 function onRoomSelect() {
@@ -702,6 +720,52 @@ function onRoomSelect() {
     selectedRoomType.value = room.room_type
     const rate = getRoomRate(room)
     if (rate > 0) form.rate_amount = rate
+    loadRateCards()
+  }
+}
+
+function getCheckInDateForRates() {
+  if (!form.check_in_datetime) return ''
+  return String(form.check_in_datetime).slice(0, 10)
+}
+
+async function loadRateCards(options = {}) {
+  const { preserveSelection = true } = options
+  loadingRateCards.value = true
+  try {
+    const rows = await callMethodForm('rhohotel.rhocom_hotel.utils.billing_routing.get_eligible_rate_codes', {
+      reservation_type: 'Walk In',
+      check_in_date: getCheckInDateForRates(),
+      room_type: form.room_type || selectedRoomType.value || '',
+      nights: form.number_of_nights || 1,
+    })
+    rateCards.value = Array.isArray(rows) ? rows : []
+
+    if (!preserveSelection) {
+      form.rate_type = ''
+      return
+    }
+
+    if (form.rate_type) {
+      const selected = rateCards.value.find(rate => rate.name === form.rate_type)
+      if (selected) {
+        form.rate_amount = getNumericRate(selected.rate_amount)
+      } else {
+        form.rate_type = ''
+      }
+    }
+  } catch {
+    rateCards.value = []
+    if (!preserveSelection) form.rate_type = ''
+  } finally {
+    loadingRateCards.value = false
+  }
+}
+
+function onRateCardSelect() {
+  const selected = rateCards.value.find(rate => rate.name === form.rate_type)
+  if (selected) {
+    form.rate_amount = getNumericRate(selected.rate_amount)
   }
 }
 
@@ -738,6 +802,14 @@ const form = reactive({
   id_type: '',
   contact_number: '',
 })
+
+watch(
+  () => [form.check_in_datetime, form.number_of_nights],
+  () => {
+    loadAvailableRooms()
+    loadRateCards()
+  }
+)
 
 const defaultPreferenceTags = [
   { label: 'High Floor',   active: false, activeClass: 'bg-blue-100 text-blue-600' },
@@ -930,6 +1002,7 @@ async function submitCheckIn() {
 onMounted(() => {
   loadRoomTypes()
   loadAvailableRooms()
+  loadRateCards()
   loadMarketPlaces()
 
   const preReservation = String(route.query.reservation || '').trim()

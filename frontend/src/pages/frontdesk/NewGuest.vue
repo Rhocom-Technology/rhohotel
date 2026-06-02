@@ -156,8 +156,8 @@
               <p class="text-xs text-gray-500 mb-1.5">ID Type <span class="text-red-500">*</span></p>
               <select v-model="form.id_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
                 <option value="">Select ID type</option>
-                <option>Passport</option>
-                <option>International</option>
+                
+                <option>International Passport</option>
                 <option>National ID</option>
                 <option>Driver's License</option>
                 <option>Voter's Card</option>

@@ -11,7 +11,7 @@
   "new_checkout_datetime",
   "previous_number_of_nights",
   "new_number_of_nights",
-  "adjustment_nvoice",
+  "adjustment_invoice",
   "amount",
   "reason",
   "workflow_state"
@@ -56,7 +56,7 @@
    "non_negative": 1
   },
   {
-   "fieldname": "adjustment_nvoice",
+   "fieldname": "adjustment_invoice",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Adjustment Invoice",

@@ -39,6 +39,13 @@ def _normalize_housekeeping_status(value):
 	return mapping.get(status, cstr(value).strip() or "Unknown")
 
 
+def _room_column_expr(fieldname, alias=None, fallback="NULL"):
+	alias = alias or fieldname
+	if frappe.db.has_column("Hotel Room", fieldname):
+		return f"room.`{fieldname}` as `{alias}`"
+	return f"{fallback} as `{alias}`"
+
+
 def _as_bool(value):
 	if isinstance(value, bool):
 		return value
@@ -259,11 +266,11 @@ def get_rooms_summary(filters=None):
 		conds.append("room.room_type = %s")
 		args.append(filters.get("room_type"))
 	if filters.get("status"):
-		conds.append("room.room_status = %s")
+		conds.append("room.status = %s")
 		args.append(filters.get("status"))
-	if filters.get("maintenance"):
+	if filters.get("maintenance") and frappe.db.has_column("Hotel Room", "maintenance_flag"):
 		conds.append("room.maintenance_flag = 1")
-	if filters.get("housekeeper_present"):
+	if filters.get("housekeeper_present") and frappe.db.has_column("Hotel Room", "last_keycard_user"):
 		conds.append("room.last_keycard_user IS NOT NULL")
 
 	# upcoming checkout window
@@ -273,26 +280,40 @@ def get_rooms_summary(filters=None):
 		conds.append("(ci.expected_check_out_datetime between %s and %s)")
 		args.extend([now_datetime(), end])
 
+	maintenance_expr = _room_column_expr("maintenance_flag", "maintenance", "0")
+	last_keycard_user_expr = _room_column_expr("last_keycard_user")
+	last_keycard_time_expr = _room_column_expr("last_keycard_time")
+	current_check_in_expr = _room_column_expr("current_check_in")
+	current_check_in_join = "room.current_check_in" if frappe.db.has_column("Hotel Room", "current_check_in") else "NULL"
+	reservation_link = (
+		"ci.canonical_reservation"
+		if frappe.db.has_column("Hotel Room Check In", "canonical_reservation")
+		else "NULL"
+	)
+
 	query = f"""
 		select
 			room.name as room,
+			room.room_number as room_number,
 			room.room_type as room_type,
 			room.floor as floor,
-			room.room_status as status,
-			room.maintenance_flag as maintenance,
-			room.last_keycard_user as last_keycard_user,
-			room.last_keycard_time as last_keycard_time,
-			room.current_check_in as current_check_in,
-			ci.guest_name as guest_name,
+			room.status as status,
+			{maintenance_expr},
+			{last_keycard_user_expr},
+			{last_keycard_time_expr},
+			{current_check_in_expr},
+			COALESCE(g.hotel_guest_name, ci.guest) as guest_name,
 			ci.expected_check_out_datetime as expected_check_out_datetime,
 			r.name as reservation,
-			r.reservation_source as reservation_source
+			r.source_channel as reservation_source
 		from
 			`tabHotel Room` room
 		left join
-			`tabHotel Room Check In` ci on ci.name = room.current_check_in
+			`tabHotel Room Check In` ci on ci.name = {current_check_in_join}
 		left join
-			`tabHotel Reservation` r on r.name = ci.reservation
+			`tabHotel Guest` g on g.name = ci.guest
+		left join
+			`tabHotel Reservation` r on r.name = {reservation_link}
 		where {" AND ".join(conds)}
 		order by room.floor, room.name
 	"""
@@ -316,9 +337,9 @@ def make_check_out(checkin_name):
 	ci.save()
 
 	# update linked room
-	if ci.room:
-		room = frappe.get_doc("Hotel Room", ci.room)
-		room.room_status = "Vacant"
+	if ci.room_number:
+		room = frappe.get_doc("Hotel Room", ci.room_number)
+		room.status = "Vacant"
 		room.current_check_in = None
 		room.save()
 

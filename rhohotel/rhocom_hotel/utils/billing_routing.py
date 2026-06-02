@@ -344,6 +344,8 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
         "Corporate":     "channel_corporate",
         "Group":         "channel_front_desk",
         "OTA":           "channel_ota",
+        "Walk In":       "channel_walk_in",
+        "Walk-in":       "channel_walk_in",
         "House Use":     "channel_front_desk",
         "Complimentary": "channel_front_desk",
     }

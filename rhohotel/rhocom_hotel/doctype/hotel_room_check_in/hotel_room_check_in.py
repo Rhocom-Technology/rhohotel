@@ -295,11 +295,13 @@ def get_linked_documents(check_in):
 	# -----------------------------
 	# Get POS Invoices
 	# -----------------------------
-	pos_invoices = frappe.get_all(
-		"POS Invoice",
-		filters={"custom_hotel_room_check_in": check_in_doc.name, "status": "Unpaid"},
-		fields=["name", "customer", "posting_date", "grand_total", "outstanding_amount", "pos_profile"],
-	)
+	pos_invoices = []
+	if frappe.db.has_column("POS Invoice", "custom_hotel_room_check_in"):
+		pos_invoices = frappe.get_all(
+			"POS Invoice",
+			filters={"custom_hotel_room_check_in": check_in_doc.name, "status": "Unpaid"},
+			fields=["name", "customer", "posting_date", "grand_total", "outstanding_amount", "pos_profile"],
+		)
 
 	for inv in pos_invoices:
 		inv["invoice_type"] = "POS Invoice"
@@ -307,11 +309,13 @@ def get_linked_documents(check_in):
 	# -----------------------------
 	# Get Sales Invoices
 	# -----------------------------
-	sales_invoices = frappe.get_all(
-		"Sales Invoice",
-		filters={"custom_hotel_room_check_in": check_in_doc.name, "status": ["!=", "Cancelled"]},
-		fields=["name", "customer", "posting_date", "grand_total", "outstanding_amount"],
-	)
+	sales_invoices = []
+	if frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in"):
+		sales_invoices = frappe.get_all(
+			"Sales Invoice",
+			filters={"custom_hotel_room_check_in": check_in_doc.name, "status": ["!=", "Cancelled"]},
+			fields=["name", "customer", "posting_date", "grand_total", "outstanding_amount"],
+		)
 
 	for inv in sales_invoices:
 		inv["invoice_type"] = "Room Invoice"
@@ -352,20 +356,26 @@ def get_linked_documents(check_in):
 	# -----------------------------
 	# Get Payment Entries
 	# -----------------------------
-	payments = frappe.get_all(
-		"Payment Entry",
-		filters={"custom_hotel_room_check_in": check_in_doc.name, "payment_type": "Receive", "docstatus": 1},
-		fields=["name", "party", "posting_date", "paid_amount"],
-	)
+	payments = []
+	if frappe.db.has_column("Payment Entry", "custom_hotel_room_check_in"):
+		payments = frappe.get_all(
+			"Payment Entry",
+			filters={"custom_hotel_room_check_in": check_in_doc.name, "payment_type": "Receive", "docstatus": 1},
+			fields=["name", "party", "posting_date", "paid_amount"],
+		)
 
 	# -----------------------------
 	# Get Payment Sessions
 	# -----------------------------
-	payment_sessions = frappe.get_all(
-		"Payment Session",
-		filters={"hotel_room_check_in": check_in_doc.name, "status": "Paid"},
-		fields=["name", "posting_date", "total_amount"],
-	)
+	payment_sessions = []
+	if frappe.db.exists("DocType", "Payment Session") and frappe.db.has_column(
+		"Payment Session", "hotel_room_check_in"
+	):
+		payment_sessions = frappe.get_all(
+			"Payment Session",
+			filters={"hotel_room_check_in": check_in_doc.name, "status": "Paid"},
+			fields=["name", "posting_date", "total_amount"],
+		)
 
 	# -----------------------------
 	# Totals
@@ -539,7 +549,7 @@ def extend_stay(check_in_name, number_of_nights):
 		current_checkout_dt,
 		new_checkout_dt,
 		exclude_checkin=check_in_doc.name,
-		exclude_canonical=check_in_doc.canonical_reservation or check_in_doc.reservation or None,
+		exclude_canonical=getattr(check_in_doc, "canonical_reservation", None) or getattr(check_in_doc, "reservation", None),
 	)
 
 	# Create a new Sales Invoice for the extension
@@ -717,6 +727,8 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 
 	# Safe-get doc (avoid missing permissions)
 	doc = frappe.get_doc("Hotel Room Check In", check_in_name)
+	if not frappe.has_permission("Hotel Room Check In", "write", doc=doc):
+		frappe.throw(_("Not permitted to adjust this check-in."), frappe.PermissionError)
 
 	# Convert datetime
 	new_dt = get_datetime(new_checkout)
@@ -737,7 +749,7 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 	# Special rule for reduction
 	if adjustment_type == "Reduction":
 		settings = frappe.get_cached_doc("Hotel Settings")
-		default_time = settings.default_check_out_time
+		default_time = settings.default_check_out_time or "12:00:00"
 
 		today = getdate(now_dt)
 		new_date = getdate(new_dt)
@@ -766,7 +778,7 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 			current_dt,
 			new_dt,
 			exclude_checkin=doc.name,
-			exclude_canonical=doc.canonical_reservation or doc.reservation or None,
+			exclude_canonical=getattr(doc, "canonical_reservation", None) or getattr(doc, "reservation", None),
 		)
 
 	amount = flt(doc.rate_amount) * diff_nights
@@ -777,6 +789,30 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 		frappe.throw(_("No customer linked to guest {0}").format(doc.guest))
 
 	room_doc = frappe.get_doc("Hotel Room", doc.room_number)
+	item_code = room_doc.erpnext_item or doc.room_number
+	if not item_code or not frappe.db.exists("Item", item_code):
+		frappe.throw(_("No valid ERPNext Item linked to room {0}.").format(doc.room_number))
+
+	company = (
+		frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+	)
+	if not company:
+		frappe.throw(_("No default Company configured. Cannot create stay adjustment invoice."))
+
+	default_income = frappe.db.get_value("Company", company, "default_income_account")
+	if not default_income:
+		frappe.throw(_("No default income account set for Company {0}.").format(company))
+
+	source_invoice_doc = None
+	if source_invoice:
+		source_invoice_doc = frappe.get_doc("Sales Invoice", source_invoice)
+		if source_invoice_doc.docstatus != 1:
+			frappe.throw(_("Source invoice {0} must be submitted.").format(source_invoice))
+		if source_invoice_doc.is_return:
+			frappe.throw(_("Source invoice {0} is already a return invoice.").format(source_invoice))
+		if source_invoice_doc.custom_hotel_room_check_in != doc.name:
+			frappe.throw(_("Source invoice {0} is not linked to this check-in.").format(source_invoice))
 
 	try:
 		# === EXTENSION INVOICE ===
@@ -785,24 +821,27 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 				{
 					"doctype": "Sales Invoice",
 					"customer": customer,
+					"company": company,
 					"is_return": 0,
 					"update_stock": 0,
 					"custom_hotel_room_check_in": doc.name,
+					"posting_date": frappe.utils.today(),
+					"due_date": getdate(new_dt),
+					"remarks": f"Stay extension for Check In {doc.name} ({diff_nights} night(s))",
 					"items": [
 						{
-							"item_code": room_doc.erpnext_item,
+							"item_code": item_code,
 							"qty": diff_nights,
 							"rate": doc.rate_amount,
 							"amount": diff_nights * doc.rate_amount,
+							"income_account": default_income,
+							"description": _("Stay extension for room {0}: {1} additional night(s).").format(
+								doc.room_number, diff_nights
+							),
 						}
 					],
-					"posting_date": frappe.utils.today(),
 				}
 			)
-
-			invoice.flags.ignore_permissions = True
-			invoice.flags.ignore_mandatory = True
-			invoice.flags.ignore_links = True
 
 			if new_discount and flt(new_discount) > 0:
 				if discount_type == "Percentage":
@@ -812,6 +851,9 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 				elif discount_type == "Fixed Amount":
 					invoice.discount_amount = flt(new_discount)
 
+			if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+				invoice.custom_invoice_source = "Stay Adjustment"
+			invoice.set_taxes()
 			invoice.insert(ignore_permissions=True)
 			invoice.submit()
 			adjustment_invoice_name = invoice.name
@@ -821,20 +863,27 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 			credit_note_data = {
 				"doctype": "Sales Invoice",
 				"customer": customer,
+				"company": company,
 				"is_return": 1,
 				"update_stock": 0,
 				"custom_hotel_room_check_in": doc.name,
+				"posting_date": frappe.utils.today(),
+				"due_date": frappe.utils.today(),
+				"remarks": f"Stay reduction credit for Check In {doc.name} ({diff_nights} night(s))",
 				"items": [
 					{
-						"item_code": room_doc.erpnext_item,
+						"item_code": item_code,
 						"qty": -diff_nights,
 						"rate": doc.rate_amount,
+						"income_account": default_income,
+						"description": _("Stay reduction credit for room {0}: {1} reduced night(s).").format(
+							doc.room_number, diff_nights
+						),
 					}
 				],
-				"posting_date": frappe.utils.today(),
 			}
 
-			if source_invoice:
+			if source_invoice_doc:
 				credit_note_data["return_against"] = source_invoice
 				src_fields = frappe.db.get_value(
 					"Sales Invoice", source_invoice, ["debit_to", "company"], as_dict=1
@@ -846,9 +895,6 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 						credit_note_data["company"] = src_fields.company
 
 			credit_note = frappe.get_doc(credit_note_data)
-			credit_note.flags.ignore_permissions = True
-			credit_note.flags.ignore_mandatory = True
-			credit_note.flags.ignore_links = True
 
 			if new_discount and flt(new_discount) > 0:
 				if discount_type == "Percentage":
@@ -858,7 +904,10 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 				elif discount_type == "Fixed Amount":
 					credit_note.discount_amount = flt(new_discount)
 
-			credit_note.insert()
+			if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+				credit_note.custom_invoice_source = "Stay Adjustment"
+			credit_note.set_taxes()
+			credit_note.insert(ignore_permissions=True)
 			credit_note.submit()
 			adjustment_invoice_name = credit_note.name
 
@@ -881,6 +930,8 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 		# === Update Check-In Document ===
 		doc.flags.ignore_permissions = True
 		doc.flags.ignore_mandatory = True
+		doc.flags.ignore_validate_update_after_submit = True
+		doc.flags.skip_availability_check = True
 
 		doc.append(
 			"adjustments",
@@ -894,30 +945,41 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 				"nights_difference": diff_nights if adjustment_type == "Extension" else -diff_nights,
 				"adjustment_invoice": adjustment_invoice_name,
 				"amount": amount,
+				"workflow_state": "Completed",
 			},
 		)
 
 		doc.expected_check_out_datetime = new_dt
 		doc.number_of_nights = new_nights
-		doc.save()
+		doc.save(ignore_permissions=True)
 
 		frappe.db.commit()
 
-		return {"status": "success", "adjustment_invoice": adjustment_invoice_name}
+		return {
+			"status": "success",
+			"adjustment_type": adjustment_type,
+			"adjustment_invoice": adjustment_invoice_name,
+			"new_checkout": new_dt,
+			"new_nights": new_nights,
+		}
 
 	except Exception as e:
 		frappe.db.rollback()
-		frappe.log_error(str(e), "adjust_stay")
+		frappe.log_error(frappe.get_traceback(), "adjust_stay")
 		frappe.throw(f"Failed to process stay adjustment: {str(e)}")
 
 
 @frappe.whitelist()
 def transfer_room(check_in_name, new_room_number, note=None):
 	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in_name)
+	if not frappe.has_permission("Hotel Room Check In", "write", doc=check_in_doc):
+		frappe.throw(_("Not permitted to transfer this check-in."), frappe.PermissionError)
 
 	# ensure new room exists
 	if not frappe.db.exists("Hotel Room", new_room_number):
 		frappe.throw(_("New room {0} does not exist.").format(new_room_number))
+	if check_in_doc.room_number == new_room_number:
+		frappe.throw(_("Guest is already in Room {0}.").format(new_room_number))
 
 	new_room_doc = frappe.get_doc("Hotel Room", new_room_number)
 	if new_room_doc.status != "Vacant":
@@ -936,72 +998,84 @@ def transfer_room(check_in_name, new_room_number, note=None):
 		check_in_doc.expected_check_out_datetime,
 	)
 
-	# Free the old room
-	old_room_doc = frappe.get_doc("Hotel Room", check_in_doc.room_number)
-	old_room_doc.db_set("current_check_in", None)
-	old_room_doc.db_set("current_guest", None)
-	old_room_doc.db_set("status", "Vacant")
-	old_room_doc.add_comment(
-		"Comment",
-		text=_("Guest transferred out to {1}. {2}").format(
-			check_in_doc.room_number, new_room_number, note or ""
-		),
-	)
-	old_room_doc.save(ignore_permissions=True)
+	try:
+		# Free the old room
+		old_room_doc = frappe.get_doc("Hotel Room", check_in_doc.room_number)
+		old_room_number = check_in_doc.room_number
+		old_rate = flt(check_in_doc.rate_amount)
 
-	# Update the new room details
-	new_room_doc.status = "Occupied"
-	new_room_doc.current_guest = check_in_doc.guest
-	new_room_doc.current_check_in = check_in_doc.name
-	new_room_doc.save(ignore_permissions=True)
+		old_room_doc.db_set("current_check_in", None)
+		old_room_doc.db_set("current_guest", None)
+		old_room_doc.db_set("status", "Vacant")
+		old_room_doc.add_comment(
+			"Comment",
+			text=_("Guest transferred out to {0}. {1}").format(new_room_number, note or ""),
+		)
+		old_room_doc.save(ignore_permissions=True)
 
-	# get new room type rate
-	new_rate_data = get_room_rate(new_room_doc.room_type, "", str(getdate(check_in_doc.check_in_datetime)))
-	new_rate = flt(new_rate_data)
-	if new_rate <= 0:
-		frappe.throw(_("No valid rate found for Room Type {0}").format(new_room_doc.room_type))
+		# Update the new room details
+		new_room_doc.status = "Occupied"
+		new_room_doc.current_guest = check_in_doc.guest
+		new_room_doc.current_check_in = check_in_doc.name
+		new_room_doc.save(ignore_permissions=True)
 
-	# Update check-in document (fixed: also update room_type)
-	old_room_number = check_in_doc.room_number
-	old_room_type = check_in_doc.room_type
-	old_rate = flt(check_in_doc.rate_amount)  # capture before updating
-	check_in_doc.room_number = new_room_number
-	check_in_doc.room_type = new_room_doc.room_type  # Fixed: Update room type
-	check_in_doc.db_set("room_number", new_room_number)
-	check_in_doc.db_set("room_type", new_room_doc.room_type)  # Direct DB update
-	check_in_doc.db_set("rate_amount", new_rate)
-	check_in_doc.add_comment(
-		"Comment",
-		text=_("Guest transferred from {0} to {1}. {2}").format(old_room_number, new_room_number, note or ""),
-	)
+		# get new room type rate
+		new_rate_data = get_room_rate(new_room_doc.room_type, "", str(getdate(check_in_doc.check_in_datetime)))
+		new_rate = flt(new_rate_data)
+		if new_rate <= 0:
+			frappe.throw(_("No valid rate found for Room Type {0}").format(new_room_doc.room_type))
 
-	# Log transfer history
-	check_in_doc.append(
-		"transfer_history",
-		{
-			"transfer_datetime": now_datetime(),
-			"from_room": old_room_number,
-			"to_room": new_room_number,
-			"reason": note,
-			"user": frappe.session.user,
-		},
-	)
-	check_in_doc.save(ignore_permissions=True)
+		# Update check-in document (fixed: also update room_type)
+		check_in_doc.flags.ignore_permissions = True
+		check_in_doc.flags.ignore_mandatory = True
+		check_in_doc.flags.ignore_validate_update_after_submit = True
+		check_in_doc.flags.skip_availability_check = True
+		check_in_doc.room_number = new_room_number
+		check_in_doc.room_type = new_room_doc.room_type
+		check_in_doc.rate_amount = new_rate
+		check_in_doc.add_comment(
+			"Comment",
+			text=_("Guest transferred from {0} to {1}. {2}").format(old_room_number, new_room_number, note or ""),
+		)
 
-	# Create rate-difference invoice for remaining nights
-	rate_invoice = adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, note)
+		# Log transfer history
+		check_in_doc.append(
+			"transfer_history",
+			{
+				"transfer_datetime": now_datetime(),
+				"from_room": old_room_number,
+				"to_room": new_room_number,
+				"reason": note,
+				"user": frappe.session.user,
+			},
+		)
+		check_in_doc.save(ignore_permissions=True)
 
-	frappe.db.commit()
-	frappe.publish_realtime("rhohotel_front_desk_update")
+		# Create rate-difference invoice for remaining nights
+		rate_invoice = adjust_room_rate(
+			check_in_doc,
+			old_room_number,
+			new_room_number,
+			old_rate,
+			note,
+			new_rate=new_rate,
+		)
 
-	return {
-		"success": True,
-		"message": _("Guest transferred successfully to Room {0}").format(new_room_number),
-		"rate_invoice": rate_invoice,
-	}
+		frappe.db.commit()
+		frappe.publish_realtime("rhohotel_front_desk_update")
+
+		return {
+			"success": True,
+			"message": _("Guest transferred successfully to Room {0}").format(new_room_number),
+			"rate_invoice": rate_invoice,
+		}
+	except Exception as e:
+		frappe.db.rollback()
+		frappe.log_error(frappe.get_traceback(), "transfer_room")
+		frappe.throw(_("Failed to transfer room: {0}").format(str(e)))
 
 
-def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, note=None):
+def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, note=None, new_rate=None):
 	"""Create a rate-difference invoice (positive or negative) for the remaining nights after a room transfer.
 
 	- new room rate > old rate  → positive Sales Invoice (guest owes the difference)
@@ -1011,11 +1085,14 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 
 	new_room = frappe.get_doc("Hotel Room", new_room_number)
 
-	# Get new room's current nightly rate (use today so day-type is evaluated correctly)
+	# Prefer the rate already applied to the check-in during transfer. Recomputing
+	# here can silently return a generic/default rate and skip the adjustment.
 	today = getdate(nowdate())
-	new_rate = flt(get_room_rate(new_room.room_type, "", str(today)))
+	new_rate = flt(new_rate if new_rate is not None else check_in_doc.rate_amount)
 	if new_rate <= 0:
 		# fallback: active tariff without day-type filter
+		new_rate = flt(get_room_rate(new_room.room_type, "", str(today)))
+	if new_rate <= 0:
 		new_rate = flt(
 			frappe.db.get_value(
 				"Hotel Room Tariff",
@@ -1024,17 +1101,11 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 			)
 		)
 
-	# Remaining nights: from today (transfer day) to expected checkout
+	# Remaining nights: from today (transfer day) to expected checkout.
+	# Same-day transfers still consume the new room for the current stay day, so
+	# apply one billable night/day when there is a rate difference.
 	expected_checkout = getdate(check_in_doc.expected_check_out_datetime)
-	remaining_nights = max(date_diff(expected_checkout, today), 0)
-
-	if remaining_nights <= 0:
-		check_in_doc.add_comment(
-			"Comment",
-			text=_("Room transfer to {0}: no remaining nights to adjust.").format(new_room_number),
-		)
-		return None
-
+	remaining_nights = max(date_diff(expected_checkout, today), 1)
 	nightly_diff = new_rate - flt(old_rate)
 	total_diff = nightly_diff * remaining_nights
 
@@ -1069,9 +1140,9 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 	item_code = new_room.erpnext_item
 	if not item_code:
 		item_code = frappe.db.get_value("Hotel Room", old_room_number, "erpnext_item")
-	if not item_code:
+	if not item_code or not frappe.db.exists("Item", item_code):
 		frappe.throw(
-			_("No ERPNext item linked to rooms {0} or {1}. Cannot create invoice.").format(
+			_("No valid ERPNext item linked to rooms {0} or {1}. Cannot create invoice.").format(
 				old_room_number, new_room_number
 			)
 		)
@@ -1085,8 +1156,12 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 	invoice.customer = customer
 	invoice.company = company
 	invoice.posting_date = nowdate()
+	invoice.due_date = nowdate()
 	invoice.is_return = 0 if is_upgrade else 1
+	invoice.update_stock = 0
 	invoice.custom_hotel_room_check_in = check_in_doc.name
+	if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+		invoice.custom_invoice_source = "Room Transfer"
 	invoice.remarks = _(
 		"Room transfer from {0} to {1}: rate adjustment for {2} remaining night(s)."
 	).format(old_room_number, new_room_number, remaining_nights)
@@ -1111,6 +1186,7 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 		},
 	)
 
+	invoice.set_taxes()
 	invoice.save(ignore_permissions=True)
 	invoice.submit()
 

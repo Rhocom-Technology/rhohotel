@@ -1,175 +1,134 @@
 import frappe
 import json
-from frappe.utils import nowdate, now_datetime, flt
+from frappe import _
+from frappe.utils import nowdate, now_datetime, flt, getdate
+
+DOCTYPE = "Hotel Complimentary"
+MANAGER_ROLES = {"System Manager", "Hotel Manager"}
+APPROVAL_ROLES = {
+    "General Manager": {"System Manager", "Hotel Manager"},
+    "Duty Manager": {"System Manager", "Hotel Manager", "Front Desk Manager"},
+    "Front Desk Supervisor": {"System Manager", "Hotel Manager", "Front Desk Manager"},
+    "Operations Lead": {"System Manager", "Hotel Manager", "Front Desk Manager"},
+}
+CONSUMPTION_ROLES = {
+    "Restaurant": {"System Manager", "Hotel Manager", "Front Desk Manager", "Restaurant Manager"},
+    "Front Desk": {"System Manager", "Hotel Manager", "Front Desk Manager", "Hotel Receptionist", "Front Desk"},
+    "Housekeeping": {"System Manager", "Hotel Manager", "Hotel Housekeeping", "Housekeeping Manager"},
+    "GM Office": {"System Manager", "Hotel Manager"},
+    "Operations": {"System Manager", "Hotel Manager", "Front Desk Manager"},
+}
+ALLOWED_FIELDS = {
+    "guest", "room", "reservation", "check_in", "complimentary_type", "department",
+    "value", "quantity", "issue_date", "expiry_date", "reason", "redemption_rule",
+    "note", "approval_level", "source_category",
+}
 
 
-@frappe.whitelist()
-def get_complimentary_dashboard():
-    """Stats for the complimentary dashboard page."""
-    today = nowdate()
+def _payload(value):
+    if isinstance(value, str):
+        return json.loads(value or "{}")
+    return value or {}
 
-    issued_today = frappe.db.count("Hotel Complimentary", {"issue_date": today})
-    pending_approval = frappe.db.count("Hotel Complimentary", {"status": "Pending"})
-    consumed_today = frappe.db.count("Hotel Complimentary", {"status": "Consumed", "issue_date": today})
-    active_count = frappe.db.count(
-        "Hotel Complimentary",
-        {"status": ["in", ["Approved", "In Progress"]]}
+
+def _roles(user=None):
+    return set(frappe.get_roles(user or frappe.session.user))
+
+
+def _has_any(required_roles):
+    return bool(_roles() & set(required_roles))
+
+
+def _is_manager():
+    return _has_any(MANAGER_ROLES)
+
+
+def _is_owner(doc):
+    return doc.owner == frappe.session.user or doc.issued_by == frappe.session.user
+
+
+def _require_read(doc):
+    if not frappe.has_permission(DOCTYPE, "read", doc=doc):
+        frappe.throw(_("Not permitted to read this complimentary record."), frappe.PermissionError)
+
+
+def _require_write(doc):
+    if not frappe.has_permission(DOCTYPE, "write", doc=doc):
+        frappe.throw(_("Not permitted to update this complimentary record."), frappe.PermissionError)
+
+
+def _can_approve(doc):
+    return _is_manager() or _has_any(APPROVAL_ROLES.get(doc.approval_level, set()))
+
+
+def _can_consume(doc):
+    return _is_manager() or _has_any(CONSUMPTION_ROLES.get(doc.department, set()))
+
+
+def _normalize_status(value):
+    value = (value or "").strip()
+    return value if value in {"Draft", "Pending", "Approved", "In Progress", "Consumed", "Expired", "Cancelled"} else "Draft"
+
+
+def _check_in_reservation_fields():
+    fields = ["guest", "room_number"]
+    if frappe.db.has_column("Hotel Room Check In", "canonical_reservation"):
+        fields.append("canonical_reservation")
+    if frappe.db.has_column("Hotel Room Check In", "reservation"):
+        fields.append("reservation")
+    return fields
+
+
+def _check_in_reservation_select():
+    canonical = (
+        "ci.canonical_reservation"
+        if frappe.db.has_column("Hotel Room Check In", "canonical_reservation")
+        else "NULL"
     )
-    expired_unused = frappe.db.count("Hotel Complimentary", {"status": "Expired"})
-
-    # Budget impact: sum of value for today's records
-    result = frappe.db.sql("""
-        SELECT COALESCE(SUM(value), 0) as total
-        FROM `tabHotel Complimentary`
-        WHERE issue_date = %s
-    """, (today,), as_dict=1)
-    budget_impact_today = flt(result[0].total) if result else 0.0
-
-    return {
-        "issued_today": issued_today,
-        "pending_approval": pending_approval,
-        "consumed_today": consumed_today,
-        "active_count": active_count,
-        "expired_unused": expired_unused,
-        "budget_impact_today": budget_impact_today,
-    }
+    reservation = (
+        "ci.reservation"
+        if frappe.db.has_column("Hotel Room Check In", "reservation")
+        else "NULL"
+    )
+    return canonical, reservation
 
 
-@frappe.whitelist()
-def get_complimentary_list(
-    search=None,
-    filter_type=None,
-    filter_status=None,
-    filter_approver=None,
-    page=1,
-    page_size=25
-):
-    """Paginated complimentary list with optional filters."""
-    try:
-        page = int(page)
-        page_size = int(page_size)
-    except (TypeError, ValueError):
-        page, page_size = 1, 25
+def _set_doc_fields(doc, data):
+    for field in ALLOWED_FIELDS:
+        if field not in data:
+            continue
+        value = data.get(field)
+        if field == "value":
+            value = flt(value or 0)
+        if field == "quantity":
+            value = value or "1"
+        if field in {"reservation", "check_in", "expiry_date"}:
+            value = value or None
+        setattr(doc, field, value)
 
-    filters = {}
-    if filter_type:
-        filters["complimentary_type"] = filter_type
-    if filter_status:
-        filters["status"] = filter_status
-    if filter_approver:
-        filters["approval_level"] = filter_approver
-
-    fields = [
-        "name", "guest", "room", "complimentary_type", "department",
-        "value", "status", "approval_level", "issue_date", "expiry_date",
-        "source_category", "note", "reason"
-    ]
-
-    if search:
-        q = f"%{search}%"
-        records = frappe.db.sql("""
-            SELECT name, guest, room, complimentary_type, department,
-                   value, status, approval_level, issue_date, expiry_date,
-                   source_category, note, reason
-            FROM `tabHotel Complimentary`
-            WHERE (name LIKE %(q)s OR guest LIKE %(q)s OR room LIKE %(q)s
-                   OR complimentary_type LIKE %(q)s OR approval_level LIKE %(q)s)
-            ORDER BY issue_date DESC, modified DESC
-            LIMIT %(limit)s OFFSET %(offset)s
-        """, {"q": q, "limit": page_size, "offset": (page - 1) * page_size}, as_dict=1)
-
-        count_result = frappe.db.sql("""
-            SELECT COUNT(name) as cnt
-            FROM `tabHotel Complimentary`
-            WHERE (name LIKE %(q)s OR guest LIKE %(q)s OR room LIKE %(q)s
-                   OR complimentary_type LIKE %(q)s OR approval_level LIKE %(q)s)
-        """, {"q": q}, as_dict=1)
-        total = count_result[0].cnt if count_result else 0
-    else:
-        records = frappe.get_all(
-            "Hotel Complimentary",
-            filters=filters,
-            fields=fields,
-            order_by="issue_date desc, modified desc",
-            limit_page_length=page_size,
-            limit_start=(page - 1) * page_size,
+    if doc.check_in and frappe.db.exists("Hotel Room Check In", doc.check_in):
+        check_in = frappe.db.get_value(
+            "Hotel Room Check In",
+            doc.check_in,
+            _check_in_reservation_fields(),
+            as_dict=True,
         )
-        total = frappe.db.count("Hotel Complimentary", filters)
-
-    return {
-        "records": records,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": max(1, -(-total // page_size)),
-    }
+        if check_in:
+            if check_in.guest:
+                doc.guest = frappe.db.get_value("Hotel Guest", check_in.guest, "hotel_guest_name") or check_in.guest
+            if check_in.room_number:
+                doc.room = check_in.room_number
+            if not doc.reservation:
+                doc.reservation = check_in.get("canonical_reservation") or check_in.get("reservation") or None
 
 
-@frappe.whitelist()
-def get_complimentary(complimentary_name):
-    """Full detail of a single complimentary record."""
-    if not frappe.db.exists("Hotel Complimentary", complimentary_name):
-        frappe.throw(
-            f"Complimentary record '{complimentary_name}' not found",
-            frappe.DoesNotExistError
-        )
-
-    doc = frappe.get_doc("Hotel Complimentary", complimentary_name)
-
-    # Fetch change log for audit trail
-    audit_trail = []
-    try:
-        logs = frappe.get_all(
-            "Version",
-            filters={"ref_doctype": "Hotel Complimentary", "docname": complimentary_name},
-            fields=["creation", "owner", "data"],
-            order_by="creation asc",
-            limit_page_length=20,
-        )
-        for log in logs:
-            try:
-                data = json.loads(log.data) if isinstance(log.data, str) else log.data
-                changed = data.get("changed", [])
-                if changed:
-                    changes = "; ".join(
-                        f"{c[0]}: {c[1]} → {c[2]}"
-                        for c in changed
-                        if len(c) >= 3
-                    )
-                    audit_trail.append({
-                        "time": str(log.creation),
-                        "action": f"Changed by {log.owner}: {changes}",
-                    })
-            except Exception:
-                audit_trail.append({
-                    "time": str(log.creation),
-                    "action": f"Updated by {log.owner}",
-                })
-    except Exception:
-        pass
-
-    # Creation entry
-    audit_trail.insert(0, {
-        "time": str(doc.creation),
-        "action": f"Created by {doc.owner}",
-    })
-
-    if doc.approved_on:
-        audit_trail.append({
-            "time": str(doc.approved_on),
-            "action": f"Approved by {doc.approved_by or 'Manager'}",
-        })
-    if doc.consumed_on:
-        audit_trail.append({
-            "time": str(doc.consumed_on),
-            "action": "Marked as consumed",
-        })
-
+def _record_response(doc, audit_trail=None):
     return {
         "name": doc.name,
         "guest": doc.guest,
         "room": doc.room,
         "reservation": doc.reservation,
+        "check_in": getattr(doc, "check_in", None),
         "complimentary_type": doc.complimentary_type,
         "department": doc.department,
         "value": doc.value,
@@ -187,41 +146,230 @@ def get_complimentary(complimentary_name):
         "approved_on": str(doc.approved_on) if doc.approved_on else None,
         "consumption_reference": doc.consumption_reference,
         "consumed_on": str(doc.consumed_on) if doc.consumed_on else None,
-        "audit_trail": audit_trail,
+        "audit_trail": audit_trail or [],
     }
 
 
 @frappe.whitelist()
-def create_complimentary(complimentary_data):
-    """Create a new Hotel Complimentary record."""
-    if isinstance(complimentary_data, str):
-        complimentary_data = json.loads(complimentary_data)
+def get_complimentary_dashboard():
+    """Stats for the complimentary dashboard page."""
+    frappe.has_permission(DOCTYPE, "read", throw=True)
+    today = nowdate()
+    expire_unused_complimentaries(commit=True)
+
+    issued_today = frappe.db.count(DOCTYPE, {"issue_date": today})
+    draft_count = frappe.db.count(DOCTYPE, {"status": "Draft"})
+    pending_approval = frappe.db.count(DOCTYPE, {"status": "Pending"})
+    consumed_today = frappe.db.count(DOCTYPE, {"status": "Consumed", "issue_date": today})
+    active_count = frappe.db.count(DOCTYPE, {"status": ["in", ["Approved", "In Progress"]]})
+    expired_unused = frappe.db.count(DOCTYPE, {"status": "Expired"})
+
+    result = frappe.db.sql(
+        """
+        SELECT COALESCE(SUM(value), 0) as total
+        FROM `tabHotel Complimentary`
+        WHERE issue_date = %s AND status != 'Cancelled'
+        """,
+        (today,),
+        as_dict=1,
+    )
+    budget_impact_today = flt(result[0].total) if result else 0.0
+
+    return {
+        "issued_today": issued_today,
+        "draft_count": draft_count,
+        "pending_approval": pending_approval,
+        "consumed_today": consumed_today,
+        "active_count": active_count,
+        "expired_unused": expired_unused,
+        "budget_impact_today": budget_impact_today,
+    }
+
+
+@frappe.whitelist()
+def get_complimentary_list(
+    search=None,
+    filter_type=None,
+    filter_status=None,
+    filter_approver=None,
+    filter_department=None,
+    page=1,
+    page_size=25,
+):
+    """Paginated complimentary list with optional filters."""
+    frappe.has_permission(DOCTYPE, "read", throw=True)
+    try:
+        page = max(1, int(page))
+        page_size = min(100, max(1, int(page_size)))
+    except (TypeError, ValueError):
+        page, page_size = 1, 25
+
+    conditions = ["1 = 1"]
+    params = {"limit": page_size, "offset": (page - 1) * page_size}
+
+    if filter_type:
+        conditions.append("complimentary_type = %(filter_type)s")
+        params["filter_type"] = filter_type
+    if filter_status:
+        conditions.append("status = %(filter_status)s")
+        params["filter_status"] = filter_status
+    if filter_approver:
+        conditions.append("approval_level = %(filter_approver)s")
+        params["filter_approver"] = filter_approver
+    if filter_department:
+        conditions.append("department = %(filter_department)s")
+        params["filter_department"] = filter_department
+    if search:
+        params["q"] = f"%{search}%"
+        conditions.append(
+            """(name LIKE %(q)s OR guest LIKE %(q)s OR room LIKE %(q)s
+                OR complimentary_type LIKE %(q)s OR approval_level LIKE %(q)s
+                OR department LIKE %(q)s OR source_category LIKE %(q)s)"""
+        )
+
+    where_clause = " AND ".join(conditions)
+    fields = """
+        name, guest, room, check_in, complimentary_type, department,
+        value, status, approval_level, issue_date, expiry_date,
+        source_category, note, reason
+    """
+
+    records = frappe.db.sql(
+        f"""
+        SELECT {fields}
+        FROM `tabHotel Complimentary`
+        WHERE {where_clause}
+        ORDER BY issue_date DESC, modified DESC
+        LIMIT %(limit)s OFFSET %(offset)s
+        """,
+        params,
+        as_dict=1,
+    )
+
+    count_result = frappe.db.sql(
+        f"""
+        SELECT COUNT(name) as cnt
+        FROM `tabHotel Complimentary`
+        WHERE {where_clause}
+        """,
+        params,
+        as_dict=1,
+    )
+    total = count_result[0].cnt if count_result else 0
+
+    return {
+        "records": records,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, -(-total // page_size)),
+    }
+
+
+@frappe.whitelist()
+def get_complimentary(complimentary_name):
+    """Full detail of a single complimentary record."""
+    if not frappe.db.exists(DOCTYPE, complimentary_name):
+        frappe.throw(f"Complimentary record '{complimentary_name}' not found", frappe.DoesNotExistError)
+
+    doc = frappe.get_doc(DOCTYPE, complimentary_name)
+    _require_read(doc)
+
+    audit_trail = []
+    try:
+        logs = frappe.get_all(
+            "Version",
+            filters={"ref_doctype": DOCTYPE, "docname": complimentary_name},
+            fields=["creation", "owner", "data"],
+            order_by="creation asc",
+            limit_page_length=30,
+        )
+        for log in logs:
+            try:
+                data = json.loads(log.data) if isinstance(log.data, str) else log.data
+                changed = data.get("changed", [])
+                if changed:
+                    changes = "; ".join(
+                        f"{c[0]}: {c[1]} -> {c[2]}" for c in changed if len(c) >= 3
+                    )
+                    audit_trail.append({"time": str(log.creation), "action": f"Changed by {log.owner}: {changes}"})
+            except Exception:
+                audit_trail.append({"time": str(log.creation), "action": f"Updated by {log.owner}"})
+    except Exception:
+        pass
+
+    audit_trail.insert(0, {"time": str(doc.creation), "action": f"Created by {doc.owner}"})
+    if doc.approved_on:
+        audit_trail.append({"time": str(doc.approved_on), "action": f"Approved by {doc.approved_by or 'Manager'}"})
+    if doc.consumed_on:
+        audit_trail.append({"time": str(doc.consumed_on), "action": f"Marked as consumed: {doc.consumption_reference or 'No reference'}"})
+
+    return _record_response(doc, audit_trail)
+
+
+@frappe.whitelist()
+def create_complimentary(complimentary_data, submit_for_approval=1):
+    """Create a new Hotel Complimentary record as Draft or Pending."""
+    data = _payload(complimentary_data)
+    submit_for_approval = str(submit_for_approval) not in {"0", "false", "False", ""}
 
     try:
-        doc = frappe.new_doc("Hotel Complimentary")
-        doc.guest = complimentary_data.get("guest", "")
-        doc.room = complimentary_data.get("room", "")
-        doc.reservation = complimentary_data.get("reservation") or None
-        doc.complimentary_type = complimentary_data.get("complimentary_type", "")
-        doc.department = complimentary_data.get("department", "")
-        doc.value = flt(complimentary_data.get("value") or 0)
-        doc.quantity = complimentary_data.get("quantity") or "1"
-        doc.issue_date = complimentary_data.get("issue_date") or nowdate()
-        doc.expiry_date = complimentary_data.get("expiry_date") or None
-        doc.reason = complimentary_data.get("reason") or ""
-        doc.redemption_rule = complimentary_data.get("redemption_rule") or ""
-        doc.note = complimentary_data.get("note") or ""
-        doc.approval_level = complimentary_data.get("approval_level", "General Manager")
-        doc.source_category = complimentary_data.get("source_category") or ""
-        doc.status = "Pending"
+        frappe.has_permission(DOCTYPE, "create", throw=True)
+        doc = frappe.new_doc(DOCTYPE)
+        _set_doc_fields(doc, data)
+        doc.status = "Pending" if submit_for_approval else "Draft"
         doc.issued_by = frappe.session.user
-
-        doc.insert(ignore_permissions=True)
+        doc.insert()
         frappe.db.commit()
-        return {"success": True, "complimentary_name": doc.name}
-
+        return {"success": True, "complimentary_name": doc.name, "status": doc.status}
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "create_complimentary error")
+        frappe.db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def update_complimentary(complimentary_name, complimentary_data, submit_for_approval=0):
+    """Update a Draft/Pending complimentary record and optionally submit it."""
+    data = _payload(complimentary_data)
+    submit_for_approval = str(submit_for_approval) not in {"0", "false", "False", ""}
+
+    try:
+        doc = frappe.get_doc(DOCTYPE, complimentary_name)
+        _require_write(doc)
+        if doc.status not in {"Draft", "Pending"}:
+            return {"success": False, "error": f"Cannot edit a record with status '{doc.status}'."}
+        if not (_is_owner(doc) or _is_manager()):
+            frappe.throw(_("Only the issuer or a manager can update this record."), frappe.PermissionError)
+
+        _set_doc_fields(doc, data)
+        if submit_for_approval:
+            doc.status = "Pending"
+        doc.save()
+        frappe.db.commit()
+        return {"success": True, "status": doc.status}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "update_complimentary error")
+        frappe.db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def submit_complimentary(complimentary_name):
+    """Move a draft record into the approval queue."""
+    try:
+        doc = frappe.get_doc(DOCTYPE, complimentary_name)
+        _require_write(doc)
+        if doc.status != "Draft":
+            return {"success": False, "error": f"Only Draft records can be submitted. Current status: {doc.status}"}
+        if not (_is_owner(doc) or _is_manager()):
+            frappe.throw(_("Only the issuer or a manager can submit this record."), frappe.PermissionError)
+        doc.status = "Pending"
+        doc.save()
+        frappe.db.commit()
+        return {"success": True}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "submit_complimentary error")
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
 
@@ -230,20 +378,42 @@ def create_complimentary(complimentary_data):
 def approve_complimentary(complimentary_name):
     """Approve a pending complimentary record."""
     try:
-        doc = frappe.get_doc("Hotel Complimentary", complimentary_name)
-
-        if doc.status not in ("Pending", "In Progress"):
-            return {"success": False, "error": f"Cannot approve a record with status '{doc.status}'"}
+        doc = frappe.get_doc(DOCTYPE, complimentary_name)
+        _require_write(doc)
+        if doc.status != "Pending":
+            return {"success": False, "error": f"Cannot approve a record with status '{doc.status}'."}
+        if not _can_approve(doc):
+            frappe.throw(_("You do not have the role required for this approval level."), frappe.PermissionError)
 
         doc.status = "Approved"
         doc.approved_by = frappe.session.user
         doc.approved_on = now_datetime()
-        doc.save(ignore_permissions=True)
+        doc.save()
         frappe.db.commit()
         return {"success": True}
-
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "approve_complimentary error")
+        frappe.db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def mark_in_progress(complimentary_name):
+    """Mark an approved complimentary as being prepared/served by the outlet."""
+    try:
+        doc = frappe.get_doc(DOCTYPE, complimentary_name)
+        _require_write(doc)
+        if doc.status != "Approved":
+            return {"success": False, "error": f"Only Approved records can move in progress. Current status: {doc.status}"}
+        if not _can_consume(doc):
+            frappe.throw(_("You do not have the role required for this department."), frappe.PermissionError)
+        doc.status = "In Progress"
+        doc.save()
+        frappe.db.commit()
+        return {"success": True}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "mark_in_progress error")
+        frappe.db.rollback()
         return {"success": False, "error": str(e)}
 
 
@@ -251,23 +421,26 @@ def approve_complimentary(complimentary_name):
 def mark_consumed(complimentary_name, consumption_reference=None):
     """Mark a complimentary record as consumed."""
     try:
-        doc = frappe.get_doc("Hotel Complimentary", complimentary_name)
-
+        doc = frappe.get_doc(DOCTYPE, complimentary_name)
+        _require_write(doc)
         if doc.status == "Consumed":
             return {"success": False, "error": "Record is already consumed"}
-        if doc.status in ("Cancelled", "Expired"):
-            return {"success": False, "error": f"Cannot consume a record with status '{doc.status}'"}
+        if doc.status not in {"Approved", "In Progress"}:
+            return {"success": False, "error": f"Cannot consume a record with status '{doc.status}'."}
+        if not _can_consume(doc):
+            frappe.throw(_("You do not have the role required to confirm consumption for this department."), frappe.PermissionError)
+        if not (consumption_reference or "").strip():
+            return {"success": False, "error": "Consumption reference is required."}
 
         doc.status = "Consumed"
         doc.consumed_on = now_datetime()
-        if consumption_reference:
-            doc.consumption_reference = consumption_reference
-        doc.save(ignore_permissions=True)
+        doc.consumption_reference = consumption_reference.strip()
+        doc.save()
         frappe.db.commit()
         return {"success": True}
-
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "mark_consumed error")
+        frappe.db.rollback()
         return {"success": False, "error": str(e)}
 
 
@@ -275,20 +448,22 @@ def mark_consumed(complimentary_name, consumption_reference=None):
 def cancel_complimentary(complimentary_name):
     """Cancel a complimentary record."""
     try:
-        doc = frappe.get_doc("Hotel Complimentary", complimentary_name)
-
+        doc = frappe.get_doc(DOCTYPE, complimentary_name)
+        _require_write(doc)
         if doc.status == "Consumed":
             return {"success": False, "error": "Cannot cancel a consumed record"}
         if doc.status == "Cancelled":
             return {"success": False, "error": "Record is already cancelled"}
+        if not (_is_owner(doc) or _is_manager() or _can_approve(doc)):
+            frappe.throw(_("Only the issuer, approver, or manager can cancel this record."), frappe.PermissionError)
 
         doc.status = "Cancelled"
-        doc.save(ignore_permissions=True)
+        doc.save()
         frappe.db.commit()
         return {"success": True}
-
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "cancel_complimentary error")
+        frappe.db.rollback()
         return {"success": False, "error": str(e)}
 
 
@@ -296,30 +471,59 @@ def cancel_complimentary(complimentary_name):
 def get_active_checkins():
     """Return currently checked-in guests and their rooms for the complimentary form."""
     try:
-        rows = frappe.db.sql("""
-            SELECT ci.name as check_in, ci.guest, ci.room_number
+        frappe.has_permission(DOCTYPE, "create", throw=True)
+        canonical_expr, reservation_expr = _check_in_reservation_select()
+        rows = frappe.db.sql(
+            f"""
+            SELECT
+                ci.name as check_in,
+                ci.guest,
+                ci.room_number,
+                {canonical_expr} as canonical_reservation,
+                {reservation_expr} as reservation
             FROM `tabHotel Room Check In` ci
             WHERE ci.status = 'Checked In'
               AND ci.docstatus = 1
             ORDER BY ci.room_number ASC
-        """, as_dict=True)
+            """,
+            as_dict=True,
+        )
 
         checkins = []
         for r in rows:
             guest_display = r.guest or ""
             if guest_display:
-                guest_display = (
-                    frappe.db.get_value("Hotel Guest", r.guest, "hotel_guest_name")
-                    or r.guest
-                )
+                guest_display = frappe.db.get_value("Hotel Guest", r.guest, "hotel_guest_name") or r.guest
             checkins.append({
                 "check_in": r.check_in,
                 "guest": guest_display,
+                "guest_id": r.guest,
                 "room_number": r.room_number or "",
+                "reservation": r.canonical_reservation or r.reservation or "",
             })
 
         return {"checkins": checkins}
-
-    except Exception as e:
+    except Exception:
         frappe.log_error(frappe.get_traceback(), "get_active_checkins error")
         return {"checkins": []}
+
+
+@frappe.whitelist()
+def expire_unused_complimentaries(commit=True):
+    """Expire approved/pending unused complimentary records past expiry_date."""
+    today = getdate(nowdate())
+    rows = frappe.get_all(
+        DOCTYPE,
+        filters={"status": ["in", ["Draft", "Pending", "Approved", "In Progress"]], "expiry_date": ["<", today]},
+        fields=["name", "status"],
+    )
+    expired = []
+    for row in rows:
+        try:
+            frappe.db.set_value(DOCTYPE, row.name, "status", "Expired", update_modified=True)
+            expired.append(row.name)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"Failed to expire complimentary {row.name}")
+    if commit:
+        frappe.db.commit()
+    return {"expired": expired, "count": len(expired)}

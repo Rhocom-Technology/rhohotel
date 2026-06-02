@@ -95,6 +95,19 @@ _TERMINAL_STATUSES = {STATUS_CANCELLED, STATUS_COMPLETED, STATUS_NO_SHOW, STATUS
 _DEFAULT_HOLD_HOURS = 1
 
 
+def _mark_reservation_room_checked_in(row_name, check_in_reference, check_in_time):
+    frappe.db.set_value(
+        "Hotel Reservation Room",
+        row_name,
+        {
+            "status": STATUS_CHECKED_IN,
+            "check_in_time": check_in_time,
+            "check_in_reference": check_in_reference,
+        },
+        update_modified=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Doctype class
 # ---------------------------------------------------------------------------
@@ -645,13 +658,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
             "name",
         )
         if existing_ci:
-            frappe.db.set_value(
-                "Hotel Reservation Room",
-                row.name,
-                "check_in_reference",
-                existing_ci,
-                update_modified=False,
-            )
+            _mark_reservation_room_checked_in(row.name, existing_ci, ci_dt)
             frappe.clear_document_cache("Hotel Reservation", reservation_name)
             frappe.db.commit()
             return {
@@ -706,13 +713,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
         ci_doc.insert(ignore_permissions=True)
         ci_doc.submit()
 
-        frappe.db.set_value(
-            "Hotel Reservation Room",
-            row.name,
-            "check_in_reference",
-            ci_doc.name,
-            update_modified=False,
-        )
+        _mark_reservation_room_checked_in(row.name, ci_doc.name, ci_dt)
         # Update reservation-level status atomically without loading the full doc
         current_res_status = frappe.db.get_value("Hotel Reservation", reservation_name, "reservation_status")
         if current_res_status not in (STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
@@ -801,6 +802,7 @@ def bulk_check_in_reservation(reservation_name):
                 row.status = STATUS_CHECKED_IN
                 row.check_in_time = ci_dt
                 row.check_in_reference = existing_ci
+                _mark_reservation_room_checked_in(row.name, existing_ci, ci_dt)
                 already_checked_in += 1
                 continue
 
@@ -866,12 +868,15 @@ def bulk_check_in_reservation(reservation_name):
                 continue
 
             row.check_in_reference = ci_doc.name
+            row.status = STATUS_CHECKED_IN
+            row.check_in_time = ci_dt
+            _mark_reservation_room_checked_in(row.name, ci_doc.name, ci_dt)
             checked_in_count += 1
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), f"bulk_check_in: room {room_label}")
             errors.append(f"Room {room_label}: {str(e)}")
 
-    if checked_in_count > 0:
+    if checked_in_count > 0 or already_checked_in > 0:
         doc.reservation_status = STATUS_CHECKED_IN
         doc.check_in_time = ci_dt
         doc.flags.ignore_validate_update_after_submit = True

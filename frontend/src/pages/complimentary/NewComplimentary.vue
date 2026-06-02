@@ -42,7 +42,7 @@
         <!-- Guest selector from active check-ins -->
         <div class="mb-4">
           <p class="text-xs text-gray-500 mb-1.5">Select Active Guest</p>
-          <select @change="onCheckinSelect" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+          <select v-model="selectedCheckIn" @change="onCheckinSelect" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">-- Select checked-in guest --</option>
             <option v-for="c in checkins" :key="c.check_in" :value="c.check_in">
               {{ c.guest }} — Room {{ c.room_number }}
@@ -144,7 +144,7 @@
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Charge Impact</p>
           <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">
-            Post to complimentary expense account
+            Track approved value for complimentary reporting
           </div>
         </div>
 
@@ -161,32 +161,17 @@
         <div>
           <p class="text-xs text-gray-500 mb-2">Usage Confirmation Required</p>
           <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-2.5">
-            <label class="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked class="accent-blue-600 w-3.5 h-3.5" />
-              <span class="text-xs text-gray-700">Require outlet consumption confirmation</span>
-            </label>
-            <label class="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked class="accent-blue-600 w-3.5 h-3.5" />
-              <span class="text-xs text-gray-700">Notify front desk after redemption</span>
-            </label>
+            <p class="text-xs text-gray-700">Approved items must be marked consumed with a reference by the responsible department.</p>
+            <p class="text-xs text-gray-500">Every approval, consumption, and cancellation is recorded on the complimentary record.</p>
           </div>
         </div>
 
         <div>
-          <p class="text-xs text-gray-500 mb-2">Linked Actions</p>
+          <p class="text-xs text-gray-500 mb-2">Operational Routing</p>
           <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-2.5">
-            <label class="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked class="accent-blue-600 w-3.5 h-3.5" />
-              <span class="text-xs text-gray-700">Notify guest by SMS / email</span>
-            </label>
-            <label class="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked class="accent-blue-600 w-3.5 h-3.5" />
-              <span class="text-xs text-gray-700">Notify linked outlet / department</span>
-            </label>
-            <label class="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked class="accent-blue-600 w-3.5 h-3.5" />
-              <span class="text-xs text-gray-700">Create audit trail entry</span>
-            </label>
+            <p class="text-xs text-gray-700">Department: {{ form.department }}</p>
+            <p class="text-xs text-gray-700">Approval queue: {{ form.approval_level }}</p>
+            <p class="text-xs text-gray-500">Drafts can be edited before submission.</p>
           </div>
         </div>
 
@@ -226,6 +211,8 @@ const successMsg = ref('')
 const form = reactive({
   guest: '',
   room: '',
+  reservation: '',
+  check_in: '',
   complimentary_type: 'Food Voucher',
   department: 'Restaurant',
   value: '',
@@ -241,6 +228,7 @@ const form = reactive({
 
 // ── Active check-ins for guest/room dropdowns ─────────────────────────────────
 const checkins = ref([])
+const selectedCheckIn = ref('')
 
 const checkinsResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.complimentary.get_active_checkins',
@@ -249,11 +237,16 @@ const checkinsResource = createResource({
   },
 })
 
-function onCheckinSelect(e) {
-  const selected = checkins.value.find(c => c.check_in === e.target.value)
+function onCheckinSelect() {
+  const selected = checkins.value.find(c => c.check_in === selectedCheckIn.value)
   if (selected) {
+    form.check_in = selected.check_in
+    form.reservation = selected.reservation || ''
     form.guest = selected.guest
     form.room = selected.room_number
+  } else {
+    form.check_in = ''
+    form.reservation = ''
   }
 }
 
@@ -284,36 +277,44 @@ const submitResource = createResource({
   },
 })
 
-function submitApproval() {
+function payload() {
+  return {
+    guest: form.guest,
+    room: form.room,
+    reservation: form.reservation || null,
+    check_in: form.check_in || null,
+    complimentary_type: form.complimentary_type,
+    department: form.department,
+    value: form.value ? parseFloat(String(form.value).replace(/[^0-9.]/g, '')) : 0,
+    quantity: form.quantity,
+    issue_date: form.issue_date,
+    expiry_date: form.expiry_date || null,
+    reason: form.reason,
+    redemption_rule: form.redemption_rule,
+    note: form.note,
+    approval_level: form.approval_level,
+    source_category: form.source_category,
+  }
+}
+
+function submitRecord(submitForApproval) {
   errorMsg.value = ''
   if (validationErrors.value.length) {
     errorMsg.value = validationErrors.value[0]
     return
   }
   submitResource.fetch({
-    complimentary_data: {
-      guest: form.guest,
-      room: form.room,
-      complimentary_type: form.complimentary_type,
-      department: form.department,
-      value: form.value ? parseFloat(form.value.replace(/[^0-9.]/g, '')) : 0,
-      quantity: form.quantity,
-      issue_date: form.issue_date,
-      expiry_date: form.expiry_date || null,
-      reason: form.reason,
-      redemption_rule: form.redemption_rule,
-      note: form.note,
-      approval_level: form.approval_level,
-      source_category: form.source_category,
-    },
+    complimentary_data: payload(),
+    submit_for_approval: submitForApproval ? 1 : 0,
   })
 }
 
+function submitApproval() {
+  submitRecord(true)
+}
+
 function saveDraft() {
-  errorMsg.value = ''
-  if (!form.guest.trim()) { errorMsg.value = 'Guest name is required'; return }
-  if (!form.complimentary_type) { errorMsg.value = 'Complimentary type is required'; return }
-  submitApproval()
+  submitRecord(false)
 }
 
 onMounted(() => {

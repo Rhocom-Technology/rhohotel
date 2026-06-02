@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import now_datetime, add_days, flt, cint, get_datetime
+from frappe.utils import now_datetime, add_days, flt, cint, get_datetime, getdate
 import json
 
 
@@ -67,19 +67,24 @@ def get_checkin_detail(name):
     if doc.canonical_reservation and not checkin.get("reservation_source"):
         checkin["reservation_source"] = "Reservation"
 
-    # Fetch invoices linked via custom field — gracefully skip if column doesn't exist
+    # Fetch invoices linked via custom field. Some sites may not have the optional
+    # custom_invoice_source column migrated yet, so build the label expression safely.
     invoices = []
     try:
-        invoices = frappe.db.sql("""
+        invoice_type_expr = "'Sales Invoice'"
+        if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+            invoice_type_expr = "COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice')"
+
+        invoices = frappe.db.sql(f"""
             SELECT name AS invoice, grand_total AS amount, outstanding_amount, is_return,
                    posting_date, status,
-                   COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice') AS invoice_type
+                   {invoice_type_expr} AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
         """, name, as_dict=1) or []
     except Exception:
-        pass
+        frappe.log_error(frappe.get_traceback(), "Check-in detail invoice fetch failed")
 
     pos_invoices = []
     try:
@@ -362,14 +367,13 @@ def get_room_types():
 def get_rooms_for_transfer(current_room="", check_in_dt=None, check_out_dt=None):
     """Return rooms eligible for a room-transfer operation.
 
-    Unlike get_available_rooms (which restricts to status=Vacant), this returns
-    all rooms that do NOT have an active, overlapping check-in — excluding the
-    guest's current room and rooms under Maintenance.
+    Returns vacant rooms that do NOT have an active, overlapping check-in,
+    excluding the guest's current room.
     """
     from rhohotel.rhocom_hotel.utils.room_availability import _normalize_dt
 
-    # Get all rooms except Maintenance and the current room
-    filters = {"status": ["not in", ["Maintenance"]]}
+    # Transfer targets must match transfer_room(), which only accepts Vacant rooms.
+    filters = {"status": "Vacant"}
     if current_room:
         filters["name"] = ["!=", current_room]
 
@@ -402,23 +406,20 @@ def get_rooms_for_transfer(current_room="", check_in_dt=None, check_out_dt=None)
         )
         busy_set = {r.room_number for r in busy}
         rooms = [r for r in rooms if r.name not in busy_set]
-    else:
-        # No dates: only return Vacant rooms (safe default)
-        rooms = [r for r in rooms if r.get("status") == "Vacant"]
 
-    # Attach tariff rate
-    tariff_map = {}
+    # Attach room-rate pricing using the same source as new check-in and transfer billing.
+    from rhohotel.api import get_room_rate
+
+    check_in_date = str(getdate(check_in_dt)) if check_in_dt else None
+    rate_map = {}
     for room in rooms:
         rt = room.get("room_type")
-        if rt and rt not in tariff_map:
-            tariff = frappe.get_all(
-                "Hotel Room Tariff",
-                filters={"room_type": rt, "is_active": 1},
-                fields=["rate_amount"],
-                limit=1,
-            )
-            tariff_map[rt] = tariff[0].rate_amount if tariff else 0
-        room["default_rate"] = tariff_map.get(rt, 0)
+        if rt and rt not in rate_map:
+            rate_map[rt] = get_room_rate(rt, check_in_date=check_in_date) or 0
+        rate = rate_map.get(rt, 0)
+        room["default_rate"] = rate
+        room["rate_per_night"] = rate
+        room["rate"] = rate
 
     return rooms
 
@@ -722,17 +723,21 @@ def get_checkout_detail(check_in_name):
     # queries so a missing column on one table does not silently kill both.
     invoices = []
     try:
-        si_rows = frappe.db.sql("""
+        invoice_type_expr = "'Sales Invoice'"
+        if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+            invoice_type_expr = "COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice')"
+
+        si_rows = frappe.db.sql(f"""
             SELECT name AS invoice_id, grand_total AS amount, outstanding_amount, is_return,
                    posting_date, status,
-                   COALESCE(NULLIF(custom_invoice_source, ''), 'Sales Invoice') AS invoice_type
+                   {invoice_type_expr} AS invoice_type
             FROM `tabSales Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
         """, check_in_name, as_dict=1) or []
         invoices.extend(si_rows)
     except Exception:
-        pass
+        frappe.log_error(frappe.get_traceback(), "Checkout detail invoice fetch failed")
 
     try:
         pos_rows = frappe.db.sql("""
