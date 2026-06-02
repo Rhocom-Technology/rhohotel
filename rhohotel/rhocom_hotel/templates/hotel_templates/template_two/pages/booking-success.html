@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#2C3E35' }};
+  --web-secondary: {{ hotel.secondary_color or '#BFA37E' }};
+  --web-accent: {{ hotel.accent_color or '#8E6E5E' }};
+">
+
+    {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
+
+    <div class="container py-5">
+
+        <div id="bookingSuccessContainer">
+
+            <div class="text-center">
+
+                <div class="
+                spinner-border
+                mb-3
+                "></div>
+
+                <p>
+                    Verifying payment...
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        window.addEventListener(
+            "load",
+            verifyBookingPayment
+        );
+    </script>
+
+
+    {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
+
+    {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
+    <script src="/assets/rhohotel/hotel_templates/template_two/js/booking.js"></script>
+
+</body>
+
+</html>

@@ -330,6 +330,7 @@ def _create_invoice_for_online_reservation(reservation_name):
     return si.name
 
 
+@frappe.whitelist(allow_guest=True)
 def _confirm_reservation_after_payment(reservation_name, paystack_reference, amount_paid):
     """
     Shared post-payment confirmation logic — called by both verify_reservation_payment
