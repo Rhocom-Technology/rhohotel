@@ -4,8 +4,20 @@
 
 import frappe
 from frappe.model.document import Document
+from rhohotel.rhocom_hotel.utils.phone import validate_phone_number
 
 class HotelGuest(Document):
+    def validate(self):
+        self.phone_number = validate_phone_number(
+            self.phone_number,
+            label="Phone Number",
+            required=True,
+        )
+        self.contact_number = validate_phone_number(
+            self.contact_number,
+            label="Contact Person Number",
+        )
+
     def before_save(self):
         if not self.customer:
             self.create_customer()

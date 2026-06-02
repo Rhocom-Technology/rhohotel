@@ -5,7 +5,7 @@ import json
 
 @frappe.whitelist()
 def get_checkin_list(limit=500):
-    """Return check-in list with real-time payment status computed from linked Sales Invoices."""
+    """Return check-in list using the synced folio balance on the check-in."""
     checkins = frappe.db.sql("""
         SELECT
             ci.name,
@@ -18,7 +18,7 @@ def get_checkin_list(limit=500):
             ci.reservation_source,
             ci.number_of_nights,
             COALESCE(SUM(si.grand_total), 0) AS total_invoiced,
-            COALESCE(SUM(si.outstanding_amount), 0) AS total_outstanding
+            COALESCE(ci.total_outstanding_amount, 0) AS total_outstanding
         FROM `tabHotel Room Check In` ci
         LEFT JOIN `tabSales Invoice` si
             ON si.custom_hotel_room_check_in = ci.name
@@ -62,6 +62,14 @@ def get_checkin_detail(name):
         frappe.throw(f"Check-in {name} not found")
 
     doc = frappe.get_doc("Hotel Room Check In", name)
+    from rhohotel.rhocom_hotel.utils.folio import get_checkin_folio, sync_checkin_folio_totals
+
+    try:
+        folio = sync_checkin_folio_totals(name)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Check-in folio summary failed")
+        folio = {"sales_invoices": [], "acquired_bills": [], "summary": {}}
+
     checkin = doc.as_dict()
     checkin["reservation"] = checkin.get("reservation") or doc.canonical_reservation or ""
     if doc.canonical_reservation and not checkin.get("reservation_source"):
@@ -176,6 +184,10 @@ def get_checkin_detail(name):
                 outstanding = float(bill.get("total_amount") or 0)
         bill["outstanding_amount"] = outstanding
 
+    folio_acquired = folio.get("acquired_bills") or []
+    if folio_acquired:
+        acquired_bills = folio_acquired
+
     checkin["acquired_bills"] = list(acquired_bills)
 
     # Payment entries linked to this check-in (include draft=0 in case submit failed)
@@ -198,6 +210,7 @@ def get_checkin_detail(name):
     # Corporate reservations are billed on the corporate account and should not
     # show reservation-level invoices on individual occupant folios.
     include_reservation_ledger = True
+    added_reservation_ledger = False
     if doc.canonical_reservation and frappe.db.exists("Hotel Reservation", doc.canonical_reservation):
         reservation_type = frappe.db.get_value(
             "Hotel Reservation",
@@ -229,6 +242,7 @@ def get_checkin_detail(name):
                         "invoice_type": "Reservation Invoice",
                     }
                 )
+                added_reservation_ledger = True
                 existing_invoice_names.add(inv_name)
 
             existing_payment_names = {row.get("payment_id") or row.get("name") for row in merged_payments}
@@ -247,12 +261,44 @@ def get_checkin_detail(name):
                         "docstatus": 1,
                     }
                 )
+                added_reservation_ledger = True
                 existing_payment_names.add(pay_name)
         except Exception:
             pass
 
+    folio_invoice_map = {row.get("name"): row for row in (folio.get("sales_invoices") or [])}
+    for inv in merged_invoices:
+        folio_row = folio_invoice_map.get(inv.get("invoice"))
+        if not folio_row:
+            continue
+        inv["amount"] = folio_row.get("amount")
+        inv["outstanding_amount"] = folio_row.get("net_outstanding_amount") if not folio_row.get("is_return") else folio_row.get("open_credit_amount")
+        inv["raw_outstanding_amount"] = folio_row.get("raw_outstanding_amount")
+        inv["net_outstanding_amount"] = folio_row.get("net_outstanding_amount")
+        inv["credit_applied"] = folio_row.get("credit_applied")
+        inv["open_credit_amount"] = folio_row.get("open_credit_amount")
+        inv["source_transfer_amount"] = folio_row.get("source_transfer_amount")
+        inv["return_against"] = folio_row.get("return_against")
+
     checkin["invoices"] = merged_invoices
     checkin["payments"] = merged_payments
+    checkin["billing_summary"] = {} if added_reservation_ledger else (folio.get("summary") or {})
+    if checkin["billing_summary"]:
+        checkin["total_outstanding_amount"] = flt(
+            checkin["billing_summary"].get("balance_amount", checkin.get("total_outstanding_amount") or 0)
+        )
+    else:
+        invoice_due = sum(
+            flt(inv.get("outstanding_amount"))
+            for inv in merged_invoices
+            if not inv.get("is_return") and flt(inv.get("outstanding_amount")) > 0
+        )
+        invoice_credit = sum(
+            abs(flt(inv.get("outstanding_amount")))
+            for inv in merged_invoices
+            if inv.get("is_return") or flt(inv.get("outstanding_amount")) < 0
+        )
+        checkin["total_outstanding_amount"] = flt(invoice_due - invoice_credit)
 
     return checkin
 
@@ -582,7 +628,8 @@ def create_checkin(
     doc.number_of_nights = cint(number_of_nights)
     doc.check_in_datetime = ci_dt
     doc.expected_check_out_datetime = expected_out
-    doc.reservation = reservation or canonical_reservation or ""
+    if frappe.get_meta("Hotel Room Check In").has_field("reservation"):
+        doc.reservation = reservation or canonical_reservation or ""
     doc.canonical_reservation = canonical_reservation or ""
     doc.reservation_source = reservation_source or ("Reservation" if canonical_reservation else "")
     doc.discount_type = discount_type or "None"
@@ -601,7 +648,13 @@ def create_checkin(
     doc.id_type = id_type or ""
     # Use the passed contact_number; fall back to the guest's phone_number (not contact_number
     # which is the "Contact Person Number" — a different person's number).
-    doc.contact_number = contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or ""
+    from rhohotel.rhocom_hotel.utils.phone import validate_phone_number
+
+    doc.contact_number = validate_phone_number(
+        contact_number or frappe.db.get_value("Hotel Guest", guest, "phone_number") or "",
+        label="Guest Phone Number",
+        required=True,
+    )
     # Reservation check-ins often use rooms in Reserved status; allow submit after
     # explicit availability assertion above.
     doc.flags.skip_availability_check = bool(canonical_reservation)
@@ -650,41 +703,23 @@ def create_refund(check_in_name, reason="", amount=None):
         frappe.throw(f"Check-in {check_in_name} not found")
 
     check_in = frappe.get_doc("Hotel Room Check In", check_in_name)
+    from rhohotel.rhocom_hotel.utils.folio import get_checkin_folio
 
-    # Total submitted payments received for this check-in
-    paid_result = frappe.db.sql("""
-        SELECT COALESCE(SUM(paid_amount), 0) AS total_paid
-        FROM `tabPayment Entry`
-        WHERE custom_hotel_room_check_in = %s AND docstatus = 1 AND payment_type = 'Receive'
-    """, check_in_name, as_dict=1)
-    total_paid = flt(paid_result[0].total_paid) if paid_result else 0
+    folio = get_checkin_folio(check_in_name)
+    summary = folio.get("summary") or {}
+    total_paid = flt(summary.get("total_received"))
 
     if total_paid <= 0:
         frappe.throw("No confirmed payments found for this check-in. Cannot create refund.")
 
-    # Total invoiced charges for this check-in (excluding credit notes)
-    charged_result = frappe.db.sql("""
-        SELECT COALESCE(SUM(grand_total), 0) AS total_charged
-        FROM `tabSales Invoice`
-        WHERE custom_hotel_room_check_in = %s AND docstatus = 1 AND is_return = 0
-    """, check_in_name, as_dict=1)
-    total_charged = flt(charged_result[0].total_charged) if charged_result else 0
-
-    # Total already refunded via submitted Hotel Refund records
-    refunded_result = frappe.db.sql("""
-        SELECT COALESCE(SUM(refund_amount), 0) AS total_refunded
-        FROM `tabHotel Refund`
-        WHERE check_in = %s AND docstatus = 1
-    """, check_in_name, as_dict=1)
-    total_refunded = flt(refunded_result[0].total_refunded) if refunded_result else 0
-
-    # Net overpayment after accounting for previous refunds
-    net_overpayment = max(0.0, total_paid - total_charged - total_refunded)
+    total_charged = flt(summary.get("net_bill"))
+    total_refunded = flt(summary.get("reserved_refunds_total"))
+    net_overpayment = flt(summary.get("refundable_balance"))
 
     if net_overpayment <= 0:
         frappe.throw(
             "No refundable overpayment remaining for this check-in. "
-            f"Total paid: ₦{total_paid:,.2f}, Total charged: ₦{total_charged:,.2f}, "
+            f"Total paid: ₦{total_paid:,.2f}, Net bill: ₦{total_charged:,.2f}, "
             f"Already refunded: ₦{total_refunded:,.2f}."
         )
 
@@ -707,6 +742,12 @@ def create_refund(check_in_name, reason="", amount=None):
     refund.reason = reason or f"Refund for Check In {check_in.name}"
     refund.insert(ignore_permissions=True)
     refund.submit()
+    try:
+        from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+        sync_checkin_folio_totals(check_in.name)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after refund request")
 
     return {"name": refund.name, "refund_amount": refund_amount, "total_paid": total_paid, "total_charged": total_charged, "total_refunded": total_refunded}
 
@@ -718,6 +759,13 @@ def get_checkout_detail(check_in_name):
         frappe.throw(f"Check-in {check_in_name} not found")
 
     doc = frappe.get_doc("Hotel Room Check In", check_in_name)
+    from rhohotel.rhocom_hotel.utils.folio import get_checkin_folio, sync_checkin_folio_totals
+
+    try:
+        folio = sync_checkin_folio_totals(check_in_name)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Checkout folio summary failed")
+        folio = {"sales_invoices": [], "acquired_bills": [], "summary": {}}
 
     # Fetch all invoices (Sales + POS) linked to this check-in — split into separate
     # queries so a missing column on one table does not silently kill both.
@@ -763,17 +811,22 @@ def get_checkout_detail(check_in_name):
     except Exception:
         pass
 
-    # Exclude credit notes (is_return=1) from charge/outstanding totals
-    charge_invoices = [inv for inv in invoices if not inv.get("is_return")]
-    total_invoice = sum(flt(inv.get("amount")) for inv in charge_invoices)
-    total_outstanding = sum(flt(inv.get("outstanding_amount")) for inv in charge_invoices)
-    total_paid = total_invoice - total_outstanding
+    folio_invoice_map = {row.get("name"): row for row in (folio.get("sales_invoices") or [])}
+    for inv in invoices:
+        folio_row = folio_invoice_map.get(inv.get("invoice_id"))
+        if not folio_row:
+            continue
+        inv["amount"] = folio_row.get("amount")
+        inv["outstanding_amount"] = folio_row.get("net_outstanding_amount") if not folio_row.get("is_return") else folio_row.get("open_credit_amount")
+        inv["raw_outstanding_amount"] = folio_row.get("raw_outstanding_amount")
+        inv["net_outstanding_amount"] = folio_row.get("net_outstanding_amount")
+        inv["credit_applied"] = folio_row.get("credit_applied")
+        inv["open_credit_amount"] = folio_row.get("open_credit_amount")
 
-    # If no invoices, fall back to doc fields
-    if not invoices:
-        total_invoice = flt(doc.total_charges)
-        total_outstanding = flt(doc.total_outstanding_amount)
-        total_paid = total_invoice - total_outstanding
+    summary = folio.get("summary") or {}
+    total_invoice = flt(summary.get("net_bill", doc.total_charges))
+    total_outstanding = flt(summary.get("balance_amount", doc.total_outstanding_amount))
+    total_paid = flt(summary.get("total_received", 0))
 
     # Fetch guest display name
     guest_display = doc.guest or ""
@@ -797,13 +850,16 @@ def get_checkout_detail(check_in_name):
         "number_of_nights": doc.number_of_nights,
         "status": doc.status,
         "total_charges": flt(doc.total_charges),
-        "total_outstanding_amount": flt(doc.total_outstanding_amount),
+        "total_outstanding_amount": flt(summary.get("balance_amount", doc.total_outstanding_amount)),
         "total_invoice": total_invoice,
         "total_paid": total_paid,
         "total_outstanding": total_outstanding,
+        "collectible_outstanding": flt(summary.get("collectible_outstanding", max(0, total_outstanding))),
+        "billing_summary": summary,
         "late_checkout": doc.late_checkout,
         "reservation_source": doc.reservation_source or "Walk-in",
         "invoices": invoices,
+        "acquired_bills": folio.get("acquired_bills") or [],
         "payments": payments,
     }
 
@@ -859,12 +915,19 @@ def create_bill_transfer(from_check_in, to_guest, invoices, reason="", note=""):
         full_reason = f"{reason} — {note}" if reason else note
 
     created = []
+    from rhohotel.rhocom_hotel.utils.folio import get_invoice_net_outstanding
+
     for inv_name in invoices:
         if not frappe.db.exists("Sales Invoice", inv_name):
             continue  # Skip POS Invoices and non-existing docs
 
         inv_doc = frappe.get_doc("Sales Invoice", inv_name)
-        total_amount = flt(inv_doc.outstanding_amount)
+        if cint(inv_doc.is_return):
+            continue
+        if inv_doc.custom_hotel_room_check_in != from_check_in:
+            frappe.throw(f"Invoice {inv_name} is not linked to check-in {from_check_in}.")
+
+        total_amount = flt(get_invoice_net_outstanding(from_check_in, inv_name))
 
         if total_amount <= 0:
             continue
@@ -911,6 +974,18 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None):
     if checkin.status != "Checked In":
         frappe.throw(f"Check-in is in status '{checkin.status}' — cannot check out")
 
+    from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+    folio = sync_checkin_folio_totals(check_in_name)
+    summary = folio.get("summary") or {}
+    outstanding = flt(summary.get("collectible_outstanding") or summary.get("balance_amount"))
+    if outstanding > 0:
+        roles = frappe.get_roles(frappe.session.user)
+        if frappe.session.user != "Administrator" and "Front Desk Manager" not in roles:
+            frappe.throw(
+                "Only a Front Desk Manager can check out a guest with an outstanding bill."
+            )
+
     if not check_out_datetime:
         check_out_datetime = now_datetime()
 
@@ -922,7 +997,7 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None):
     co.check_out_datetime = check_out_datetime
     co.late_checkout = checkin.late_checkout
     co.remarks = remarks or ""
-    co.payment_status = "Paid" if flt(checkin.total_outstanding_amount) <= 0 else "Unpaid"
+    co.payment_status = "Paid" if flt(summary.get("balance_amount")) <= 0 else "Unpaid"
 
     co.insert(ignore_permissions=True)
     co.submit()

@@ -176,10 +176,16 @@
             </td>
             <!-- Actions -->
             <td class="px-4 py-4">
-              <button @click="router.push({ name: 'GuestProfile', params: { id: guest.name } })"
-                class="px-4 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors">
-                Open
-              </button>
+              <div class="flex items-center gap-2">
+                <button @click="router.push({ name: 'GuestProfile', params: { id: guest.name } })"
+                  class="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors">
+                  Open
+                </button>
+                <button @click="router.push({ name: 'EditGuest', params: { id: guest.name } })"
+                  class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
+                  Edit
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>

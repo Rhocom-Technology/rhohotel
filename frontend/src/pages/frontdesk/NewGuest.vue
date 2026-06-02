@@ -274,6 +274,7 @@
 import { reactive, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { callMethodForm, requestApi } from '@/lib/api'
+import { buildPhoneWithCountry, isValidPhone, phoneError } from '@/lib/phone'
 
 const router = useRouter()
 const route = useRoute()
@@ -380,6 +381,15 @@ async function createGuest() {
     saveError.value = 'Phone number is required.'
     return
   }
+  const fullPhone = buildPhoneWithCountry(form.country_code, form.phone_number)
+  if (!isValidPhone(fullPhone, { required: true })) {
+    saveError.value = phoneError('Phone number')
+    return
+  }
+  if (form.contact_number && !isValidPhone(form.contact_number)) {
+    saveError.value = phoneError('Contact person number')
+    return
+  }
   if (!form.id_type) {
     saveError.value = 'ID type is required.'
     return
@@ -391,8 +401,6 @@ async function createGuest() {
 
   saving.value = true
   try {
-    // Build the phone with country code
-    const fullPhone = form.phone_number ? `${form.country_code}${form.phone_number}` : ''
     const created = await callMethodForm('rhohotel.rhocom_hotel.api.guest.create_guest', {
       hotel_guest_name: form.hotel_guest_name,
       guest_type: form.guest_type,

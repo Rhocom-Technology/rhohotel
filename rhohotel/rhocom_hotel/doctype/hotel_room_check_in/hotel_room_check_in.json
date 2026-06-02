@@ -111,7 +111,7 @@
             "fetch_from": "guest.phone_number",
             "fieldname": "contact_number",
             "fieldtype": "Data",
-            "label": "Contact Number",
+            "label": "Guest Phone Number",
             "read_only": 1
         },
         {

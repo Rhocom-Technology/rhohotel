@@ -20,9 +20,13 @@
         <div class="flex items-start gap-3 flex-wrap">
           <h2 class="text-2xl font-bold text-gray-900">{{ data.guest_name || data.guest || '—' }}</h2>
           <span class="px-3 py-1 text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200 rounded-full">Room {{ data.room_number }}</span>
-          <span v-if="data.total_outstanding > 0"
+          <span v-if="computedOutstanding > 0"
             class="px-3 py-1 text-xs font-semibold bg-red-50 text-red-500 border border-red-200 rounded-full">
-            Balance {{ formatCurrency(data.total_outstanding) }}
+            Balance {{ formatCurrency(computedOutstanding) }}
+          </span>
+          <span v-else-if="computedOutstanding < 0"
+            class="px-3 py-1 text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200 rounded-full">
+            Credit {{ formatCurrency(Math.abs(computedOutstanding)) }}
           </span>
           <span v-else class="px-3 py-1 text-xs font-semibold bg-green-50 text-green-600 border border-green-200 rounded-full">
             Settled
@@ -64,11 +68,11 @@
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Outstanding</p>
-        <p class="text-2xl font-bold" :class="computedOutstanding > 0 ? 'text-red-500' : 'text-green-500'">
-          {{ formatCurrency(computedOutstanding) }}
+        <p class="text-2xl font-bold" :class="computedOutstanding > 0 ? 'text-red-500' : computedOutstanding < 0 ? 'text-teal-600' : 'text-green-500'">
+          {{ computedOutstanding < 0 ? '− ' + formatCurrency(Math.abs(computedOutstanding)) : formatCurrency(computedOutstanding) }}
         </p>
-        <p class="text-xs font-medium mt-1" :class="computedOutstanding > 0 ? 'text-red-400' : 'text-green-500'">
-          {{ computedOutstanding > 0 ? 'Must settle before departure' : 'Fully paid' }}
+        <p class="text-xs font-medium mt-1" :class="computedOutstanding > 0 ? 'text-red-400' : computedOutstanding < 0 ? 'text-teal-500' : 'text-green-500'">
+          {{ computedOutstanding > 0 ? 'Must settle before departure' : computedOutstanding < 0 ? 'Credit balance' : 'Fully paid' }}
         </p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
@@ -136,7 +140,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!data.invoices || data.invoices.length === 0">
+                <tr v-if="(!data.invoices || data.invoices.length === 0) && approvedAcquiredBills.length === 0">
                   <td colspan="5" class="px-5 py-8 text-center text-xs text-gray-400">No invoices found for this stay</td>
                 </tr>
                 <tr v-for="inv in data.invoices" :key="inv.invoice_id"
@@ -145,22 +149,36 @@
                   <td class="px-5 py-3 text-xs text-gray-700">{{ inv.invoice_id }}</td>
                   <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(inv.posting_date) }}</td>
                   <td class="px-4 py-3 text-xs" :class="inv.is_return ? 'text-teal-600 font-medium' : 'text-gray-500'">
-                    {{ inv.is_return ? 'Credit Note' : inv.invoice_type }}
+                    {{ inv.is_return ? 'Credit Note' : formatInvoiceType(inv.invoice_type) }}
                   </td>
                   <td class="px-5 py-3 text-xs text-right" :class="inv.is_return ? 'text-teal-600 font-semibold' : 'text-gray-700'">
-                    {{ inv.is_return ? '− ' + formatCurrency(inv.amount) : formatCurrency(inv.amount) }}
+                    {{ inv.is_return ? '− ' + formatCurrency(Math.abs(inv.amount || 0)) : formatCurrency(inv.amount) }}
                   </td>
                   <td class="px-5 py-3 text-xs text-right font-semibold"
                     :class="inv.is_return ? 'text-teal-400' : inv.outstanding_amount > 0 ? 'text-red-500' : 'text-gray-400'">
                     {{ inv.is_return ? (inv.outstanding_amount > 0 ? formatCurrency(inv.outstanding_amount) : '—') : formatCurrency(inv.outstanding_amount) }}
                   </td>
                 </tr>
+                <tr v-for="bill in approvedAcquiredBills" :key="bill.name"
+                  class="border-b border-gray-50 last:border-0 transition-colors bg-purple-50">
+                  <td class="px-5 py-3 text-xs text-gray-700">{{ bill.journal_entry || bill.name }}</td>
+                  <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(bill.transfer_date) }}</td>
+                  <td class="px-4 py-3 text-xs text-purple-600 font-medium">Bill Transfer</td>
+                  <td class="px-5 py-3 text-xs text-right text-gray-700">{{ formatCurrency(bill.total_amount) }}</td>
+                  <td class="px-5 py-3 text-xs text-right font-semibold"
+                    :class="bill.outstanding_amount > 0 ? 'text-red-500' : 'text-gray-400'">
+                    {{ formatCurrency(bill.outstanding_amount) }}
+                  </td>
+                </tr>
               </tbody>
-              <tfoot v-if="data.invoices && data.invoices.length > 0">
+              <tfoot v-if="(data.invoices && data.invoices.length > 0) || approvedAcquiredBills.length > 0">
                 <tr class="border-t border-gray-200 bg-gray-50">
                   <td colspan="3" class="px-5 py-3 text-xs font-bold text-gray-900">Total</td>
                   <td class="px-5 py-3 text-xs font-bold text-right text-gray-900">{{ formatCurrency(computedTotalCharges) }}</td>
-                  <td class="px-5 py-3 text-xs font-bold text-right text-red-500">{{ formatCurrency(computedOutstanding) }}</td>
+                  <td class="px-5 py-3 text-xs font-bold text-right"
+                    :class="computedOutstanding > 0 ? 'text-red-500' : computedOutstanding < 0 ? 'text-teal-600' : 'text-green-600'">
+                    {{ computedOutstanding < 0 ? '− ' + formatCurrency(Math.abs(computedOutstanding)) : formatCurrency(computedOutstanding) }}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -194,12 +212,16 @@
           </div>
 
           <!-- Balance Alert -->
-          <div v-if="computedOutstanding > 0" class="bg-red-50 rounded-xl border border-red-200 px-4 py-4">
+          <div v-if="computedCollectibleOutstanding > 0" class="bg-red-50 rounded-xl border border-red-200 px-4 py-4">
             <p class="text-xs font-bold text-red-600 mb-1">Outstanding Balance Alert</p>
             <p class="text-xs text-red-500 leading-relaxed">
-              Guest owes {{ formatCurrency(computedOutstanding) }}.
+              Guest owes {{ formatCurrency(computedCollectibleOutstanding) }}.
               Receive payment or arrange bill transfer before completing checkout.
             </p>
+          </div>
+          <div v-else-if="computedOutstanding < 0" class="bg-teal-50 rounded-xl border border-teal-200 px-4 py-4">
+            <p class="text-xs font-bold text-teal-600 mb-1">Credit Balance</p>
+            <p class="text-xs text-teal-600 leading-relaxed">Guest has a refundable balance of {{ formatCurrency(Math.abs(computedOutstanding)) }}.</p>
           </div>
           <div v-else class="bg-green-50 rounded-xl border border-green-200 px-4 py-4">
             <p class="text-xs font-bold text-green-600 mb-1">Folio Settled</p>
@@ -304,35 +326,52 @@ const data = ref({
   total_outstanding: 0,
   total_invoice: 0,
   total_charges: 0,
+  acquired_bills: [],
 })
+
+const billingSummary = computed(() => data.value.billing_summary || {})
+function summaryNumber(field, fallback) {
+  const value = billingSummary.value?.[field]
+  return value === undefined || value === null || value === '' ? fallback : Number(value) || 0
+}
 
 // Computed values that correctly derive from invoice and payment data.
 // Credit notes (is_return=1) have positive grand_total in this Frappe version;
 // exclude them from charge/outstanding totals and show them separately.
 const computedTotalCharges = computed(() => {
-  if (data.value.invoices && data.value.invoices.length > 0) {
-    return (data.value.invoices)
+  const fallback = data.value.invoices && data.value.invoices.length > 0
+    ? data.value.invoices
       .filter(inv => !inv.is_return)
       .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
-  }
-  return data.value.total_invoice || data.value.total_charges || 0
+      + approvedAcquiredBills.value.reduce((sum, bill) => sum + (Number(bill.total_amount) || 0), 0)
+    : data.value.total_invoice || data.value.total_charges || 0
+  return summaryNumber('total_charges', fallback)
 })
 
 const computedTotalPaid = computed(() => {
-  if (data.value.payments && data.value.payments.length > 0) {
-    return (data.value.payments).reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0)
-  }
-  return data.value.total_paid || 0
+  const fallback = data.value.payments && data.value.payments.length > 0
+    ? data.value.payments.reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0)
+    : data.value.total_paid || 0
+  return summaryNumber('total_received', fallback)
 })
 
 const computedOutstanding = computed(() => {
-  if (data.value.invoices && data.value.invoices.length > 0) {
-    return (data.value.invoices)
+  const fallback = data.value.invoices && data.value.invoices.length > 0
+    ? data.value.invoices
       .filter(inv => !inv.is_return)
       .reduce((sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0)
-  }
-  return data.value.total_outstanding || 0
+      + approvedAcquiredBills.value.reduce((sum, bill) => sum + (Number(bill.outstanding_amount) || 0), 0)
+    : data.value.total_outstanding || 0
+  return summaryNumber('balance_amount', fallback)
 })
+
+const computedCollectibleOutstanding = computed(() =>
+  summaryNumber('collectible_outstanding', Math.max(0, computedOutstanding.value))
+)
+
+const approvedAcquiredBills = computed(() =>
+  (data.value.acquired_bills || []).filter(bill => bill.status === 'Approved')
+)
 
 const isOverstay = computed(() => {
   if (!data.value.expected_check_out_datetime) return false
@@ -413,6 +452,15 @@ function formatDate(dt) {
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦ 0.00'
   return `₦ ${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+}
+
+function formatInvoiceType(type) {
+  if (type === 'Sales Invoice') return 'Room Charge'
+  if (type === 'POS Invoice') return 'Restaurant'
+  if (type === 'Restaurant') return 'Restaurant'
+  if (type === 'Stay Adjustment') return 'Stay Adjustment'
+  if (type === 'Room Transfer') return 'Room Transfer'
+  return type || 'Room Charge'
 }
 
 onMounted(() => {

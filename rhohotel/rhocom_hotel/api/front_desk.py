@@ -329,6 +329,17 @@ def make_check_out(checkin_name):
 	ci = frappe.get_doc("Hotel Room Check In", checkin_name)
 	if ci.status == "Checked Out":
 		frappe.throw(_("Check-in {0} already checked out").format(checkin_name))
+	from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+	folio = sync_checkin_folio_totals(checkin_name)
+	summary = folio.get("summary") or {}
+	outstanding = flt(summary.get("collectible_outstanding") or summary.get("balance_amount"))
+	if outstanding > 0:
+		roles = frappe.get_roles(frappe.session.user)
+		if frappe.session.user != "Administrator" and "Front Desk Manager" not in roles:
+			frappe.throw(
+				_("Only a Front Desk Manager can check out a guest with an outstanding bill.")
+			)
 	ci.actual_check_out_datetime = now_datetime()
 	ci.status = "Checked Out"
 	# placeholder: calculate extra charges here if required
@@ -356,17 +367,31 @@ def get_checkin_invoice_list(check_in):
 	if not check_in:
 		frappe.throw("Check-in not supplied")
 
-	invoices = frappe.get_all(
-		"Sales Invoice",
-		filters={"custom_hotel_room_check_in": check_in},
-		fields=["name", "posting_date", "grand_total", "outstanding_amount", "docstatus", "customer"],
-		order_by="posting_date desc",
-	)
+	from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
 
-	total_invoiced = sum(i.grand_total or 0 for i in invoices)
-	total_outstanding = sum(i.outstanding_amount or 0 for i in invoices)
+	folio = sync_checkin_folio_totals(check_in)
+	summary = folio.get("summary") or {}
+	invoices = []
+	for row in folio.get("sales_invoices") or []:
+		invoices.append(
+			{
+				"name": row.get("name"),
+				"posting_date": row.get("posting_date"),
+				"grand_total": row.get("grand_total"),
+				"outstanding_amount": row.get("net_outstanding_amount") if not row.get("is_return") else row.get("open_credit_amount"),
+				"raw_outstanding_amount": row.get("raw_outstanding_amount"),
+				"docstatus": 1,
+				"customer": row.get("customer"),
+				"is_return": row.get("is_return"),
+			}
+		)
 
-	return {"invoices": invoices, "total_invoiced": total_invoiced, "total_outstanding": total_outstanding}
+	return {
+		"invoices": invoices,
+		"total_invoiced": summary.get("net_bill", 0),
+		"total_outstanding": summary.get("balance_amount", 0),
+		"billing_summary": summary,
+	}
 
 
 @frappe.whitelist()
@@ -508,7 +533,9 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 			if invoice.custom_hotel_room_check_in != check_in:
 				frappe.throw(_("Invoice {0} is not linked to Check In {1}.").format(ref_name, check_in))
 
-			allocated_amount = min(requested_amount, float(invoice.outstanding_amount or 0))
+			from rhohotel.rhocom_hotel.utils.folio import get_invoice_net_outstanding
+
+			allocated_amount = min(requested_amount, float(get_invoice_net_outstanding(check_in, ref_name) or 0))
 			if allocated_amount <= 0:
 				continue
 
@@ -534,11 +561,9 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 
 		# Sync total_outstanding_amount on the check-in so the list view reflects correct status
 		try:
-			new_outstanding = frappe.db.sql("""
-				SELECT COALESCE(SUM(outstanding_amount), 0)
-				FROM `tabSales Invoice`
-				WHERE custom_hotel_room_check_in = %s AND docstatus = 1
-			""", check_in)[0][0] or 0
+			from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+			new_outstanding = (sync_checkin_folio_totals(check_in).get("summary") or {}).get("balance_amount", 0)
 			frappe.db.set_value(
 				"Hotel Room Check In", check_in, "total_outstanding_amount", new_outstanding,
 				update_modified=False
@@ -579,24 +604,20 @@ def collect_payment_and_checkout(check_in, allocations=None, payment_info=None, 
 	else:
 		payment_entry = None
 
-	# Re-check outstanding invoices
-	invoices = (
-		frappe.get_all(
-			"Sales Invoice",
-			filters={"custom_hotel_room_check_in": check_in, "outstanding_amount": [">", 0]},
-			fields=["name", "outstanding_amount"],
-		)
-		or []
-	)
-	if invoices and len(invoices) > 0:
+	from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+	folio = sync_checkin_folio_totals(check_in)
+	summary = folio.get("summary") or {}
+	outstanding = flt(summary.get("collectible_outstanding") or summary.get("balance_amount"))
+	if outstanding > 0:
 		if not force_checkout:
 			frappe.throw(
 				"Outstanding invoices remain. Collect payment or use force checkout with manager authorization."
 			)
 		# check roles
 		roles = frappe.get_roles(frappe.session.user)
-		if "System Manager" not in roles and "Hotel Manager" not in roles:
-			frappe.throw("Only a manager can perform a force checkout")
+		if frappe.session.user != "Administrator" and "Front Desk Manager" not in roles:
+			frappe.throw("Only a Front Desk Manager can perform a force checkout with outstanding balance")
 
 	# perform checkout using existing helper
 	check_out_res = make_check_out(check_in)

@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import cstr, flt, nowdate
+from rhohotel.rhocom_hotel.utils.phone import validate_phone_number
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +279,9 @@ def create_guest(
 	if frappe.db.exists("Hotel Guest", hotel_guest_name):
 		frappe.throw(_("A guest with the name '{0}' already exists.").format(hotel_guest_name))
 
+	phone_number = validate_phone_number(phone_number, label=_("Phone Number"), required=True)
+	contact_number = validate_phone_number(contact_number, label=_("Contact Person Number"))
+
 	doc = frappe.new_doc("Hotel Guest")
 	doc.hotel_guest_name = hotel_guest_name
 	doc.guest_type = guest_type or "Individual"
@@ -333,6 +337,11 @@ def update_guest(
 		frappe.throw(_("Guest not found: {0}").format(name), frappe.DoesNotExistError)
 
 	doc = frappe.get_doc("Hotel Guest", name)
+
+	if phone_number is not None:
+		phone_number = validate_phone_number(phone_number, label=_("Phone Number"), required=True)
+	if contact_number is not None:
+		contact_number = validate_phone_number(contact_number, label=_("Contact Person Number"))
 
 	# hotel_guest_name is handled separately below (rename logic)
 	if guest_type is not None:

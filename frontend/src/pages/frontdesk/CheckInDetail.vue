@@ -27,9 +27,13 @@
         <span class="px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-600 rounded-full border border-blue-200">
           Room {{ checkIn.room_number || '—' }}
         </span>
-        <span v-if="(checkIn.total_outstanding_amount || 0) > 0"
+        <span v-if="grandNetOutstanding > 0"
           class="px-2.5 py-1 text-xs font-semibold bg-orange-50 text-orange-600 rounded-full border border-orange-200">
-          Balance {{ formatCurrency(checkIn.total_outstanding_amount) }}
+          Balance {{ formatCurrency(grandNetOutstanding) }}
+        </span>
+        <span v-else-if="grandNetOutstanding < 0"
+          class="px-2.5 py-1 text-xs font-semibold bg-teal-50 text-teal-600 rounded-full border border-teal-200">
+          Credit {{ formatCurrency(Math.abs(grandNetOutstanding)) }}
         </span>
       </div>
       <p class="text-xs text-gray-400">
@@ -125,7 +129,7 @@
             <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ checkIn.number_of_nights || '—' }}</div>
           </div>
           <div>
-            <p class="text-xs text-gray-400 mb-1">Contact Number</p>
+            <p class="text-xs text-gray-400 mb-1">Guest Phone Number</p>
             <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ checkIn.contact_number || '—' }}</div>
           </div>
           <div>
@@ -170,6 +174,10 @@
                 {{ pref }}
               </span>
             </div>
+          </div>
+          <div style="grid-column:span 2;" v-if="housekeepingNotes">
+            <p class="text-xs text-gray-400 mb-1">Housekeeping Notes</p>
+            <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg whitespace-pre-line">{{ housekeepingNotes }}</div>
           </div>
           <div style="grid-column:span 2;">
             <p class="text-xs text-gray-400 mb-1">Total Charges</p>
@@ -305,7 +313,7 @@
             </thead>
             <tbody>
               <tr v-if="payments.length === 0">
-                <td colspan="7" class="py-6 text-center text-xs text-gray-400">No payment or refund entries</td>
+                <td colspan="6" class="py-6 text-center text-xs text-gray-400">No payment or refund entries</td>
               </tr>
               <tr v-for="pmt in payments" :key="pmt.payment_id"
                 class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -333,7 +341,7 @@
             </tbody>
             <tfoot v-if="payments.length > 0">
               <tr class="border-t border-gray-200">
-                <td colspan="6" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Received</td>
+                <td colspan="5" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Received</td>
                 <td class="px-4 py-2.5 text-xs font-bold text-right text-green-600">
                   {{ formatCurrency(totalPaid) }}
                 </td>
@@ -531,17 +539,29 @@ async function onActionDone() {
   await loadCheckIn(true)
 }
 
+const billingSummary = computed(() => checkIn.value?.billing_summary || {})
+function summaryNumber(field, fallback) {
+  const value = billingSummary.value?.[field]
+  return value === undefined || value === null || value === '' ? fallback : Number(value) || 0
+}
+
 // Gross positive charges (room, restaurant, extensions) — exclude credit notes which
 // have positive grand_total in this Frappe version (is_return handles accounting reversal)
 const chargesTotal = computed(() =>
-  invoices.value.filter(inv => !inv.is_return && (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
+  summaryNumber(
+    'sales_charges_total',
+    invoices.value.filter(inv => !inv.is_return && (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
+  )
 )
 // Credit notes — is_return=1 invoices with positive amounts
 const creditsTotal = computed(() =>
-  invoices.value.filter(inv => inv.is_return).reduce((s, inv) => s + Math.abs(inv.amount || 0), 0)
+  summaryNumber(
+    'credit_notes_total',
+    invoices.value.filter(inv => inv.is_return).reduce((s, inv) => s + Math.abs(inv.amount || 0), 0)
+  )
 )
 // Net for invoice table footer
-const invoiceTotal = computed(() => chargesTotal.value - creditsTotal.value)
+const invoiceTotal = computed(() => summaryNumber('invoice_net_total', chargesTotal.value - creditsTotal.value))
 // Outstanding the guest still owes — only regular (non-return) invoices
 // If Frappe reconciled the credit note via return_against, the original invoice's
 // outstanding_amount is already reduced; credit note outstanding = 0.
@@ -553,32 +573,44 @@ const creditBalance = computed(() =>
   invoices.value.filter(inv => (inv.outstanding_amount || 0) < 0).reduce((s, inv) => s + Math.abs(inv.outstanding_amount), 0)
 )
 // Net for invoice table footer
-const outstandingTotal = computed(() => outstandingDue.value - creditBalance.value)
+const outstandingTotal = computed(() => summaryNumber('invoice_outstanding', outstandingDue.value - creditBalance.value))
 const acquiredTotal = computed(() =>
-  acquiredBills.value
-    .filter(b => b.status === 'Approved')
-    .reduce((s, b) => s + (b.total_amount || 0), 0)
+  summaryNumber(
+    'acquired_total',
+    acquiredBills.value
+      .filter(b => b.status === 'Approved')
+      .reduce((s, b) => s + (b.total_amount || 0), 0)
+  )
 )
 const acquiredOutstanding = computed(() =>
-  acquiredBills.value
-    .filter(b => b.status === 'Approved')
-    .reduce((s, b) => s + (b.outstanding_amount || 0), 0)
+  summaryNumber(
+    'acquired_outstanding',
+    acquiredBills.value
+      .filter(b => b.status === 'Approved')
+      .reduce((s, b) => s + (b.outstanding_amount || 0), 0)
+  )
 )
 // Grand billing summary values
-const grandCharges = computed(() => chargesTotal.value + acquiredTotal.value)
-const grandCredits = computed(() => creditsTotal.value)
-const grandNetBill = computed(() => grandCharges.value - grandCredits.value)
+const grandCharges = computed(() => summaryNumber('total_charges', chargesTotal.value + acquiredTotal.value))
+const grandCredits = computed(() => summaryNumber('total_credits', creditsTotal.value))
+const grandNetBill = computed(() => summaryNumber('net_bill', grandCharges.value - grandCredits.value))
 const totalPaid = computed(() =>
-  payments.value
-    .filter(p => p.payment_type === 'Receive' && p.docstatus === 1)
-    .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  summaryNumber(
+    'total_received',
+    payments.value
+      .filter(p => p.payment_type === 'Receive' && p.docstatus === 1)
+      .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  )
 )
 const totalRefunded = computed(() =>
-  payments.value
-    .filter(p => p.payment_type === 'Pay' && p.docstatus === 1)
-    .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  summaryNumber(
+    'total_refunded',
+    payments.value
+      .filter(p => p.payment_type === 'Pay' && p.docstatus === 1)
+      .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  )
 )
-const grandNetOutstanding = computed(() => grandNetBill.value - totalPaid.value + totalRefunded.value)
+const grandNetOutstanding = computed(() => summaryNumber('balance_amount', grandNetBill.value - totalPaid.value + totalRefunded.value))
 const isOverdue = computed(() => {
   if (!checkIn.value?.expected_check_out_datetime) return false
   return new Date(checkIn.value.expected_check_out_datetime) < new Date()
@@ -592,6 +624,13 @@ const preferenceList = computed(() =>
     .split(',')
     .map(v => v.trim())
     .filter(Boolean)
+)
+const housekeepingNotes = computed(() =>
+  String(checkIn.value?.housekeeping_notes || '')
+    .split('\n')
+    .filter(line => !/^Room Preferences:\s*/i.test(line.trim()))
+    .join('\n')
+    .trim()
 )
 
 function formatDateTime(dt) {

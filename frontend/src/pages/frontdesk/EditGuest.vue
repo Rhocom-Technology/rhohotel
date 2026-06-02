@@ -241,6 +241,7 @@
 import { reactive, ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { callMethodForm, requestApi } from '@/lib/api'
+import { isValidPhone, phoneError } from '@/lib/phone'
 
 const route = useRoute()
 const router = useRouter()
@@ -387,6 +388,14 @@ async function saveGuest() {
     : form.hotel_guest_name.trim()
   if (!fullName) {
     saveError.value = 'Guest name is required.'
+    return
+  }
+  if (!isValidPhone(form.phone_number, { required: true })) {
+    saveError.value = phoneError('Phone number')
+    return
+  }
+  if (form.contact_number && !isValidPhone(form.contact_number)) {
+    saveError.value = phoneError('Contact person number')
     return
   }
   saving.value = true

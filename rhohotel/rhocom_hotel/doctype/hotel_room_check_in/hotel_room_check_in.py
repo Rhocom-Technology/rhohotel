@@ -14,6 +14,7 @@ from datetime import datetime, time
 
 class HotelRoomCheckIn(Document):
 	def validate(self):
+		self.validate_guest_phone_number()
 		self.validate_rate_amount()
 		self.validate_discount()
 		self.validate_room()
@@ -21,6 +22,17 @@ class HotelRoomCheckIn(Document):
 		self.validate_dates()
 		self.calculate_total_charges()
 		self.validate_rate_and_session()
+
+	def validate_guest_phone_number(self):
+		if not self.is_new():
+			return
+		from rhohotel.rhocom_hotel.utils.phone import validate_phone_number
+
+		self.contact_number = validate_phone_number(
+			self.contact_number,
+			label="Guest Phone Number",
+			required=True,
+		)
 
 	def set_checkout_time(self):
 		"""Set the time part of expected_check_out_datetime from Hotel Settings."""
@@ -501,6 +513,13 @@ def apply_discount(check_in_name, discount_amount, reason=None, source_invoice=N
 			update_modified=False,
 		)
 
+	try:
+		from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+		sync_checkin_folio_totals(check_in_doc.name)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after discount")
+
 	return {"status": "success", "credit_note": credit_note.name}
 
 
@@ -953,6 +972,13 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 		doc.number_of_nights = new_nights
 		doc.save(ignore_permissions=True)
 
+		try:
+			from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+			sync_checkin_folio_totals(doc.name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after stay adjustment")
+
 		frappe.db.commit()
 
 		return {
@@ -1060,6 +1086,13 @@ def transfer_room(check_in_name, new_room_number, note=None):
 			note,
 			new_rate=new_rate,
 		)
+
+		try:
+			from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+			sync_checkin_folio_totals(check_in_doc.name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after room transfer")
 
 		frappe.db.commit()
 		frappe.publish_realtime("rhohotel_front_desk_update")

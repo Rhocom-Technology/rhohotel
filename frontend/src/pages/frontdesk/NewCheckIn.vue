@@ -175,7 +175,7 @@
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg bg-gray-50" />
             </div>
             <div>
-              <p class="text-xs text-gray-500 mb-1.5">Contact Number</p>
+              <p class="text-xs text-gray-500 mb-1.5">Guest Phone Number</p>
               <input type="text" v-model="form.contact_number"
                 placeholder="Direct contact for this stay"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -395,6 +395,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
+import { isValidPhone, phoneError } from '@/lib/phone'
 
 const router = useRouter()
 const route = useRoute()
@@ -959,6 +960,10 @@ async function submitCheckIn() {
   }
   if (!form.number_of_nights || form.number_of_nights < 1) {
     errorMsg.value = 'Number of nights must be at least 1.'; return
+  }
+  if (!isValidPhone(form.contact_number, { required: true })) {
+    errorMsg.value = phoneError('Guest phone number')
+    return
   }
 
   submitting.value = true

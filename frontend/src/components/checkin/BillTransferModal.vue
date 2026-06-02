@@ -22,7 +22,7 @@
           <div class="bg-blue-50 rounded-xl border border-blue-100 px-5 py-4 flex items-center justify-between">
             <div>
               <p class="text-sm font-bold text-blue-700 mb-1">Current Billing Context</p>
-              <p class="text-xs text-blue-600">{{ checkIn.guest }} • Room {{ checkIn.room_number }} • Outstanding {{ fmt(checkIn.total_outstanding_amount) }}</p>
+              <p class="text-xs text-blue-600">{{ checkIn.guest }} • Room {{ checkIn.room_number }} • Outstanding {{ fmt(displayOutstanding) }}</p>
             </div>
             <span class="px-3 py-1 text-xs font-semibold bg-yellow-100 text-yellow-600 rounded-full flex-shrink-0">{{ checkIn.status }}</span>
           </div>
@@ -125,11 +125,11 @@
                           class="accent-blue-600 w-3.5 h-3.5" @click.stop />
                       </td>
                       <td class="px-3 py-3 text-xs font-medium text-blue-600">{{ c.invoice }}</td>
-                      <td class="px-3 py-3 text-xs text-gray-500">{{ c.invoice_type }}</td>
+                      <td class="px-3 py-3 text-xs text-gray-500">{{ formatInvoiceType(c.invoice_type) }}</td>
                       <td class="px-3 py-3 text-xs text-gray-500">{{ c.posting_date || '—' }}</td>
                       <td class="px-3 py-3 text-xs text-right font-semibold"
-                        :class="(c.outstanding_amount || 0) > 0 ? 'text-red-500' : 'text-gray-400'">
-                        {{ fmt(c.outstanding_amount) }}
+                        :class="invoiceOutstanding(c) > 0 ? 'text-red-500' : 'text-gray-400'">
+                        {{ fmt(invoiceOutstanding(c)) }}
                       </td>
                     </tr>
                   </tbody>
@@ -260,6 +260,18 @@ function fmt(v) {
   return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00'
 }
 
+function invoiceOutstanding(invoice) {
+  const value = invoice?.net_outstanding_amount ?? invoice?.outstanding_amount ?? 0
+  return Math.max(0, Number(value) || 0)
+}
+
+function formatInvoiceType(type) {
+  if (type === 'Sales Invoice') return 'Room Charge'
+  if (type === 'POS Invoice') return 'Restaurant'
+  if (type === 'Restaurant') return 'Restaurant'
+  return type || 'Room Charge'
+}
+
 async function apiPost(method, params) {
   const res = await fetch(`/api/method/${method}`, {
     method: 'POST',
@@ -319,7 +331,7 @@ function hideTargetDropdown() {
 
 // Credit notes (is_return = 1) and zero/negative amounts must not be transferable
 const transferableInvoices = computed(() =>
-  (props.checkIn.invoices || []).filter(c => (c.amount || 0) > 0 && !c.is_return)
+  (props.checkIn.invoices || []).filter(c => (c.amount || 0) > 0 && !c.is_return && invoiceOutstanding(c) > 0)
 )
 
 const selectedInvoices = computed(() =>
@@ -331,7 +343,11 @@ const selectedInvoices = computed(() =>
 const transferTotal = computed(() =>
   transferableInvoices.value
     .filter(c => c.selected && c.invoice_type !== 'POS Invoice')
-    .reduce((sum, c) => sum + (c.outstanding_amount || 0), 0)
+    .reduce((sum, c) => sum + invoiceOutstanding(c), 0)
+)
+
+const displayOutstanding = computed(() =>
+  props.checkIn.billing_summary?.balance_amount ?? props.checkIn.total_outstanding_amount ?? 0
 )
 
 async function submitTransfer() {

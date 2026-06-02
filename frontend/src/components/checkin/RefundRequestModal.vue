@@ -27,7 +27,7 @@
           <!-- Billing summary -->
           <div v-if="!loadingAmount" class="bg-gray-50 rounded-xl border border-gray-200 px-5 py-4 space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-xs text-gray-500">Total Charges</span>
+              <span class="text-xs text-gray-500">Net Bill</span>
               <span class="text-xs font-semibold text-gray-800">{{ fmt(totalCharged) }}</span>
             </div>
             <div class="flex items-center justify-between">
@@ -116,8 +116,20 @@ async function apiPost(m, p) {
   return r.json()
 }
 
+function applyBillingSummary(summary) {
+  totalPaid.value = Number(summary.total_received || 0)
+  totalCharged.value = Number(summary.net_bill || 0)
+  totalAlreadyRefunded.value = Number(summary.reserved_refunds_total || 0)
+  refundAmount.value = Number(summary.refundable_balance || overpayment.value || 0)
+}
+
 onMounted(async () => {
   try {
+    if (props.checkIn.billing_summary && Object.keys(props.checkIn.billing_summary).length) {
+      applyBillingSummary(props.checkIn.billing_summary)
+      return
+    }
+
     const [pData, sData, rData] = await Promise.all([
       // Total Receive payments
       apiPost('frappe.client.get_list', {
@@ -130,15 +142,14 @@ onMounted(async () => {
         fields: JSON.stringify(['paid_amount']),
         limit: 100,
       }),
-      // Total invoiced charges (non-return SIs)
+      // Net invoiced charges: non-return SIs minus submitted return invoices.
       apiPost('frappe.client.get_list', {
         doctype: 'Sales Invoice',
         filters: JSON.stringify([
           ['custom_hotel_room_check_in', '=', props.checkIn.name],
           ['docstatus', '=', 1],
-          ['is_return', '=', 0],
         ]),
-        fields: JSON.stringify(['grand_total']),
+        fields: JSON.stringify(['grand_total', 'is_return']),
         limit: 100,
       }),
       // Previously submitted Hotel Refunds for this check-in
@@ -153,7 +164,9 @@ onMounted(async () => {
       }),
     ])
     totalPaid.value = (pData.message || []).reduce((s, p) => s + (p.paid_amount || 0), 0)
-    totalCharged.value = (sData.message || []).reduce((s, i) => s + (i.grand_total || 0), 0)
+    totalCharged.value = (sData.message || []).reduce((s, i) => (
+      i.is_return ? s - Math.abs(i.grand_total || 0) : s + (i.grand_total || 0)
+    ), 0)
     totalAlreadyRefunded.value = (rData.message || []).reduce((s, r) => s + (r.refund_amount || 0), 0)
     // Default to net overpayment; leave at 0 if none
     refundAmount.value = overpayment.value
