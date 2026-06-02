@@ -138,7 +138,7 @@
               </div>
               <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-500" :class="b.bg"
-                  :style="{ width: agingPct(b.value, insights.ind_aging.total) + '%' }"></div>
+                  :style="{ width: agingPct(b.value, insights.ind_aging?.total) + '%' }"></div>
               </div>
             </div>
           </div>
@@ -174,7 +174,7 @@
               </div>
               <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-500" :class="b.bg"
-                  :style="{ width: agingPct(b.value, insights.corp_aging.total) + '%' }"></div>
+                  :style="{ width: agingPct(b.value, insights.corp_aging?.total) + '%' }"></div>
               </div>
             </div>
           </div>
@@ -223,15 +223,15 @@
         <div class="space-y-3">
 
           <!-- Unreconciled Credit Notes -->
-          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4" v-if="insights.unreconciled_credits.total_count > 0">
+          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4" v-if="insights.unreconciled_credits?.total_count > 0">
             <div class="flex items-center justify-between mb-2">
               <p class="text-xs font-bold text-gray-900">Unreconciled Credits</p>
               <span class="px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-500 rounded-full">Action Required</span>
             </div>
-            <p class="text-lg font-bold text-red-500 mb-2">-{{ fmt(insights.unreconciled_credits.total_amount) }}</p>
-            <p class="text-xs text-gray-400 mb-3">{{ insights.unreconciled_credits.total_count }} credit note{{ insights.unreconciled_credits.total_count === 1 ? '' : 's' }} not yet applied</p>
+            <p class="text-lg font-bold text-red-500 mb-2">-{{ fmt(insights.unreconciled_credits?.total_amount) }}</p>
+            <p class="text-xs text-gray-400 mb-3">{{ insights.unreconciled_credits?.total_count }} credit note{{ insights.unreconciled_credits?.total_count === 1 ? '' : 's' }} not yet applied</p>
             <div class="space-y-1.5">
-              <div v-for="c in insights.unreconciled_credits.by_customer" :key="c.customer"
+              <div v-for="c in (insights.unreconciled_credits?.by_customer || [])" :key="c.customer"
                 class="flex items-center justify-between text-xs">
                 <span class="text-gray-600 truncate mr-2">{{ c.customer }}</span>
                 <span class="text-red-500 font-semibold flex-shrink-0">-{{ fmt(c.amount) }}</span>
@@ -294,7 +294,7 @@ function pct(part, total) {
   return Math.round((part / total) * 100)
 }
 function agingPct(bucket, total) {
-  if (!total) return 0
+  if (!total || !bucket) return 0
   return Math.min(100, Math.round((bucket / total) * 100))
 }
 function fmtDate(iso) {
@@ -328,9 +328,10 @@ const activityFeed = ref([])
 const feedPage     = ref(1)
 const feedPerPage  = 10
 
+const emptyAging = () => ({ current: 0, days_1_30: 0, days_31_60: 0, days_60_plus: 0, total: 0 })
 const insights = ref({
-  corp_aging:               { current: 0, days_1_30: 0, days_31_60: 0, days_60_plus: 0, total: 0 },
-  ind_aging:                { current: 0, days_1_30: 0, days_31_60: 0, days_60_plus: 0, total: 0 },
+  corp_aging:               emptyAging(),
+  ind_aging:                emptyAging(),
   unreconciled_credits:     { total_count: 0, total_amount: 0, by_customer: [] },
   corporate_followup_count: 0,
   checkout_risk_count:      0,
@@ -343,12 +344,14 @@ const agingDefs = [
   { label: '31–60 Days',key: 'days_31_60',   color: 'text-orange-600', bg: 'bg-orange-400' },
   { label: '60+ Days',  key: 'days_60_plus', color: 'text-red-600',    bg: 'bg-red-500'    },
 ]
-const corpAgingBuckets = computed(() =>
-  agingDefs.map(d => ({ ...d, value: insights.value.corp_aging[d.key] || 0 }))
-)
-const indAgingBuckets = computed(() =>
-  agingDefs.map(d => ({ ...d, value: insights.value.ind_aging[d.key] || 0 }))
-)
+const corpAgingBuckets = computed(() => {
+  const aging = insights.value.corp_aging || {}
+  return agingDefs.map(d => ({ ...d, value: aging[d.key] || 0 }))
+})
+const indAgingBuckets = computed(() => {
+  const aging = insights.value.ind_aging || {}
+  return agingDefs.map(d => ({ ...d, value: aging[d.key] || 0 }))
+})
 
 // ── Feed pagination ───────────────────────────────────────────────────────────
 const feedTotalPages = computed(() => Math.max(1, Math.ceil(activityFeed.value.length / feedPerPage)))
@@ -364,7 +367,13 @@ async function load() {
     const data = await getBillingDashboardData(fromDate.value, toDate.value)
     stats.value        = data.stats
     activityFeed.value = data.activity_feed
-    insights.value     = data.insights
+    insights.value     = {
+      corp_aging:               data.insights?.corp_aging               || emptyAging(),
+      ind_aging:                data.insights?.ind_aging                || emptyAging(),
+      unreconciled_credits:     data.insights?.unreconciled_credits     || { total_count: 0, total_amount: 0, by_customer: [] },
+      corporate_followup_count: data.insights?.corporate_followup_count ?? 0,
+      checkout_risk_count:      data.insights?.checkout_risk_count      ?? 0,
+    }
     feedPage.value     = 1
   } catch (err) {
     error.value = err.message || 'Failed to load billing data.'
