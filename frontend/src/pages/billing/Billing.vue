@@ -84,7 +84,7 @@
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Overdue</p>
           <p class="text-3xl font-bold text-red-500">{{ fmt(stats.total_overdue) }}</p>
-          <p class="text-xs text-gray-400 mt-2">{{ pct(stats.total_overdue, stats.total_outstanding) }}% of outstanding</p>
+          <p class="text-xs text-gray-400 mt-2">{{ pct(stats.total_overdue, stats.total_outstanding) }}% of net outstanding</p>
         </div>
 
         <!-- Invoices in Period -->
@@ -291,7 +291,7 @@ function fmt(value) {
 }
 function pct(part, total) {
   if (!total) return 0
-  return Math.round((part / total) * 100)
+  return Math.min(100, Math.round((part / total) * 100))
 }
 function agingPct(bucket, total) {
   if (!total || !bucket) return 0

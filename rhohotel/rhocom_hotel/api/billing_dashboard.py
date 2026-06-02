@@ -122,9 +122,9 @@ def _build_stats(from_dt, to_dt, today, corp):
     # ── Overdue vs current (join SI for due_date, only net positive entries) ─
     overdue_row = frappe.db.sql("""
         SELECT
-            SUM(CASE WHEN si.due_date < %(today)s AND net.outstanding > 0
+            SUM(CASE WHEN si.due_date < %(today)s
                      THEN net.outstanding ELSE 0 END) AS overdue,
-            SUM(CASE WHEN (si.due_date >= %(today)s OR si.due_date IS NULL) AND net.outstanding > 0
+            SUM(CASE WHEN si.due_date >= %(today)s OR si.due_date IS NULL
                      THEN net.outstanding ELSE 0 END) AS current_amt
         FROM (
             SELECT voucher_no, SUM(amount) AS outstanding
@@ -134,6 +134,7 @@ def _build_stats(from_dt, to_dt, today, corp):
               AND party_type = 'Customer'
               AND delinked = 0
             GROUP BY voucher_no
+            HAVING SUM(amount) > 0.5
         ) net
         LEFT JOIN `tabSales Invoice` si ON si.name = net.voucher_no
     """, {"today": str(today)}, as_dict=True)[0]
