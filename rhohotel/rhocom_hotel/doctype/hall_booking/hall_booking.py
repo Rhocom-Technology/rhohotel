@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import get_datetime, nowdate, getdate, now_datetime
+from frappe.utils import get_datetime, nowdate, getdate, now_datetime,flt
 from frappe import _
 
 
@@ -292,30 +292,114 @@ def get_payment_status(booking_name):
 		return "Unpaid"
 
 
+# @frappe.whitelist()
+# def create_payment_entry(booking, data):
+# 	import json
+
+# 	data = frappe._dict(json.loads(data))
+
+# 	booking = frappe.get_doc("Hall Booking", booking)
+
+# 	if booking.docstatus != 1:
+# 		frappe.throw("Only submitted bookings can receive payment.")
+
+# 	if not booking.sales_invoice:
+# 		frappe.throw("No invoice linked to this booking.")
+
+# 	invoice = frappe.get_doc("Sales Invoice", booking.sales_invoice)
+
+# 	if invoice.outstanding_amount <= 0:
+# 		frappe.throw("Invoice is already fully paid.")
+
+# 	company = frappe.db.get_single_value("Global Defaults", "default_company")
+
+# 	# --------------------------------------------------
+# 	# Get accounts from Mode of Payment
+# 	# --------------------------------------------------
+# 	mop = frappe.get_doc("Mode of Payment", data.payment_mode)
+
+# 	if not mop.accounts:
+# 		frappe.throw("Mode of Payment has no accounts configured.")
+
+# 	mop_account = next((a.default_account for a in mop.accounts if a.company == company), None)
+
+# 	if not mop_account:
+# 		frappe.throw(f"No account found for Mode of Payment in {company}")
+
+# 	# avoid duplicate reference numbers
+# 	existing_pe = frappe.db.get_value("Payment Entry", {"reference_no": data.reference_no})
+# 	if existing_pe:
+# 		frappe.throw("A Payment Entry with this reference number already exists.")
+
+# 	# --------------------------------------------------
+# 	# Create Payment Entry
+# 	# --------------------------------------------------
+# 	pe = frappe.get_doc(
+# 		{
+# 			"doctype": "Payment Entry",
+# 			"payment_type": "Receive",
+# 			"company": company,
+# 			"posting_date": data.payment_date,
+# 			"party_type": "Customer",
+# 			"party": invoice.customer,
+# 			"mode_of_payment": data.payment_mode,
+# 			"paid_to": mop_account,
+# 			"paid_amount": data.paid_amount,
+# 			"received_amount": data.paid_amount,
+# 			"reference_no": data.reference_no,
+# 			"reference_date": data.reference_date,
+# 			"remarks": data.remarks,
+# 			"references": [
+# 				{
+# 					"reference_doctype": "Sales Invoice",
+# 					"reference_name": invoice.name,
+# 					"allocated_amount": min(data.paid_amount, invoice.outstanding_amount),
+# 				}
+# 			],
+# 		}
+# 	)
+
+# 	pe.insert(ignore_permissions=True)
+# 	pe.submit()
+
+# 	return pe.name
+
+
 @frappe.whitelist()
 def create_payment_entry(booking, data):
 	import json
 
 	data = frappe._dict(json.loads(data))
-
 	booking = frappe.get_doc("Hall Booking", booking)
 
 	if booking.docstatus != 1:
 		frappe.throw("Only submitted bookings can receive payment.")
 
-	if not booking.sales_invoice:
+	# Get all invoices: original + adjustment invoices
+	invoice_names = []
+
+	if booking.sales_invoice:
+		invoice_names.append(booking.sales_invoice)
+
+	for row in booking.get("adjustment_history", []):
+		if row.adjustment_invoice:
+			invoice_names.append(row.adjustment_invoice)
+
+	if not invoice_names:
 		frappe.throw("No invoice linked to this booking.")
 
-	invoice = frappe.get_doc("Sales Invoice", booking.sales_invoice)
+	# Pick unpaid invoices only
+	unpaid_invoices = []
+	for inv_name in invoice_names:
+		inv = frappe.get_doc("Sales Invoice", inv_name)
+		if inv.docstatus == 1 and flt(inv.outstanding_amount) > 0:
+			unpaid_invoices.append(inv)
 
-	if invoice.outstanding_amount <= 0:
-		frappe.throw("Invoice is already fully paid.")
+	if not unpaid_invoices:
+		frappe.throw("All invoices for this booking are already fully paid.")
 
 	company = frappe.db.get_single_value("Global Defaults", "default_company")
 
-	# --------------------------------------------------
-	# Get accounts from Mode of Payment
-	# --------------------------------------------------
 	mop = frappe.get_doc("Mode of Payment", data.payment_mode)
 
 	if not mop.accounts:
@@ -326,38 +410,47 @@ def create_payment_entry(booking, data):
 	if not mop_account:
 		frappe.throw(f"No account found for Mode of Payment in {company}")
 
-	# avoid duplicate reference numbers
 	existing_pe = frappe.db.get_value("Payment Entry", {"reference_no": data.reference_no})
 	if existing_pe:
 		frappe.throw("A Payment Entry with this reference number already exists.")
 
-	# --------------------------------------------------
-	# Create Payment Entry
-	# --------------------------------------------------
-	pe = frappe.get_doc(
-		{
-			"doctype": "Payment Entry",
-			"payment_type": "Receive",
-			"company": company,
-			"posting_date": data.payment_date,
-			"party_type": "Customer",
-			"party": invoice.customer,
-			"mode_of_payment": data.payment_mode,
-			"paid_to": mop_account,
-			"paid_amount": data.paid_amount,
-			"received_amount": data.paid_amount,
-			"reference_no": data.reference_no,
-			"reference_date": data.reference_date,
-			"remarks": data.remarks,
-			"references": [
-				{
-					"reference_doctype": "Sales Invoice",
-					"reference_name": invoice.name,
-					"allocated_amount": min(data.paid_amount, invoice.outstanding_amount),
-				}
-			],
-		}
-	)
+	paid_amount = flt(data.paid_amount)
+	remaining_amount = paid_amount
+	references = []
+
+	for inv in unpaid_invoices:
+		if remaining_amount <= 0:
+			break
+
+		allocated = min(remaining_amount, flt(inv.outstanding_amount))
+
+		references.append({
+			"reference_doctype": "Sales Invoice",
+			"reference_name": inv.name,
+			"allocated_amount": allocated,
+		})
+
+		remaining_amount -= allocated
+
+	if not references:
+		frappe.throw("No outstanding invoice found for this booking.")
+
+	pe = frappe.get_doc({
+		"doctype": "Payment Entry",
+		"payment_type": "Receive",
+		"company": company,
+		"posting_date": data.payment_date,
+		"party_type": "Customer",
+		"party": unpaid_invoices[0].customer,
+		"mode_of_payment": data.payment_mode,
+		"paid_to": mop_account,
+		"paid_amount": paid_amount,
+		"received_amount": paid_amount,
+		"reference_no": data.reference_no,
+		"reference_date": data.reference_date,
+		"remarks": data.remarks,
+		"references": references,
+	})
 
 	pe.insert(ignore_permissions=True)
 	pe.submit()

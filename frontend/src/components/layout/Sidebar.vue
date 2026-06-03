@@ -175,5 +175,14 @@ const navGroups = [
   { label: 'Asset Maintenance', to: '/assets-mgmt/maintenance' },
     ],
   },
+
+   {
+    label: 'Hall',
+    icon: LayoutGrid,
+    children: [
+      { label: 'Hall List',     to: '/hall' },
+      { label: 'Hall Bookings', to: '/hall/booking' },
+    ],
+  },
 ]
 </script>

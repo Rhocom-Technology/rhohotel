@@ -84,6 +84,16 @@ const router = createRouter({
     { path: '/rooms/new', name: 'NewRoom', component: () => import('@/pages/rooms/NewRoom.vue') },
     { path: '/rooms/:id', name: 'SavedRoom', component: () => import('@/pages/frontdesk/SavedRoom.vue') },
 
+
+    // Hall Management
+    { path: '/hall',                  name: 'HallList',         component: () => import('@/pages/hall/HallList.vue') },
+    { path: '/hall/new',              name: 'NewHall',          component: () => import('@/pages/hall/NewHall.vue') },
+    { path: '/hall/booking',          name: 'HallBookingList',  component: () => import('@/pages/hall/HallBookingList.vue') },
+    { path: '/hall/booking/new',      name: 'NewHallBooking',   component: () => import('@/pages/hall/NewHallBooking.vue') },
+    { path: '/hall/booking/:id',      name: 'HallBooking',      component: () => import('@/pages/hall/HallBooking.vue') },
+    { path: '/hall/:id',              name: 'SavedHall',        component: () => import('@/pages/hall/SavedHall.vue') },
+    { path: '/hall/:id/edit',         name: 'EditHall',         component: () => import('@/pages/hall/NewHall.vue') },
+
     // Others
     { path: '/reports', name: 'ReportList', component: () => import('@/pages/reports/ReportList.vue') },
     { path: '/reports/corporate-account-statement', name: 'CorporateAccountStatement', component: () => import('@/pages/reports/CorporateAccountStatement.vue') },
