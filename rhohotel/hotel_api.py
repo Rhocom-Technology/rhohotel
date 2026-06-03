@@ -934,10 +934,14 @@ def create_reservation_payment_link(reservation_name=None):
         "reference": reservation_name,   # reservation name is unique — ties webhook back to doc
         "currency":  "NGN",
         "callback_url": (
-            f"{frappe.utils.get_url()}/api/method/"
-            f"rhohotel.hotel_api.verify_reservation_payment"
+            f"{frappe.utils.get_url()}/booking-success"
             f"?reference={reservation_name}"
         ),
+        # "callback_url": (
+        #     f"{frappe.utils.get_url()}/api/method/"
+        #     f"rhohotel.hotel_api.verify_reservation_payment"
+        #     f"?reference={reservation_name}"
+        # ),
         "metadata": {
             "reservation": reservation_name,
             "guest_name":  doc.primary_guest_name or "",

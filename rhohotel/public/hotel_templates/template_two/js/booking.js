@@ -56,40 +56,40 @@ function calculateNights() {
 	return diff;
 }
 
-function resetRoomBookingForNow() {
-	const checkAvailabilityBtn = document.getElementById("checkAvailabilityBtn");
-	const continueRoomBookingBtn = document.getElementById("continueRoomBookingBtn");
-	const roomBookingForm = document.getElementById("roomBookingForm");
+// function resetRoomBookingForNow() {
+// 	const checkAvailabilityBtn = document.getElementById("checkAvailabilityBtn");
+// 	const continueRoomBookingBtn = document.getElementById("continueRoomBookingBtn");
+// 	const roomBookingForm = document.getElementById("roomBookingForm");
 
-	if (checkAvailabilityBtn) {
-		checkAvailabilityBtn.addEventListener("click", function () {
-			showBookingAlert(
-				"Online room availability is currently being configured. Please contact the hotel to confirm available rooms.",
-				"info",
-			);
-		});
-	}
+// 	if (checkAvailabilityBtn) {
+// 		checkAvailabilityBtn.addEventListener("click", function () {
+// 			showBookingAlert(
+// 				"Online room availability is currently being configured. Please contact the hotel to confirm available rooms.",
+// 				"info",
+// 			);
+// 		});
+// 	}
 
-	if (continueRoomBookingBtn) {
-		continueRoomBookingBtn.addEventListener("click", function () {
-			showBookingAlert(
-				"Room booking is currently being configured. Please contact the hotel to complete your room reservation.",
-				"info",
-			);
-		});
-	}
+// 	if (continueRoomBookingBtn) {
+// 		continueRoomBookingBtn.addEventListener("click", function () {
+// 			showBookingAlert(
+// 				"Room booking is currently being configured. Please contact the hotel to complete your room reservation.",
+// 				"info",
+// 			);
+// 		});
+// 	}
 
-	if (roomBookingForm) {
-		roomBookingForm.addEventListener("submit", function (event) {
-			event.preventDefault();
+// 	if (roomBookingForm) {
+// 		roomBookingForm.addEventListener("submit", function (event) {
+// 			event.preventDefault();
 
-			showBookingAlert(
-				"Room booking is currently being configured. Please contact the hotel to complete your room reservation.",
-				"info",
-			);
-		});
-	}
-}
+// 			showBookingAlert(
+// 				"Room booking is currently being configured. Please contact the hotel to complete your room reservation.",
+// 				"info",
+// 			);
+// 		});
+// 	}
+// }
 
 function showEventAlert(message, type = "success", bookingRef = "") {
 	let alertBox = document.getElementById("eventBookingAlert");
@@ -254,8 +254,6 @@ function resetEventBookingForNow() {
 				);
 
 				eventForm.reset();
-
-				eventForm.reset();
 			} else {
 				showEventAlert(
 					response?.message || "Unable to submit event enquiry. Please try again.",
@@ -338,7 +336,7 @@ function initBookingPage() {
 	checkIn?.addEventListener("change", calculateNights);
 	checkOut?.addEventListener("change", calculateNights);
 
-	resetRoomBookingForNow();
+	// resetRoomBookingForNow();
 	resetEventBookingForNow();
 }
 
@@ -466,7 +464,7 @@ async function apiCall(method, args = {}) {
 
 document.getElementById("searchRoomsBtn").addEventListener("click", searchAvailability);
 
-//search function
+//search (check availability) function
 async function searchAvailability() {
 	const checkIn = document.getElementById("roomCheckIn").value;
 
@@ -641,19 +639,9 @@ function createRoomCard(room, nights) {
 
                 </label>
 
-                <select
-                    class="
-                    form-select
-                    room-qty-selector
-                    "
-                    data-room-type="
-                    ${room.room_type}
-                    "
-                >
+                <select class="form-select room-qty-selector" data-room-type="${room.room_type}">
 
-                    <option value="0">
-                        Select
-                    </option>
+                    <option value="0"> Select </option>
 
                     ${Array.from(
 						{
@@ -689,6 +677,8 @@ document.addEventListener("change", function (e) {
 
 //seleced rooms updater (builder)
 function updateSelectedRooms() {
+	console.log(currentAvailability);
+
 	bookingState.selectedRooms = [];
 
 	document.querySelectorAll(".room-qty-selector").forEach((selector) => {
@@ -702,7 +692,15 @@ function updateSelectedRooms() {
 
 		const roomType = selector.dataset.roomType;
 
+		if (!currentAvailability?.room_types) return;
+
+		console.log("roomType:", roomType);
+
 		const room = currentAvailability.room_types.find((r) => r.room_type === roomType);
+
+		console.log("found room:", room);
+
+		if (!room) return;
 
 		bookingState.selectedRooms.push({
 			room_type: room.room_type,
@@ -716,6 +714,7 @@ function updateSelectedRooms() {
 			total_amount: room.rate_per_night * qty * currentAvailability.nights,
 		});
 	});
+	console.log(bookingState.selectedRooms);
 }
 
 //proceed to summary btn handler
@@ -1256,205 +1255,204 @@ async function startPayment() {
 	} catch (error) {
 		console.error(error);
 
-		showMessage("Could not start payment.");
-	}
-}
-
-function getReservationNumber() {
-	return sessionStorage.getItem("hotelReservation");
-}
-
-//verify payment
-async function verifyBookingPayment() {
-	const reservation = getReservationNumber();
-
-	if (!reservation) {
-		document.getElementById("confirmationContainer").innerHTML = `
-            <div
-                class="
-                alert
-                alert-danger
-                "
-            >
-                Reservation not found.
-            </div>
-        `;
-
-		return;
-	}
-
-	try {
-		const response = await fetch(
-			`/api/method/rhohotel.hotel_api.verify_reservation_payment?reference=${reservation}`,
+		showMessage(
+			"Payment could not be started. Please check your internet connection or contact support.",
 		);
 
-		const result = await response.json();
-
-		const data = result.message;
-
-		if (!data.success) {
-			throw new Error(data.message);
+		const btn = document.getElementById("payNowBtn");
+		if (btn) {
+			btn.disabled = false;
+			btn.innerHTML = "Proceed To Payment";
 		}
-
-		buildConfirmationPage(data);
-	} catch (error) {
-		document.getElementById("confirmationContainer").innerHTML = `
-            <div
-                class="
-                alert
-                alert-danger
-                "
-            >
-                ${error.message}
-            </div>
-        `;
 	}
 }
 
-//confirmation renderer
-function buildConfirmationPage(payment) {
-	document.getElementById("confirmationContainer").innerHTML = `
+// function getReservationNumber() {
+// 	return sessionStorage.getItem("hotelReservation");
+// }
 
-        <div
-            class="
-            card
-            shadow-sm
-            "
-        >
+// //verify payment
+// async function verifyBookingPayment() {
+// 	const reservation = getReservationNumber();
 
-            <div
-                class="
-                card-body
-                p-5
-                "
-            >
+// 	if (!reservation) {
+// 		document.getElementById("bookingSuccessContainer").innerHTML = `
+//             <div class="alert alert-danger">
+//                 Reservation not found.
+//             </div>
+//         `;
+// 		return;
+// 	}
 
-                <div
-                    class="
-                    text-center
-                    mb-4
-                    "
-                >
+// 	try {
+// 		const response = await fetch(
+// 			`/api/method/rhohotel.hotel_api.verify_reservation_payment?reference=${reservation}`
+// 		);
 
-                    <i
-                        class="
-                        fa-solid
-                        fa-circle-check
-                        text-success
-                        display-3
-                        "
-                    ></i>
+// 		const result = await response.json();
+// 		const data = result.message;
 
-                    <h2
-                        class="
-                        mt-3
-                        "
-                    >
-                        Booking Confirmed
-                    </h2>
+// 		if (!data.success) {
+// 			throw new Error(data.message);
+// 		}
 
-                </div>
+// 		// 🚨 THIS IS WHERE YOUR REDIRECT GOES
+// 		window.location.href =
+// 			`/booking-success?reservation=${data.reservation}`;
 
-                <div
-                    id="
-                    receiptArea
-                    "
-                >
+// 	} catch (error) {
+// 		document.getElementById("bookingSuccessContainer").innerHTML = `
+//             <div class="alert alert-danger">
+//                 ${error.message}
+//             </div>
+//         `;
+// 	}
+// }
 
-                    <table
-                        class="
-                        table
-                        "
-                    >
+// //confirmation renderer
+// function buildConfirmationPage(payment) {
+// 	document.getElementById("confirmationContainer").innerHTML = `
 
-                        <tr>
+//         <div
+//             class="
+//             card
+//             shadow-sm
+//             "
+//         >
 
-                            <th>
-                                Reservation
-                            </th>
+//             <div
+//                 class="
+//                 card-body
+//                 p-5
+//                 "
+//             >
 
-                            <td>
-                                ${payment.reservation}
-                            </td>
+//                 <div
+//                     class="
+//                     text-center
+//                     mb-4
+//                     "
+//                 >
 
-                        </tr>
+//                     <i
+//                         class="
+//                         fa-solid
+//                         fa-circle-check
+//                         text-success
+//                         display-3
+//                         "
+//                     ></i>
 
-                        <tr>
+//                     <h2
+//                         class="
+//                         mt-3
+//                         "
+//                     >
+//                         Booking Confirmed
+//                     </h2>
 
-                            <th>
-                                Payment Status
-                            </th>
+//                 </div>
 
-                            <td>
-                                ${payment.payment_status}
-                            </td>
+//                 <div
+//                     id="
+//                     receiptArea
+//                     "
+//                 >
 
-                        </tr>
+//                     <table
+//                         class="
+//                         table
+//                         "
+//                     >
 
-                        <tr>
+//                         <tr>
 
-                            <th>
-                                Reservation Status
-                            </th>
+//                             <th>
+//                                 Reservation
+//                             </th>
 
-                            <td>
-                                ${payment.reservation_status}
-                            </td>
+//                             <td>
+//                                 ${payment.reservation}
+//                             </td>
 
-                        </tr>
+//                         </tr>
 
-                    </table>
+//                         <tr>
 
-                </div>
+//                             <th>
+//                                 Payment Status
+//                             </th>
 
-                <div
-                    class="
-                    mt-4
-                    "
-                >
+//                             <td>
+//                                 ${payment.payment_status}
+//                             </td>
 
-                    <button
-                        class="
-                        web-btn-solid
-                        "
-                        onclick="
-                        printReceipt()
-                        "
-                    >
-                        Print Receipt
-                    </button>
+//                         </tr>
 
-                </div>
+//                         <tr>
 
-            </div>
+//                             <th>
+//                                 Reservation Status
+//                             </th>
 
-        </div>
+//                             <td>
+//                                 ${payment.reservation_status}
+//                             </td>
 
-    `;
-}
+//                         </tr>
 
-//print receipt
-function printReceipt() {
-	const receipt = document.getElementById("receiptArea").innerHTML;
+//                     </table>
 
-	const win = window.open("", "_blank");
+//                 </div>
 
-	win.document.write(`
-        <html>
-        <head>
-            <title>
-                Receipt
-            </title>
-        </head>
-        <body>
+//                 <div
+//                     class="
+//                     mt-4
+//                     "
+//                 >
 
-            ${receipt}
+//                     <button
+//                         class="
+//                         web-btn-solid
+//                         "
+//                         onclick="
+//                         printReceipt()
+//                         "
+//                     >
+//                         Print Receipt
+//                     </button>
 
-        </body>
-        </html>
-    `);
+//                 </div>
 
-	win.document.close();
+//             </div>
 
-	win.print();
-}
+//         </div>
+
+//     `;
+// }
+
+// //print receipt
+// function printReceipt() {
+// 	const receipt = document.getElementById("receiptArea").innerHTML;
+
+// 	const win = window.open("", "_blank");
+
+// 	win.document.write(`
+//         <html>
+//         <head>
+//             <title>
+//                 Receipt
+//             </title>
+//         </head>
+//         <body>
+
+//             ${receipt}
+
+//         </body>
+//         </html>
+//     `);
+
+// 	win.document.close();
+
+// 	win.print();
+// }

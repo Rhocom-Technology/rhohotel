@@ -13,21 +13,13 @@
 
     {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/navbar.html" %}
 
-    <div class="container py-5">
+    <div class="booking-success-page web-confirmation-page">
 
         <div id="bookingSuccessContainer">
 
-            <div class="text-center">
-
-                <div class="
-                spinner-border
-                mb-3
-                "></div>
-
-                <p>
-                    Verifying payment...
-                </p>
-
+            <div class="web-loading-state">
+                <div class="spinner-border text-primary"></div>
+                <p class="mt-3">Verifying your reservation...</p>
             </div>
 
         </div>
@@ -35,17 +27,20 @@
     </div>
 
     <script>
-        window.addEventListener(
-            "load",
-            verifyBookingPayment
-        );
+        // pass hotel data safely into JS (IMPORTANT FIX)
+        window.HOTEL = {
+            name: "{{ hotel.hotel_name or 'Hotel' }}",
+            email: "{{ hotel.email or 'reservations@example.com' }}",
+            phone: "{{ hotel.phone or '+234 800 000 0000' }}",
+            address: "{{ hotel.address or '' }}",
+            logo: "{{ hotel.logo or '' }}"
+        };
     </script>
 
+    <script src="/assets/rhohotel/hotel_templates/template_two/js/booking-success.js"></script>
 
     {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
-
     {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
-    <script src="/assets/rhohotel/hotel_templates/template_two/js/booking.js"></script>
 
 </body>
 

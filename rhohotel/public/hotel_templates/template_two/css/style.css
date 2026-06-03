@@ -1784,50 +1784,377 @@ img {
 
 
 
-.web-booking-progress{
-    display:flex;
-    justify-content:space-between;
-    gap:1rem;
-    margin-bottom:3rem;
+.web-booking-progress {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 3rem;
 }
 
-.web-step{
-    flex:1;
-    text-align:center;
-    opacity:.4;
-    transition:.3s;
+.web-step {
+  flex: 1;
+  text-align: center;
+  opacity: .4;
+  transition: .3s;
 }
 
-.web-step span{
-    width:46px;
-    height:46px;
-    border-radius:50%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    margin:auto;
-    background:#eaeaea;
-    font-weight:700;
+.web-step span {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  background: #eaeaea;
+  font-weight: 700;
 }
 
-.web-step.active{
-    opacity:1;
+.web-step.active {
+  opacity: 1;
 }
 
-.web-step.active span{
-    background:#c8a97e;
-    color:#fff;
+.web-step.active span {
+  background: #c8a97e;
+  color: #fff;
 }
 
-.web-step.completed span{
-    background:#198754;
-    color:#fff;
+.web-step.completed span {
+  background: #198754;
+  color: #fff;
 }
 
-.booking-step{
-    display:none;
+.booking-step {
+  display: none;
 }
 
-.booking-step.active{
-    display:block;
+.booking-step.active {
+  display: block;
+}
+
+
+.booking-success-page {
+  position: relative;
+  z-index: 1;
+  padding-top: calc(var(--web-navbar-height) + 40px);
+  min-height: 100vh;
+}
+
+/* ===========================
+   BOOKING SUCCESS PAGE
+=========================== */
+
+.booking-success-page {
+  min-height: 100vh;
+  background: var(--web-page-bg);
+  padding: calc(var(--web-navbar-height) + 40px) 16px 60px;
+}
+
+/* Loading */
+.web-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--web-text-muted);
+  text-align: center;
+}
+
+/* ===========================
+   MAIN LAYOUT WRAPPER
+=========================== */
+
+.web-confirmation-page {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ===========================
+   SUCCESS BANNER
+=========================== */
+
+.web-success-banner {
+  text-align: center;
+  padding: 32px 20px;
+  border-radius: var(--web-radius-xl);
+  background: linear-gradient(
+    135deg,
+    var(--web-primary),
+    var(--web-primary-dark)
+  );
+  color: var(--web-text-white);
+  box-shadow: var(--web-shadow-md);
+}
+
+.web-success-banner i {
+  font-size: 42px;
+  color: var(--web-secondary);
+  margin-bottom: 10px;
+}
+
+.web-success-banner h2 {
+  margin: 0;
+  font-size: var(--web-text-3xl);
+}
+
+.web-success-banner p {
+  margin-top: 6px;
+  opacity: 0.85;
+}
+
+/* ===========================
+   GUEST CARD
+=========================== */
+
+.web-guest-card {
+  background: var(--web-surface-bg);
+  border-radius: var(--web-radius-xl);
+  padding: 24px;
+  box-shadow: var(--web-shadow-md);
+  border: 1px solid var(--web-border-light);
+}
+
+.web-guest-card h3 {
+  margin-bottom: 16px;
+}
+
+/* GRID FIX */
+.web-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.web-info-grid div {
+  padding: 12px;
+  border-radius: var(--web-radius-md);
+  background: var(--web-surface-muted-bg);
+  border: 1px solid var(--web-border-light);
+}
+
+.web-info-grid span {
+  font-size: var(--web-text-xs);
+  color: var(--web-text-muted);
+}
+
+.web-info-grid strong {
+  display: block;
+  font-size: var(--web-text-base);
+  color: var(--web-primary-dark);
+  margin-top: 4px;
+}
+
+/* ===========================
+   RECEIPT CARD
+=========================== */
+
+.web-receipt {
+  background: var(--web-surface-bg);
+  border-radius: var(--web-radius-xl);
+  box-shadow: var(--web-shadow-lg);
+  border: 1px solid var(--web-border-light);
+  overflow: hidden;
+}
+
+/* HOTEL HEADER */
+.web-receipt-header {
+  background: linear-gradient(
+    135deg,
+    var(--web-primary),
+    var(--web-primary-dark)
+  );
+  color: var(--web-text-white);
+  padding: 22px;
+}
+
+.web-hotel-branding {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.web-hotel-branding img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--web-radius-md);
+  background: white;
+}
+
+.web-hotel-branding h2 {
+  margin: 0;
+  font-size: var(--web-text-xl);
+}
+
+.web-hotel-branding p,
+.web-hotel-branding small {
+  margin: 2px 0;
+  opacity: 0.9;
+  font-size: var(--web-text-sm);
+}
+
+/* ===========================
+   RECEIPT BODY
+=========================== */
+
+.web-receipt-body {
+  padding: 22px;
+}
+
+.web-receipt-body h3 {
+  margin-bottom: 18px;
+  color: var(--web-primary-dark);
+}
+
+/* ROW STYLE */
+.web-receipt-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--web-border-light);
+  font-size: var(--web-text-sm);
+}
+
+.web-receipt-row strong {
+  color: var(--web-text-muted);
+}
+
+.web-receipt-row span {
+  color: var(--web-primary-dark);
+  font-weight: 600;
+}
+
+/* ===========================
+   ACTIONS
+=========================== */
+
+.web-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.web-nav-btn {
+  padding: 12px 20px;
+  border-radius: var(--web-radius-pill);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--web-transition-normal);
+  background: var(--web-secondary);
+  color: var(--web-primary-dark);
+}
+
+.web-nav-btn:hover {
+  transform: translateY(-2px);
+  background: var(--web-secondary-hover);
+  color: var(--web-text-white);
+}
+
+/* ===========================
+   PRINT STYLES (IMPORTANT)
+=========================== */
+
+@media print {
+
+  body {
+    background: white !important;
+  }
+
+  .web-success-banner,
+  .web-guest-card,
+  .web-actions {
+    display: none !important;
+  }
+
+  /* ONLY RECEIPT PRINTS */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #receiptArea,
+  #receiptArea * {
+    visibility: visible !important;
+  }
+
+  #receiptArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20px;
+  }
+
+  .web-receipt {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .web-receipt-header {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .web-receipt-row {
+    page-break-inside: avoid;
+  }
+}
+
+.web-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* OUTLINE BUTTON */
+.web-btn-outline {
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 2px solid var(--web-primary);
+  background: transparent;
+  color: var(--web-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.web-btn-outline:hover {
+  background: var(--web-primary);
+  color: white;
+}
+
+/* SOLID BUTTON */
+.web-btn-solid {
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--web-secondary);
+  color: var(--web-primary-dark);
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.web-btn-solid:hover {
+  background: var(--web-secondary-hover);
+  color: white;
+}
+
+/* MOBILE STACK ONLY ON SMALL SCREENS */
+@media (max-width: 480px) {
+  .web-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .web-actions button {
+    width: 100%;
+  }
 }

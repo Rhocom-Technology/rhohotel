@@ -158,23 +158,6 @@
               </div>
 
               <div class="col-md-6">
-                <label for="roomType">Room Type</label>
-                <select id="roomType" name="room_type" class="form-select">
-                  <option value="all">Any available room</option>
-
-                  {% if rooms %}
-                  {% for room in rooms %}
-                  <option value="{{ room.name }}">
-                    {{ room.display_name or room.room_type or room.room_name or room.name }}
-                  </option>
-                  {% endfor %}
-                  {% else %}
-                  <option value="">No room types currently available</option>
-                  {% endif %}
-                </select>
-              </div>
-
-              <div class="col-md-6">
                 <label>Length of Stay</label>
                 <div id="roomStayOutput" class="web-stay-pill">
                   <i class="fa-solid fa-moon me-2"></i>Select valid dates
