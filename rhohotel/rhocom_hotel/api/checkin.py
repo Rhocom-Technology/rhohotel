@@ -3,6 +3,13 @@ from frappe.utils import now_datetime, add_days, flt, cint, get_datetime, getdat
 import json
 
 
+def _valid_marketplace_source(source):
+    source = (source or "").strip()
+    if source and frappe.db.exists("Market Place", source):
+        return source
+    return ""
+
+
 @frappe.whitelist()
 def get_checkin_list(limit=500):
     """Return check-in list using the synced folio balance on the check-in."""
@@ -207,8 +214,9 @@ def get_checkin_detail(name):
 
     # If this check-in came from a canonical reservation, include reservation-level
     # invoice/payment ledger so front desk does not lose billing context.
-    # Corporate reservations are billed on the corporate account and should not
-    # show reservation-level invoices on individual occupant folios.
+    # Corporate and Group reservations keep master/group billing on the
+    # reservation. Individual occupant check-in folios should show only that
+    # room/check-in's own charges, payments, and transferred bills.
     include_reservation_ledger = True
     added_reservation_ledger = False
     if doc.canonical_reservation and frappe.db.exists("Hotel Reservation", doc.canonical_reservation):
@@ -217,7 +225,7 @@ def get_checkin_detail(name):
             doc.canonical_reservation,
             "reservation_type",
         )
-        if reservation_type == "Corporate":
+        if reservation_type in ("Corporate", "Group"):
             include_reservation_ledger = False
 
     if include_reservation_ledger and doc.canonical_reservation and frappe.db.exists("Hotel Reservation", doc.canonical_reservation):
@@ -631,7 +639,7 @@ def create_checkin(
     if frappe.get_meta("Hotel Room Check In").has_field("reservation"):
         doc.reservation = reservation or canonical_reservation or ""
     doc.canonical_reservation = canonical_reservation or ""
-    doc.reservation_source = reservation_source or ("Reservation" if canonical_reservation else "")
+    doc.reservation_source = _valid_marketplace_source(reservation_source)
     doc.discount_type = discount_type or "None"
     doc.discount = flt(discount)
     doc.late_checkout = cint(late_checkout)

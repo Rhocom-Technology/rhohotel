@@ -116,6 +116,7 @@ const pageMeta = {
   'NightAuditSummaryReport': { title: 'Night Audit Summary Report', subtitle: 'Operations, finance, and control overview for end-of-day review' },
   'CorporateAccountStatement':              { title: 'Corporate Account Statement', subtitle: 'Hotel performance and occupancy overview' },
   'CorporateBillingStatementReport':              { title: 'Corporate Billing Statement', subtitle: 'Corporate account ledger with running balance, payments, outstanding exposure, and date filter controls' },
+  'ComplimentaryHouseUseReport':              { title: 'Complimentary & House Use Report', subtitle: 'Internal stays, authorisation, room nights, and theoretical revenue' },
   'PosSalesReport':              { title: 'POS Sales Report', subtitle: 'Point of Sales performance and sales overview' },
   'HousekeepingProductivityReport':              { title: 'Housekeeping Productivity Report', subtitle: 'Housekeeping performance and productivity overview' },
 }

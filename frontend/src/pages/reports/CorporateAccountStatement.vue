@@ -60,6 +60,7 @@
           >
             <option value="">All Transactions</option>
             <option value="Sales Invoice">Sales Invoice</option>
+            <option value="Credit Note">Credit Note</option>
             <option value="Payment Entry">Payment Entry</option>
           </select>
         </div>
@@ -635,6 +636,7 @@ function formatNumber(value) {
 function transactionClass(type) {
   return {
     'Sales Invoice': 'bg-blue-100 text-blue-700',
+    'Credit Note': 'bg-amber-100 text-amber-700',
     'Payment Entry': 'bg-green-100 text-green-700',
   }[type] || 'bg-gray-100 text-gray-600'
 }

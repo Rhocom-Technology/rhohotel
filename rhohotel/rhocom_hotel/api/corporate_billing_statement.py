@@ -179,6 +179,7 @@ def get_corporate_billing_statement(
 	grand_total_field = _get_field("Sales Invoice", ["grand_total", "rounded_total"])
 	outstanding_field = _get_field("Sales Invoice", ["outstanding_amount"])
 	paid_field = _get_field("Sales Invoice", ["paid_amount"])
+	is_return_field = _get_field("Sales Invoice", ["is_return"])
 	remarks_field = _get_field("Sales Invoice", ["remarks", "custom_reference", "po_no"])
 
 	guest_field = _get_field(
@@ -252,6 +253,7 @@ def get_corporate_billing_statement(
 		grand_total_field,
 		paid_field,
 		outstanding_field,
+		is_return_field,
 		remarks_field,
 	]:
 		if field and field not in select_fields:
@@ -275,15 +277,20 @@ def get_corporate_billing_statement(
 		invoice_date = inv.get(posting_date_field) if posting_date_field else ""
 		due_date = inv.get(due_date_field) if due_date_field else ""
 
-		billed_amount = flt(inv.get(grand_total_field)) if grand_total_field else 0
+		raw_billed_amount = flt(inv.get(grand_total_field)) if grand_total_field else 0
+		is_return = bool(inv.get(is_return_field)) if is_return_field else raw_billed_amount < 0
+		billed_amount = -abs(raw_billed_amount) if is_return else raw_billed_amount
 
-		if paid_field:
+		if is_return:
+			paid_amount = 0
+		elif paid_field:
 			paid_amount = flt(inv.get(paid_field))
 		else:
 			paid_amount = _get_payment_amount(invoice_name)
 
 		if outstanding_field:
-			outstanding_amount = flt(inv.get(outstanding_field))
+			raw_outstanding = flt(inv.get(outstanding_field))
+			outstanding_amount = -abs(raw_outstanding) if is_return else raw_outstanding
 		else:
 			outstanding_amount = billed_amount - paid_amount
 
@@ -332,6 +339,7 @@ def get_corporate_billing_statement(
 				"billed_amount": billed_amount,
 				"paid_amount": paid_amount,
 				"outstanding_amount": outstanding_amount,
+				"is_return": 1 if is_return else 0,
 				"aging_bucket": bucket,
 				"status": computed_status,
 			}

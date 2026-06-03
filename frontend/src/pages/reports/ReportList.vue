@@ -228,6 +228,14 @@ const reports = ref([
     route: '/reports/corporate-billing-statement',
   },
   {
+    name: 'Complimentary & House Use Report',
+    subtitle: 'Internal stays, complimentary stays, authorisation, room nights, and theoretical room revenue',
+    category: 'Front Desk',
+    description: 'Tracks House Use and Complimentary reservations where revenue is reported theoretically instead of invoiced.',
+    exportNote: 'Export: CSV',
+    route: '/reports/complimentary-house-use-report',
+  },
+  {
   name: 'Corporate Account Statement',
   subtitle: 'Customer account ledger showing invoices, payments, debits, credits and running balances',
   category: 'Billing',

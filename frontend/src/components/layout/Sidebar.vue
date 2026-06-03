@@ -130,6 +130,7 @@ const navGroups = [
       { label: 'Night Audit Summary Report',    to: '/reports/night-audit-summary-report' },
       { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement' },
       { label: 'Corporate Billing Statement', to: '/reports/corporate-billing-statement' },
+      { label: 'Complimentary & House Use', to: '/reports/complimentary-house-use-report' },
       { label: 'POS Sales Report', to: '/reports/pos-sales-report' },
       { label: 'Housekeeping Productivity Report', to: '/reports/house-keeping-productivity-report' },
     ],

@@ -441,6 +441,21 @@ const roomPickerRef = ref(null)
 const selectedRateCode = ref('')
 const eligibleRateCodes = ref([])
 const roomBlocks = ref([])
+const preselectedRoomName = ref(String(route.query.room || '').trim())
+const preselectedRoomAdded = ref(false)
+
+if (String(route.query.room_type || '').trim()) {
+  selectedRoomType.value = String(route.query.room_type).trim()
+}
+
+if (preselectedRoomName.value) {
+  roomSearch.value = preselectedRoomName.value
+  const today = new Date()
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  form.value.from_date = String(route.query.from_date || formatISODate(today))
+  form.value.to_date = String(route.query.to_date || formatISODate(tomorrow))
+}
 
 // Customer search for group master payer
 const customerSearch = ref('')
@@ -717,9 +732,29 @@ async function loadAvailableRooms() {
       rate_code: selectedRateCode.value || undefined,
     })
     availableRooms.value = Array.isArray(rows) ? rows : []
+    await applyPreselectedRoom()
   } catch {
     availableRooms.value = []
   }
+}
+
+async function applyPreselectedRoom() {
+  if (!preselectedRoomName.value || preselectedRoomAdded.value) return
+  if (!form.value.from_date || !form.value.to_date || nightsCount.value < 1) return
+
+  const room = availableRooms.value.find((r) =>
+    r.name === preselectedRoomName.value || r.room_number === preselectedRoomName.value
+  )
+  if (!room) {
+    roomSearch.value = preselectedRoomName.value
+    return
+  }
+
+  if (!selectedRooms.value.some((r) => r.name === room.name)) {
+    selectedRoom.value = [room.name]
+    await addRoom()
+  }
+  preselectedRoomAdded.value = true
 }
 
 async function addRoom() {
@@ -932,5 +967,12 @@ async function saveReservation(submitAfterSave) {
 
 function formatCurrency(amount) {
   return `₦${Number(amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+}
+
+function formatISODate(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 </script>

@@ -55,6 +55,7 @@
             <option value="">All Statuses</option>
             <option value="Hold">Hold</option>
             <option value="Confirmed">Confirmed</option>
+            <option value="Due Today">Due Today</option>
             <option value="Checked In">Checked In</option>
             <option value="Checked Out">Checked Out</option>
             <option value="Cancelled">Cancelled</option>
@@ -269,7 +270,10 @@ import { dateKey, parseServerDate } from '@/lib/utils'
 const router = useRouter()
 const route = useRoute()
 const search = ref('')
-const filterStatus = ref(String(route.query.status || ''))
+const initialStatus = route.query.arrival === 'today' && route.query.status === 'Confirmed'
+  ? 'Due Today'
+  : String(route.query.status || '')
+const filterStatus = ref(initialStatus)
 const filterArrival = ref(route.query.arrival === 'today' ? dateKey(new Date()) : String(route.query.arrival || ''))
 const filterSource = ref('')
 const page = ref(1)
@@ -333,7 +337,7 @@ const filteredList = computed(() => {
       String(r.source_channel || '').toLowerCase().includes(q)
     )
   }
-  if (filterStatus.value) list = list.filter(r => r.statusLabel === filterStatus.value)
+  if (filterStatus.value) list = list.filter(r => statusMatches(r, filterStatus.value))
   if (filterSource.value) list = list.filter(r => r.reservation_type === filterSource.value)
   if (filterArrival.value) list = list.filter(r => dateKey(r.from_date) === filterArrival.value)
   return list
@@ -393,6 +397,13 @@ function mapReservationStatus(item) {
   if (!status && Number(item.docstatus) === 0) return 'Draft'
   if (status === 'Confirmed' && isToday(item.from_date)) return 'Due Today'
   return status || 'Confirmed'
+}
+
+function statusMatches(item, status) {
+  if (!status) return true
+  if (item.statusLabel === status) return true
+  if (status === 'Confirmed' && item.reservation_status === 'Confirmed') return true
+  return false
 }
 
 function isToday(dateValue) {
