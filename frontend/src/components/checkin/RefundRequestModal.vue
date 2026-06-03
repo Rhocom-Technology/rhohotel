@@ -97,6 +97,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const reason = ref('')
@@ -130,46 +131,11 @@ onMounted(async () => {
       return
     }
 
-    const [pData, sData, rData] = await Promise.all([
-      // Total Receive payments
-      apiPost('frappe.client.get_list', {
-        doctype: 'Payment Entry',
-        filters: JSON.stringify([
-          ['custom_hotel_room_check_in', '=', props.checkIn.name],
-          ['docstatus', '=', 1],
-          ['payment_type', '=', 'Receive'],
-        ]),
-        fields: JSON.stringify(['paid_amount']),
-        limit: 100,
-      }),
-      // Net invoiced charges: non-return SIs minus submitted return invoices.
-      apiPost('frappe.client.get_list', {
-        doctype: 'Sales Invoice',
-        filters: JSON.stringify([
-          ['custom_hotel_room_check_in', '=', props.checkIn.name],
-          ['docstatus', '=', 1],
-        ]),
-        fields: JSON.stringify(['grand_total', 'is_return']),
-        limit: 100,
-      }),
-      // Previously submitted Hotel Refunds for this check-in
-      apiPost('frappe.client.get_list', {
-        doctype: 'Hotel Refund',
-        filters: JSON.stringify([
-          ['check_in', '=', props.checkIn.name],
-          ['docstatus', '=', 1],
-        ]),
-        fields: JSON.stringify(['refund_amount']),
-        limit: 100,
-      }),
-    ])
-    totalPaid.value = (pData.message || []).reduce((s, p) => s + (p.paid_amount || 0), 0)
-    totalCharged.value = (sData.message || []).reduce((s, i) => (
-      i.is_return ? s - Math.abs(i.grand_total || 0) : s + (i.grand_total || 0)
-    ), 0)
-    totalAlreadyRefunded.value = (rData.message || []).reduce((s, r) => s + (r.refund_amount || 0), 0)
-    // Default to net overpayment; leave at 0 if none
-    refundAmount.value = overpayment.value
+    const detail = await apiPost('rhohotel.rhocom_hotel.api.checkin.get_checkin_detail', {
+      name: props.checkIn.name,
+    })
+    const summary = detail.message?.billing_summary || {}
+    applyBillingSummary(summary)
   } catch {
     error.value = 'Failed to load billing data.'
   } finally {
@@ -187,7 +153,11 @@ async function submit() {
       amount: refundAmount.value,
     })
     if (data.exc) {
-      try { error.value = JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { error.value = 'Refund failed.' }
+      try {
+        error.value = humanizeErrorMessage(JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message)
+      } catch {
+        error.value = humanizeErrorMessage(data.exception || data._error_message || 'Refund failed.')
+      }
       return
     }
     emit('done', data.message); emit('close')

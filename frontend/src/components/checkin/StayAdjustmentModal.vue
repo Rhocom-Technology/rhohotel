@@ -149,7 +149,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { callMethodForm } from '@/lib/api'
+import { callMethodForm, humanizeErrorMessage } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const newCheckout = ref('')
@@ -239,7 +239,11 @@ async function submit() {
     })
     const data = await res.json()
     if (data.exc) {
-      try { error.value = JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { error.value = 'Adjustment failed.' }
+      try {
+        error.value = humanizeErrorMessage(JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message)
+      } catch {
+        error.value = humanizeErrorMessage(data.exception || data._error_message || 'Adjustment failed.')
+      }
       return
     }
     emit('done', data.message); emit('close')

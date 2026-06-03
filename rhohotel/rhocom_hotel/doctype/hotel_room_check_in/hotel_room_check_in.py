@@ -1193,6 +1193,29 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 	invoice.is_return = 0 if is_upgrade else 1
 	invoice.update_stock = 0
 	invoice.custom_hotel_room_check_in = check_in_doc.name
+	source_invoice = None
+	if not is_upgrade:
+		source_invoice = frappe.db.get_value(
+			"Sales Invoice",
+			{
+				"custom_hotel_room_check_in": check_in_doc.name,
+				"docstatus": 1,
+				"is_return": 0,
+				"outstanding_amount": [">", 0],
+			},
+			"name",
+			order_by="posting_date asc, creation asc",
+		)
+		if source_invoice:
+			invoice.return_against = source_invoice
+			src_fields = frappe.db.get_value(
+				"Sales Invoice", source_invoice, ["debit_to", "company"], as_dict=1
+			)
+			if src_fields:
+				if src_fields.debit_to:
+					invoice.debit_to = src_fields.debit_to
+				if src_fields.company:
+					invoice.company = src_fields.company
 	if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
 		invoice.custom_invoice_source = "Room Transfer"
 	invoice.remarks = _(
@@ -1222,6 +1245,19 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 	invoice.set_taxes()
 	invoice.save(ignore_permissions=True)
 	invoice.submit()
+
+	if source_invoice:
+		reduction_amount = abs(flt(invoice.grand_total))
+		current_outstanding = flt(
+			frappe.db.get_value("Sales Invoice", source_invoice, "outstanding_amount") or 0
+		)
+		frappe.db.set_value(
+			"Sales Invoice",
+			source_invoice,
+			"outstanding_amount",
+			max(0.0, current_outstanding - reduction_amount),
+			update_modified=False,
+		)
 
 	action = _("Charged") if is_upgrade else _("Credited")
 	check_in_doc.add_comment(
@@ -1274,6 +1310,9 @@ def apply_late_checkout_charge(check_in, item, charge_type, amount):
 	# ----------------------------
 	# Customer validation using check-in guest
 	# ----------------------------
+	if not item or not frappe.db.exists("Item", item):
+		frappe.throw(_("Late check-out charge item is not configured or no longer exists."))
+
 	customer = frappe.get_value("Hotel Guest", check_in_doc.guest, "customer")
 	if not customer:
 		frappe.throw("No customer linked to this check-in.")
@@ -1292,10 +1331,30 @@ def apply_late_checkout_charge(check_in, item, charge_type, amount):
 
 		rate = (room_rate * percentage) / 100
 
+	if flt(rate) <= 0:
+		frappe.throw(_("Late check-out charge amount must be greater than zero."))
+
+	existing = frappe.db.sql(
+		"""
+		SELECT sii.name
+		FROM `tabSales Invoice Item` sii
+		INNER JOIN `tabSales Invoice` si ON si.name = sii.parent
+		WHERE sii.item_code = %s
+		  AND si.custom_hotel_room_check_in = %s
+		  AND si.docstatus < 2
+		LIMIT 1
+		""",
+		(item, check_in),
+	)
+	if existing:
+		frappe.throw(_("Late check-out charge has already been applied."))
+
 	# ----------------------------
 	# Create Sales Invoice
 	# ----------------------------
-	company = frappe.defaults.get_user_default("Company")
+	company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+	if not company:
+		frappe.throw(_("No default Company configured. Cannot create late check-out charge."))
 
 	si = frappe.new_doc("Sales Invoice")
 	si.customer = customer
@@ -1303,6 +1362,10 @@ def apply_late_checkout_charge(check_in, item, charge_type, amount):
 	si.company = company
 	si.due_date = nowdate()
 	si.custom_hotel_room_check_in = check_in
+	si.flags.ignore_permissions = True
+	si.flags.ignore_mandatory = True
+	if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+		si.custom_invoice_source = "Late Check-out"
 
 	# ----------------------------
 	# Add item

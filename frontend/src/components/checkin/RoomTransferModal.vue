@@ -114,6 +114,7 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const availableRooms = ref([])
@@ -146,10 +147,10 @@ async function apiPost(m, p) {
 function parseErr(data) {
   try {
     const messages = JSON.parse(data._server_messages || '[]')
-    if (messages.length) return JSON.parse(messages[0]).message
+    if (messages.length) return humanizeErrorMessage(JSON.parse(messages[0]).message)
   } catch {}
-  if (data?._error_message) return data._error_message
-  if (data?.exception) return String(data.exception).split('\n').pop() || 'Request failed.'
+  if (data?._error_message) return humanizeErrorMessage(data._error_message)
+  if (data?.exception) return humanizeErrorMessage(data.exception)
   return 'Request failed.'
 }
 async function loadRooms() {
@@ -160,6 +161,7 @@ async function loadRooms() {
       current_room: props.checkIn.room_number || '',
       check_in_dt: props.checkIn.check_in_datetime || '',
       check_out_dt: props.checkIn.expected_check_out_datetime || '',
+      exclude_reservation: props.checkIn.canonical_reservation || props.checkIn.reservation || '',
     })
     if (data.exc) { error.value = parseErr(data); return }
     availableRooms.value = data.message || []

@@ -236,6 +236,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
@@ -287,9 +288,9 @@ async function apiPost(method, params) {
 function parseErr(data) {
   try {
     const msgs = JSON.parse(data._server_messages || '[]')
-    if (msgs.length) return JSON.parse(msgs[0]).message
+    if (msgs.length) return humanizeErrorMessage(JSON.parse(msgs[0]).message)
   } catch {}
-  return data.exception || 'Request failed. Please try again.'
+  return humanizeErrorMessage(data.exception || data._error_message || 'Request failed. Please try again.')
 }
 
 function clearTarget() {

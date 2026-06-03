@@ -10,6 +10,87 @@ def _valid_marketplace_source(source):
     return ""
 
 
+def _invoice_names(rows, key):
+    return [row.get(key) for row in rows or [] if row.get(key)]
+
+
+def _set_invoice_type(rows, key, invoice_name, invoice_type):
+    for row in rows or []:
+        if row.get(key) == invoice_name:
+            row["invoice_type"] = invoice_type
+
+
+def _normalize_sales_invoice_types(rows, key="invoice"):
+    """Apply user-facing folio labels without depending on optional custom fields."""
+    names = _invoice_names(rows, key)
+    if not names:
+        return rows
+
+    try:
+        pos_links = frappe.db.sql(
+            """
+            SELECT name AS pos_invoice, consolidated_invoice
+            FROM `tabPOS Invoice`
+            WHERE consolidated_invoice IN %s
+              AND docstatus = 1
+            """,
+            (tuple(names),),
+            as_dict=1,
+        ) or []
+        for row in pos_links:
+            if row.get("consolidated_invoice"):
+                _set_invoice_type(rows, key, row.get("consolidated_invoice"), "Restaurant")
+    except Exception:
+        pass
+
+    try:
+        meta_rows = frappe.db.sql(
+            """
+            SELECT
+                si.name,
+                COALESCE(si.remarks, '') AS remarks,
+                GROUP_CONCAT(DISTINCT COALESCE(i.item_group, '') SEPARATOR ',') AS item_groups
+            FROM `tabSales Invoice` si
+            LEFT JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+            LEFT JOIN `tabItem` i ON i.name = sii.item_code
+            WHERE si.name IN %s
+            GROUP BY si.name
+            """,
+            (tuple(names),),
+            as_dict=1,
+        ) or []
+    except Exception:
+        return rows
+
+    meta_map = {row.name: row for row in meta_rows}
+    restaurant_groups = {"kitchen", "drinks", "food", "beverage", "bar", "restaurant"}
+    for row in rows or []:
+        current = row.get("invoice_type")
+        if current and current not in ("Sales Invoice", "POS Invoice"):
+            continue
+
+        meta = meta_map.get(row.get(key)) or {}
+        remarks = str(meta.get("remarks") or "").lower()
+        item_groups = {
+            group.strip().lower()
+            for group in str(meta.get("item_groups") or "").split(",")
+            if group.strip()
+        }
+
+        if "room transfer" in remarks:
+            row["invoice_type"] = "Room Transfer"
+        elif "stay extension" in remarks or "stay reduction" in remarks:
+            row["invoice_type"] = "Stay Adjustment"
+        elif "late check-out" in remarks or "late checkout" in remarks:
+            row["invoice_type"] = "Late Check-out"
+        elif "discount applied" in remarks:
+            row["invoice_type"] = "Discount"
+        elif item_groups & restaurant_groups:
+            row["invoice_type"] = "Restaurant"
+
+    return rows
+
+
 @frappe.whitelist()
 def get_checkin_list(limit=500):
     """Return check-in list using the synced folio balance on the check-in."""
@@ -141,6 +222,8 @@ def get_checkin_detail(name):
                         inv["invoice_type"] = "Restaurant"
         except Exception:
             pass
+
+    _normalize_sales_invoice_types(invoices, key="invoice")
 
     # Exclude consolidated room-posting POS Invoices — already represented
     # by their corresponding Sales Invoice on the folio.
@@ -418,7 +501,7 @@ def get_room_types():
 
 
 @frappe.whitelist()
-def get_rooms_for_transfer(current_room="", check_in_dt=None, check_out_dt=None):
+def get_rooms_for_transfer(current_room="", check_in_dt=None, check_out_dt=None, exclude_reservation=None):
     """Return rooms eligible for a room-transfer operation.
 
     Returns vacant rooms that do NOT have an active, overlapping check-in,
@@ -459,7 +542,25 @@ def get_rooms_for_transfer(current_room="", check_in_dt=None, check_out_dt=None)
             as_dict=True,
         )
         busy_set = {r.room_number for r in busy}
-        rooms = [r for r in rooms if r.name not in busy_set]
+
+        reserved = frappe.db.sql(
+            f"""
+            SELECT DISTINCT rr.room_number
+            FROM `tabHotel Reservation Room` rr
+            INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
+            WHERE rr.room_number IN ({placeholders})
+              AND hr.docstatus != 2
+              AND hr.reservation_status NOT IN
+                  ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+              AND hr.from_date < %s
+              AND hr.to_date > %s
+              AND hr.name != %s
+            """,
+            tuple(room_names) + (co_str, ci_str, exclude_reservation or ""),
+            as_dict=True,
+        )
+        unavailable = busy_set | {r.room_number for r in reserved}
+        rooms = [r for r in rooms if r.name not in unavailable]
 
     # Attach room-rate pricing using the same source as new check-in and transfer billing.
     from rhohotel.api import get_room_rate
@@ -798,14 +899,26 @@ def get_checkout_detail(check_in_name):
     try:
         pos_rows = frappe.db.sql("""
             SELECT name AS invoice_id, grand_total AS amount, outstanding_amount, 0 AS is_return,
-                   posting_date, status, 'POS Invoice' AS invoice_type
+                   posting_date, status, 'POS Invoice' AS invoice_type,
+                   consolidated_invoice
             FROM `tabPOS Invoice`
             WHERE custom_hotel_room_check_in = %s AND docstatus = 1
             ORDER BY posting_date DESC
         """, check_in_name, as_dict=1) or []
-        invoices.extend(pos_rows)
     except Exception:
-        pass
+        pos_rows = []
+
+    si_names = {row.get("invoice_id") for row in invoices}
+    room_posting_pos_names = set()
+    for row in pos_rows:
+        if row.get("consolidated_invoice") in si_names:
+            room_posting_pos_names.add(row.get("invoice_id"))
+            for inv in invoices:
+                if inv.get("invoice_id") == row.get("consolidated_invoice"):
+                    inv["invoice_type"] = "Restaurant"
+
+    invoices.extend([row for row in pos_rows if row.get("invoice_id") not in room_posting_pos_names])
+    _normalize_sales_invoice_types(invoices, key="invoice_id")
 
     # Fetch payment entries linked to this check-in
     payments = []
@@ -865,6 +978,7 @@ def get_checkout_detail(check_in_name):
         "collectible_outstanding": flt(summary.get("collectible_outstanding", max(0, total_outstanding))),
         "billing_summary": summary,
         "late_checkout": doc.late_checkout,
+        "late_checkout_charge": _get_late_checkout_charge_preview(check_in_name),
         "reservation_source": doc.reservation_source or "Walk-in",
         "invoices": invoices,
         "acquired_bills": folio.get("acquired_bills") or [],
@@ -982,6 +1096,8 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None):
     if checkin.status != "Checked In":
         frappe.throw(f"Check-in is in status '{checkin.status}' — cannot check out")
 
+    _apply_due_late_checkout_charge(check_in_name)
+
     from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
 
     folio = sync_checkin_folio_totals(check_in_name)
@@ -1011,3 +1127,43 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None):
     co.submit()
 
     return {"name": co.name, "check_in": check_in_name, "status": "Checked Out"}
+
+
+def _get_late_checkout_charge_preview(check_in_name):
+    try:
+        from rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings import check_late_checkout
+
+        result = check_late_checkout(check_in_name) or {}
+        if not result.get("late"):
+            return None
+        policy = result.get("policy") or {}
+        raw_amount = flt(policy.get("amount"))
+        amount = raw_amount
+        if policy.get("charge_type") == "Percentage":
+            rate = flt(frappe.db.get_value("Hotel Room Check In", check_in_name, "rate_amount") or 0)
+            amount = (rate * amount) / 100
+        return {
+            "hours_late": flt(result.get("hours_late")),
+            "item": policy.get("item"),
+            "charge_type": policy.get("charge_type"),
+            "raw_amount": raw_amount,
+            "amount": flt(amount),
+        }
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Late checkout preview failed")
+        return None
+
+
+def _apply_due_late_checkout_charge(check_in_name):
+    preview = _get_late_checkout_charge_preview(check_in_name)
+    if not preview or not preview.get("item"):
+        return None
+
+    from rhohotel.rhocom_hotel.doctype.hotel_room_check_in.hotel_room_check_in import apply_late_checkout_charge
+
+    return apply_late_checkout_charge(
+        check_in_name,
+        preview.get("item"),
+        preview.get("charge_type"),
+        preview.get("raw_amount"),
+    )

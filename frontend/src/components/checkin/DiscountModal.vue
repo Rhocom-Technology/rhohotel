@@ -152,6 +152,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
@@ -219,8 +220,10 @@ async function submit() {
     if (data.exc) {
       try {
         const msgs = JSON.parse(data._server_messages || '[]')
-        error.value = JSON.parse(msgs[0]).message || 'Failed to apply discount.'
-      } catch { error.value = 'Failed to apply discount.' }
+        error.value = humanizeErrorMessage(JSON.parse(msgs[0]).message || 'Failed to apply discount.')
+      } catch {
+        error.value = humanizeErrorMessage(data.exception || data._error_message || 'Failed to apply discount.')
+      }
       return
     }
     emit('done', data.message)

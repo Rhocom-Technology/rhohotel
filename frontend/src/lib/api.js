@@ -47,7 +47,7 @@ function stripHtml(value) {
   return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function humanizeErrorMessage(rawMessage) {
+export function humanizeErrorMessage(rawMessage) {
   let message = stripHtml(rawMessage || '')
   if (!message) return 'Something went wrong. Please try again.'
 
@@ -56,6 +56,8 @@ function humanizeErrorMessage(rawMessage) {
     .replace(/Traceback \(most recent call last\):[\s\S]*/i, '')
     .replace(/\bFile ".*"[\s\S]*/i, '')
     .replace(/\{\"exc_type\"[\s\S]*/i, '')
+    .replace(/^(?:frappe|erpnext)(?:\.[\w]+)*\.[\w]+:\s*/i, '')
+    .replace(/^builtins\.[\w]+:\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim()
 

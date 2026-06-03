@@ -208,7 +208,19 @@
           <!-- Late Check-out Alert -->
           <div v-if="data.late_checkout" class="bg-amber-50 rounded-xl border border-amber-200 px-4 py-4">
             <p class="text-xs font-bold text-amber-600 mb-1">Late Check-out Approved</p>
-            <p class="text-xs text-amber-600 leading-relaxed">This guest has been approved for a late check-out. Confirm any applicable late check-out charges are included before finalizing.</p>
+            <p class="text-xs text-amber-600 leading-relaxed">
+              This guest has been approved for a late check-out.
+              <span v-if="data.late_checkout_charge">
+                Applicable charge: {{ formatCurrency(lateCheckoutAmount) }}.
+              </span>
+              <span v-else>There is no active late check-out charge for this folio.</span>
+            </p>
+          </div>
+          <div v-else-if="data.late_checkout_charge" class="bg-amber-50 rounded-xl border border-amber-200 px-4 py-4">
+            <p class="text-xs font-bold text-amber-600 mb-1">Late Check-out Charge Due</p>
+            <p class="text-xs text-amber-600 leading-relaxed">
+              A late check-out charge of {{ formatCurrency(lateCheckoutAmount) }} will be posted before final checkout.
+            </p>
           </div>
 
           <!-- Balance Alert -->
@@ -368,6 +380,8 @@ const computedOutstanding = computed(() => {
 const computedCollectibleOutstanding = computed(() =>
   summaryNumber('collectible_outstanding', Math.max(0, computedOutstanding.value))
 )
+
+const lateCheckoutAmount = computed(() => Number(data.value.late_checkout_charge?.amount || 0))
 
 const approvedAcquiredBills = computed(() =>
   (data.value.acquired_bills || []).filter(bill => bill.status === 'Approved')
