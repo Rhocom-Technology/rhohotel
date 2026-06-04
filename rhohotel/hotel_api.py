@@ -1041,7 +1041,13 @@ def verify_reservation_payment(reference=None):
             "success": False,
             "message": "Payment verified but reservation confirmation failed. Please contact the hotel.",
         }
+        
+    room_type_counts = {}
 
+    for room in (doc.rooms or []):
+        room_type = room.room_type or "Unknown"
+        room_type_counts[room_type] = room_type_counts.get(room_type, 0) + 1
+        
     return {
         "success": True,
         "reservation": reference,
@@ -1054,6 +1060,11 @@ def verify_reservation_payment(reference=None):
         "check_out_date": str(doc.to_date or ""),
         "number_of_nights": doc.number_of_nights,
 
+        "number_of_rooms": len(doc.rooms or []),
+
+        # e.g. {"Deluxe Room": 2, "Executive Suite": 1}
+        "room_type_summary": room_type_counts,
+
         "subtotal": flt(doc.subtotal or 0),
         "discount_amount": flt(doc.discount_amount or 0),
         "total_amount": flt(doc.total_amount or 0),
@@ -1064,7 +1075,6 @@ def verify_reservation_payment(reference=None):
 
         "message": "Payment verified. Your reservation is confirmed.",
     }
-
 
 # ---------------------------------------------------------------------------
 # Paystack – Webhook  (server-to-server, authoritative confirmation)
