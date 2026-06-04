@@ -57,27 +57,26 @@ function printReceipt() {
 }
 
 function showSuccess(container, data) {
-	container.innerHTML = `
+    container.innerHTML = `
     <div class="web-confirmation-page">
 
-        <!-- SUCCESS (still kept but minimal) -->
         <div class="web-success-banner">
             <i class="fa-solid fa-circle-check"></i>
             <h2>Booking Confirmed</h2>
             <p>Your reservation has been successfully processed</p>
         </div>
 
-        <!-- SINGLE RECEIPT ONLY -->
         <div id="receiptArea" class="web-receipt">
 
-            <!-- HOTEL HEADER -->
             <div class="web-receipt-header">
 
                 <div class="web-hotel-branding">
 
-                <img src="${window.HOTEL.logo || "/assets/rhohotel/logo.png"}"
-     alt="Hotel Logo"
-     onerror="this.src='/assets/rhohotel/logo.png'" />
+                    <img
+                        src="${window.HOTEL.logo || "/assets/rhohotel/logo.png"}"
+                        alt="Hotel Logo"
+                        onerror="this.src='/assets/rhohotel/logo.png'"
+                    />
 
                     <div>
                         <h2>${window.HOTEL.name}</h2>
@@ -87,65 +86,166 @@ function showSuccess(container, data) {
                     </div>
 
                 </div>
+
             </div>
 
-            <!-- RECEIPT BODY (ALL IN ONE) -->
             <div class="web-receipt-body">
 
-                <h3>Reservation Receipt</h3>
+                <h3 class="web-receipt-title">
+                    Reservation Receipt
+                </h3>
 
-                <div class="web-receipt-row">
-                    <strong>Guest Name</strong>
-                    <span>${data.guest_name || ""}</span>
+                <!-- Reservation Details -->
+                <div class="web-receipt-section">
+
+                    <h4 class="web-section-title">
+                        Reservation Details
+                    </h4>
+
+                    <div class="web-receipt-row">
+                        <strong>Reservation Number</strong>
+                        <span>${data.reservation || "-"}</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Booking Status</strong>
+                        <span>${data.reservation_status || "-"}</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Payment Status</strong>
+                        <span>${data.payment_status || "-"}</span>
+                    </div>
+
                 </div>
 
-                <div class="web-receipt-row">
-                    <strong>Email</strong>
-                    <span>${data.guest_email || ""}</span>
+                <!-- Guest Information -->
+                <div class="web-receipt-section">
+
+                    <h4 class="web-section-title">
+                        Guest Information
+                    </h4>
+
+                    <div class="web-receipt-row">
+                        <strong>Guest Name</strong>
+                        <span>${data.guest_name || "-"}</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Email Address</strong>
+                        <span>${data.guest_email || "-"}</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Phone Number</strong>
+                        <span>${data.guest_phone || "-"}</span>
+                    </div>
+
                 </div>
 
-                <div class="web-receipt-row">
-                    <strong>Phone</strong>
-                    <span>${data.guest_phone || ""}</span>
+                <!-- Stay Details -->
+                <div class="web-receipt-section">
+
+                    <h4 class="web-section-title">
+                        Stay Details
+                    </h4>
+
+                    <div class="web-receipt-row">
+                        <strong>Check-in Date</strong>
+                        <span>${data.check_in_date || "-"}</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Check-out Date</strong>
+                        <span>${data.check_out_date || "-"}</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Number of Nights</strong>
+                        <span>${data.number_of_nights || 0}</span>
+                    </div>
+
                 </div>
 
-                <div class="web-receipt-row">
-                    <strong>Reservation</strong>
-                    <span>${data.reservation}</span>
+                <!-- Room Reservation -->
+                <div class="web-receipt-section">
+
+                    <h4 class="web-section-title">
+                        Room Reservation
+                    </h4>
+
+                    <div class="web-receipt-row">
+                        <strong>Room Type</strong>
+                       <span>
+${data.room_type_summary
+    ? Object.entries(data.room_type_summary)
+        .map(([type, count]) => `
+            <div>${count} × ${type}</div>
+        `)
+        .join("")
+    : "-"}
+</span>
+                    </div>
+
+                    <div class="web-receipt-row">
+                        <strong>Rooms Reserved</strong>
+                        <span>${data.number_of_rooms || 1}</span>
+                    </div>
+
                 </div>
 
-                <div class="web-receipt-row">
-                    <strong>Check-in</strong>
-                    <span>${data.check_in || ""}</span>
+                <!-- Payment Summary -->
+                <div class="web-receipt-section">
+
+                    <h4 class="web-section-title">
+                        Payment Summary
+                    </h4>
+
+                    <div class="web-receipt-row">
+                        <strong>Subtotal</strong>
+                        <span>₦${Number(data.subtotal || 0).toLocaleString()}</span>
+                    </div>
+
+                    ${
+                        Number(data.discount_amount || 0) > 0
+                        ? `
+                        <div class="web-receipt-row">
+                            <strong>Discount</strong>
+                            <span>₦${Number(data.discount_amount).toLocaleString()}</span>
+                        </div>
+                        `
+                        : ""
+                    }
+
+                    <div class="web-receipt-row web-total-row">
+                        <strong>Total Paid</strong>
+                        <span>₦${Number(data.total_amount || 0).toLocaleString()}</span>
+                    </div>
+
                 </div>
 
-                <div class="web-receipt-row">
-                    <strong>Check-out</strong>
-                    <span>${data.check_out || ""}</span>
-                </div>
-
-                <div class="web-receipt-row">
-                    <strong>Status</strong>
-                    <span>${data.reservation_status}</span>
-                </div>
-
-                <div class="web-receipt-row">
-                    <strong>Payment</strong>
-                    <span>${data.payment_status}</span>
+                <div class="web-receipt-footer">
+                    <p>Thank you for choosing ${window.HOTEL.name}.</p>
+                    <small>Please present this receipt during check-in.</small>
                 </div>
 
             </div>
 
         </div>
 
-        <!-- ACTIONS -->
         <div class="web-actions">
 
-            <button class="web-btn-outline" onclick="window.print()">
+            <button
+                class="web-btn-outline"
+                onclick="window.print()"
+            >
                 Print Receipt
             </button>
 
-            <button class="web-btn-solid" onclick="window.location.href='/'">
+            <button
+                class="web-btn-solid"
+                onclick="window.location.href='/'"
+            >
                 Back Home
             </button>
 
@@ -154,6 +254,8 @@ function showSuccess(container, data) {
     </div>
     `;
 }
+
+
 
 function showError(container, message) {
 	container.innerHTML = `
