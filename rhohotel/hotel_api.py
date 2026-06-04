@@ -1043,11 +1043,28 @@ def verify_reservation_payment(reference=None):
         }
 
     return {
-        "success":            True,
-        "reservation":        reference,
-        "payment_status":     doc.payment_status,
+        "success": True,
+        "reservation": reference,
+
+        "guest_name": doc.primary_guest_name,
+        "guest_email": doc.primary_guest_email,
+        "guest_phone": doc.primary_guest_phone,
+
+        "check_in_date": str(doc.from_date or ""),
+        "check_out_date": str(doc.to_date or ""),
+        "number_of_nights": doc.number_of_nights,
+
+        "subtotal": flt(doc.subtotal or 0),
+        "discount_amount": flt(doc.discount_amount or 0),
+        "total_amount": flt(doc.total_amount or 0),
+        "net_total": flt(doc.net_total or doc.total_amount or 0),
+
+        "payment_status": doc.payment_status,
         "reservation_status": doc.reservation_status,
-        "message":            "Payment verified. Your reservation is confirmed.",
+        "sales_invoice": doc.sales_invoice,
+        "payment_entry": doc.payment_entry,
+
+        "message": "Payment verified. Your reservation is confirmed.",
     }
 
 
