@@ -319,34 +319,110 @@ class POSInvoice(SalesInvoice):
 	# 			title="⚠️ POS Check-in Auto-Link Failed",
 	# 		)
 
+	# def auto_link_hotel_check_in(self):
+	# 	frappe.log_error(
+	# 		message=f"auto_link_hotel_check_in called. Customer: {self.customer}, Check-in: {self.custom_hotel_room_check_in}, Is new: {self.is_new()}, Name: {self.name}",
+	# 		title="🔍 AUTO LINK DEBUG",
+	# 	)
+
+	# 	if self.custom_hotel_room_check_in:
+	# 		check_in_guest = frappe.db.get_value(
+	# 			"Hotel Room Check In", self.custom_hotel_room_check_in, "guest"
+	# 		)
+	# 		check_in_customer = frappe.db.get_value("Hotel Guest", check_in_guest, "hotel_guest_name")
+	# 		if check_in_customer == self.customer:
+	# 			return
+	# 		else:
+	# 			self.custom_hotel_room_check_in = None
+
+	# 	if not self.customer:
+	# 		return
+
+	# 	# Check if doc already exists in DB (i.e. not truly new)
+	# 	# In POS context, is_new() returns None so we check DB directly
+	# 	doc_exists_in_db = frappe.db.exists("POS Invoice", self.name)
+	# 	if doc_exists_in_db:
+	# 		return
+
+	# 	try:
+	# 		hotel_guest = frappe.db.get_value(
+	# 			"Hotel Guest", filters={"hotel_guest_name": self.customer}, fieldname="name"
+	# 		)
+
+	# 		if not hotel_guest:
+	# 			return
+
+	# 		check_ins = frappe.get_all(
+	# 			"Hotel Room Check In",
+	# 			filters={
+	# 				"guest": hotel_guest,
+	# 				"status": "Checked In",
+	# 				"docstatus": 1,
+	# 			},
+	# 			fields=["name", "room_number"],
+	# 			order_by="check_in_datetime desc",
+	# 		)
+
+	# 		if not check_ins:
+	# 			return
+
+	# 		if len(check_ins) == 1:
+	# 			self.custom_hotel_room_check_in = check_ins[0].name
+	# 			frappe.log_error(
+	# 				message=f"Auto-linked check-in {check_ins[0].name} for customer {self.customer}",
+	# 				title="✅ POS Check-in Auto-Link Success",
+	# 			)
+	# 		else:
+	# 			frappe.log_error(
+	# 				message=f"Multiple active check-ins found for customer {self.customer}. "
+	# 				f"Rooms: {[c.room_number for c in check_ins]}. "
+	# 				f"Frontend must set custom_hotel_room_check_in.",
+	# 				title="⚠️ Multiple Check-ins Found - Auto-link Skipped",
+	# 			)
+
+	# 	except Exception as e:
+	# 		frappe.log_error(
+	# 			message=f"Could not auto-link check-in for POS Invoice {self.name}: {str(e)}",
+	# 			title="⚠️ POS Check-in Auto-Link Failed",
+	# 		)
+
+ 
 	def auto_link_hotel_check_in(self):
+		if not frappe.db.has_column("POS Invoice", "custom_hotel_room_check_in"):
+			return
+
+		current_check_in = self.get("custom_hotel_room_check_in")
+
 		frappe.log_error(
-			message=f"auto_link_hotel_check_in called. Customer: {self.customer}, Check-in: {self.custom_hotel_room_check_in}, Is new: {self.is_new()}, Name: {self.name}",
-			title="🔍 AUTO LINK DEBUG",
+			message=f"auto_link_hotel_check_in called. Customer: {self.customer}, Check-in: {current_check_in}, Is new: {self.is_new()}, Name: {self.name}",
+			title="AUTO LINK DEBUG",
 		)
 
-		if self.custom_hotel_room_check_in:
+		if current_check_in:
 			check_in_guest = frappe.db.get_value(
-				"Hotel Room Check In", self.custom_hotel_room_check_in, "guest"
+				"Hotel Room Check In", current_check_in, "guest"
 			)
-			check_in_customer = frappe.db.get_value("Hotel Guest", check_in_guest, "hotel_guest_name")
+			check_in_customer = frappe.db.get_value(
+				"Hotel Guest", check_in_guest, "hotel_guest_name"
+			)
+
 			if check_in_customer == self.customer:
 				return
-			else:
-				self.custom_hotel_room_check_in = None
+
+			self.set("custom_hotel_room_check_in", None)
 
 		if not self.customer:
 			return
 
-		# Check if doc already exists in DB (i.e. not truly new)
-		# In POS context, is_new() returns None so we check DB directly
 		doc_exists_in_db = frappe.db.exists("POS Invoice", self.name)
 		if doc_exists_in_db:
 			return
 
 		try:
 			hotel_guest = frappe.db.get_value(
-				"Hotel Guest", filters={"hotel_guest_name": self.customer}, fieldname="name"
+				"Hotel Guest",
+				filters={"hotel_guest_name": self.customer},
+				fieldname="name",
 			)
 
 			if not hotel_guest:
@@ -367,25 +443,20 @@ class POSInvoice(SalesInvoice):
 				return
 
 			if len(check_ins) == 1:
-				self.custom_hotel_room_check_in = check_ins[0].name
-				frappe.log_error(
-					message=f"Auto-linked check-in {check_ins[0].name} for customer {self.customer}",
-					title="✅ POS Check-in Auto-Link Success",
-				)
+				self.set("custom_hotel_room_check_in", check_ins[0].name)
 			else:
 				frappe.log_error(
-					message=f"Multiple active check-ins found for customer {self.customer}. "
-					f"Rooms: {[c.room_number for c in check_ins]}. "
-					f"Frontend must set custom_hotel_room_check_in.",
-					title="⚠️ Multiple Check-ins Found - Auto-link Skipped",
+					message=f"Multiple active check-ins found for customer {self.customer}. Rooms: {[c.room_number for c in check_ins]}. Frontend must set custom_hotel_room_check_in.",
+					title="Multiple Check-ins Found - Auto-link Skipped",
 				)
 
 		except Exception as e:
 			frappe.log_error(
 				message=f"Could not auto-link check-in for POS Invoice {self.name}: {str(e)}",
-				title="⚠️ POS Check-in Auto-Link Failed",
+				title="POS Check-in Auto-Link Failed",
 			)
-
+   
+   
 	def delink_serial_and_batch_bundle(self):
 		for row in self.items:
 			if row.serial_and_batch_bundle:
@@ -428,7 +499,7 @@ class POSInvoice(SalesInvoice):
 					)
 
 	def validate_pos_opening_entry(self):
-		opening_entries = frappe.get_list(
+		opening_entries = frappe.get_all(
 			"POS Opening Entry", filters={"pos_profile": self.pos_profile, "status": "Open", "docstatus": 1}
 		)
 		if len(opening_entries) == 0:
