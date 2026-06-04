@@ -1061,8 +1061,6 @@ def verify_reservation_payment(reference=None):
 
         "payment_status": doc.payment_status,
         "reservation_status": doc.reservation_status,
-        "sales_invoice": doc.sales_invoice,
-        "payment_entry": doc.payment_entry,
 
         "message": "Payment verified. Your reservation is confirmed.",
     }
