@@ -110,7 +110,7 @@
 
           <div class="h-48 flex items-end gap-10 border-b border-gray-200 px-2">
             <div v-for="w in revenueTrend" :key="w.label" class="flex flex-col items-center flex-1">
-              <div class="w-10 bg-blue-100 rounded-t-lg" :style="{ height: w.bar + 'px' }"></div>
+              <div class="w-10 bg-blue-600 rounded-t-lg" :style="{ height: w.bar + 'px' }"></div>
               <p class="text-xs text-gray-400 mt-2">{{ w.label }}</p>
               <p class="text-[10px] text-gray-400">₦{{ money(w.amount) }}</p>
             </div>
