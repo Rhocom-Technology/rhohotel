@@ -225,31 +225,39 @@ const checkInResource = createResource({
   auto: true,
 })
 
-const checkins = computed(() => (checkInResource.data || []).map((row) => {
-  const overdue = isOverdue(row)
-  const stayStatus = mapStayStatus(row.status, overdue)
-  const outstanding = Number(row.total_outstanding || 0)
-  const invoiced = Number(row.total_invoiced || 0)
-  let payment
-  if (invoiced === 0) {
-    payment = 'Not Invoiced'
-  } else if (outstanding > 0) {
-    payment = 'Balance Due'
-  } else {
-    payment = 'Paid'
-  }
-  return {
-    ...row,
-    guest: row.guest || '—',
-    room: row.room_number || '—',
-    source: row.reservation_source || 'Walk In',
-    payment,
-    stayStatus,
-    overdue,
-    check_in_date: formatDate(row.check_in_datetime),
-    check_out_date: formatDate(row.actual_check_out_datetime || row.expected_check_out_datetime),
-  }
-}))
+const checkins = computed(() => {
+  const rows = (checkInResource.data || []).map((row) => {
+    const overdue = isOverdue(row)
+    const stayStatus = mapStayStatus(row.status, overdue)
+    const outstanding = Number(row.total_outstanding || 0)
+    const invoiced = Number(row.total_invoiced || 0)
+    let payment
+    if (invoiced === 0) {
+      payment = 'Not Invoiced'
+    } else if (outstanding > 0) {
+      payment = 'Balance Due'
+    } else {
+      payment = 'Paid'
+    }
+    return {
+      ...row,
+      guest: row.guest || '—',
+      room: row.room_number || '—',
+      source: row.reservation_source || 'Walk In',
+      payment,
+      stayStatus,
+      overdue,
+      check_in_date: formatDate(row.check_in_datetime),
+      check_out_date: formatDate(row.actual_check_out_datetime || row.expected_check_out_datetime),
+    }
+  })
+
+  return rows.sort((a, b) => {
+    const aCreated = parseDate(a.creation || a.created_at || a.creation_datetime || a.modified)
+    const bCreated = parseDate(b.creation || b.created_at || b.creation_datetime || b.modified)
+    return bCreated - aCreated
+  })
+})
 
 const stats = computed(() => {
   const list = checkins.value
@@ -325,6 +333,11 @@ function isOverdue(item) {
 function formatDate(value) {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function parseDate(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime()
 }
 
 function inDateRange(dateValue, rangeKey) {
