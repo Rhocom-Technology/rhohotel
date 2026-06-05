@@ -87,6 +87,7 @@ const navGroups = [
       //  Hall
       { label: 'Hall List',     to: '/hall' },
       { label: 'Hall Bookings', to: '/hall/booking' },
+      { label: 'Hall Dashboard', to: '/hall-dashboard' },
     ],
   },
   {

@@ -96,6 +96,7 @@ const pageMeta = {
   
   // Hall Management
   'HallBookingList': { title: 'Hall Bookings',    subtitle: 'Front desk • all hall bookings, payment status, and booking management' },
+  'HallDashboard': { title: 'Hall Dashboard',    subtitle: 'Monitor hall reservation performance from one screen' },
   'NewHallBooking':  { title: 'New Hall Booking', subtitle: 'Front desk • create a new hall booking and generate invoice' },
   'HallBooking':     { title: 'Hall Booking',     subtitle: 'Front desk • booking details, payment, and adjustment' },
   'HallList':  { title: 'Hall List',  subtitle: 'Front desk • view all halls, monitor availability, and manage hall setup, rates, and operational status' },

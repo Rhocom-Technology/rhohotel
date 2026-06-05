@@ -7,10 +7,10 @@
  "field_order": [
   "previous_start",
   "previous_end",
-  "previous_hours",
+  "previous_days",
   "new_start",
   "new_end",
-  "new_hours",
+  "new_days",
   "adjustment_invoice",
   "adjustment_reason",
   "adjusted_by",
@@ -33,10 +33,10 @@
   },
   {
    "allow_on_submit": 1,
-   "fieldname": "previous_hours",
+   "fieldname": "previous_days",
    "fieldtype": "Int",
    "in_list_view": 1,
-   "label": "Previous Hours"
+   "label": "Previous Days"
   },
   {
    "allow_on_submit": 1,
@@ -49,14 +49,22 @@
    "allow_on_submit": 1,
    "fieldname": "new_end",
    "fieldtype": "Datetime",
+   "in_list_view": 1,
    "label": "New End"
   },
   {
    "allow_on_submit": 1,
-   "fieldname": "new_hours",
+   "fieldname": "new_days",
    "fieldtype": "Int",
    "in_list_view": 1,
-   "label": "New Hours"
+   "label": "New Days"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "adjustment_invoice",
+   "fieldtype": "Link",
+   "label": "Adjustment Invoice",
+   "options": "Sales Invoice"
   },
   {
    "allow_on_submit": 1,
@@ -76,13 +84,6 @@
    "fieldname": "adjusted_on",
    "fieldtype": "Datetime",
    "label": "Adjusted On"
-  },
-  {
-   "allow_on_submit": 1,
-   "fieldname": "adjustment_invoice",
-   "fieldtype": "Link",
-   "label": "Adjustment Invoice",
-   "options": "Sales Invoice"
   }
  ],
  "grid_page_length": 50,

@@ -21,6 +21,15 @@
           <p class="text-xs text-gray-400 mt-0.5">{{ booking.customer_name }} • {{ booking.hall }} • {{ booking.event_type }}</p>
         </div>
         <div class="flex items-center gap-2">
+
+          <button
+            v-if="booking.docstatus === 0"
+            @click="router.push(`/hall/booking/${booking.name}/edit`)"
+            class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            Edit Booking
+          </button>
+
           <!-- Submit button for drafts -->
           <button v-if="booking.docstatus === 0" @click="submitBooking" :disabled="submitting"
             class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
@@ -56,8 +65,8 @@
           </span>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p class="text-xs text-gray-400 mb-2">Total Hours</p>
-          <p class="text-2xl font-bold text-gray-900">{{ booking.total_hours }}h</p>
+          <p class="text-xs text-gray-400 mb-2">Total Days</p>
+          <p class="text-2xl font-bold text-gray-900">{{ booking.total_days }} day(s)</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Net Total</p>
@@ -86,8 +95,8 @@
               <div><p class="text-xs text-gray-400 mb-0.5">Event Type</p><p class="text-xs font-semibold text-gray-900">{{ booking.event_type }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Start</p><p class="text-xs font-semibold text-gray-900">{{ fmtDatetime(booking.start_datetime) }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">End</p><p class="text-xs font-semibold text-gray-900">{{ fmtDatetime(booking.end_datetime) }}</p></div>
-              <div><p class="text-xs text-gray-400 mb-0.5">Rate/hr</p><p class="text-xs font-semibold text-gray-900">₦{{ Number(booking.rate || 0).toLocaleString() }}</p></div>
-              <div><p class="text-xs text-gray-400 mb-0.5">Total Hours</p><p class="text-xs font-semibold text-gray-900">{{ booking.total_hours }}h</p></div>
+              <div><p class="text-xs text-gray-400 mb-0.5">Rate/day</p><p class="text-xs font-semibold text-gray-900">₦{{ Number(booking.rate || 0).toLocaleString() }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-0.5">Total Days</p><p class="text-xs font-semibold text-gray-900">{{ booking.total_days }} day(s)</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Total Amount</p><p class="text-xs font-semibold text-gray-900">₦{{ Number(booking.total_amount || 0).toLocaleString() }}</p></div>
               <div v-if="booking.discount_amount"><p class="text-xs text-gray-400 mb-0.5">Discount</p><p class="text-xs font-semibold text-red-500">{{ booking.discount_type === 'Percentage' ? booking.discount_amount + '%' : '₦' + Number(booking.discount_amount).toLocaleString() }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Net Total</p><p class="text-xs font-bold text-gray-900">₦{{ Number(booking.net_total || 0).toLocaleString() }}</p></div>
@@ -132,10 +141,10 @@
                 <tr class="border-b border-gray-100">
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Previous Start</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Previous End</th>
-                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Prev Hrs</th>
+                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Prev Days</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">New Start</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">New End</th>
-                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">New Hrs</th>
+                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">New Days</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Reason</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Status</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Invoice</th>
@@ -145,10 +154,10 @@
                 <tr v-for="(a, i) in booking.adjustment_history" :key="i">
                   <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(a.previous_start) }}</td>
                   <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(a.previous_end) }}</td>
-                  <td class="px-6 py-3 text-xs text-gray-600">{{ a.previous_hours }}h</td>
+                  <td class="px-6 py-3 text-xs text-gray-600">{{ a.previous_days }}</td>
                   <td class="px-6 py-3 text-xs text-gray-700 font-medium">{{ fmtDatetime(a.new_start) }}</td>
                   <td class="px-6 py-3 text-xs text-gray-700 font-medium">{{ fmtDatetime(a.new_end) }}</td>
-                  <td class="px-6 py-3 text-xs text-gray-700 font-medium">{{ a.new_hours }}h</td>
+                  <td class="px-6 py-3 text-xs text-gray-700 font-medium">{{ a.new_days }}</td>
                   <td class="px-6 py-3 text-xs text-gray-500">{{ a.adjustment_reason || '–' }}</td>
                   <td class="px-6 py-3 text-xs text-gray-500">
                     <div
@@ -279,23 +288,23 @@
         <div class="px-6 py-4 space-y-3">
           <div class="bg-yellow-50 rounded-lg px-4 py-2 text-xs text-yellow-700">
             Current: {{ fmtDatetime(booking.start_datetime) }} → {{ fmtDatetime(booking.end_datetime) }}
-            ({{ booking.total_hours }}h)
+            ({{ booking.total_days }} day(s))
           </div>
           <div>
             <label class="text-xs text-gray-500 mb-1 block">New Start <span class="text-red-500">*</span></label>
-            <input v-model="adjust.start_datetime" type="datetime-local"
+            <input v-model="adjust.start_datetime" type="date"
               class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label class="text-xs text-gray-500 mb-1 block">New End <span class="text-red-500">*</span></label>
-            <input v-model="adjust.end_datetime" type="datetime-local"
+            <input v-model="adjust.end_datetime" type="date"
               class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div v-if="adjustHours > 0" class="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-            New duration: <strong>{{ adjustHours }}h</strong>
-            <span v-if="adjustHours !== booking.total_hours" class="ml-2"
-              :class="adjustHours > booking.total_hours ? 'text-blue-600' : 'text-red-500'">
-              ({{ adjustHours > booking.total_hours ? '+' : '' }}{{ adjustHours - booking.total_hours }}h — {{ adjustHours > booking.total_hours ? 'additional invoice' : 'return invoice' }} will be created)
+          <div v-if="adjustDays > 0" class="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+            New duration: <strong>{{ adjustDays }} day(s)</strong>
+            <span v-if="adjustDays !== booking.total_days" class="ml-2"
+              :class="adjustDays > booking.total_days ? 'text-blue-600' : 'text-red-500'">
+              ({{ adjustDays > booking.total_days ? '+' : '' }}{{ adjustDays - booking.total_days }} day(s) — {{ adjustDays > booking.total_days ? 'additional invoice' : 'return invoice' }} will be created)
             </span>
           </div>
           <div>
@@ -321,10 +330,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { callMethod } from '@/lib/api'
 
 const route   = useRoute()
+const router = useRouter()
+
 const loading = ref(false)
 const booking = ref({})
 
@@ -344,17 +355,17 @@ const adjustSaving    = ref(false)
 const adjustError     = ref(null)
 const adjust = ref({ start_datetime: '', end_datetime: '', reason: '' })
 
-const adjustHours = computed(() => {
+const adjustDays = computed(() => {
   if (!adjust.value.start_datetime || !adjust.value.end_datetime) return 0
   const diff = new Date(adjust.value.end_datetime) - new Date(adjust.value.start_datetime)
-  return diff > 0 ? Math.ceil(diff / 3600000) : 0
+  return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0
 })
 
 function today() { return new Date().toISOString().slice(0, 10) }
 
 function fmtDatetime(dt) {
   if (!dt) return '–'
-  return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+  return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', day:'2-digit', minute:'2-digit' })
 }
 
 function statusLabel(s) { return { 0: 'Draft', 1: 'Confirmed', 2: 'Cancelled' }[s] || 'Unknown' }

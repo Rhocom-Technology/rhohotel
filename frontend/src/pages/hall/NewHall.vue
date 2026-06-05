@@ -76,8 +76,8 @@
             </div>
 
             <div>
-              <label class="text-xs text-gray-500 mb-1 block">Rate Per Hour <span class="text-red-500">*</span></label>
-              <input v-model="form.rate_per_hour" type="number" min="0" placeholder="0"
+              <label class="text-xs text-gray-500 mb-1 block">Rate <span class="text-red-500">*</span></label>
+              <input v-model="form.rate" type="number" min="0" placeholder="0"
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
@@ -211,7 +211,7 @@
               {{ form.hall_type || '–' }} • {{ form.capacity ? form.capacity + ' Pax' : '–' }}
             </p>
             <p class="text-xs text-gray-500 mt-0.5">
-              ₦{{ Number(form.rate_per_hour || 0).toLocaleString() }}/hr
+              ₦{{ Number(form.rate || 0).toLocaleString() }}/day
             </p>
           </div>
           <div class="mt-3 space-y-1">
@@ -363,7 +363,7 @@ const form = ref({
   hall_name: '',
   hall_type: '',
   capacity: '',
-  rate_per_hour: '',
+  rate: '',
   item_name: '',
   amenities: [],
 
@@ -378,7 +378,7 @@ const form = ref({
 })
 
 const canSave = computed(() =>
-  !!(form.value.hall_name && form.value.hall_type && form.value.capacity && form.value.rate_per_hour)
+  !!(form.value.hall_name && form.value.hall_type && form.value.capacity && form.value.rate)
 )
 
 function addAmenity() {
@@ -463,7 +463,7 @@ async function createHall() {
       hall_name: form.value.hall_name,
       hall_type: form.value.hall_type,
       capacity: form.value.capacity,
-      rate_per_hour: form.value.rate_per_hour,
+      rate: form.value.rate,
       item_name: form.value.item_name,
       amenities: form.value.amenities.filter(a => a.item),
 
@@ -513,7 +513,7 @@ onMounted(async () => {
       form.value.hall_name = existing.hall_name || ''
       form.value.hall_type = existing.hall_type || ''
       form.value.capacity = existing.capacity || ''
-      form.value.rate_per_hour = existing.rate_per_hour || ''
+      form.value.rate = existing.rate || ''
       form.value.item_name = existing.item_name || ''
       form.value.amenities = (existing.amenities || []).map(a => ({
         item: a.item || '',

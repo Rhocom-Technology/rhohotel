@@ -20,7 +20,7 @@
         "section_break_5h3m",
         "rate",
         "column_break_1h2k",
-        "total_hours",
+        "total_days",
         "column_break_1j4k",
         "total_amount",
         "additional_services_section",
@@ -112,7 +112,7 @@
             "fieldname": "rate",
             "fieldtype": "Currency",
             "in_list_view": 1,
-            "label": "Rate Per Hour",
+            "label": "Hall Daily Rate",
             "options": "0",
             "read_only": 1
         },
@@ -123,10 +123,10 @@
         {
             "allow_on_submit": 1,
             "default": "0",
-            "fieldname": "total_hours",
+            "fieldname": "total_days",
             "fieldtype": "Float",
             "in_list_view": 1,
-            "label": "Total Hours",
+            "label": "Total Days",
             "read_only": 1
         },
         {

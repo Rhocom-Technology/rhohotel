@@ -54,7 +54,7 @@ def update_hall(name, data):
     doc.hall_name     = data.get("hall_name")
     doc.hall_type = data.get("hall_type")
     doc.capacity      = int(data.get("capacity") or 0)
-    doc.rate_per_hour = flt(data.get("rate_per_hour") or 0)
+    doc.rate = flt(data.get("rate") or 0)
     doc.item_name     = data.get("item_name") or None
 
     # Replace child table rows
@@ -78,13 +78,13 @@ def get_hall_list():
     """
     halls = frappe.db.get_all(
         "Hall",
-        fields=["name", "hall_name", "hall_type", "capacity", "rate_per_hour", "item_name"],
+        fields=["name", "hall_name", "hall_type", "capacity", "rate", "item_name"],
         order_by="hall_name asc",
     )
 
-    now  = now_datetime()
+    now = now_datetime()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end   = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
     for hall in halls:
         # Active booking right now
@@ -189,7 +189,7 @@ def create_hall(data):
     doc.hall_name    = data.get("hall_name")
     doc.hall_type = data.get("hall_type")
     doc.capacity     = int(data.get("capacity") or 0)
-    doc.rate_per_hour = flt(data.get("rate_per_hour") or 0)
+    doc.rate = flt(data.get("rate") or 0)
     doc.item_name    = data.get("item_name") or None
     doc.has_projector_av = 1 if data.get("has_projector_av") else 0
     doc.has_sound_system = 1 if data.get("has_sound_system") else 0

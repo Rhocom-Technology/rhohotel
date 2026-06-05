@@ -152,26 +152,30 @@
             </div>
 
             <div>
-              <label class="text-xs text-gray-500 mb-1 block">Start Date &amp; Time <span class="text-red-500">*</span></label>
-              <input v-model="form.start_datetime" type="datetime-local" @change="computeTotals"
+              <label class="text-xs text-gray-500 mb-1 block">Start Date <span class="text-red-500">*</span></label>
+              <input v-model="form.start_datetime" type="date" @change="computeTotals"
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <div>
-              <label class="text-xs text-gray-500 mb-1 block">End Date &amp; Time <span class="text-red-500">*</span></label>
-              <input v-model="form.end_datetime" type="datetime-local" @change="computeTotals"
+              <label class="text-xs text-gray-500 mb-1 block">End Date <span class="text-red-500">*</span></label>
+              <input v-model="form.end_datetime" type="date" @change="computeTotals"
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <div>
-              <label class="text-xs text-gray-500 mb-1 block">Rate Per Hour</label>
-              <input v-model="form.rate" type="number" @change="computeTotals"
-                class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label class="text-xs text-gray-500 mb-1 block">Rate</label>
+              <input
+                  v-model="form.rate"
+                  type="number"
+                  readonly
+                  class="w-full text-xs border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-600 cursor-default"
+                />
             </div>
 
             <div>
-              <label class="text-xs text-gray-500 mb-1 block">Total Hours</label>
-              <input :value="form.total_hours" type="text" readonly
+              <label class="text-xs text-gray-500 mb-1 block">Total Days</label>
+              <input :value="form.total_days" type="text" readonly
                 class="w-full text-xs border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-600 cursor-default" />
             </div>
 
@@ -292,8 +296,8 @@
            
             <div class="flex justify-between"><span class="text-gray-500">Hall</span><span class="font-medium text-gray-900">{{ form.hall || '–' }}</span></div>
             <div class="flex justify-between"><span class="text-gray-500">Event</span><span class="font-medium text-gray-900">{{ form.event_type || '–' }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Total Hours</span><span class="font-medium text-gray-900">{{ form.total_hours || 0 }}h</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Rate/hr</span><span class="font-medium text-gray-900">₦{{ Number(form.rate || 0).toLocaleString() }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Total Days</span><span class="font-medium text-gray-900">{{ form.total_days || 0 }} day(s)</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Daily Rate</span><span class="font-medium text-gray-900">₦{{ Number(form.rate || 0).toLocaleString() }}</span></div>
             <div class="border-t border-gray-100 pt-2 flex justify-between"><span class="text-gray-500">Hall Total</span><span class="font-medium text-gray-900">₦{{ Number(form.total_amount || 0).toLocaleString() }}</span></div>
             <div class="flex justify-between"><span class="text-gray-500">Services</span><span class="font-medium text-gray-900">₦{{ Number(servicesTotal).toLocaleString() }}</span></div>
              <div v-if="form.discount_value > 0" class="flex justify-between text-red-500">
@@ -503,7 +507,7 @@ const form = ref({
   start_datetime:      '',
   end_datetime:        '',
   rate:                0,
-  total_hours:         0,
+  total_days:         0,
   total_amount:        0,
    discount_value: 0,
   discount_type:       'Percentage',
@@ -547,15 +551,15 @@ function computeTotals() {
   const end = new Date(form.value.end_datetime)
 
   if (!form.value.start_datetime || !form.value.end_datetime || end <= start) {
-    form.value.total_hours = 0
+    form.value.total_days = 0
     form.value.total_amount = 0
     form.value.discount_value = 0
     form.value.net_total = 0
     return
   }
 
-  const hours = Math.ceil((end - start) / 3600000)
-  const hallTotal = Number(form.value.rate || 0) * hours
+  const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+  const hallTotal = Number(form.value.rate || 0) * days
   const svcTotal = servicesTotal.value
   const grossTotal = hallTotal + svcTotal
 
@@ -570,7 +574,7 @@ function computeTotals() {
     }
   }
 
-  form.value.total_hours = hours
+  form.value.total_days = days
   form.value.total_amount = hallTotal
   form.value.discount_value = discount
   form.value.net_total = Math.max(0, grossTotal - discount)

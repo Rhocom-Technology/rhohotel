@@ -107,7 +107,7 @@
               <td class="px-6 py-3 text-xs font-semibold text-gray-900">{{ hall.hall_name }}</td>
               <td class="px-6 py-3 text-xs text-gray-600">{{ hall.hall_type }}</td>
               <td class="px-6 py-3 text-xs text-gray-600">{{ hall.capacity }}</td>
-              <td class="px-6 py-3 text-xs text-gray-600">₦{{ Number(hall.rate_per_hour || 0).toLocaleString() }}</td>
+              <td class="px-6 py-3 text-xs text-gray-600">₦{{ Number(hall.rate || 0).toLocaleString() }}</td>
               <td class="px-6 py-3">
                 <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(hall.current_status)">
                   {{ hall.current_status }}

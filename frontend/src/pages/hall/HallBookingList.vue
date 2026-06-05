@@ -72,7 +72,7 @@
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Event</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Start</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">End</th>
-            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Hours</th>
+            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Days</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Net Total</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Status</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Payment</th>
@@ -90,7 +90,7 @@
             <td class="px-6 py-3 text-xs text-gray-600">{{ b.event_type }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(b.start_datetime) }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(b.end_datetime) }}</td>
-            <td class="px-6 py-3 text-xs text-gray-600">{{ b.total_hours }}h</td>
+            <td class="px-6 py-3 text-xs text-gray-600">{{ b.total_days }} day(s)</td>
             <td class="px-6 py-3 text-xs text-gray-700 font-medium">₦{{ Number(b.net_total || 0).toLocaleString() }}</td>
             <td class="px-6 py-3">
               <span class="px-2 py-0.5 text-xs font-semibold rounded-full" :class="statusClass(b.docstatus)">
@@ -160,7 +160,7 @@ const paged      = computed(() => filtered.value.slice(pageStart.value, pageEnd.
 
 function fmtDatetime(dt) {
   if (!dt) return '–'
-  return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+  return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', day:'2-digit', minute:'2-digit' })
 }
 
 function statusClass(s) {

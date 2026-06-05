@@ -43,9 +43,9 @@
         <p class="text-xs text-gray-400 mt-1">{{ hall.hall_type }}</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <p class="text-xs text-gray-400 mb-2">Rate Per Hour</p>
-        <p class="text-2xl font-bold text-gray-900">₦{{ Number(hall.rate_per_hour || 0).toLocaleString() }}</p>
-        <p class="text-xs text-gray-400 mt-1">Per hour billing</p>
+        <p class="text-xs text-gray-400 mb-2">Rate</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ Number(hall.rate || 0).toLocaleString() }}</p>
+        <p class="text-xs text-gray-400 mt-1">Per day billing</p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-2">Bookings This Month</p>
@@ -80,8 +80,8 @@
               <p class="text-xs font-semibold text-gray-900">{{ hall.capacity }} Pax</p>
             </div>
             <div>
-              <p class="text-xs text-gray-400 mb-0.5">Rate Per Hour</p>
-              <p class="text-xs font-semibold text-gray-900">₦{{ Number(hall.rate_per_hour || 0).toLocaleString() }}</p>
+              <p class="text-xs text-gray-400 mb-0.5">Rate</p>
+              <p class="text-xs font-semibold text-gray-900">₦{{ Number(hall.rate || 0).toLocaleString() }}</p>
             </div>
             <div v-if="hall.item_name">
               <p class="text-xs text-gray-400 mb-0.5">Linked Item</p>
@@ -161,7 +161,7 @@
           <div class="bg-gray-50 rounded-lg px-4 py-3 mb-2">
             <p class="text-sm font-bold text-gray-900">{{ hall.hall_name }}</p>
             <p class="text-xs text-gray-500 mt-0.5">{{ hall.hall_type }} • {{ hall.capacity }} Pax</p>
-            <p class="text-xs text-gray-500">₦{{ Number(hall.rate_per_hour || 0).toLocaleString() }}/hr</p>
+            <p class="text-xs text-gray-500">₦{{ Number(hall.rate || 0).toLocaleString() }}/day</p>
           </div>
           <div class="space-y-1 mt-2">
             <div v-for="a in (hall.amenities || [])" :key="a.item"
@@ -215,7 +215,7 @@ function fmtDatetime(dt) {
   if (!dt) return '–'
   return new Date(dt).toLocaleString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
+    day: '2-digit', minute: '2-digit'
   })
 }
 
