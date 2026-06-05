@@ -15,52 +15,119 @@
 
         <!-- Booking Details -->
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-          <h3 class="text-sm font-bold text-gray-900 mb-4">Booking Details</h3>
+          <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-bold text-gray-900">Booking Details</h3>
+
+          <button
+            type="button"
+            @click="showCustomerModal = true"
+            class="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
+          >
+            + Add Customer
+          </button>
+        </div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
 
             <div>
-               <label class="text-xs text-gray-500 mb-1 block">
-    Customer <span class="text-red-500">*</span>
-  </label>
-             <div class="relative">
+              <label class="text-xs text-gray-500 mb-1 block">
+                Customer <span class="text-red-500">*</span>
+              </label>
 
+              <div class="relative">
+                <input
+                  v-model="customerSearch"
+                  type="text"
+                  placeholder="Search customer..."
+                  :readonly="customerLocked"
+                  @input="searchCustomers"
+                  @focus="searchCustomers"
+                  class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
 
-  <input
-    v-model="customerSearch"
-    type="text"
-    placeholder="Search customer..."
-    @input="searchCustomers"
-    @focus="searchCustomers"
-    class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-  />
+                <button
+                  v-if="customerLocked"
+                  type="button"
+                  @click="clearSelectedCustomer"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 text-xs"
+                >
+                  ✕
+                </button>
 
-  <div
-    v-if="showCustomerDropdown && customers.length"
-    class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto"
-  >
-    <button
-      v-for="c in customers"
-      :key="c.name"
-      type="button"
-      @click="selectCustomer(c)"
-      class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50"
-    >
-      <div class="font-medium text-gray-800">
-        {{ c.customer_name || c.name }}
-      </div>
-      <div class="text-gray-400">
-        {{ c.name }} <span v-if="c.mobile_no">• {{ c.mobile_no }}</span>
-      </div>
-    </button>
-  </div>
-</div>
+                <div
+                  v-if="showCustomerDropdown && customers.length && !customerLocked"
+                  class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto"
+                >
+                  <button
+                    v-for="c in customers"
+                    :key="c.name"
+                    type="button"
+                    @click="selectCustomer(c)"
+                    class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50"
+                  >
+                    <div class="font-medium text-gray-800">
+                      {{ c.customer_name || c.name }}
+                    </div>
+
+                    <div class="text-gray-400">
+                      {{ c.name }}
+                      <span v-if="c.mobile_no">
+                        • {{ c.mobile_no }}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div>
-              <label class="text-xs text-gray-500 mb-1 block">Mobile Number</label>
-              <input v-model="form.mobile_number" type="text" placeholder="e.g. 0801 234 5678"
-                class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+  <label class="text-xs text-gray-500 mb-1 block">
+    Mobile Number
+  </label>
+
+  <div class="relative">
+    <input
+      v-model="phoneSearch"
+      type="text"
+      placeholder="Search phone number..."
+      :readonly="phoneLocked"
+      @input="searchCustomersByPhone"
+      @focus="searchCustomersByPhone"
+      class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+
+    <button
+      v-if="phoneLocked"
+      type="button"
+      @click="clearSelectedCustomer"
+      class="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 text-xs"
+    >
+      ✕
+    </button>
+
+    <div
+      v-if="showPhoneDropdown && phoneResults.length && !phoneLocked"
+      class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto"
+    >
+      <button
+        v-for="c in phoneResults"
+        :key="c.name"
+        type="button"
+        @click="selectCustomer(c)"
+        class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50"
+      >
+        <div class="font-medium text-gray-800">
+          {{ c.mobile_no || 'No Phone Number' }}
+        </div>
+
+        <div class="text-gray-400">
+          {{ c.customer_name || c.name }}
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
 
             <div>
               <label class="text-xs text-gray-500 mb-1 block">Hall <span class="text-red-500">*</span></label>
@@ -345,6 +412,40 @@
     </div>
 
   </div>
+
+
+  <div
+  v-if="showCustomerModal"
+  class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+>
+  <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
+    <h3 class="text-sm font-bold text-gray-900 mb-4">Add Customer</h3>
+
+    <label class="text-xs text-gray-500 mb-1 block">Customer Name *</label>
+    <input v-model="newCustomerName" class="w-full text-xs border rounded-lg px-3 py-2" />
+
+    <label class="text-xs text-gray-500 mb-1 mt-3 block">Phone</label>
+    <input v-model="newCustomerPhone" class="w-full text-xs border rounded-lg px-3 py-2" />
+
+    <label class="text-xs text-gray-500 mb-1 mt-3 block">Email</label>
+    <input v-model="newCustomerEmail" class="w-full text-xs border rounded-lg px-3 py-2" />
+
+    <p v-if="customerError" class="text-xs text-red-500 mt-2">{{ customerError }}</p>
+    <p v-if="customerSuccess" class="text-xs text-green-600 mt-2">
+      {{ customerSuccess }}
+    </p>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button @click="showCustomerModal = false" class="px-4 py-2 text-xs border rounded-lg">
+        Cancel
+      </button>
+
+      <button @click="saveCustomer" :disabled="savingCustomer" class="px-4 py-2 text-xs text-white bg-blue-600 rounded-lg">
+        {{ savingCustomer ? 'Saving…' : 'Save' }}
+      </button>
+    </div>
+  </div>
+</div>
 </template>
 
 <script setup>
@@ -367,6 +468,20 @@ const allItems = ref([])
 const itemSearch = ref('')
 const itemResults = ref([])
 const showItemDropdown = ref(false)
+
+const showCustomerModal = ref(false)
+const newCustomerName = ref('')
+const newCustomerPhone = ref('')
+const newCustomerEmail = ref('')
+const savingCustomer = ref(false)
+const customerError = ref(null)
+const customerSuccess = ref(null)
+
+const phoneSearch = ref('')
+const phoneResults = ref([])
+const showPhoneDropdown = ref(false)
+const customerLocked = ref(false)
+const phoneLocked = ref(false)
 
 const showCustomerDropdown = ref(false)
 
@@ -413,6 +528,20 @@ async function onHallChange() {
   computeTotals()
 }
 
+
+async function searchCustomersByPhone() {
+  if (phoneLocked.value) return
+
+  const data = await callMethod(
+    'rhohotel.rhocom_hotel.api.hall_booking.search_customers',
+    { query: phoneSearch.value }
+  )
+
+  phoneResults.value = data || []
+  showPhoneDropdown.value = true
+}
+
+
 function computeTotals() {
   const start = new Date(form.value.start_datetime)
   const end = new Date(form.value.end_datetime)
@@ -449,6 +578,49 @@ function computeTotals() {
 
 function addService() {
   form.value.additional_billings.push({ service: '', qty: 1, rate: 0, amount: 0, discount_amount: 0 })
+}
+
+
+async function saveCustomer() {
+  customerSuccess.value = null
+  customerError.value = null
+
+  if (!newCustomerName.value.trim()) {
+    customerError.value = 'Customer name is required.'
+    return
+  }
+
+  savingCustomer.value = true
+
+  try {
+    const result = await callMethod('rhohotel.rhocom_hotel.api.hall_booking.create_customer', {
+      customer_name: newCustomerName.value.trim(),
+      mobile_no: newCustomerPhone.value.trim(),
+      email_id: newCustomerEmail.value.trim(),
+    })
+
+    form.value.customer = result.name
+    form.value.customer_name = result.customer_name || result.name
+    form.value.mobile_number = result.mobile_no || ''
+    customerSearch.value = result.customer_name || result.name
+    phoneSearch.value = result.mobile_no || ''
+    customerLocked.value = true
+    phoneLocked.value = true
+
+    customerSuccess.value = 'Customer added successfully.'
+
+    setTimeout(() => {
+      showCustomerModal.value = false
+      newCustomerName.value = ''
+      newCustomerPhone.value = ''
+      newCustomerEmail.value = ''
+      customerSuccess.value = null
+    }, 800)
+  } catch (e) {
+    customerError.value = e.message || 'Failed to create customer.'
+  } finally {
+    savingCustomer.value = false
+  }
 }
 
 function onServiceChange(row) {
@@ -526,9 +698,30 @@ async function searchCustomers() {
 
 function selectCustomer(c) {
   form.value.customer_name = c.name
-  customerSearch.value = c.customer_name || c.name
   form.value.mobile_number = c.mobile_no || ''
+
+  customerSearch.value = c.customer_name || c.name
+  phoneSearch.value = c.mobile_no || ''
+
+  customerLocked.value = true
+  phoneLocked.value = true
+
   showCustomerDropdown.value = false
+  showPhoneDropdown.value = false
+}
+
+function clearSelectedCustomer() {
+  form.value.customer_name = ''
+  form.value.mobile_number = ''
+
+  customerSearch.value = ''
+  phoneSearch.value = ''
+
+  customerLocked.value = false
+  phoneLocked.value = false
+
+  showCustomerDropdown.value = false
+  showPhoneDropdown.value = false
 }
 
 function onServiceItemChange() {

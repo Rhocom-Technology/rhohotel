@@ -375,3 +375,35 @@ def search_items(query=""):
         ORDER BY item_name ASC
         LIMIT 20
     """, {"like": like}, as_dict=True)
+    
+    
+@frappe.whitelist()
+def create_customer(customer_name, mobile_no=None, email_id=None):
+    if not customer_name:
+        frappe.throw("Customer name is required")
+
+    customer_name = customer_name.strip()
+
+    if frappe.db.exists("Customer", customer_name):
+        return frappe.get_doc("Customer", customer_name).as_dict()
+
+    doc = frappe.new_doc("Customer")
+    doc.customer_name = customer_name
+    doc.customer_type = "Individual"
+    doc.customer_group = "Individual"
+    doc.territory = "Nigeria"
+
+    if mobile_no:
+        doc.mobile_no = mobile_no
+
+    if email_id:
+        doc.email_id = email_id
+
+    doc.insert(ignore_permissions=True)
+
+    return {
+        "name": doc.name,
+        "customer_name": doc.customer_name,
+        "mobile_no": doc.mobile_no,
+        "email_id": doc.email_id
+    }

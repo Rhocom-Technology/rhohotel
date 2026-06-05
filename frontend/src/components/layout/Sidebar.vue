@@ -83,6 +83,10 @@ const navGroups = [
       { label: 'Payments', to: '/payments' },
       { label: 'Guest List', to: '/guests' },
       { label: 'Night Audit', to: '/night-audit' },
+
+      //  Hall
+      { label: 'Hall List',     to: '/hall' },
+      { label: 'Hall Bookings', to: '/hall/booking' },
     ],
   },
   {
@@ -174,15 +178,6 @@ const navGroups = [
      { label: 'Dashboard',  to: '/assets-mgmt' },
   { label: 'Asset List', to: '/assets-mgmt/list' },
   { label: 'Asset Maintenance', to: '/assets-mgmt/maintenance' },
-    ],
-  },
-
-   {
-    label: 'Hall',
-    icon: LayoutGrid,
-    children: [
-      { label: 'Hall List',     to: '/hall' },
-      { label: 'Hall Bookings', to: '/hall/booking' },
     ],
   },
 ]

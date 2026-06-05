@@ -52,7 +52,7 @@ def update_hall(name, data):
 
     doc = frappe.get_doc("Hall", name)
     doc.hall_name     = data.get("hall_name")
-    doc.hall_type     = data.get("hall_type", "Conference")
+    doc.hall_type = data.get("hall_type")
     doc.capacity      = int(data.get("capacity") or 0)
     doc.rate_per_hour = flt(data.get("rate_per_hour") or 0)
     doc.item_name     = data.get("item_name") or None
@@ -187,10 +187,18 @@ def create_hall(data):
 
     doc = frappe.new_doc("Hall")
     doc.hall_name    = data.get("hall_name")
-    doc.hall_type    = data.get("hall_type", "Conference")
+    doc.hall_type = data.get("hall_type")
     doc.capacity     = int(data.get("capacity") or 0)
     doc.rate_per_hour = flt(data.get("rate_per_hour") or 0)
     doc.item_name    = data.get("item_name") or None
+    doc.has_projector_av = 1 if data.get("has_projector_av") else 0
+    doc.has_sound_system = 1 if data.get("has_sound_system") else 0
+    doc.has_air_conditioning = 1 if data.get("has_air_conditioning") else 0
+    doc.has_stage = 1 if data.get("has_stage") else 0
+    doc.has_restroom_access = 1 if data.get("has_restroom_access") else 0
+    doc.has_parking_access = 1 if data.get("has_parking_access") else 0
+    doc.has_kitchen_support = 1 if data.get("has_kitchen_support") else 0
+    doc.has_private_entrance = 1 if data.get("has_private_entrance") else 0
 
     for row in data.get("amenities", []):
         if row.get("item") or row.get("amenity_name"):
@@ -201,3 +209,77 @@ def create_hall(data):
 
     doc.insert(ignore_permissions=True)
     return {"name": doc.name}
+
+@frappe.whitelist()
+def get_hall_types():
+    """Return all Hall Type records for the Hall Type dropdown."""
+    return frappe.db.get_all(
+        "Hall Type",
+        fields=["name", "hall_type_name"],
+        order_by="hall_type_name asc"
+    )
+
+
+@frappe.whitelist()
+def create_hall_type(hall_type_name):
+    """Create a new Hall Type record."""
+    if not hall_type_name:
+        frappe.throw("Hall Type Name is required")
+
+    hall_type_name = hall_type_name.strip()
+
+    if frappe.db.exists("Hall Type", hall_type_name):
+        return {
+            "name": hall_type_name,
+            "hall_type_name": hall_type_name,
+            "exists": True
+        }
+
+    doc = frappe.new_doc("Hall Type")
+    doc.hall_type_name = hall_type_name
+    doc.insert(ignore_permissions=True)
+
+    return {
+        "name": doc.name,
+        "hall_type_name": doc.hall_type_name,
+        "exists": False
+    }
+    
+@frappe.whitelist()
+def create_hall_item(item_name):
+    """Create a new ERPNext Item under Hall item group."""
+    if not item_name:
+        frappe.throw("Item Name is required")
+
+    item_name = item_name.strip()
+
+    if not frappe.db.exists("Item Group", "Hall"):
+        frappe.throw("Item Group 'Hall' does not exist. Please create it first.")
+
+    if frappe.db.exists("Item", item_name):
+        item = frappe.get_doc("Item", item_name)
+
+        if item.item_group != "Hall":
+            frappe.throw("An Item with this name already exists, but it is not under Hall item group.")
+
+        return {
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "exists": True
+        }
+
+    doc = frappe.new_doc("Item")
+    doc.item_code = item_name
+    doc.item_name = item_name
+    doc.item_group = "Hall"
+    doc.stock_uom = "Nos"
+    doc.is_stock_item = 1
+    doc.include_item_in_manufacturing = 0
+    doc.insert(ignore_permissions=True)
+
+    return {
+        "item_code": doc.item_code,
+        "item_name": doc.item_name,
+        "exists": False
+    }
+    

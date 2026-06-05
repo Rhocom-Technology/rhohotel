@@ -57,10 +57,19 @@
         </div>
         <div>
           <label class="text-xs text-gray-500 mb-1 block">Type</label>
-          <select v-model="filterType" class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select
+            v-model="filterType"
+            class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
             <option value="">All Types</option>
-            <option value="Conference">Conference</option>
-            <option value="Event">Event</option>
+
+            <option
+              v-for="type in hallTypes"
+              :key="type.name"
+              :value="type.name"
+            >
+              {{ type.hall_type_name || type.name }}
+            </option>
           </select>
         </div>
         <button @click="search = ''; filterStatus = ''; filterType = ''"
@@ -152,6 +161,7 @@ const perPage = 10
 const search       = ref('')
 const filterStatus = ref('')
 const filterType   = ref('')
+const hallTypes = ref([])
 
 const totalBookingsToday = computed(() =>
   halls.value.reduce((acc, h) => acc + (h.bookings_today || 0), 0)
@@ -182,6 +192,11 @@ async function load() {
   try {
     const data = await callMethod('rhohotel.rhocom_hotel.api.hall.get_hall_list')
     halls.value = data || []
+
+    // fetch types from actual Hall records
+    const types = await callMethod('rhohotel.rhocom_hotel.api.hall.get_hall_types')
+    hallTypes.value = types || []
+
   } catch (e) {
     console.error(e)
   } finally {

@@ -30,13 +30,13 @@
       "fieldname": "column_break_qfkp",
       "fieldtype": "Column Break"
     },
-    {
+      {
       "fieldname": "hall_type",
-      "fieldtype": "Select",
+      "fieldtype": "Link",
       "label": "Hall Type",
-      "options": "Conference\nEvent",
-      "default": "Conference",
-      "list_view": 1
+      "options": "Hall Type",
+      "in_list_view": 1,
+      "reqd": 1
     },
     {
       "fieldname": "rate_per_hour",
@@ -58,7 +58,52 @@
       "fieldname": "table_tdts",
       "fieldtype": "Table",
       "options": "Hall Amenity"
-    }
+    },
+    {
+  "fieldname": "facilities_section",
+  "fieldtype": "Section Break",
+  "label": "Facilities & Setup Options"
+},
+{
+  "fieldname": "has_projector_av",
+  "fieldtype": "Check",
+  "label": "Projector / AV"
+},
+{
+  "fieldname": "has_sound_system",
+  "fieldtype": "Check",
+  "label": "Sound System"
+},
+{
+  "fieldname": "has_air_conditioning",
+  "fieldtype": "Check",
+  "label": "Air Conditioning"
+},
+{
+  "fieldname": "has_stage",
+  "fieldtype": "Check",
+  "label": "Stage"
+},
+{
+  "fieldname": "has_restroom_access",
+  "fieldtype": "Check",
+  "label": "Restroom Access"
+},
+{
+  "fieldname": "has_parking_access",
+  "fieldtype": "Check",
+  "label": "Parking Access"
+},
+{
+  "fieldname": "has_kitchen_support",
+  "fieldtype": "Check",
+  "label": "Kitchen Support"
+},
+{
+  "fieldname": "has_private_entrance",
+  "fieldtype": "Check",
+  "label": "Private Entrance"
+}
   ],
   "grid_page_length": 50,
   "index_web_pages_for_search": 1,
@@ -80,7 +125,34 @@
       "role": "System Manager",
       "share": 1,
       "write": 1
-    }
+    },
+     {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk User",
+            "select": 1,
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk Manager",
+            "select": 1,
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        }
   ],
   "row_format": "Dynamic",
   "sort_field": "modified",
