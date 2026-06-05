@@ -1969,6 +1969,7 @@ img {
   align-items: center;
   justify-content: space-between;
 }
+
 .web-hotel-branding {
   display: flex;
   gap: 14px;
@@ -2131,7 +2132,7 @@ img {
 
   @page {
     size: A4;
-    margin: 8mm;
+    margin: 10mm;
   }
 
   html,
@@ -2141,9 +2142,30 @@ img {
     background: #fff !important;
   }
 
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+
   body * {
     visibility: hidden !important;
   }
+
+  .web-confirmation-page {
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .booking-success-page {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+
 
   #receiptArea,
   #receiptArea * {
@@ -2151,12 +2173,12 @@ img {
   }
 
   #receiptArea {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 194mm;
-    margin: 0 auto;
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 210mm;
+    margin: 0 !important;
     padding: 0 !important;
+
   }
 
   .web-receipt {
@@ -2164,6 +2186,9 @@ img {
     box-shadow: none !important;
     border-radius: 0 !important;
     overflow: visible !important;
+    font-size: 12px !important;
+    /* slightly smaller on print */
+    line-height: 1.3 !important;
   }
 
   .web-receipt-header {
@@ -2195,6 +2220,9 @@ img {
   }
 }
 
+/* ===========================
+   PRINT STYLES END
+=========================== */
 
 .web-actions {
   display: flex;
