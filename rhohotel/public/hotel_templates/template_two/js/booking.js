@@ -407,10 +407,21 @@ function goToStep(step) {
 
 	currentStep = step;
 
-	window.scrollTo({
-		top: 0,
-		behavior: "smooth",
-	});
+	const activeStep = document.getElementById(`step${step}`);
+
+	if (activeStep) {
+		const y = activeStep.getBoundingClientRect().top + window.pageYOffset - 120; // adjust offset
+
+		window.scrollTo({
+			top: y,
+			behavior: "smooth",
+		});
+	}
+
+	// window.scrollTo({
+	// 	top: 0,
+	// 	behavior: "smooth",
+	// });
 }
 
 function nextStep() {
@@ -762,6 +773,10 @@ function buildSummaryStep() {
                         ${room.count}
                     </td>
 
+					 <td>
+                        ${currentAvailability.nights}
+                    </td>
+
                     <td>
                         ₦${room.rate_per_night.toLocaleString()}
                     </td>
@@ -798,6 +813,10 @@ function buildSummaryStep() {
 
                     <th>
                         Qty
+                    </th>
+
+					<th>
+                        No. of Nights
                     </th>
 
                     <th>
@@ -920,6 +939,10 @@ function buildReviewStep() {
                         ${room.count}
                     </td>
 
+					 <td>
+                        ${currentAvailability.nights}
+                    </td>
+
                     <td>
                         ₦${room.total_amount.toLocaleString()}
                     </td>
@@ -979,6 +1002,10 @@ function buildReviewStep() {
                                         Qty
                                     </th>
 
+									 <th>
+                                        No. of Nights
+                                    </th>
+
                                     <th>
                                         Amount
                                     </th>
@@ -1006,6 +1033,19 @@ function buildReviewStep() {
                             ₦${total.toLocaleString()}
 
                         </div>
+
+						<div
+    class="alert alert-warning mt-4"
+>
+    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+
+    Please review your reservation carefully.
+
+    Once you click
+    <strong>Confirm Booking</strong>,
+    your reservation will be created and
+    booking details can no longer be modified online.
+</div>
 
                         <div class="mt-4">
 
@@ -1188,13 +1228,6 @@ function buildPaymentStep() {
 
                         <div class="mt-4">
 
-                            <button
-                                type="button"
-                                class="web-btn-ghost"
-                                onclick="goToStep(5)"
-                            >
-                                Back
-                            </button>
 
                             <button
                                 type="button"
@@ -1231,7 +1264,9 @@ async function startPayment() {
 
 		btn.disabled = true;
 
-		btn.innerHTML = "Preparing Payment...";
+		btn.style.pointerEvents = "none";
+
+		btn.innerHTML = ` <i class="fa fa-spinner fa-spin"></i> Opening Payment Gateway...`;
 
 		const reservationName = bookingState.reservation.reservation;
 
@@ -1456,3 +1491,12 @@ async function startPayment() {
 
 // 	win.print();
 // }
+window.addEventListener("pageshow", function () {
+	const btn = document.getElementById("payNowBtn");
+
+	if (btn) {
+		btn.disabled = false;
+		btn.style.pointerEvents = "";
+		btn.innerHTML = "Proceed To Payment";
+	}
+});
