@@ -529,7 +529,8 @@ def _validate_room_voucher_for_checkin(complimentary, check_in_doc):
 	if complimentary.expiry_date and getdate(complimentary.expiry_date) < getdate(nowdate()):
 		frappe.throw(_("Room Voucher {0} has expired.").format(complimentary.name))
 
-	if flt(complimentary.value) <= 0:
+	remaining_value = flt(complimentary.get("remaining_value")) if complimentary.get("remaining_value") is not None else flt(complimentary.value) - flt(complimentary.get("redeemed_amount"))
+	if remaining_value <= 0:
 		frappe.throw(_("Room Voucher {0} has no redeemable value.").format(complimentary.name))
 
 	if complimentary.check_in and complimentary.check_in != check_in_doc.name:
@@ -572,7 +573,8 @@ def apply_room_voucher(check_in_name, complimentary_name, source_invoice):
 		if invoice_source in {"restaurant", "pos invoice"}:
 			frappe.throw(_("Room Vouchers can only be applied to room charge invoices."))
 
-	voucher_amount = min(flt(complimentary.value), flt(invoice.outstanding_amount))
+	remaining_value = flt(complimentary.get("remaining_value")) if complimentary.get("remaining_value") is not None else flt(complimentary.value) - flt(complimentary.get("redeemed_amount"))
+	voucher_amount = min(remaining_value, flt(invoice.outstanding_amount))
 	if voucher_amount <= 0:
 		frappe.throw(_("Room Voucher {0} cannot be applied to this invoice.").format(complimentary.name))
 
@@ -585,11 +587,14 @@ def apply_room_voucher(check_in_name, complimentary_name, source_invoice):
 	)
 
 	credit_note = result.get("credit_note")
-	complimentary.status = "Consumed"
-	complimentary.consumed_on = now_datetime()
-	complimentary.consumption_reference = _("Credit Note {0} against Sales Invoice {1}").format(credit_note, source_invoice)
-	complimentary.flags.ignore_permissions = True
-	complimentary.save()
+	from rhohotel.rhocom_hotel.api.complimentary import redeem_complimentary_value
+
+	redemption = redeem_complimentary_value(
+		complimentary_name=complimentary.name,
+		applied_amount=voucher_amount,
+		transaction_reference=_("Credit Note {0} against Sales Invoice {1}").format(credit_note, source_invoice),
+		department="Front Desk",
+	)
 
 	frappe.db.commit()
 	return {
@@ -598,6 +603,8 @@ def apply_room_voucher(check_in_name, complimentary_name, source_invoice):
 		"source_invoice": source_invoice,
 		"complimentary_name": complimentary.name,
 		"applied_amount": voucher_amount,
+		"remaining_value": redemption.get("remaining_value"),
+		"voucher_status": redemption.get("status"),
 	}
 
 

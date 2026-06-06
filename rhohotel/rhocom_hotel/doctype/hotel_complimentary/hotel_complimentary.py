@@ -1,6 +1,6 @@
 import frappe
 from frappe.model.document import Document
-from frappe.utils import nowdate, now_datetime
+from frappe.utils import flt, now_datetime
 
 
 class HotelComplimentary(Document):
@@ -20,6 +20,7 @@ class HotelComplimentary(Document):
             frappe.throw("Expiry date cannot be before the issue date.", title="Invalid Dates")
         if self.is_new():
             self.issued_by = frappe.session.user
+        self._sync_redemption_amounts()
 
     def on_update(self):
         self._stamp_approval()
@@ -33,3 +34,9 @@ class HotelComplimentary(Document):
     def _stamp_consumption(self):
         if self.status == "Consumed" and not self.consumed_on:
             self.db_set("consumed_on", now_datetime())
+
+    def _sync_redemption_amounts(self):
+        value = flt(self.value)
+        redeemed = min(max(flt(self.redeemed_amount), 0), value)
+        self.redeemed_amount = redeemed
+        self.remaining_value = max(value - redeemed, 0)

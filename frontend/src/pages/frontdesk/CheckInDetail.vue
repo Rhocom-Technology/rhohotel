@@ -27,6 +27,10 @@
         <span class="px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-600 rounded-full border border-blue-200">
           Room {{ checkIn.room_number || '—' }}
         </span>
+        <span v-if="unusedComplimentaryCount > 0"
+          class="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
+          {{ unusedComplimentaryCount }} unused voucher{{ unusedComplimentaryCount === 1 ? '' : 's' }}
+        </span>
         <span v-if="grandNetOutstanding > 0"
           class="px-2.5 py-1 text-xs font-semibold bg-orange-50 text-orange-600 rounded-full border border-orange-200">
           Balance {{ formatCurrency(grandNetOutstanding) }}
@@ -43,6 +47,27 @@
         Check-out {{ formatDateTime(checkIn.expected_check_out_datetime) }} •
         {{ checkIn.number_of_nights }} nights
       </p>
+    </div>
+
+    <div v-if="unusedComplimentaryCount > 0" class="bg-emerald-50 rounded-xl border border-emerald-200 px-5 py-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-bold text-emerald-800">Unused Complimentary Voucher Available</p>
+          <p class="text-xs text-emerald-600 mt-0.5">{{ unusedComplimentarySummary }}</p>
+        </div>
+        <button
+          v-if="checkIn.status === 'Checked In'"
+          @click="showDiscount = true"
+          class="px-3 py-2 text-xs font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-100">
+          Review
+        </button>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap mt-2">
+        <span v-for="voucher in unusedComplimentaries.slice(0, 4)" :key="voucher.name"
+          class="px-2.5 py-1 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-full">
+          {{ voucher.complimentary_type }} • {{ formatCurrency(voucherRemainingValue(voucher)) }}
+        </span>
+      </div>
     </div>
 
     <!-- Action Buttons -->
@@ -515,6 +540,7 @@ const showCreateMenu = ref(false)
 const invoices = ref([])
 const acquiredBills = ref([])
 const payments = ref([])
+const unusedComplimentaries = ref([])
 const loading = ref(true)
 const loadError = ref('')
 const checkingOut = ref(false)
@@ -543,6 +569,7 @@ async function loadCheckIn(silent = false) {
       invoices.value = data.invoices || []
       acquiredBills.value = data.acquired_bills || []
       payments.value = data.payments || []
+      await loadUnusedComplimentaryIndicator(data)
     }
   } catch (e) {
     loadError.value = 'Network error — please refresh.'
@@ -579,10 +606,43 @@ async function onActionDone() {
   await loadCheckIn(true)
 }
 
+async function loadUnusedComplimentaryIndicator(data = checkIn.value) {
+  try {
+    const summary = await callMethodForm('rhohotel.rhocom_hotel.api.complimentary.get_unused_complimentary_indicator', {
+      check_in: data?.name || route.params.id || '',
+      room: data?.room_number || '',
+      guest: data?.guest || '',
+    })
+    unusedComplimentaries.value = summary?.items || []
+  } catch (e) {
+    unusedComplimentaries.value = []
+  }
+}
+
 const billingSummary = computed(() => checkIn.value?.billing_summary || {})
+const unusedComplimentaryCount = computed(() => unusedComplimentaries.value.length)
+const unusedComplimentarySummary = computed(() => {
+  if (!unusedComplimentaries.value.length) return ''
+  const counts = unusedComplimentaries.value.reduce((acc, voucher) => {
+    const type = voucher.complimentary_type || 'Voucher'
+    acc[type] = (acc[type] || 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts)
+    .map(([type, count]) => `${count} ${type}`)
+    .join(' • ')
+})
 function summaryNumber(field, fallback) {
   const value = billingSummary.value?.[field]
   return value === undefined || value === null || value === '' ? fallback : Number(value) || 0
+}
+
+function voucherRemainingValue(voucher) {
+  if (!voucher) return 0
+  if (voucher.remaining_value !== undefined && voucher.remaining_value !== null) {
+    return Number(voucher.remaining_value || 0)
+  }
+  return Math.max(0, Number(voucher.value || 0) - Number(voucher.redeemed_amount || 0))
 }
 
 // Gross positive charges (room, restaurant, extensions) — exclude credit notes which

@@ -224,7 +224,7 @@ const selectedVoucher = computed(() =>
 )
 const voucherApplyAmount = computed(() => {
   if (!selectedVoucher.value || !selectedInvoice.value) return 0
-  return Math.min(Number(selectedVoucher.value.value || 0), Number(selectedInvoice.value.outstanding_amount || 0))
+  return Math.min(voucherRemainingValue(selectedVoucher.value), Number(selectedInvoice.value.outstanding_amount || 0))
 })
 
 onMounted(() => {
@@ -250,7 +250,17 @@ function formatType(type) {
 
 function voucherLabel(voucher) {
   const expiry = voucher.expiry_date ? ` - expires ${voucher.expiry_date}` : ''
-  return `${voucher.name} - ${fmt(voucher.value)}${expiry}`
+  const redeemed = Number(voucher.redeemed_amount || 0)
+  const usage = redeemed > 0 ? ` remaining of ${fmt(voucher.value)}` : ''
+  return `${voucher.name} - ${fmt(voucherRemainingValue(voucher))}${usage}${expiry}`
+}
+
+function voucherRemainingValue(voucher) {
+  if (!voucher) return 0
+  if (voucher.remaining_value !== undefined && voucher.remaining_value !== null) {
+    return Number(voucher.remaining_value || 0)
+  }
+  return Math.max(0, Number(voucher.value || 0) - Number(voucher.redeemed_amount || 0))
 }
 
 async function loadRoomVouchers() {

@@ -150,11 +150,27 @@
               {{ selectedBillTo.name?.[0] || '?' }}
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-xs font-semibold text-gray-900">{{ selectedBillTo.name }}</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="text-xs font-semibold text-gray-900">{{ selectedBillTo.name }}</p>
+                <span v-if="unusedComplimentaryCount > 0"
+                  class="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full">
+                  {{ unusedComplimentaryCount }} voucher{{ unusedComplimentaryCount === 1 ? '' : 's' }}
+                </span>
+              </div>
               <p class="text-xs text-gray-400 mt-0.5">{{ selectedBillTo.room ? `Room ${selectedBillTo.room}` : selectedBillTo.type }}</p>
             </div>
             <button @click="clearBillTo"
               class="text-gray-300 hover:text-red-500 transition-colors w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-50 text-xs">✕</button>
+          </div>
+          <div v-if="selectedBillTo && unusedComplimentaryCount > 0"
+            class="mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <p class="text-xs font-semibold text-emerald-800">Unused complimentary available</p>
+            <div class="flex items-center gap-1.5 flex-wrap mt-1">
+              <span v-for="voucher in unusedComplimentaries.slice(0, 3)" :key="voucher.name"
+                class="px-2 py-0.5 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-full">
+                {{ voucher.complimentary_type }} • ₦{{ voucherRemainingValue(voucher).toLocaleString() }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -239,7 +255,7 @@
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
             <option value="">{{ complimentaryResource.loading ? 'Loading vouchers...' : 'No voucher applied' }}</option>
             <option v-for="voucher in redeemableComplimentaries" :key="voucher.name" :value="voucher.name">
-              {{ voucher.name }} — {{ voucher.complimentary_type }} — ₦{{ Number(voucher.value || 0).toLocaleString() }}
+              {{ voucher.name }} — {{ voucher.complimentary_type }} — ₦{{ voucherRemainingValue(voucher).toLocaleString() }} remaining
             </option>
           </select>
           <div v-if="selectedComplimentary" class="mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -795,6 +811,7 @@ const discountType = ref('flat')
 const discountInput = ref('')
 const selectedComplimentaryName = ref('')
 const redeemableComplimentaries = ref([])
+const unusedComplimentaries = ref([])
 
 const manualDiscountAmount = computed(() => {
   const val = parseFloat(discountInput.value) || 0
@@ -807,10 +824,11 @@ const selectedComplimentary = computed(() =>
 )
 const complimentaryDiscountAmount = computed(() => {
   if (!selectedComplimentary.value) return 0
-  return Math.min(Number(selectedComplimentary.value.value || 0), Math.max(0, subTotal.value - manualDiscountAmount.value))
+  return Math.min(voucherRemainingValue(selectedComplimentary.value), Math.max(0, subTotal.value - manualDiscountAmount.value))
 })
 const discountAmount = computed(() => Math.min(subTotal.value, manualDiscountAmount.value + complimentaryDiscountAmount.value))
 const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
+const unusedComplimentaryCount = computed(() => unusedComplimentaries.value.length)
 
 const complimentaryResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.complimentary.get_redeemable_complimentaries',
@@ -827,6 +845,17 @@ const complimentaryResource = createResource({
   },
 })
 
+const complimentaryIndicatorResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_unused_complimentary_indicator',
+  auto: false,
+  onSuccess(data) {
+    unusedComplimentaries.value = data?.items || []
+  },
+  onError() {
+    unusedComplimentaries.value = []
+  },
+})
+
 function loadComplimentaries() {
   complimentaryResource.submit({
     check_in: selectedBillTo.value?.id || null,
@@ -834,6 +863,23 @@ function loadComplimentaries() {
     guest: selectedBillTo.value?.name || billToSearch.value || null,
     department: 'Restaurant',
   })
+  loadComplimentaryIndicator()
+}
+
+function loadComplimentaryIndicator() {
+  complimentaryIndicatorResource.submit({
+    check_in: selectedBillTo.value?.id || null,
+    room: selectedBillTo.value?.room || roomNumber.value || null,
+    guest: selectedBillTo.value?.name || billToSearch.value || null,
+  })
+}
+
+function voucherRemainingValue(voucher) {
+  if (!voucher) return 0
+  if (voucher.remaining_value !== undefined && voucher.remaining_value !== null) {
+    return Number(voucher.remaining_value || 0)
+  }
+  return Math.max(0, Number(voucher.value || 0) - Number(voucher.redeemed_amount || 0))
 }
 
 // ── Kitchen send tracking ─────────────────────────────────────────
@@ -877,6 +923,7 @@ function clearBillTo() {
   roomNumber.value = ''
   selectedComplimentaryName.value = ''
   redeemableComplimentaries.value = []
+  unusedComplimentaries.value = []
 }
 
 function selectRoomFromNumber(r) {
@@ -1325,6 +1372,7 @@ function clearCart() {
   discountInput.value = ''
   selectedComplimentaryName.value = ''
   redeemableComplimentaries.value = []
+  unusedComplimentaries.value = []
   showDiscountPanel.value = false
   resumedDraftInvoice.value = null
   try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}

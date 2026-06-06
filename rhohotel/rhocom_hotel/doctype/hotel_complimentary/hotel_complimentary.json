@@ -17,6 +17,8 @@
         "approval_level",
         "source_category",
         "value",
+        "redeemed_amount",
+        "remaining_value",
         "quantity",
         "dates_section",
         "issue_date",
@@ -113,6 +115,21 @@
             "fieldtype": "Currency",
             "in_list_view": 1,
             "label": "Value"
+        },
+        {
+            "default": "0",
+            "fieldname": "redeemed_amount",
+            "fieldtype": "Currency",
+            "label": "Redeemed Amount",
+            "read_only": 1
+        },
+        {
+            "default": "0",
+            "fieldname": "remaining_value",
+            "fieldtype": "Currency",
+            "in_list_view": 1,
+            "label": "Remaining Value",
+            "read_only": 1
         },
         {
             "fieldname": "quantity",
