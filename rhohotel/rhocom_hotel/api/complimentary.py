@@ -1,7 +1,7 @@
 import frappe
 import json
 from frappe import _
-from frappe.utils import nowdate, now_datetime, flt, getdate
+from frappe.utils import nowdate, now_datetime, flt, getdate, cstr
 
 DOCTYPE = "Hotel Complimentary"
 MANAGER_ROLES = {"System Manager", "Hotel Manager"}
@@ -68,6 +68,23 @@ def _can_consume(doc):
 def _normalize_status(value):
     value = (value or "").strip()
     return value if value in {"Draft", "Pending", "Approved", "In Progress", "Consumed", "Expired", "Cancelled"} else "Draft"
+
+
+def _is_expired(doc):
+    return bool(doc.expiry_date and getdate(doc.expiry_date) < getdate(nowdate()))
+
+
+def _validate_redeemable(doc, department="Restaurant"):
+    if doc.status not in {"Approved", "In Progress"}:
+        frappe.throw(_("Complimentary {0} is not approved for redemption.").format(doc.name))
+    if doc.department != department:
+        frappe.throw(_("Complimentary {0} is for {1}, not {2}.").format(doc.name, doc.department, department))
+    if _is_expired(doc):
+        frappe.throw(_("Complimentary {0} has expired.").format(doc.name))
+    if flt(doc.value) <= 0:
+        frappe.throw(_("Complimentary {0} has no redeemable value.").format(doc.name))
+    if not _can_consume(doc):
+        frappe.throw(_("You do not have the role required to redeem this complimentary."), frappe.PermissionError)
 
 
 def _check_in_reservation_fields():
@@ -442,6 +459,114 @@ def mark_consumed(complimentary_name, consumption_reference=None):
         frappe.log_error(frappe.get_traceback(), "mark_consumed error")
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
+
+
+def redeem_complimentary_for_pos(complimentary_name, transaction_reference, bill_total, manual_discount=0, department="Restaurant"):
+    """Validate and consume a complimentary voucher against a submitted POS transaction."""
+    if not complimentary_name:
+        return {"applied_amount": 0}
+
+    if not frappe.db.exists(DOCTYPE, complimentary_name):
+        frappe.throw(_("Complimentary record {0} not found.").format(complimentary_name))
+
+    doc = frappe.get_doc(DOCTYPE, complimentary_name)
+    _validate_redeemable(doc, department=department)
+
+    remaining_total = max(0, flt(bill_total) - flt(manual_discount))
+    applied_amount = min(flt(doc.value), remaining_total)
+    if applied_amount <= 0:
+        frappe.throw(_("Complimentary {0} cannot be applied to this bill.").format(doc.name))
+
+    doc.status = "Consumed"
+    doc.consumed_on = now_datetime()
+    reference = cstr(transaction_reference).strip()
+    if reference and " " not in reference:
+        reference = _("POS Invoice {0}").format(reference)
+    doc.consumption_reference = reference or _("POS Invoice")
+    doc.flags.ignore_permissions = True
+    doc.save()
+
+    return {
+        "complimentary_name": doc.name,
+        "applied_amount": applied_amount,
+        "consumption_reference": doc.consumption_reference,
+    }
+
+
+def get_complimentary_pos_discount(complimentary_name, bill_total, manual_discount=0, department="Restaurant"):
+    """Return the amount a POS bill may discount for a complimentary voucher."""
+    if not complimentary_name:
+        return 0
+    if not frappe.db.exists(DOCTYPE, complimentary_name):
+        frappe.throw(_("Complimentary record {0} not found.").format(complimentary_name))
+    doc = frappe.get_doc(DOCTYPE, complimentary_name)
+    _validate_redeemable(doc, department=department)
+    return min(flt(doc.value), max(0, flt(bill_total) - flt(manual_discount)))
+
+
+@frappe.whitelist()
+def get_redeemable_complimentaries(check_in=None, room=None, guest=None, department="Restaurant", complimentary_type=None):
+    """Approved complimentary records that can be applied from POS."""
+    department = department or "Restaurant"
+    if not _is_manager() and not _has_any(CONSUMPTION_ROLES.get(department, set())):
+        frappe.throw(_("You do not have the role required to redeem complimentaries."), frappe.PermissionError)
+
+    expire_unused_complimentaries(commit=True)
+
+    conditions = ["status IN ('Approved', 'In Progress')", "department = %(department)s"]
+    params = {"department": department}
+
+    identity_conditions = []
+    if check_in:
+        identity_conditions.append("check_in = %(check_in)s")
+        params["check_in"] = check_in
+    if room:
+        identity_conditions.append("room = %(room)s")
+        params["room"] = room
+    if guest:
+        identity_conditions.append("guest LIKE %(guest)s")
+        params["guest"] = f"%{guest}%"
+    if complimentary_type:
+        conditions.append("complimentary_type = %(complimentary_type)s")
+        params["complimentary_type"] = complimentary_type
+
+    if identity_conditions:
+        conditions.append("(" + " OR ".join(identity_conditions) + ")")
+
+    rows = frappe.db.sql(
+        f"""
+        SELECT
+            name, guest, room, check_in, complimentary_type, department,
+            value, quantity, issue_date, expiry_date, reason, redemption_rule, status
+        FROM `tabHotel Complimentary`
+        WHERE {" AND ".join(conditions)}
+        ORDER BY expiry_date IS NULL ASC, expiry_date ASC, modified DESC
+        LIMIT 20
+        """,
+        params,
+        as_dict=True,
+    )
+
+    today = getdate(nowdate())
+    return [
+        {
+            "name": r.name,
+            "guest": r.guest,
+            "room": r.room,
+            "check_in": r.check_in,
+            "complimentary_type": r.complimentary_type,
+            "department": r.department,
+            "value": flt(r.value),
+            "quantity": r.quantity,
+            "issue_date": str(r.issue_date) if r.issue_date else None,
+            "expiry_date": str(r.expiry_date) if r.expiry_date else None,
+            "reason": r.reason,
+            "redemption_rule": r.redemption_rule,
+            "status": r.status,
+        }
+        for r in rows
+        if not r.expiry_date or getdate(r.expiry_date) >= today
+    ]
 
 
 @frappe.whitelist()

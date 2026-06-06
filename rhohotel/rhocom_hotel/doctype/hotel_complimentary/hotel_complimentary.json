@@ -77,7 +77,7 @@
             "in_filter": 1,
             "in_standard_filter": 1,
             "label": "Complimentary Type",
-            "options": "\nFood Voucher\nAirport Transfer\nRoom Upgrade\nAmenity Basket\nLate Checkout\nLaundry\nTransport / Food\nAmenity / Late CO\nLaundry / Amenity",
+            "options": "\nFood Voucher\nRoom Voucher\nAirport Transfer\nRoom Upgrade\nAmenity Basket\nLate Checkout\nLaundry\nTransport / Food\nAmenity / Late CO\nLaundry / Amenity",
             "reqd": 1
         },
         {

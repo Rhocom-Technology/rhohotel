@@ -206,8 +206,8 @@
         <div class="mb-4">
           <button @click="showDiscountPanel = !showDiscountPanel"
             class="w-full py-2 text-xs font-medium border border-dashed rounded-lg transition-all"
-            :class="discountAmount > 0 ? 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100' : 'text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300'">
-            {{ discountAmount > 0 ? `Discount applied: −₦${discountAmount.toLocaleString()}` : '+ Add Discount' }}
+            :class="manualDiscountAmount > 0 ? 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100' : 'text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300'">
+            {{ manualDiscountAmount > 0 ? `Manual discount: −₦${manualDiscountAmount.toLocaleString()}` : '+ Add Discount' }}
           </button>
           <div v-if="showDiscountPanel" class="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
             <div class="flex gap-1.5">
@@ -228,6 +228,30 @@
           </div>
         </div>
 
+        <!-- Complimentary Voucher -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold text-emerald-700">Complimentary Voucher</p>
+            <button @click="loadComplimentaries" class="text-xs text-blue-600 hover:text-blue-700">Refresh</button>
+          </div>
+          <select v-model="selectedComplimentaryName"
+            :disabled="complimentaryResource.loading"
+            class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+            <option value="">{{ complimentaryResource.loading ? 'Loading vouchers...' : 'No voucher applied' }}</option>
+            <option v-for="voucher in redeemableComplimentaries" :key="voucher.name" :value="voucher.name">
+              {{ voucher.name }} — {{ voucher.complimentary_type }} — ₦{{ Number(voucher.value || 0).toLocaleString() }}
+            </option>
+          </select>
+          <div v-if="selectedComplimentary" class="mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold text-emerald-800">{{ selectedComplimentary.name }} applies −₦{{ complimentaryDiscountAmount.toLocaleString() }}</p>
+              <button @click="selectedComplimentaryName = ''" class="text-xs text-emerald-600 hover:text-emerald-800">Remove</button>
+            </div>
+            <p class="text-xs text-emerald-700 mt-1">Guest: {{ selectedComplimentary.guest || selectedBillTo?.name || 'Walk In' }}<template v-if="selectedComplimentary.expiry_date"> • Expires {{ selectedComplimentary.expiry_date }}</template></p>
+          </div>
+          <p v-else class="text-[11px] text-gray-400 mt-1">Approved restaurant complimentaries for the selected guest or room appear here.</p>
+        </div>
+
         <!-- Totals -->
         <div class="space-y-1.5 mb-4 border-t border-gray-100 pt-3">
           <div class="flex items-center justify-between">
@@ -237,6 +261,10 @@
           <div v-if="discountAmount > 0" class="flex items-center justify-between">
             <span class="text-xs text-green-600">Discount</span>
             <span class="text-xs font-medium text-green-600">−₦{{ discountAmount.toLocaleString() }}</span>
+          </div>
+          <div v-if="selectedComplimentary" class="flex items-center justify-between">
+            <span class="text-xs text-emerald-600">Voucher</span>
+            <span class="text-xs font-medium text-emerald-600">{{ selectedComplimentary.name }}</span>
           </div>
           <div class="flex items-center justify-between pt-2.5 mt-1 border-t border-gray-200">
             <span class="text-sm font-bold text-gray-900">Grand Total</span>
@@ -342,6 +370,8 @@
       :cart-items="cart"
       :service-charge="serviceCharge"
       :discount-amount="discountAmount"
+      :manual-discount-amount="manualDiscountAmount"
+      :complimentary-name="selectedComplimentaryName"
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
@@ -356,6 +386,8 @@
       :cart-items="cart"
       :service-charge="serviceCharge"
       :discount-amount="discountAmount"
+      :manual-discount-amount="manualDiscountAmount"
+      :complimentary-name="selectedComplimentaryName"
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
@@ -761,13 +793,48 @@ const serviceCharge = computed(() => 0)
 const showDiscountPanel = ref(false)
 const discountType = ref('flat')
 const discountInput = ref('')
-const discountAmount = computed(() => {
+const selectedComplimentaryName = ref('')
+const redeemableComplimentaries = ref([])
+
+const manualDiscountAmount = computed(() => {
   const val = parseFloat(discountInput.value) || 0
   if (!val) return 0
   if (discountType.value === 'percent') return Math.min(Math.round(subTotal.value * val / 100), subTotal.value)
   return Math.min(val, subTotal.value)
 })
+const selectedComplimentary = computed(() =>
+  redeemableComplimentaries.value.find(v => v.name === selectedComplimentaryName.value) || null
+)
+const complimentaryDiscountAmount = computed(() => {
+  if (!selectedComplimentary.value) return 0
+  return Math.min(Number(selectedComplimentary.value.value || 0), Math.max(0, subTotal.value - manualDiscountAmount.value))
+})
+const discountAmount = computed(() => Math.min(subTotal.value, manualDiscountAmount.value + complimentaryDiscountAmount.value))
 const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
+
+const complimentaryResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_redeemable_complimentaries',
+  auto: false,
+  onSuccess(data) {
+    redeemableComplimentaries.value = Array.isArray(data) ? data : []
+    if (selectedComplimentaryName.value && !redeemableComplimentaries.value.some(v => v.name === selectedComplimentaryName.value)) {
+      selectedComplimentaryName.value = ''
+    }
+  },
+  onError() {
+    redeemableComplimentaries.value = []
+    selectedComplimentaryName.value = ''
+  },
+})
+
+function loadComplimentaries() {
+  complimentaryResource.submit({
+    check_in: selectedBillTo.value?.id || null,
+    room: selectedBillTo.value?.room || roomNumber.value || null,
+    guest: selectedBillTo.value?.name || billToSearch.value || null,
+    department: 'Restaurant',
+  })
+}
 
 // ── Kitchen send tracking ─────────────────────────────────────────
 const kitchenSentMap = ref({}) // { item_code: qty_already_sent_to_kitchen }
@@ -800,6 +867,7 @@ function selectBillTo(guest) {
   if (settlementMethod.value === 'Post to Room' && guest.room) {
     roomNumber.value = guest.room
   }
+  loadComplimentaries()
 }
 
 // REPLACE with:
@@ -807,12 +875,15 @@ function clearBillTo() {
   selectedBillTo.value = null
   billToSearch.value = ''
   roomNumber.value = ''
+  selectedComplimentaryName.value = ''
+  redeemableComplimentaries.value = []
 }
 
 function selectRoomFromNumber(r) {
   roomNumber.value = r.room
   roomFocused.value = false
   selectedBillTo.value = { id: r.check_in, name: r.guest, room: r.room, type: r.payment_type || 'Direct Guest' }
+  loadComplimentaries()
 }
 
 function extractApiErrorMessage(err, fallback = 'Request failed') {
@@ -1222,6 +1293,9 @@ function restorePosState() {
 
 onMounted(() => {
   restorePosState()
+  if (selectedBillTo.value?.id || selectedBillTo.value?.room) {
+    loadComplimentaries()
+  }
 })
 
 // function clearCart() {
@@ -1249,6 +1323,8 @@ function clearCart() {
   kitchenNote.value = ''
   billToSearch.value = ''
   discountInput.value = ''
+  selectedComplimentaryName.value = ''
+  redeemableComplimentaries.value = []
   showDiscountPanel.value = false
   resumedDraftInvoice.value = null
   try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}
@@ -1318,7 +1394,8 @@ function onChargeNow() {
         }))),
         check_in: selectedBillTo.value.id,
         service_charge: serviceCharge.value,
-        discount_amount: discountAmount.value,
+        discount_amount: manualDiscountAmount.value,
+        complimentary_name: selectedComplimentaryName.value || null,
         kitchen_note: kitchenNote.value || null,
         pos_profile: terminalInfo.value?.pos_profile || null,
         existing_draft: resumedDraftInvoice.value || null,
@@ -1347,7 +1424,8 @@ function onChargeNow() {
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
     customer: selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
-    discount_amount: discountAmount.value,
+    discount_amount: manualDiscountAmount.value,
+    complimentary_name: selectedComplimentaryName.value || null,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
     existing_draft: resumedDraftInvoice.value || null,

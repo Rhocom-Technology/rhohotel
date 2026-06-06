@@ -174,12 +174,12 @@
                 placeholder="Auto-filled from guest"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg bg-gray-50" />
             </div>
-            <div>
+            <!-- <div>
               <p class="text-xs text-gray-500 mb-1.5">Guest Phone Number</p>
               <input type="text" v-model="form.contact_number"
                 placeholder="Direct contact for this stay"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+            </div> -->
           </div>
         </div>
 

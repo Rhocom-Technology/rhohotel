@@ -230,6 +230,10 @@
               Guest owes {{ formatCurrency(computedCollectibleOutstanding) }}.
               Receive payment or arrange bill transfer before completing checkout.
             </p>
+            <button @click="showPayment = true"
+              class="mt-3 px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+              Receive Payment
+            </button>
           </div>
           <div v-else-if="computedOutstanding < 0" class="bg-teal-50 rounded-xl border border-teal-200 px-4 py-4">
             <p class="text-xs font-bold text-teal-600 mb-1">Credit Balance</p>
@@ -299,6 +303,10 @@
           <div v-if="!checkoutDone && data.status !== 'Checked Out'">
             <h4 class="text-xs font-bold text-gray-900 mb-3">Quick Actions</h4>
             <div class="flex items-center gap-2 flex-wrap">
+              <button v-if="computedCollectibleOutstanding > 0" @click="showPayment = true"
+                class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                Receive Payment
+              </button>
               <button @click="finalizeCheckout"
                 :disabled="checkingOut"
                 class="flex-1 px-4 py-2.5 text-xs font-semibold text-white rounded-lg transition-colors"
@@ -317,12 +325,42 @@
     </div>
 
     </template>
+
+    <div v-if="showLateCheckoutPrompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div class="w-full max-w-md bg-white rounded-xl border border-gray-200 shadow-xl">
+        <div class="px-6 py-5 border-b border-gray-100">
+          <p class="text-sm font-bold text-gray-900">Charge Late Check-out?</p>
+          <p class="text-xs text-gray-500 mt-1">
+            {{ formatHoursLate(data.late_checkout_charge?.hours_late) }} overdue • {{ formatCurrency(lateCheckoutAmount) }}
+          </p>
+        </div>
+        <div class="px-6 py-5">
+          <p class="text-xs text-gray-600 leading-relaxed">
+            This stay is past the expected check-out time. Posting the charge will create a Sales Invoice on the guest folio before checkout is completed.
+          </p>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button @click="continueCheckout(false)"
+            class="px-4 py-2 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Skip Charge
+          </button>
+          <button @click="continueCheckout(true)"
+            class="px-4 py-2 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700">
+            Charge and Check Out
+          </button>
+        </div>
+      </div>
+    </div>
+    <ReceivePaymentModal v-if="showPayment" :checkIn="paymentCheckIn"
+      @close="showPayment = false"
+      @done="onPaymentDone" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import { callMethodForm } from '@/lib/api'
 import { parseServerDate } from '@/lib/utils'
 
@@ -399,6 +437,9 @@ const remarks = ref('')
 const checkingOut = ref(false)
 const checkoutDone = ref(false)
 const checkoutError = ref('')
+const showLateCheckoutPrompt = ref(false)
+const lateCheckoutDecision = ref(null)
+const showPayment = ref(false)
 
 const checklist = [
   'Receive final outstanding payment',
@@ -426,15 +467,25 @@ async function loadDetail() {
 
 async function finalizeCheckout() {
   checkoutError.value = ''
+  if (shouldPromptLateCheckout.value && lateCheckoutDecision.value === null) {
+    showLateCheckoutPrompt.value = true
+    return
+  }
+
   checkingOut.value = true
   try {
     const result = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.process_checkout', {
         check_in_name: route.params.id,
         remarks: remarks.value || '',
+        charge_late_checkout: lateCheckoutDecision.value ? 1 : 0,
     })
     if (result && result.status === 'Checked Out') {
       checkoutDone.value = true
       data.value.status = 'Checked Out'
+    } else if (result && result.status === 'Payment Required') {
+      checkoutError.value = result.message || 'Please collect payment before completing checkout.'
+      lateCheckoutDecision.value = null
+      await loadDetail()
     } else {
       checkoutError.value = 'Unexpected response from server.'
     }
@@ -444,6 +495,28 @@ async function finalizeCheckout() {
   } finally {
     checkingOut.value = false
   }
+}
+
+function continueCheckout(chargeLateCheckout) {
+  lateCheckoutDecision.value = !!chargeLateCheckout
+  showLateCheckoutPrompt.value = false
+  finalizeCheckout()
+}
+
+const shouldPromptLateCheckout = computed(() =>
+  data.value.status !== 'Checked Out'
+  && lateCheckoutAmount.value > 0
+  && !!data.value.late_checkout_charge
+)
+
+const paymentCheckIn = computed(() => ({
+  ...data.value,
+  name: data.value.name || route.params.id,
+}))
+
+async function onPaymentDone() {
+  showPayment.value = false
+  await loadDetail()
 }
 
 function formatDateTime(dt) {
@@ -468,10 +541,17 @@ function formatCurrency(amount) {
   return `₦ ${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 }
 
+function formatHoursLate(hours) {
+  const value = Number(hours || 0)
+  if (!value) return '0 hours'
+  return `${value.toLocaleString('en-NG', { maximumFractionDigits: 2 })} hour${value === 1 ? '' : 's'}`
+}
+
 function formatInvoiceType(type) {
   if (type === 'Sales Invoice') return 'Room Charge'
   if (type === 'POS Invoice') return 'Restaurant'
   if (type === 'Restaurant') return 'Restaurant'
+  if (type === 'Late Check-out' || type === 'Late Checkout' || type === 'Late Charges') return 'Late Charges'
   if (type === 'Stay Adjustment') return 'Stay Adjustment'
   if (type === 'Room Transfer') return 'Room Transfer'
   return type || 'Room Charge'

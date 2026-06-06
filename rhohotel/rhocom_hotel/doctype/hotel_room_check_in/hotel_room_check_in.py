@@ -455,8 +455,8 @@ def make_check_out(source_name, target_doc=None):
 def apply_discount(check_in_name, discount_amount, reason=None, source_invoice=None):
 	"""
 	Apply a discount to the Hotel Room Check In document by creating a credit note.
-	If source_invoice is provided the credit note is linked via return_against so
-	Frappe automatically reconciles and reduces the original invoice's outstanding.
+	If source_invoice is provided, a background reconciliation job applies the
+	credit note against that invoice in Accounts Receivable.
 	"""
 	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in_name)
 
@@ -479,9 +479,8 @@ def apply_discount(check_in_name, discount_amount, reason=None, source_invoice=N
 
 	if source_invoice:
 		credit_note_data["return_against"] = source_invoice
-		# Copy the receivable account and company from the original invoice so that
-		# Frappe creates GL entries with against_voucher = source_invoice, which
-		# triggers the automatic outstanding_amount reduction on the original invoice.
+		# Keep the receivable account aligned so the reconciliation Journal Entry
+		# can apply the credit note against the selected invoice.
 		src_fields = frappe.db.get_value(
 			"Sales Invoice", source_invoice, ["debit_to", "company"], as_dict=1
 		)
@@ -498,19 +497,13 @@ def apply_discount(check_in_name, discount_amount, reason=None, source_invoice=N
 	credit_note.insert()
 	credit_note.submit()
 
-	# Explicitly reduce the source invoice's outstanding_amount as a guaranteed
-	# fallback in case Frappe's automatic GL reconciliation has not yet updated
-	# the cached field (e.g. due to deferred GL processing).
 	if source_invoice:
-		current_outstanding = flt(
-			frappe.db.get_value("Sales Invoice", source_invoice, "outstanding_amount") or 0
-		)
-		frappe.db.set_value(
-			"Sales Invoice",
-			source_invoice,
-			"outstanding_amount",
-			max(0.0, current_outstanding - flt(discount_amount)),
-			update_modified=False,
+		from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import enqueue_credit_note_reconciliation
+
+		enqueue_credit_note_reconciliation(
+			credit_note.name,
+			source_invoice=source_invoice,
+			check_in=check_in_doc.name,
 		)
 
 	try:
@@ -521,6 +514,105 @@ def apply_discount(check_in_name, discount_amount, reason=None, source_invoice=N
 		frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after discount")
 
 	return {"status": "success", "credit_note": credit_note.name}
+
+
+def _validate_room_voucher_for_checkin(complimentary, check_in_doc):
+	if complimentary.complimentary_type != "Room Voucher":
+		frappe.throw(_("Complimentary {0} is not a Room Voucher.").format(complimentary.name))
+
+	if complimentary.department != "Front Desk":
+		frappe.throw(_("Room Voucher {0} must be routed to Front Desk.").format(complimentary.name))
+
+	if complimentary.status not in ("Approved", "In Progress"):
+		frappe.throw(_("Room Voucher {0} is not approved for redemption.").format(complimentary.name))
+
+	if complimentary.expiry_date and getdate(complimentary.expiry_date) < getdate(nowdate()):
+		frappe.throw(_("Room Voucher {0} has expired.").format(complimentary.name))
+
+	if flt(complimentary.value) <= 0:
+		frappe.throw(_("Room Voucher {0} has no redeemable value.").format(complimentary.name))
+
+	if complimentary.check_in and complimentary.check_in != check_in_doc.name:
+		frappe.throw(_("Room Voucher {0} belongs to another check-in.").format(complimentary.name))
+
+	if complimentary.room and complimentary.room != check_in_doc.room_number:
+		frappe.throw(_("Room Voucher {0} belongs to room {1}.").format(complimentary.name, complimentary.room))
+
+	if not complimentary.check_in and not complimentary.room:
+		guest_name = frappe.db.get_value("Hotel Guest", check_in_doc.guest, "hotel_guest_name") or check_in_doc.guest
+		if complimentary.guest and complimentary.guest.strip().lower() not in {guest_name.lower(), str(check_in_doc.guest).lower()}:
+			frappe.throw(_("Room Voucher {0} belongs to another guest.").format(complimentary.name))
+
+
+@frappe.whitelist()
+def apply_room_voucher(check_in_name, complimentary_name, source_invoice):
+	"""Redeem an approved Room Voucher by creating a credit note on a room invoice."""
+	if not complimentary_name:
+		frappe.throw(_("Select a Room Voucher."))
+	if not source_invoice:
+		frappe.throw(_("Select a room invoice for this voucher."))
+
+	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in_name)
+	if not frappe.db.exists("Hotel Complimentary", complimentary_name):
+		frappe.throw(_("Room Voucher {0} not found.").format(complimentary_name))
+
+	complimentary = frappe.get_doc("Hotel Complimentary", complimentary_name)
+	_validate_room_voucher_for_checkin(complimentary, check_in_doc)
+
+	if not frappe.db.exists("Sales Invoice", source_invoice):
+		frappe.throw(_("Sales Invoice {0} not found.").format(source_invoice))
+
+	invoice = frappe.get_doc("Sales Invoice", source_invoice)
+	if int(invoice.docstatus or 0) != 1 or int(invoice.is_return or 0):
+		frappe.throw(_("Select a submitted, non-return room invoice."))
+	if flt(invoice.outstanding_amount) <= 0:
+		frappe.throw(_("Selected invoice has no outstanding balance."))
+	if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+		invoice_source = (invoice.get("custom_invoice_source") or "").strip().lower()
+		if invoice_source in {"restaurant", "pos invoice"}:
+			frappe.throw(_("Room Vouchers can only be applied to room charge invoices."))
+
+	voucher_amount = min(flt(complimentary.value), flt(invoice.outstanding_amount))
+	if voucher_amount <= 0:
+		frappe.throw(_("Room Voucher {0} cannot be applied to this invoice.").format(complimentary.name))
+
+	reason = _("Room Voucher {0} redeemed against {1}").format(complimentary.name, source_invoice)
+	result = apply_discount(
+		check_in_name=check_in_doc.name,
+		discount_amount=voucher_amount,
+		reason=reason,
+		source_invoice=source_invoice,
+	)
+
+	credit_note = result.get("credit_note")
+	complimentary.status = "Consumed"
+	complimentary.consumed_on = now_datetime()
+	complimentary.consumption_reference = _("Credit Note {0} against Sales Invoice {1}").format(credit_note, source_invoice)
+	complimentary.flags.ignore_permissions = True
+	complimentary.save()
+
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"credit_note": credit_note,
+		"source_invoice": source_invoice,
+		"complimentary_name": complimentary.name,
+		"applied_amount": voucher_amount,
+	}
+
+
+def _get_oldest_open_checkin_charge_invoice(check_in_name):
+	return frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"custom_hotel_room_check_in": check_in_name,
+			"docstatus": 1,
+			"is_return": 0,
+			"outstanding_amount": [">", 0],
+		},
+		"name",
+		order_by="posting_date asc, creation asc",
+	)
 
 
 @frappe.whitelist()
@@ -697,10 +789,10 @@ def reduce_stay(check_in_name, new_checkout):
 			frappe.throw(_("No customer linked to guest {0}").format(doc.guest))
 
 		room_doc = frappe.get_doc("Hotel Room", doc.room_number)
+		source_invoice = _get_oldest_open_checkin_charge_invoice(doc.name)
 
 		# Create credit note (Sales Invoice with is_return = 1)
-		credit_note = frappe.get_doc(
-			{
+		credit_note_data = {
 				"doctype": "Sales Invoice",
 				"customer": customer,
 				"is_return": 1,
@@ -717,13 +809,32 @@ def reduce_stay(check_in_name, new_checkout):
 				],
 				"posting_date": frappe.utils.today(),
 				"remarks": f"Credit note for reduced stay ({diff_nights} nights)",
-			}
-		)
+		}
+		if source_invoice:
+			credit_note_data["return_against"] = source_invoice
+			src_fields = frappe.db.get_value(
+				"Sales Invoice", source_invoice, ["debit_to", "company"], as_dict=1
+			)
+			if src_fields:
+				if src_fields.debit_to:
+					credit_note_data["debit_to"] = src_fields.debit_to
+				if src_fields.company:
+					credit_note_data["company"] = src_fields.company
+
+		credit_note = frappe.get_doc(credit_note_data)
 		credit_note.flags.ignore_permissions = True
 		credit_note.flags.ignore_mandatory = True
 		credit_note.flags.ignore_links = True
 		credit_note.insert()
 		credit_note.submit()
+		if source_invoice:
+			from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import enqueue_credit_note_reconciliation
+
+			enqueue_credit_note_reconciliation(
+				credit_note.name,
+				source_invoice=source_invoice,
+				check_in=doc.name,
+			)
 
 	# Update check-in document
 	doc.expected_check_out_datetime = new_dt
@@ -930,20 +1041,13 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 			credit_note.submit()
 			adjustment_invoice_name = credit_note.name
 
-			# Explicitly reduce the source invoice's outstanding as a guaranteed fallback
-			# in case Frappe's automatic GL reconciliation has not yet updated the field.
 			if source_invoice:
-				reloaded_cn = frappe.get_doc("Sales Invoice", credit_note.name)
-				reduction_amount = abs(flt(reloaded_cn.grand_total))
-				current_outstanding = flt(
-					frappe.db.get_value("Sales Invoice", source_invoice, "outstanding_amount") or 0
-				)
-				frappe.db.set_value(
-					"Sales Invoice",
-					source_invoice,
-					"outstanding_amount",
-					max(0.0, current_outstanding - reduction_amount),
-					update_modified=False,
+				from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import enqueue_credit_note_reconciliation
+
+				enqueue_credit_note_reconciliation(
+					credit_note.name,
+					source_invoice=source_invoice,
+					check_in=doc.name,
 				)
 
 		# === Update Check-In Document ===
@@ -1247,16 +1351,12 @@ def adjust_room_rate(check_in_doc, old_room_number, new_room_number, old_rate, n
 	invoice.submit()
 
 	if source_invoice:
-		reduction_amount = abs(flt(invoice.grand_total))
-		current_outstanding = flt(
-			frappe.db.get_value("Sales Invoice", source_invoice, "outstanding_amount") or 0
-		)
-		frappe.db.set_value(
-			"Sales Invoice",
-			source_invoice,
-			"outstanding_amount",
-			max(0.0, current_outstanding - reduction_amount),
-			update_modified=False,
+		from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import enqueue_credit_note_reconciliation
+
+		enqueue_credit_note_reconciliation(
+			invoice.name,
+			source_invoice=source_invoice,
+			check_in=check_in_doc.name,
 		)
 
 	action = _("Charged") if is_upgrade else _("Credited")
@@ -1365,7 +1465,7 @@ def apply_late_checkout_charge(check_in, item, charge_type, amount):
 	si.flags.ignore_permissions = True
 	si.flags.ignore_mandatory = True
 	if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
-		si.custom_invoice_source = "Late Check-out"
+		si.custom_invoice_source = "Late Charges"
 
 	# ----------------------------
 	# Add item
@@ -1374,5 +1474,6 @@ def apply_late_checkout_charge(check_in, item, charge_type, amount):
 	si.set_taxes()
 	si.save(ignore_permissions=True)
 	si.submit()
+	check_in_doc.db_set("late_checkout", 1, update_modified=False)
 
 	return {"status": "success", "sales_invoice": si.name, "amount": rate}

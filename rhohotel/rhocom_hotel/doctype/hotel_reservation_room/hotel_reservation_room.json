@@ -99,6 +99,7 @@
       "description": "Copied from the parent Hotel Reservation (to_date - from_date). Used to compute room_total."
     },
     {
+      "allow_on_submit": 1,
       "fieldname": "discount",
       "fieldtype": "Currency",
       "in_list_view": 1,

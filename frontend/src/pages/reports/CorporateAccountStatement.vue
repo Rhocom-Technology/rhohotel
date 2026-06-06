@@ -62,6 +62,7 @@
             <option value="Sales Invoice">Sales Invoice</option>
             <option value="Credit Note">Credit Note</option>
             <option value="Payment Entry">Payment Entry</option>
+            <option value="Bill Transfer">Bill Transfer</option>
           </select>
         </div>
 

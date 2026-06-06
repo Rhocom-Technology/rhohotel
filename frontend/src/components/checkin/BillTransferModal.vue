@@ -270,6 +270,7 @@ function formatInvoiceType(type) {
   if (type === 'Sales Invoice') return 'Room Charge'
   if (type === 'POS Invoice') return 'Restaurant'
   if (type === 'Restaurant') return 'Restaurant'
+  if (type === 'Late Check-out' || type === 'Late Checkout' || type === 'Late Charges') return 'Late Charges'
   return type || 'Room Charge'
 }
 

@@ -68,6 +68,7 @@
         <select v-model="filterType" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Types</option>
           <option>Food Voucher</option>
+          <option>Room Voucher</option>
           <option>Airport Transfer</option>
           <option>Room Upgrade</option>
           <option>Amenity Basket</option>

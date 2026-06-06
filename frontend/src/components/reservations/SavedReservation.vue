@@ -42,6 +42,11 @@
           <button v-if="reservation.docstatus === 0" :disabled="actionLoading" @click="emit('submit-reservation')"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">Submit Reservation</button>
           <button @click="showPaymentModal = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
+          <button
+            v-if="hasTransferableInvoices"
+            @click="showBillTransferModal = true"
+            class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+          >Corporate Bill Transfer</button>
           <button v-if="!hasAnyCheckedIn" @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
           <button @click="changeRoomTargetRoom = ''; showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
           <button v-if="showTopCreateInvoice"
@@ -103,24 +108,67 @@
           <h3 class="text-sm font-bold text-gray-900">Reserved Rooms</h3>
           <button v-if="canTopBulkCheckIn" @click="openBulkCheckInPicker" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Bulk Check In</button>
         </div>
+        <div v-if="isSplitGroup" class="mb-3 flex flex-wrap items-end gap-2">
+          <label class="flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              :checked="allDiscountRoomsSelected"
+              class="accent-blue-600"
+              @change="toggleAllDiscountRooms($event.target.checked)"
+            />
+            Select all
+          </label>
+          <div>
+            <p class="mb-1 text-xs text-gray-500">Discount Type</p>
+            <select v-model="distributionDiscountType" class="w-36 rounded border border-gray-200 px-2 py-2 text-xs focus:outline-none">
+              <option>Fixed Amount</option>
+              <option>Percentage</option>
+            </select>
+          </div>
+          <div>
+            <p class="mb-1 text-xs text-gray-500">Discount</p>
+            <input
+              v-model.number="distributionDiscount"
+              type="number"
+              min="0"
+              step="0.01"
+              class="w-28 rounded border border-gray-200 px-2 py-2 text-xs focus:outline-none"
+            />
+          </div>
+          <button
+            :disabled="actionLoading || selectedDiscountRoomNames.length === 0"
+            @click="distributeRoomDiscount"
+            class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >Distribute</button>
+        </div>
         <div class="overflow-x-auto border border-gray-100 rounded-lg">
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
+                <th v-if="isSplitGroup" class="text-left text-xs font-medium text-gray-500 px-3 py-2">Select</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Room</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Type</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate / Plan</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Guest</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate/Night</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Discount</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Total</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="rooms.length === 0">
-                <td colspan="7" class="px-3 py-4 text-center text-xs text-gray-300">No room rows found.</td>
+                <td :colspan="isSplitGroup ? 9 : 8" class="px-3 py-4 text-center text-xs text-gray-300">No room rows found.</td>
               </tr>
               <tr v-for="row in rooms" :key="row.name || row.idx" class="border-t border-gray-100">
+                <td v-if="isSplitGroup" class="px-3 py-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    :checked="selectedDiscountRoomNames.includes(row.name)"
+                    class="accent-blue-600"
+                    @change="toggleDiscountRoom(row.name, $event.target.checked)"
+                  />
+                </td>
                 <td class="px-3 py-2 text-xs text-gray-700">
                   <button
                     v-if="row.check_in_reference"
@@ -130,7 +178,7 @@
                   <span v-else>{{ row.room_number || '—' }}</span>
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ row.room_type || '—' }}</td>
-                <td class="px-3 py-2 text-xs text-gray-500 text-right">
+                <td class="px-3 py-2 text-xs text-gray-500 text-left">
                   <span v-if="row.rate_code" class="inline-flex items-center px-1.5 py-0.5 text-xs bg-blue-50 text-blue-600 rounded border border-blue-100">{{ row.rate_code }}</span>
                   <span v-if="row.meal_plan_snapshot" class="ml-1 inline-flex items-center px-1.5 py-0.5 text-xs bg-green-50 text-green-600 rounded border border-green-100">{{ row.meal_plan_snapshot }}</span>
                 </td>
@@ -147,6 +195,23 @@
                   />
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.rate_per_night) }}</td>
+                <td class="px-3 py-2 text-xs text-gray-700 min-w-[150px]">
+                  <div v-if="isSplitGroup" class="flex items-center gap-1">
+                    <input
+                      v-model.number="row.discount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="w-24 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      :disabled="actionLoading"
+                      @click="saveRoomDiscount(row)"
+                      class="px-2 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 disabled:opacity-50"
+                    >{{ actionLoading ? 'Saving' : 'Apply' }}</button>
+                  </div>
+                  <span v-else>{{ formatCurrency(row.discount || 0) }}</span>
+                </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.room_total) }}</td>
                 <td class="px-3 py-2 text-xs text-gray-700">
                   <div class="flex flex-col gap-1">
@@ -401,6 +466,13 @@
       @done="handlePaymentDone"
     />
 
+    <BillTransferModal
+      v-if="showBillTransferModal"
+      :reservation="reservation"
+      @close="showBillTransferModal = false"
+      @done="handleBillTransferDone"
+    />
+
     <PrintReservationModal
       v-if="showPrintModal"
       :reservation="reservation"
@@ -461,11 +533,12 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StayAdjustment from '@/components/reservations/StayAdjustment.vue'
 import ChangeRoom from '@/components/reservations/ChangeRoom.vue'
 import ReceivePaymentModal from '@/components/reservations/ReceivePaymentModal.vue'
+import BillTransferModal from '@/components/reservations/BillTransferModal.vue'
 import PrintReservationModal from '@/components/reservations/PrintReservationModal.vue'
 import GuestSelector from '@/components/reservations/GuestSelector.vue'
 import { callMethod } from '@/lib/api'
@@ -487,6 +560,8 @@ const emit = defineEmits([
   'bulk-check-in',
   'update-room',
   'update-occupant',
+  'update-room-discount',
+  'distribute-room-discount',
   'cancel-reservation',
   'create-invoice',
   'submit-reservation',
@@ -496,6 +571,7 @@ const showAdjustModal = ref(false)
 const showChangeRoomModal = ref(false)
 const changeRoomTargetRoom = ref('')
 const showPaymentModal = ref(false)
+const showBillTransferModal = ref(false)
 const showPrintModal = ref(false)
 const printFormat = ref('summary')
 const showCheckInToast = ref(false)
@@ -504,11 +580,15 @@ const showPaymentToast = ref(false)
 const paymentToastMessage = ref('')
 const showBulkCheckInPicker = ref(false)
 const selectedBulkRoomNames = ref([])
+const selectedDiscountRoomNames = ref([])
+const distributionDiscountType = ref('Fixed Amount')
+const distributionDiscount = ref(0)
 
 function handleModalDone() {
   showAdjustModal.value = false
   showChangeRoomModal.value = false
   showPaymentModal.value = false
+  showBillTransferModal.value = false
   showPrintModal.value = false
   emit('refresh')
 }
@@ -516,6 +596,15 @@ function handleModalDone() {
 function handlePaymentDone() {
   handleModalDone()
   paymentToastMessage.value = 'Payment recorded successfully.'
+  showPaymentToast.value = true
+  setTimeout(() => {
+    showPaymentToast.value = false
+  }, 3200)
+}
+
+function handleBillTransferDone() {
+  handleModalDone()
+  paymentToastMessage.value = 'Bill transfer completed successfully.'
   showPaymentToast.value = true
   setTimeout(() => {
     showPaymentToast.value = false
@@ -533,6 +622,25 @@ const singleTopCheckInRoom = computed(() => (canSingleTopCheckIn.value ? pending
 const reservationType = computed(() => String(props.reservation?.reservation_type || '').trim().toLowerCase())
 const groupBillingMode = computed(() => String(props.reservation?.group_billing_mode || '').trim().toLowerCase())
 const isSplitGroup = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('split'))
+const allDiscountRoomsSelected = computed(() => {
+  const roomNames = rooms.value.map((row) => row?.name).filter(Boolean)
+  return roomNames.length > 0 && roomNames.every((name) => selectedDiscountRoomNames.value.includes(name))
+})
+
+watch(
+  rooms,
+  (rows) => {
+    if (!isSplitGroup.value) {
+      selectedDiscountRoomNames.value = []
+      return
+    }
+    const names = rows.map((row) => row?.name).filter(Boolean)
+    selectedDiscountRoomNames.value = selectedDiscountRoomNames.value.length
+      ? selectedDiscountRoomNames.value.filter((name) => names.includes(name))
+      : names
+  },
+  { immediate: true },
+)
 const invoiceLedger = computed(() => {
   const reservationInvoices = Array.isArray(props.reservation?.reservation_invoices)
     ? props.reservation.reservation_invoices
@@ -542,6 +650,10 @@ const invoiceLedger = computed(() => {
     : []
   return reservationInvoices.length ? reservationInvoices : fallbackInvoices
 })
+
+const hasTransferableInvoices = computed(() =>
+  invoiceLedger.value.some((invoice) => !Number(invoice?.is_return || 0) && Number(invoice?.outstanding_amount || 0) > 0)
+)
 
 const splitInvoiceLedgerCount = computed(() => invoiceLedger.value
   .filter((invoice) => Number(invoice?.is_return || 0) === 0)
@@ -581,6 +693,37 @@ async function createSplitInvoice(row) {
   } finally {
     splitInvoiceLoading.value = null
   }
+}
+
+function saveRoomDiscount(row) {
+  if (!row?.name || props.actionLoading) return
+  emit('update-room-discount', { row })
+}
+
+function toggleDiscountRoom(roomName, checked) {
+  if (!roomName) return
+  if (checked) {
+    if (!selectedDiscountRoomNames.value.includes(roomName)) {
+      selectedDiscountRoomNames.value = [...selectedDiscountRoomNames.value, roomName]
+    }
+    return
+  }
+  selectedDiscountRoomNames.value = selectedDiscountRoomNames.value.filter((name) => name !== roomName)
+}
+
+function toggleAllDiscountRooms(checked) {
+  selectedDiscountRoomNames.value = checked
+    ? rooms.value.map((row) => row?.name).filter(Boolean)
+    : []
+}
+
+function distributeRoomDiscount() {
+  if (!isSplitGroup.value || props.actionLoading || selectedDiscountRoomNames.value.length === 0) return
+  emit('distribute-room-discount', {
+    discount: Number(distributionDiscount.value || 0),
+    discount_type: distributionDiscountType.value || 'Fixed Amount',
+    room_row_names: selectedDiscountRoomNames.value,
+  })
 }
 
 function getPaymentValue(payment) {

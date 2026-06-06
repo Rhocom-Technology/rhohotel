@@ -65,6 +65,7 @@
             <p class="text-xs text-gray-500 mb-1.5">Complimentary Type</p>
             <select v-model="form.complimentary_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
               <option>Food Voucher</option>
+              <option>Room Voucher</option>
               <option>Airport Transfer</option>
               <option>Room Upgrade</option>
               <option>Amenity Basket</option>
@@ -200,7 +201,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, onMounted } from 'vue'
+import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 
@@ -224,6 +225,14 @@ const form = reactive({
   note: '',
   approval_level: 'General Manager',
   source_category: 'Service Recovery',
+})
+
+watch(() => form.complimentary_type, (type) => {
+  if (type !== 'Room Voucher') return
+  form.department = 'Front Desk'
+  if (!form.redemption_rule) {
+    form.redemption_rule = 'Redeem at Front Desk against approved room charge or stay benefit. No cash exchange.'
+  }
 })
 
 // ── Active check-ins for guest/room dropdowns ─────────────────────────────────

@@ -3,6 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import flt, get_datetime, now_datetime
 from datetime import datetime
 
 
@@ -24,14 +25,36 @@ def get_default_check_out_time():
 def get_default_check_in_time():
 	return frappe.get_single('Hotel Settings').default_check_in_time	
 
-def get_hours_late():
+@frappe.whitelist()
+def are_group_room_blocks_enabled():
+    try:
+        return bool(frappe.db.get_single_value("Hotel Settings", "enable_group_room_blocks"))
+    except Exception:
+        return False
+
+def get_hours_late(check_in_name=None, reference_datetime=None):
+    if check_in_name:
+        expected_checkout = frappe.db.get_value(
+            "Hotel Room Check In",
+            check_in_name,
+            "expected_check_out_datetime",
+        )
+        if expected_checkout:
+            checkout_dt = get_datetime(expected_checkout)
+            now = get_datetime(reference_datetime) if reference_datetime else now_datetime()
+            if now <= checkout_dt:
+                return 0.0
+
+            delta = now - checkout_dt
+            return round(delta.total_seconds() / 3600, 2)
+
     settings = frappe.get_single("Hotel Settings")
 
     checkout_time = datetime.strptime(
         str(settings.default_check_out_time), "%H:%M:%S"
     ).time()
 
-    now = datetime.now()
+    now = get_datetime(reference_datetime) if reference_datetime else now_datetime()
 
     checkout_dt = datetime.combine(now.date(), checkout_time)
 
@@ -54,14 +77,10 @@ def get_late_checkout_policy(hours_late):
     return None
 
 @frappe.whitelist()
-def check_late_checkout(check_in_name = None):
-    hours_late = get_hours_late()
+def check_late_checkout(check_in_name=None, reference_datetime=None):
+    hours_late = get_hours_late(check_in_name, reference_datetime=reference_datetime)
     settings = frappe.get_single("Hotel Settings")
-    hours_late -= settings.late_checkout_grace_hours
-
-
-    if hours_late <= 0:
-        return {"late": False}
+    hours_late -= flt(settings.late_checkout_grace_hours)
 
     if hours_late <= 0:
         return {"late": False}

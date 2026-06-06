@@ -10,6 +10,7 @@ const router = createRouter({
 
     // Front Desk
     { path: '/room-view', name: 'RoomView', component: () => import('@/pages/frontdesk/RoomView.vue') },
+    { path: '/available-rooms', name: 'AvailableRooms', component: () => import('@/pages/frontdesk/AvailableRooms.vue') },
     { path: '/check-ins', name: 'CheckIns', component: () => import('@/pages/frontdesk/CheckIns.vue') },
     { path: '/check-ins/new', name: 'NewCheckIn', component: () => import('@/pages/frontdesk/NewCheckIn.vue') },
     { path: '/check-ins/:id', name: 'CheckInDetail', component: () => import('@/pages/frontdesk/CheckInDetail.vue') },

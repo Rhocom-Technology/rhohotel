@@ -388,9 +388,7 @@ def update_guest(
 		doc.hotel_guest_name = name
 		doc.save(ignore_permissions=True)
 		# Now rename: this updates `name` and `hotel_guest_name` atomically
-		frappe.rename_doc("Hotel Guest", name, new_name, ignore_permissions=True, merge=False)
-		# Update the field on the renamed doc
-		frappe.db.set_value("Hotel Guest", new_name, "hotel_guest_name", new_name)
+		frappe.rename_doc("Hotel Guest", name, new_name, force=True, merge=False)
 		# Also update the linked Customer display name
 		customer = frappe.db.get_value("Hotel Guest", new_name, "customer")
 		if customer:
@@ -399,9 +397,9 @@ def update_guest(
 			except Exception:
 				pass
 		frappe.db.commit()
-		return {"name": new_name, "hotel_guest_name": new_name}
+		return get_guest(new_name)
 
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 
-	return {"name": doc.name, "hotel_guest_name": doc.hotel_guest_name}
+	return get_guest(doc.name)

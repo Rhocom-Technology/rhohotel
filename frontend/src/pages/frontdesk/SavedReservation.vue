@@ -10,6 +10,8 @@
     @check-in-room="goToIndividualCheckIn"
     @bulk-check-in="goToBulkCheckIn"
     @update-occupant="saveRoomOccupant"
+    @update-room-discount="saveRoomDiscount"
+    @distribute-room-discount="distributeRoomDiscount"
     @cancel-reservation="cancelReservation"
     @create-invoice="createInvoice"
     @submit-reservation="submitReservation"
@@ -146,13 +148,13 @@ async function loadReservation() {
       .map(normalizeInvoiceRow)
     const fallbackInvoices = (Array.isArray(paymentSummary?.invoices) ? paymentSummary.invoices : [])
       .map(normalizeInvoiceRow)
-    const invoiceEntries = reservationInvoices.length ? reservationInvoices : fallbackInvoices
+    const invoiceEntries = fallbackInvoices.length ? fallbackInvoices : reservationInvoices
 
     const reservationPayments = (Array.isArray(doc.reservation_payments) ? doc.reservation_payments : [])
       .map(normalizePaymentRow)
     const fallbackPayments = (Array.isArray(paymentSummary?.payment_entries) ? paymentSummary.payment_entries : [])
       .map(normalizePaymentRow)
-    const paymentEntries = reservationPayments.length ? reservationPayments : fallbackPayments
+    const paymentEntries = fallbackPayments.length ? fallbackPayments : reservationPayments
 
     const fallbackPaidAmount = paymentEntries.reduce((sum, row) => sum + getPaymentValue(row), 0)
     const paidAmount = Number(paymentSummary?.paid_amount ?? fallbackPaidAmount)
@@ -350,6 +352,57 @@ async function saveRoomOccupant(payload) {
     await loadReservation()
   } catch (error) {
     errorMessage.value = toUserError(error, 'Could not save room occupant.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function saveRoomDiscount(payload) {
+  const row = payload?.row || payload
+  if (!row?.name) {
+    errorMessage.value = 'Could not save discount: missing room row id.'
+    return
+  }
+
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.apply_split_room_discount',
+      {
+        reservation_name: reservation.value.name,
+        room_row_name: row.name,
+        discount: Number(row.discount || 0),
+        reason: 'Front desk split room discount',
+      },
+    )
+    await loadReservation()
+  } catch (error) {
+    errorMessage.value = toUserError(error, 'Could not save room discount.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function distributeRoomDiscount(payload) {
+  if (!reservation.value?.name) return
+
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.distribute_split_room_discount',
+      {
+        reservation_name: reservation.value.name,
+        discount: Number(payload?.discount || 0),
+        discount_type: payload?.discount_type || 'Fixed Amount',
+        room_row_names: payload?.room_row_names || [],
+        reason: 'Front desk split discount distribution',
+      },
+    )
+    await loadReservation()
+  } catch (error) {
+    errorMessage.value = toUserError(error, 'Could not distribute room discount.')
   } finally {
     actionLoading.value = false
   }

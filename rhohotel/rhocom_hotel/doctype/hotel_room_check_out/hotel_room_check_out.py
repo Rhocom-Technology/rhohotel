@@ -41,10 +41,16 @@ class HotelRoomCheckOut(Document):
         check_in = frappe.get_doc("Hotel Room Check In", self.check_in)
         self.late_checkout = check_in.late_checkout
         self.late_checkout_charges = 0
+        if self.flags.get("skip_late_checkout_charge"):
+            return
+        if self.flags.get("applied_late_checkout_amount"):
+            self.late_checkout = 1
+            self.late_checkout_charges = flt(self.flags.get("applied_late_checkout_amount"))
+            return
         try:
             from rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings import check_late_checkout
 
-            result = check_late_checkout(self.check_in) or {}
+            result = check_late_checkout(self.check_in, reference_datetime=self.check_out_datetime) or {}
             if result.get("late"):
                 policy = result.get("policy") or {}
                 amount = flt(policy.get("amount"))

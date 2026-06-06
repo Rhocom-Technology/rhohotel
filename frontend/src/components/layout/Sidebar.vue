@@ -77,6 +77,7 @@ const navGroups = [
     icon: LayoutGrid,
     children: [
       { label: 'Room View', to: '/room-view' },
+      { label: 'Available Rooms', to: '/available-rooms' },
       { label: 'Check-ins', to: '/check-ins' },
       { label: 'Check-outs', to: '/check-outs' },
       { label: 'Reservations', to: '/reservations' },

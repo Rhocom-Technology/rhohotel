@@ -168,6 +168,10 @@ def check_canonical_reservation_conflict(
     Statuses excluded from conflict (reservation is no longer active):
         Cancelled, Checked Out, No Show, Expired
 
+    Child rows that have already produced a Hotel Room Check In are also excluded.
+    After check-in, the live check-in record is the source of truth for the guest's
+    current room, including room transfers.
+
     Args:
         room_number       : Hotel Room name to check.
         check_in_dt       : Period start – datetime or date/str (normalized to 12:00).
@@ -201,6 +205,9 @@ def check_canonical_reservation_conflict(
           AND hr.docstatus != 2
           AND hr.reservation_status NOT IN
               ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND COALESCE(rr.check_in_reference, '') = ''
+          AND COALESCE(rr.status, 'Reserved') NOT IN
+              ('Checked In', 'Checked Out', 'Cancelled')
           AND hr.from_date < %s
           AND hr.to_date   > %s
           {exclude_clause}
@@ -420,6 +427,8 @@ def get_available_rooms(
     # Rooms allocated in a canonical Hotel Reservation for an overlapping period.
     # Hotel Reservation stores rooms in the Hotel Reservation Room child table, so
     # we JOIN child → parent to apply status and date filters on the parent.
+    # Checked-in reservation rows are excluded because the live Hotel Room Check In
+    # record becomes the operational occupancy source, including after transfers.
     canonical_rows = frappe.db.sql(
         f"""
         SELECT DISTINCT rr.room_number
@@ -429,6 +438,9 @@ def get_available_rooms(
           AND hr.docstatus != 2
           AND hr.reservation_status NOT IN
               ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND COALESCE(rr.check_in_reference, '') = ''
+          AND COALESCE(rr.status, 'Reserved') NOT IN
+              ('Checked In', 'Checked Out', 'Cancelled')
           AND hr.from_date < %s
           AND hr.to_date   > %s
         """,
@@ -485,6 +497,9 @@ def get_protected_block_count(room_type, check_in_dt, check_out_dt, context_rese
     Returns:
         int – total protected (blocked) room count from other active Group reservations.
     """
+    if not frappe.db.get_single_value("Hotel Settings", "enable_group_room_blocks"):
+        return 0
+
     check_in_dt = _normalize_dt(check_in_dt)
     check_out_dt = _normalize_dt(check_out_dt)
 
@@ -555,6 +570,8 @@ def is_room_type_blocked_for_period(
         WHERE room.room_type = %s
           AND hr.docstatus != 2
           AND hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+          AND COALESCE(rr.check_in_reference, '') = ''
+          AND COALESCE(rr.status, 'Reserved') NOT IN ('Checked In', 'Checked Out', 'Cancelled')
           AND hr.from_date < %s
           AND hr.to_date   > %s
         """,

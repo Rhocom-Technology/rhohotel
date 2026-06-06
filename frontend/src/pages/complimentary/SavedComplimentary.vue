@@ -54,7 +54,7 @@
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Type</p>
           <select v-model="editForm.complimentary_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg">
-            <option>Food Voucher</option><option>Airport Transfer</option><option>Room Upgrade</option><option>Amenity Basket</option><option>Late Checkout</option><option>Laundry</option><option>Transport / Food</option><option>Amenity / Late CO</option><option>Laundry / Amenity</option>
+            <option>Food Voucher</option><option>Room Voucher</option><option>Airport Transfer</option><option>Room Upgrade</option><option>Amenity Basket</option><option>Late Checkout</option><option>Laundry</option><option>Transport / Food</option><option>Amenity / Late CO</option><option>Laundry / Amenity</option>
           </select>
         </div>
         <div>
