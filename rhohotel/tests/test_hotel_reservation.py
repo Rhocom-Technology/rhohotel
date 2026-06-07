@@ -4,6 +4,7 @@ import unittest
 import inspect
 import re
 from datetime import date
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 
@@ -20,16 +21,20 @@ if "frappe" not in sys.modules:
     frappe_stub.utils = types.SimpleNamespace(
         add_to_date=lambda value, **kwargs: "2026-04-10 13:00:00",
         nowdate=lambda: "2026-04-10",
+        getdate=lambda value: value if isinstance(value, date) else date.fromisoformat(value),
+        flt=lambda value, precision=None: round(float(value or 0), precision) if precision is not None else float(value or 0),
+        date_diff=lambda a, b: ((a if isinstance(a, date) else date.fromisoformat(a)) - (b if isinstance(b, date) else date.fromisoformat(b))).days,
     )
 
     utils_stub = types.ModuleType("frappe.utils")
     utils_stub.getdate = lambda value: value if isinstance(value, date) else date.fromisoformat(value)
-    utils_stub.flt = lambda value: float(value or 0)
+    utils_stub.flt = lambda value, precision=None: round(float(value or 0), precision) if precision is not None else float(value or 0)
     utils_stub.date_diff = lambda a, b: (a - b).days
     utils_stub.now_datetime = lambda: "2026-04-10 12:00:00"
     utils_stub.add_days = lambda value, days=0: value
     utils_stub.cint = lambda value: int(value or 0)
     utils_stub.get_datetime = lambda value: value
+    utils_stub.today = lambda: "2026-04-10"
 
     model_stub = types.ModuleType("frappe.model")
     model_document_stub = types.ModuleType("frappe.model.document")
@@ -100,6 +105,9 @@ class TestHotelReservation(unittest.TestCase):
             "create_pending_split_invoices": ["create_pending_split_invoices"],
             "collect_payment_for_reservation": ["collect_payment_for_reservation"],
             "cancel_reservation": ["cancel_reservation"],
+            "apply_split_room_discount": ["apply_split_room_discount"],
+            "distribute_split_room_discount": ["distribute_split_room_discount"],
+            "create_bill_transfer_for_reservation": ["create_bill_transfer_for_reservation"],
         }
 
         self.assertEqual(
@@ -250,6 +258,102 @@ class TestHotelReservation(unittest.TestCase):
         self.assertEqual(doc.discount_amount, 100)
         self.assertEqual(doc.total_amount, 0)
 
+    def test_split_parent_fixed_discount_is_distributed_equally(self):
+        doc = self._base_doc()
+        doc.reservation_type = "Group"
+        doc.group_billing_mode = "Split"
+        doc.from_date = "2026-04-10"
+        doc.to_date = "2026-04-11"
+        doc.discount_type = "Fixed Amount"
+        doc.discount = 30000
+        doc.rooms = [
+            Row(rate_per_night=90000, discount=0),
+            Row(rate_per_night=120000, discount=0),
+            Row(rate_per_night=120000, discount=0),
+        ]
+
+        doc._distribute_split_parent_discount()
+
+        self.assertEqual([row.discount for row in doc.rooms], [10000, 10000, 10000])
+        self.assertEqual(doc.discount_type, "")
+        self.assertEqual(doc.discount, 0)
+        self.assertEqual(doc.discount_amount, 0)
+
+    def test_split_parent_percentage_discount_remains_proportional(self):
+        doc = self._base_doc()
+        doc.reservation_type = "Group"
+        doc.group_billing_mode = "Split"
+        doc.from_date = "2026-04-10"
+        doc.to_date = "2026-04-11"
+        doc.discount_type = "Percentage"
+        doc.discount = 10
+        doc.rooms = [
+            Row(rate_per_night=90000, discount=0),
+            Row(rate_per_night=120000, discount=0),
+            Row(rate_per_night=120000, discount=0),
+        ]
+
+        doc._distribute_split_parent_discount()
+
+        self.assertEqual([row.discount for row in doc.rooms], [9000, 12000, 12000])
+
+    def test_split_adjustment_fixed_discount_allocates_equally_to_new_invoices(self):
+        doc = types.SimpleNamespace(
+            rooms=[
+                Row(name="ROW-802", split_invoice="INV-802", room_total=170000, discount=10000),
+                Row(name="ROW-211", split_invoice="INV-211", room_total=230000, discount=10000),
+                Row(name="ROW-208", split_invoice="INV-208", room_total=230000, discount=10000),
+            ],
+        )
+        old_room_totals = {"ROW-802": 81000, "ROW-211": 108000, "ROW-208": 108000}
+        old_room_discounts = {"ROW-802": 9000, "ROW-211": 12000, "ROW-208": 12000}
+
+        allocations = hr_module._get_split_adjustment_discount_allocations(
+            doc,
+            old_room_totals,
+            old_room_discounts,
+            "Fixed Amount",
+            30000,
+        )
+
+        self.assertEqual(allocations, {"ROW-802": 10000, "ROW-211": 10000, "ROW-208": 10000})
+        net_adjustments = {}
+        for row in doc.rooms:
+            old_gross = old_room_totals[row.name] + old_room_discounts[row.name]
+            new_gross = row.room_total + row.discount
+            net_adjustments[row.name] = new_gross - old_gross - allocations[row.name]
+
+        self.assertEqual(net_adjustments, {"ROW-802": 80000, "ROW-211": 110000, "ROW-208": 110000})
+
+    def test_split_adjustment_percentage_discount_allocates_by_room_adjustment_value(self):
+        doc = types.SimpleNamespace(
+            rooms=[
+                Row(name="ROW-1", split_invoice="INV-1", room_total=145000, discount=5000),
+                Row(name="ROW-2", split_invoice="INV-2", room_total=235000, discount=5000),
+            ],
+        )
+        old_room_totals = {"ROW-1": 100000, "ROW-2": 180000}
+        old_room_discounts = {"ROW-1": 0, "ROW-2": 0}
+
+        allocations = hr_module._get_split_adjustment_discount_allocations(
+            doc,
+            old_room_totals,
+            old_room_discounts,
+            "Percentage",
+            10,
+        )
+
+        self.assertEqual(allocations, {"ROW-1": 5000, "ROW-2": 6000})
+
+    def test_saved_reservation_invoice_ledger_opens_invoice_detail_modal(self):
+        app_root = Path(__file__).resolve().parents[2]
+        source = (app_root / "frontend/src/components/reservations/SavedReservation.vue").read_text()
+
+        self.assertIn("import InvoiceDetailModal from '@/components/checkin/InvoiceDetailModal.vue'", source)
+        self.assertIn("@click=\"openInvoiceDetail(invoice)\"", source)
+        self.assertIn(":invoiceName=\"selectedInvoice.name\"", source)
+        self.assertIn("function openInvoiceDetail(invoice)", source)
+
     def test_on_submit_throws_for_non_confirmed_or_later_status(self):
         doc = self._base_doc()
         doc.reservation_status = STATUS_DRAFT
@@ -297,6 +401,8 @@ class TestHotelReservation(unittest.TestCase):
     def test_change_room_creates_adjustment_when_invoice_exists(self):
         reservation_doc = types.SimpleNamespace(
             name="RES-TEST-0001",
+            reservation_type="Individual",
+            group_billing_mode="",
             from_date="2026-04-10",
             number_of_nights=2,
             sales_invoice="INV-0001",
@@ -429,14 +535,19 @@ class TestHotelReservation(unittest.TestCase):
 
     def test_adjust_reservation_updates_dates_and_totals(self):
         doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            reservation_type="Individual",
+            group_billing_mode="",
             from_date="2026-04-10",
             to_date="2026-04-12",
             discount_type="None",
             discount=0,
+            rooms=[],
             flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
             _recalculate_room_totals=Mock(),
             _recalculate_totals=Mock(),
             save=Mock(),
+            subtotal=200,
             discount_amount=0,
             total_amount=200,
         )
@@ -550,13 +661,16 @@ class TestHotelReservation(unittest.TestCase):
             name="RES-TEST-0001",
             net_total=750,
             total_amount=750,
+            payment_status="Pending",
+            flags=types.SimpleNamespace(ignore_validate_update_after_submit=False),
             payment_entry=None,
-            get=lambda fieldname: [],
+            get=lambda fieldname: "Pending" if fieldname == "payment_status" else [],
         )
 
         with (
             patch.object(hr_module.frappe, "get_doc", return_value=doc),
             patch.object(hr_module, "_get_reservation_invoice_names", return_value=[]),
+            patch.object(hr_module, "_reconcile_pending_reservation_credit_notes", return_value=None),
         ):
             result = hr_module.get_payment_summary_for_reservation("RES-TEST-0001")
 
@@ -566,7 +680,13 @@ class TestHotelReservation(unittest.TestCase):
         self.assertEqual(result.get("balance"), 750)
 
     def test_get_outstanding_invoices_for_reservation_filters_zero_amount(self):
-        doc = types.SimpleNamespace(name="RES-TEST-0001", get=lambda fieldname: [])
+        doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            primary_guest_name="Guest One",
+            corporate_guest="",
+            customer="Guest Customer",
+            get=lambda fieldname: [],
+        )
         invoice_map = {
             "INV-1": {"name": "INV-1", "outstanding_amount": 120},
             "INV-2": {"name": "INV-2", "outstanding_amount": 0},
@@ -581,6 +701,9 @@ class TestHotelReservation(unittest.TestCase):
         with (
             patch.object(hr_module.frappe, "get_doc", return_value=doc),
             patch.object(hr_module, "_get_reservation_invoice_names", return_value=["INV-1", "INV-2"]),
+            patch.object(hr_module, "_reconcile_pending_reservation_credit_notes", return_value=None),
+            patch.object(hr_module, "_apply_reservation_invoice_netting", side_effect=lambda rows, names: rows),
+            patch.object(hr_module, "_get_invoice_credit_note_amount", return_value=0),
             patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value),
         ):
             result = hr_module.get_outstanding_invoices_for_reservation("RES-TEST-0001")
@@ -589,7 +712,12 @@ class TestHotelReservation(unittest.TestCase):
         self.assertEqual(result[0].get("name"), "INV-1")
 
     def test_adjust_invoice_for_reservation_returns_no_invoice_when_unlinked(self):
-        doc = types.SimpleNamespace(name="RES-TEST-0001", sales_invoice="")
+        doc = types.SimpleNamespace(
+            name="RES-TEST-0001",
+            reservation_type="Individual",
+            group_billing_mode="",
+            sales_invoice="",
+        )
         with (
             patch.object(hr_module.frappe, "get_doc", return_value=doc),
             patch.object(hr_module, "_get_reservation_invoice_names", return_value=[]),
@@ -614,11 +742,12 @@ class TestHotelReservation(unittest.TestCase):
 
     def test_collect_payment_for_reservation_requires_mode_of_payment(self):
         doc = types.SimpleNamespace(name="RES-TEST-0001")
-        outstanding_row = types.SimpleNamespace(name="INV-1", outstanding_amount=100)
+        outstanding_row = types.SimpleNamespace(name="INV-1", customer="Guest Customer", company="Test Company", outstanding_amount=100)
 
         with (
             patch.object(hr_module.frappe, "get_doc", return_value=doc),
             patch.object(hr_module, "_get_reservation_invoice_names", return_value=["INV-1"]),
+            patch.object(hr_module, "_reconcile_pending_reservation_credit_notes", return_value=None),
             patch.object(hr_module.frappe, "get_all", return_value=[outstanding_row], create=True),
         ):
             with self.assertRaises(RuntimeError):
@@ -626,6 +755,15 @@ class TestHotelReservation(unittest.TestCase):
                     "RES-TEST-0001",
                     payment_info={"paid_amount": 100},
                 )
+
+    def test_apply_split_room_discount_api_exists(self):
+        self.assertTrue(callable(hr_module.apply_split_room_discount))
+
+    def test_distribute_split_room_discount_api_exists(self):
+        self.assertTrue(callable(hr_module.distribute_split_room_discount))
+
+    def test_create_bill_transfer_for_reservation_api_exists(self):
+        self.assertTrue(callable(hr_module.create_bill_transfer_for_reservation))
 
     def test_cancel_reservation_returns_already_cancelled(self):
         doc = types.SimpleNamespace(docstatus=2)
