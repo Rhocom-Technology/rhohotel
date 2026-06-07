@@ -604,6 +604,8 @@ def adjust_reservation(
                 doc,
                 old_room_totals=old_room_totals,
                 old_room_discounts=old_room_discounts,
+                adjustment_discount_type=new_discount_type,
+                adjustment_discount=new_discount,
                 reason="Stay adjustment",
             )
             invoice_adjustment = {
@@ -1303,12 +1305,67 @@ def _adjust_split_invoice_for_room(doc, room_row, difference=None, reason=None, 
     return adjustment_doc
 
 
-def _adjust_split_invoices_for_reservation(doc, old_room_totals=None, old_room_discounts=None, reason=None):
+def _get_split_adjustment_discount_allocations(doc, old_room_totals, old_room_discounts, discount_type=None, discount_value=0):
+    from frappe.utils import flt
+
+    discount_type = (discount_type or "").strip()
+    discount_value = flt(discount_value or 0)
+    if not discount_type or discount_value <= 0 or not old_room_totals:
+        return {}
+
+    positive_rows = []
+    for room_row in doc.rooms or []:
+        if not getattr(room_row, "split_invoice", None) or room_row.name not in old_room_totals:
+            continue
+
+        old_gross = flt(old_room_totals.get(room_row.name)) + flt(old_room_discounts.get(room_row.name))
+        new_gross = flt(room_row.room_total or 0) + flt(room_row.discount or 0)
+        gross_difference = flt(new_gross - old_gross)
+        if gross_difference > 0:
+            positive_rows.append((room_row.name, gross_difference))
+
+    if not positive_rows:
+        return {}
+
+    allocations = {}
+    if discount_type == "Percentage":
+        pct = min(max(discount_value, 0), 100)
+        for row_name, gross_difference in positive_rows:
+            allocations[row_name] = min(flt(gross_difference * pct / 100, 2), gross_difference)
+        return allocations
+
+    if discount_type == "Fixed Amount":
+        total_discount = min(discount_value, sum(gross for _row_name, gross in positive_rows))
+        equal_share = flt(total_discount / len(positive_rows), 2)
+        allocated = 0
+        for idx, (row_name, gross_difference) in enumerate(positive_rows):
+            row_discount = total_discount - allocated if idx == len(positive_rows) - 1 else equal_share
+            allocations[row_name] = min(max(flt(row_discount, 2), 0), gross_difference)
+            allocated += flt(allocations[row_name])
+
+    return allocations
+
+
+def _adjust_split_invoices_for_reservation(
+    doc,
+    old_room_totals=None,
+    old_room_discounts=None,
+    adjustment_discount_type=None,
+    adjustment_discount=0,
+    reason=None,
+):
     from frappe.utils import flt
 
     created = []
     old_room_totals = old_room_totals or {}
     old_room_discounts = old_room_discounts or {}
+    adjustment_discount_allocations = _get_split_adjustment_discount_allocations(
+        doc,
+        old_room_totals,
+        old_room_discounts,
+        adjustment_discount_type,
+        adjustment_discount,
+    )
     for room_row in doc.rooms or []:
         if not getattr(room_row, "split_invoice", None):
             continue
@@ -1321,6 +1378,10 @@ def _adjust_split_invoices_for_reservation(doc, old_room_totals=None, old_room_d
             new_gross = flt(room_row.room_total or 0) + flt(room_row.discount or 0)
             gross_difference = flt(new_gross - old_gross)
             discount_difference = flt(room_row.discount or 0) - flt(old_room_discounts.get(room_row.name))
+            adjustment_discount_amount = flt(adjustment_discount_allocations.get(room_row.name))
+            if gross_difference > 0 and adjustment_discount_amount > 0:
+                difference = flt(gross_difference - adjustment_discount_amount)
+                discount_difference = adjustment_discount_amount
         else:
             difference = None
 
