@@ -1,7 +1,7 @@
 import sys
 import types
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 frappe_stub = sys.modules.get("frappe")
@@ -30,6 +30,8 @@ if not hasattr(frappe_stub.db, "sql"):
 	frappe_stub.db.sql = lambda *args, **kwargs: []
 if not hasattr(frappe_stub.db, "get_value"):
 	frappe_stub.db.get_value = lambda *args, **kwargs: None
+if not hasattr(frappe_stub.db, "get_single_value"):
+	frappe_stub.db.get_single_value = lambda *args, **kwargs: None
 if not hasattr(frappe_stub, "whitelist"):
 	frappe_stub.whitelist = _whitelist
 
@@ -179,6 +181,62 @@ class TestRoomAvailability(unittest.TestCase):
 
 		self.assertEqual([room.name for room in available], ["R-104"])
 		self.assertTrue(any("FROM `tabHotel Reservation Room`" in q for q in sql_queries))
+
+	def test_get_available_rooms_does_not_treat_current_occupancy_as_future_block(self):
+		rooms = [
+			DotDict(name="R-101", room_type="Deluxe", floor="1", capacity=2),
+			DotDict(name="R-102", room_type="Deluxe", floor="1", capacity=2),
+		]
+		faked_api = types.SimpleNamespace(get_room_rate=Mock(return_value=50000))
+		sql_queries = []
+
+		def fake_sql(query, params=None, as_dict=False):
+			sql_queries.append(query)
+			if "expected_check_out_datetime <=" in query:
+				return [DotDict(room_number="R-101")]
+			return []
+
+		with (
+			patch.dict(sys.modules, {"rhohotel.api": faked_api}),
+			patch.object(ra.frappe, "get_all", return_value=rooms),
+			patch.object(ra.frappe.db, "sql", side_effect=fake_sql),
+			patch.object(ra, "date_diff", return_value=2),
+		):
+			available = ra.get_available_rooms("2099-07-01", "2099-07-03")
+
+		self.assertEqual([room.name for room in available], ["R-101", "R-102"])
+		self.assertFalse(any("expected_check_out_datetime <=" in q for q in sql_queries))
+
+	def test_get_available_rooms_blocks_overdue_checkin_for_current_arrival(self):
+		today = datetime.now().strftime("%Y-%m-%d")
+		tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+		rooms = [
+			DotDict(name="R-101", room_type="Deluxe", floor="1", capacity=2),
+			DotDict(name="R-102", room_type="Deluxe", floor="1", capacity=2),
+		]
+		faked_api = types.SimpleNamespace(get_room_rate=Mock(return_value=50000))
+
+		def fake_sql(query, params=None, as_dict=False):
+			if "expected_check_out_datetime <=" in query:
+				return [DotDict(room_number="R-101")]
+			return []
+
+		with (
+			patch.dict(sys.modules, {"rhohotel.api": faked_api}),
+			patch.object(ra.frappe, "get_all", return_value=rooms),
+			patch.object(ra.frappe.db, "sql", side_effect=fake_sql),
+			patch.object(ra, "date_diff", return_value=1),
+		):
+			available = ra.get_available_rooms(today, tomorrow)
+
+		self.assertEqual([room.name for room in available], ["R-102"])
+
+	def test_check_checkin_conflict_does_not_treat_overdue_stay_as_future_block(self):
+		with patch.object(ra.frappe, "get_all", return_value=[]) as get_all_mock:
+			conflict = ra.check_checkin_conflict("R-101", "2099-07-01", "2099-07-03")
+
+		self.assertIsNone(conflict)
+		self.assertEqual(get_all_mock.call_count, 1)
 
 	def test_get_available_rooms_throws_for_invalid_date_range(self):
 		faked_api = types.SimpleNamespace(get_room_rate=Mock(return_value=50000))

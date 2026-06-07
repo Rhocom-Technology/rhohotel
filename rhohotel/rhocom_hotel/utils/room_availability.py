@@ -127,23 +127,26 @@ def check_checkin_conflict(room_number, check_in_dt, check_out_dt, exclude_check
     if results:
         return results[0]
 
-    # Pass 2: overdue-checkout guard
+    # Pass 2: overdue-checkout guard for current arrivals only.
     # A guest still "Checked In" whose expected checkout has passed is still in
-    # the room; the standard overlap query misses them because their
-    # expected_check_out_datetime <= check_in_dt.
-    overdue_filters = {
-        **base_filters,
-        "status": "Checked In",
-        "check_in_datetime": ["<", check_out_dt],
-        "expected_check_out_datetime": ["<=", check_in_dt],
-    }
-    overdue_results = frappe.get_all(
-        "Hotel Room Check In",
-        filters=overdue_filters,
-        fields=["name", "check_in_datetime", "expected_check_out_datetime", "guest"],
-        limit=1,
-    )
-    return overdue_results[0] if overdue_results else None
+    # the room today, but that transient status should not block future searches
+    # after the expected checkout date.
+    if getdate(check_in_dt) <= getdate(datetime.now()):
+        overdue_filters = {
+            **base_filters,
+            "status": "Checked In",
+            "check_in_datetime": ["<", check_out_dt],
+            "expected_check_out_datetime": ["<=", check_in_dt],
+        }
+        overdue_results = frappe.get_all(
+            "Hotel Room Check In",
+            filters=overdue_filters,
+            fields=["name", "check_in_datetime", "expected_check_out_datetime", "guest"],
+            limit=1,
+        )
+        return overdue_results[0] if overdue_results else None
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -408,21 +411,23 @@ def get_available_rooms(
         as_dict=True,
     )
 
-    # Overdue-checkout guard: guests still "Checked In" past their expected checkout.
-    # The standard query misses them because expected_check_out_datetime <= check_in_str.
-    overdue_rows = frappe.db.sql(
-        f"""
-        SELECT DISTINCT room_number
-        FROM `tabHotel Room Check In`
-        WHERE room_number IN ({placeholders})
-          AND docstatus != 2
-          AND status = 'Checked In'
-          AND check_in_datetime < %s
-          AND expected_check_out_datetime <= %s
-        """,
-        tuple(room_numbers) + (check_out_str, check_in_str),
-        as_dict=True,
-    )
+    overdue_rows = []
+    if getdate(check_in_dt) <= getdate(datetime.now()):
+        # Overdue-checkout guard: guests still "Checked In" past their expected
+        # checkout block current arrivals, but not future availability searches.
+        overdue_rows = frappe.db.sql(
+            f"""
+            SELECT DISTINCT room_number
+            FROM `tabHotel Room Check In`
+            WHERE room_number IN ({placeholders})
+              AND docstatus != 2
+              AND status = 'Checked In'
+              AND check_in_datetime < %s
+              AND expected_check_out_datetime <= %s
+            """,
+            tuple(room_numbers) + (check_out_str, check_in_str),
+            as_dict=True,
+        )
 
     # Rooms allocated in a canonical Hotel Reservation for an overlapping period.
     # Hotel Reservation stores rooms in the Hotel Reservation Room child table, so

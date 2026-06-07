@@ -450,6 +450,8 @@ def get_checkin_detail(name):
                         "invoice": inv_name,
                         "amount": inv.get("grand_total") or 0,
                         "outstanding_amount": inv.get("outstanding_amount") or 0,
+                        "raw_outstanding_amount": inv.get("raw_outstanding_amount"),
+                        "source_transfer_amount": inv.get("source_transfer_amount") or 0,
                         "is_return": inv.get("is_return") or 0,
                         "posting_date": inv.get("posting_date"),
                         "status": inv.get("status"),

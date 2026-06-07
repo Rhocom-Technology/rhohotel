@@ -12,6 +12,7 @@ def enqueue_credit_note_reconciliation(credit_note, source_invoice=None, check_i
 		"rhohotel.rhocom_hotel.utils.credit_note_reconciliation.reconcile_sales_credit_note",
 		queue="short",
 		enqueue_after_commit=True,
+		user="Administrator",
 		credit_note=credit_note,
 		source_invoice=source_invoice,
 		check_in=check_in,
@@ -20,7 +21,7 @@ def enqueue_credit_note_reconciliation(credit_note, source_invoice=None, check_i
 
 
 @frappe.whitelist()
-def reconcile_sales_credit_note(credit_note, source_invoice=None, check_in=None, reservation=None):
+def reconcile_sales_credit_note(credit_note, source_invoice=None, check_in=None, reservation=None, sync_folio=True):
 	"""Apply a Sales Invoice return against its intended invoice using ERPNext reconciliation.
 
 	The frontdesk folio can mathematically offset a return invoice, but Accounts
@@ -29,6 +30,8 @@ def reconcile_sales_credit_note(credit_note, source_invoice=None, check_in=None,
 	"""
 	if not credit_note or not frappe.db.exists("Sales Invoice", credit_note):
 		frappe.throw(_("Credit note {0} was not found.").format(credit_note))
+	if isinstance(sync_folio, str):
+		sync_folio = sync_folio.lower() not in {"0", "false", "no"}
 
 	credit_doc = frappe.get_doc("Sales Invoice", credit_note)
 	if int(credit_doc.docstatus or 0) != 1:
@@ -74,37 +77,45 @@ def reconcile_sales_credit_note(credit_note, source_invoice=None, check_in=None,
 
 	from erpnext.accounts.doctype.payment_reconciliation.payment_reconciliation import reconcile_dr_cr_note
 
-	reconcile_dr_cr_note(
-		[
-			frappe._dict(
-				{
-					"voucher_type": "Sales Invoice",
-					"voucher_no": credit_doc.name,
-					"against_voucher_type": "Sales Invoice",
-					"against_voucher": source_doc.name,
-					"account": account,
-					"party_type": "Customer",
-					"party": credit_doc.customer,
-					"dr_or_cr": "credit_in_account_currency",
-					"unreconciled_amount": credit_available,
-					"unadjusted_amount": credit_available,
-					"allocated_amount": allocated_amount,
-					"difference_amount": 0,
-					"difference_account": None,
-					"debit_or_credit_note_posting_date": today(),
-					"currency": currency,
-					"exchange_rate": exchange_rate,
-					"cost_center": _get_credit_note_cost_center(credit_doc),
-				}
-			)
-		],
-		credit_doc.company,
-	)
-
+	current_user = frappe.session.user
 	try:
-		_sync_related_folio(check_in=check_in or credit_doc.get("custom_hotel_room_check_in"), reservation=reservation)
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "Folio sync failed after credit note reconciliation")
+		if current_user != "Administrator":
+			frappe.set_user("Administrator")
+		reconcile_dr_cr_note(
+			[
+				frappe._dict(
+					{
+						"voucher_type": "Sales Invoice",
+						"voucher_no": credit_doc.name,
+						"against_voucher_type": "Sales Invoice",
+						"against_voucher": source_doc.name,
+						"account": account,
+						"party_type": "Customer",
+						"party": credit_doc.customer,
+						"dr_or_cr": "credit_in_account_currency",
+						"unreconciled_amount": credit_available,
+						"unadjusted_amount": credit_available,
+						"allocated_amount": allocated_amount,
+						"difference_amount": 0,
+						"difference_account": None,
+						"debit_or_credit_note_posting_date": today(),
+						"currency": currency,
+						"exchange_rate": exchange_rate,
+						"cost_center": _get_credit_note_cost_center(credit_doc),
+					}
+				)
+			],
+			credit_doc.company,
+		)
+	finally:
+		if current_user != frappe.session.user:
+			frappe.set_user(current_user)
+
+	if sync_folio:
+		try:
+			_sync_related_folio(check_in=check_in or credit_doc.get("custom_hotel_room_check_in"), reservation=reservation)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Folio sync failed after credit note reconciliation")
 
 	frappe.db.commit()
 	return {
@@ -142,7 +153,7 @@ def reconcile_credit_notes_for_checkin(check_in):
 
 
 @frappe.whitelist()
-def reconcile_credit_notes_for_reservation(reservation):
+def reconcile_credit_notes_for_reservation(reservation, sync_folio=True):
 	if not reservation:
 		frappe.throw(_("Reservation is required."))
 
@@ -174,6 +185,7 @@ def reconcile_credit_notes_for_reservation(reservation):
 			row.name,
 			source_invoice=row.return_against,
 			reservation=reservation,
+			sync_folio=sync_folio,
 		)
 		for row in rows
 		if row.return_against

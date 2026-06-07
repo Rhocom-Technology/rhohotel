@@ -660,8 +660,16 @@ const creditsTotal = computed(() =>
     invoices.value.filter(inv => inv.is_return).reduce((s, inv) => s + Math.abs(inv.amount || 0), 0)
   )
 )
+const sourceTransfersTotal = computed(() =>
+  summaryNumber(
+    'source_transfers_total',
+    invoices.value
+      .filter(inv => !inv.is_return)
+      .reduce((s, inv) => s + (Number(inv.source_transfer_amount) || 0), 0)
+  )
+)
 // Net for invoice table footer
-const invoiceTotal = computed(() => summaryNumber('invoice_net_total', chargesTotal.value - creditsTotal.value))
+const invoiceTotal = computed(() => summaryNumber('invoice_net_total', chargesTotal.value - creditsTotal.value - sourceTransfersTotal.value))
 // Outstanding the guest still owes — only regular (non-return) invoices
 // If Frappe reconciled the credit note via return_against, the original invoice's
 // outstanding_amount is already reduced; credit note outstanding = 0.
@@ -692,7 +700,7 @@ const acquiredOutstanding = computed(() =>
 )
 // Grand billing summary values
 const grandCharges = computed(() => summaryNumber('total_charges', chargesTotal.value + acquiredTotal.value))
-const grandCredits = computed(() => summaryNumber('total_credits', creditsTotal.value))
+const grandCredits = computed(() => summaryNumber('total_credits', creditsTotal.value + sourceTransfersTotal.value))
 const grandNetBill = computed(() => summaryNumber('net_bill', grandCharges.value - grandCredits.value))
 const totalPaid = computed(() =>
   summaryNumber(
@@ -710,7 +718,7 @@ const totalRefunded = computed(() =>
       .reduce((s, p) => s + (p.paid_amount || 0), 0)
   )
 )
-const grandNetOutstanding = computed(() => summaryNumber('balance_amount', grandNetBill.value - totalPaid.value + totalRefunded.value))
+const grandNetOutstanding = computed(() => summaryNumber('balance_amount', outstandingTotal.value + acquiredOutstanding.value))
 const lateCheckoutAmount = computed(() => Number(checkIn.value?.late_checkout_charge?.amount || 0))
 const shouldPromptLateCheckout = computed(() =>
   checkIn.value?.status === 'Checked In'

@@ -4,6 +4,7 @@
 
 import frappe
 from frappe.model.document import Document
+from rhohotel.rhocom_hotel.utils.customer import get_leaf_customer_group
 from rhohotel.rhocom_hotel.utils.phone import validate_phone_number
 
 class HotelGuest(Document):
@@ -26,7 +27,11 @@ class HotelGuest(Document):
         if not frappe.db.exists("Customer", {"custom_guest_id": self.name}):
             customer = frappe.new_doc("Customer")
             customer.customer_name = self.hotel_guest_name
+            customer.customer_type = "Company" if self.guest_type == "Corporate" else "Individual"
+            customer.customer_group = get_leaf_customer_group()
             # Set other customer fields as needed
             customer.custom_guest_id = self.name
+            customer.mobile_no = self.phone_number
+            customer.email_id = self.email
             customer.insert()
             self.customer = customer.name

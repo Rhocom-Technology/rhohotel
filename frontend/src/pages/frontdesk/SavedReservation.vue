@@ -98,6 +98,9 @@ function normalizeInvoiceRow(row) {
     outstanding_amount: Number(row?.outstanding_amount ?? 0),
     status: row?.status || '',
     is_return: Number(row?.is_return || 0),
+    room_row: row?.room_row || row?.room_row_name || '',
+    room_number: row?.room_number || '',
+    invoice_scope: row?.invoice_scope || '',
   }
 }
 
@@ -114,6 +117,11 @@ function normalizePaymentRow(row) {
 
 function getReservationId() {
   return String(route.params.id || '').trim()
+}
+
+function isReservationCancelled() {
+  return Number(reservation.value?.docstatus || 0) === 2
+    || String(reservation.value?.status || reservation.value?.reservation_status || '').toLowerCase() === 'cancelled'
 }
 
 async function loadReservation() {
@@ -189,6 +197,7 @@ function openPayments() {
 }
 
 function goToCheckIn() {
+  if (isReservationCancelled()) return
   const id = getReservationId()
   const res = reservation.value
   const rooms = Array.isArray(res?.rooms) ? res.rooms : []
@@ -309,11 +318,16 @@ function goToIndividualCheckIn(row) {
 }
 
 function goToBulkCheckIn() {
+  if (isReservationCancelled()) return
   const id = getReservationId()
   router.push({ name: 'NewCheckIn', query: id ? { reservation: id, canonical_reservation: id } : undefined })
 }
 
 async function saveRoomOccupant(payload) {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
   const row = payload?.row || payload
   const guest = payload?.guest || null
   if (!row?.name) {
@@ -358,6 +372,10 @@ async function saveRoomOccupant(payload) {
 }
 
 async function saveRoomDiscount(payload) {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
   const row = payload?.row || payload
   if (!row?.name) {
     errorMessage.value = 'Could not save discount: missing room row id.'
@@ -385,6 +403,10 @@ async function saveRoomDiscount(payload) {
 }
 
 async function distributeRoomDiscount(payload) {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
   if (!reservation.value?.name) return
 
   actionLoading.value = true
@@ -409,6 +431,7 @@ async function distributeRoomDiscount(payload) {
 }
 
 async function submitReservation() {
+  if (isReservationCancelled()) return
   if (!reservation.value?.name || Number(reservation.value.docstatus) !== 0) return
 
   actionLoading.value = true
@@ -457,6 +480,10 @@ async function cancelReservation() {
 }
 
 async function createInvoice() {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
   if (!reservation.value?.name) return
 
   const reservationType = String(reservation.value?.reservation_type || '').trim().toLowerCase()

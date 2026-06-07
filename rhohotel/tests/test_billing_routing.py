@@ -95,6 +95,7 @@ class TestBillingRouting(unittest.TestCase):
             patch.object(br.frappe.db, "set_value", side_effect=lambda *args, **kwargs: set_calls.append((args, kwargs))),
             patch.object(br.frappe, "new_doc", return_value=FakeCustomerDoc()),
             patch.object(br.frappe, "get_meta", return_value=types.SimpleNamespace(has_field=lambda f: f == "custom_guest_id")),
+            patch.object(br, "get_leaf_customer_group", return_value="Individual"),
         ):
             customer = br.resolve_or_create_customer(customer_hint="", hotel_guest="HG-001")
 

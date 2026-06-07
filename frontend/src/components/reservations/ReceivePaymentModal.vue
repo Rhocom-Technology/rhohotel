@@ -42,7 +42,8 @@
                         <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Invoice</th>
                         <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Payer / Room</th>
                         <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Date</th>
-                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Grand Total</th>
+                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Invoice Total</th>
+                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Credit Note</th>
                         <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Outstanding</th>
                       </tr>
                     </thead>
@@ -72,16 +73,19 @@
                         </td>
                         <td class="px-3 py-3 text-xs text-gray-500">{{ inv.posting_date || '—' }}</td>
                         <td class="px-4 py-3 text-xs text-right text-gray-700">{{ fmt(inv.grand_total) }}</td>
+                        <td class="px-4 py-3 text-xs text-right font-semibold" :class="Number(inv.credit_note_amount || 0) > 0 ? 'text-teal-600' : 'text-gray-400'">
+                          {{ Number(inv.credit_note_amount || 0) > 0 ? '- ' : '' }}{{ fmt(inv.credit_note_amount || 0) }}
+                        </td>
                         <td class="px-4 py-3 text-xs text-right font-semibold text-red-500">{{ fmt(inv.outstanding_amount) }}</td>
                       </tr>
                     </tbody>
                     <tfoot>
                       <tr class="border-t border-gray-200 bg-gray-50">
-                        <td colspan="4" class="px-4 py-3 text-xs font-bold text-gray-900">Total Outstanding</td>
+                        <td colspan="5" class="px-4 py-3 text-xs font-bold text-gray-900">Total Outstanding</td>
                         <td class="px-4 py-3 text-xs font-bold text-right text-red-500">{{ fmt(totalOutstanding) }}</td>
                       </tr>
                       <tr class="bg-blue-50">
-                        <td colspan="4" class="px-4 py-3 text-xs font-bold text-blue-700">Selected for Payment</td>
+                        <td colspan="5" class="px-4 py-3 text-xs font-bold text-blue-700">Selected for Payment</td>
                         <td class="px-4 py-3 text-xs font-bold text-right text-blue-700">{{ fmt(selectedOutstanding) }}</td>
                       </tr>
                     </tfoot>
