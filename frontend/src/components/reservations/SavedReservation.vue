@@ -423,7 +423,17 @@
             </thead>
             <tbody>
               <tr v-for="invoice in invoiceLedger" :key="invoice.name" class="border-t border-gray-100">
-                <td class="px-3 py-2 text-xs text-gray-800 font-medium">{{ invoice.name || '—' }}</td>
+                <td class="px-3 py-2 text-xs">
+                  <button
+                    v-if="invoice.name"
+                    type="button"
+                    class="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    @click="openInvoiceDetail(invoice)"
+                  >
+                    {{ invoice.name }}
+                  </button>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
                 <td class="px-3 py-2 text-xs" :class="invoice.is_return ? 'text-teal-600 font-semibold' : 'text-gray-600'">
                   {{ invoice.invoice_type || (invoice.is_return ? 'Credit Note' : 'Invoice') }}
                 </td>
@@ -489,6 +499,13 @@
       @done="handleModalDone"
     />
 
+    <InvoiceDetailModal
+      v-if="showInvoiceDetail && selectedInvoice"
+      :invoiceName="selectedInvoice.name"
+      :invoiceType="selectedInvoice.invoice_type || (selectedInvoice.is_return ? 'Credit Note' : 'Sales Invoice')"
+      @close="showInvoiceDetail = false; selectedInvoice = null"
+    />
+
     <Teleport to="body">
       <div
         v-if="showBulkCheckInPicker"
@@ -550,6 +567,7 @@ import ReceivePaymentModal from '@/components/reservations/ReceivePaymentModal.v
 import BillTransferModal from '@/components/reservations/BillTransferModal.vue'
 import PrintReservationModal from '@/components/reservations/PrintReservationModal.vue'
 import GuestSelector from '@/components/reservations/GuestSelector.vue'
+import InvoiceDetailModal from '@/components/checkin/InvoiceDetailModal.vue'
 import { callMethod } from '@/lib/api'
 
 const router = useRouter()
@@ -582,6 +600,8 @@ const changeRoomTargetRoom = ref('')
 const showPaymentModal = ref(false)
 const showBillTransferModal = ref(false)
 const showPrintModal = ref(false)
+const showInvoiceDetail = ref(false)
+const selectedInvoice = ref(null)
 const printFormat = ref('summary')
 const showCheckInToast = ref(false)
 const checkInToastMessage = ref('')
@@ -599,7 +619,15 @@ function handleModalDone() {
   showPaymentModal.value = false
   showBillTransferModal.value = false
   showPrintModal.value = false
+  showInvoiceDetail.value = false
+  selectedInvoice.value = null
   emit('refresh')
+}
+
+function openInvoiceDetail(invoice) {
+  if (!invoice?.name) return
+  selectedInvoice.value = invoice
+  showInvoiceDetail.value = true
 }
 
 function handlePaymentDone() {

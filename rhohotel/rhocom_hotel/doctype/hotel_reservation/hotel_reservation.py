@@ -399,15 +399,28 @@ class HotelReservation(Document):
         total_discount = flt(total_discount, 2)
 
         allocated = 0
-        for idx, (row, gross) in enumerate(gross_rows):
-            if idx == len(gross_rows) - 1:
-                row_discount = total_discount - allocated
-            else:
-                row_discount = flt((total_discount * gross / total_gross) if total_gross else 0, 2)
-            row.discount = min(max(flt(row_discount, 2), 0), gross)
-            allocated += flt(row.discount or 0)
+        if self.discount_type == "Fixed Amount":
+            eligible_rows = [(row, gross) for row, gross in gross_rows if gross > 0]
+            if not eligible_rows:
+                return
+            equal_share = flt(total_discount / len(eligible_rows), 2)
+            for idx, (row, gross) in enumerate(eligible_rows):
+                if idx == len(eligible_rows) - 1:
+                    row_discount = total_discount - allocated
+                else:
+                    row_discount = equal_share
+                row.discount = min(max(flt(row_discount, 2), 0), gross)
+                allocated += flt(row.discount or 0)
+        else:
+            for idx, (row, gross) in enumerate(gross_rows):
+                if idx == len(gross_rows) - 1:
+                    row_discount = total_discount - allocated
+                else:
+                    row_discount = flt((total_discount * gross / total_gross) if total_gross else 0, 2)
+                row.discount = min(max(flt(row_discount, 2), 0), gross)
+                allocated += flt(row.discount or 0)
 
-        self.discount_type = "None"
+        self.discount_type = ""
         self.discount = 0
         self.discount_amount = 0
 

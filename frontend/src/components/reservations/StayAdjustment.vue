@@ -157,6 +157,7 @@
           <input v-model.number="discountValue" type="number" min="0" step="0.01"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             :placeholder="discountType === 'Percentage' ? 'e.g. 10 for 10%' : 'e.g. 5000'" />
+          <p class="text-xs text-gray-400 mt-1.5">{{ discountHelpText }}</p>
         </div>
 
         <p class="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">
@@ -302,6 +303,20 @@ const invoiceResult = ref(null)
 
 const invoicePaidAmount = computed(() => invoiceGrandTotal.value - invoiceOutstanding.value)
 const invoiceIsPaid = computed(() => invoicePaidAmount.value > 0.01)
+const isSplitGroup = computed(() => {
+  const reservationType = String(props.reservation?.reservation_type || '').trim().toLowerCase()
+  const billingMode = String(props.reservation?.group_billing_mode || '').trim().toLowerCase()
+  return reservationType === 'group' && billingMode.startsWith('split')
+})
+const discountHelpText = computed(() => {
+  if (!isSplitGroup.value) {
+    return 'This discount is applied to the adjusted reservation total before the adjustment invoice is created.'
+  }
+  if (discountType.value === 'Fixed Amount') {
+    return 'For split billing, a fixed discount is divided equally across the new room adjustment invoices.'
+  }
+  return 'For split billing, a percentage discount is applied according to each room adjustment value.'
+})
 
 const invoiceResultLabel = computed(() => {
   if (!invoiceResult.value) return ''
