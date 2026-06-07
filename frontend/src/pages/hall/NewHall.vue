@@ -29,14 +29,6 @@
               >
                 + Add Hall Type
               </button>
-
-              <button
-                type="button"
-                @click="showHallItemModal = true"
-                class="px-3 py-1.5 text-xs font-medium text-green-600 border border-green-200 rounded-lg hover:bg-green-50"
-              >
-                + Add Hall Item
-              </button>
             </div>
           </div>
 
@@ -81,18 +73,7 @@
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
-            <div class="col-span-2">
-              <label class="text-xs text-gray-500 mb-1 block">Hall Item</label>
-              <select v-model="form.item_name"
-                class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">— select item —</option>
-                <option v-for="item in allItems" :key="item.item_code" :value="item.item_code">
-                  {{ item.item_name }}
-                </option>
-              </select>
-              <p class="text-xs text-gray-400 mt-1">The ERPNext item used when generating invoices for this hall.</p>
-            </div>
-
+           
           </div>
         </div>
 
@@ -153,8 +134,18 @@
               <h3 class="text-sm font-bold text-gray-900">Amenities</h3>
               <p class="text-xs text-gray-400 mt-0.5">Items included with this hall.</p>
             </div>
-            <button @click="addAmenity"
-              class="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">+ Add Row</button>
+            <div class="flex items-center gap-2">
+
+              <button @click="addAmenity"
+                class="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">+ Add Row</button>
+                <button
+                type="button"
+                @click="showAmenityModal = true"
+                class="px-3 py-1.5 text-xs font-medium text-green-600 border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
+              >
+                + Add Hall Amenity
+              </button>
+            </div>
           </div>
 
           <div v-if="form.amenities.length === 0" class="text-center py-6 text-xs text-gray-400">
@@ -286,37 +277,36 @@
 </div>
 
 
-
 <div
-  v-if="showHallItemModal"
+  v-if="showAmenityModal"
   class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
 >
   <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
-    <h3 class="text-sm font-bold text-gray-900 mb-4">Add Hall Item</h3>
+    <h3 class="text-sm font-bold text-gray-900 mb-4">Add Hall Amenity</h3>
 
     <label class="text-xs text-gray-500 mb-1 block">
-      Hall Item Name <span class="text-red-500">*</span>
+      Amenity Name <span class="text-red-500">*</span>
     </label>
 
     <input
-      v-model="newHallItemName"
+      v-model="newAmenityName"
       type="text"
-      placeholder="e.g. Ruby Hall"
+      placeholder="e.g. Podium / Lectern"
       class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
     />
 
     <p class="text-xs text-gray-400 mt-1">
-      This item will be created under the Hall item group.
+      This will be created as a non-stock item under Hall Amenities.
     </p>
 
-    <p v-if="hallItemError" class="text-xs text-red-500 mt-2">
-      {{ hallItemError }}
+    <p v-if="amenityError" class="text-xs text-red-500 mt-2">
+      {{ amenityError }}
     </p>
 
     <div class="flex justify-end gap-2 mt-5">
       <button
         type="button"
-        @click="closeHallItemModal"
+        @click="closeAmenityModal"
         class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
       >
         Cancel
@@ -324,15 +314,17 @@
 
       <button
         type="button"
-        @click="saveHallItem"
-        :disabled="savingHallItem"
+        @click="saveAmenityItem"
+        :disabled="savingAmenity"
         class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
       >
-        {{ savingHallItem ? 'Saving…' : 'Save' }}
+        {{ savingAmenity ? 'Saving…' : 'Save' }}
       </button>
     </div>
   </div>
 </div>
+
+
 
 </template>
 
@@ -346,7 +338,6 @@ const route   = useRoute()
 const isEdit  = computed(() => !!route.params.id)
 const saving  = ref(false)
 const error   = ref(null)
-const allItems    = ref([]) 
 const amenityItems = ref([]) 
 const hallTypes    = ref([])
 const showHallTypeModal = ref(false)
@@ -354,17 +345,19 @@ const newHallTypeName = ref('')
 const savingHallType = ref(false)
 const hallTypeError = ref(null)
 
-const showHallItemModal = ref(false)
-const newHallItemName = ref('')
-const savingHallItem = ref(false)
-const hallItemError = ref(null)
+
+const showAmenityModal = ref(false)
+const newAmenityName = ref('')
+const savingAmenity = ref(false)
+const amenityError = ref(null)
+
 
 const form = ref({
   hall_name: '',
   hall_type: '',
   capacity: '',
   rate: '',
-  item_name: '',
+  
   amenities: [],
 
   has_projector_av: false,
@@ -380,6 +373,41 @@ const form = ref({
 const canSave = computed(() =>
   !!(form.value.hall_name && form.value.hall_type && form.value.capacity && form.value.rate)
 )
+
+function closeAmenityModal() {
+  showAmenityModal.value = false
+  newAmenityName.value = ''
+  amenityError.value = null
+}
+
+async function saveAmenityItem() {
+  if (!newAmenityName.value.trim()) {
+    amenityError.value = 'Amenity Name is required.'
+    return
+  }
+
+  savingAmenity.value = true
+  amenityError.value = null
+
+  try {
+    const result = await callMethod('rhohotel.rhocom_hotel.api.hall.create_hall_amenity_item', {
+      item_name: newAmenityName.value.trim()
+    })
+
+    amenityItems.value.push(result)
+
+    form.value.amenities.push({
+      item: result.item_code,
+      amenity_name: result.item_name,
+    })
+
+    closeAmenityModal()
+  } catch (e) {
+    amenityError.value = e.message || 'Failed to create amenity.'
+  } finally {
+    savingAmenity.value = false
+  }
+}
 
 function addAmenity() {
   form.value.amenities.push({ item: '', amenity_name: '' })
@@ -422,36 +450,6 @@ async function saveHallType() {
   }
 }
 
-function closeHallItemModal() {
-  showHallItemModal.value = false
-  newHallItemName.value = ''
-  hallItemError.value = null
-}
-
-async function saveHallItem() {
-  if (!newHallItemName.value.trim()) {
-    hallItemError.value = 'Hall Item Name is required.'
-    return
-  }
-
-  savingHallItem.value = true
-  hallItemError.value = null
-
-  try {
-    const result = await callMethod('rhohotel.rhocom_hotel.api.hall.create_hall_item', {
-      item_name: newHallItemName.value.trim()
-    })
-
-    allItems.value.push(result)
-    form.value.item_name = result.item_code
-
-    closeHallItemModal()
-  } catch (e) {
-    hallItemError.value = e.message || 'Failed to create hall item.'
-  } finally {
-    savingHallItem.value = false
-  }
-}
 
 
 async function createHall() {
@@ -464,7 +462,6 @@ async function createHall() {
       hall_type: form.value.hall_type,
       capacity: form.value.capacity,
       rate: form.value.rate,
-      item_name: form.value.item_name,
       amenities: form.value.amenities.filter(a => a.item),
 
       has_projector_av: form.value.has_projector_av,
@@ -496,7 +493,6 @@ async function createHall() {
 onMounted(async () => {
   try {
     const calls = [
-      callMethod('rhohotel.rhocom_hotel.api.hall.get_all_items'),
       callMethod('rhohotel.rhocom_hotel.api.hall.get_amenity_items'),
       callMethod('rhohotel.rhocom_hotel.api.hall.get_hall_types'),
     ]
@@ -504,17 +500,16 @@ onMounted(async () => {
       calls.push(callMethod('rhohotel.rhocom_hotel.api.hall.get_hall', { name: route.params.id }))
     }
     const results = await Promise.all(calls)
-   allItems.value     = results[0] || []
-  amenityItems.value = results[1] || []
-  hallTypes.value    = results[2] || []
-  const existing     = results[3]
+  
+  amenityItems.value = results[0] || []
+  hallTypes.value    = results[1] || []
+  const existing     = results[2]
 
     if (existing) {
       form.value.hall_name = existing.hall_name || ''
       form.value.hall_type = existing.hall_type || ''
       form.value.capacity = existing.capacity || ''
       form.value.rate = existing.rate || ''
-      form.value.item_name = existing.item_name || ''
       form.value.amenities = (existing.amenities || []).map(a => ({
         item: a.item || '',
         amenity_name: a.amenity_name || '',

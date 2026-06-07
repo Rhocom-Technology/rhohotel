@@ -17,7 +17,13 @@
       <!-- Header -->
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
         <div>
-          <h2 class="text-sm font-bold text-gray-900">{{ booking.name }}</h2>
+          <div class="flex items-center">
+
+            <h2 class="text-sm font-bold text-gray-900">{{ booking.name }}</h2> 
+            <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(booking.docstatus)">
+            {{ statusLabel(booking.docstatus) }}
+          </span> 
+          </div>
           <p class="text-xs text-gray-400 mt-0.5">{{ booking.customer_name }} • {{ booking.hall }} • {{ booking.event_type }}</p>
         </div>
         <div class="flex items-center gap-2">
@@ -33,16 +39,27 @@
           <!-- Submit button for drafts -->
           <button v-if="booking.docstatus === 0" @click="submitBooking" :disabled="submitting"
             class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
-            {{ submitting ? 'Submitting…' : 'Submit & Create Invoice' }}
+            {{ submitting ? 'Submitting…' : 'Submit Booking' }}
           </button>
+
+         <button
+            v-if="booking.docstatus === 1 && !booking.sales_invoice"
+            @click="createInvoice"
+            :disabled="creatingInvoice"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            {{ creatingInvoice ? 'Creating…' : 'Create Invoice' }}
+          </button>
+
           <!-- Receive Payment -->
-          <button v-if="booking.docstatus === 1 && booking.payment_status !== 'Paid'"
+          <button v-if="booking.docstatus === 1 && booking.sales_invoice && booking.payment_status !== 'Paid'"
             @click="showPaymentModal = true"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
             Receive Payment
           </button>
+          
           <!-- Adjust Booking -->
-          <button v-if="booking.docstatus === 1"
+          <button v-if="booking.docstatus === 1 && booking.sales_invoice"
             @click="showAdjustModal = true"
             class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Adjust Booking
@@ -52,12 +69,7 @@
 
       <!-- Status strip -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
-        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p class="text-xs text-gray-400 mb-2">Status</p>
-          <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(booking.docstatus)">
-            {{ statusLabel(booking.docstatus) }}
-          </span>
-        </div>
+      
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Payment</p>
           <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="paymentClass(booking.payment_status)">
@@ -78,6 +90,13 @@
             ₦{{ Number(booking.outstanding_amount || 0).toLocaleString() }}
           </p>
         </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <p class="text-xs text-gray-400 mb-2">Paid Amount</p>
+          <p class="text-2xl font-bold text-green-600">
+            ₦{{ Number(booking.paid_amount || 0).toLocaleString() }}
+          </p>
+        </div>
+        
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start;">
@@ -115,8 +134,10 @@
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Service</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Qty</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Rate</th>
+                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Discount Type</th>
+                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Discount Value</th>
+                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Discount Amount</th>
                   <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Amount</th>
-                  <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Discount</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-50">
@@ -124,9 +145,20 @@
                   <td class="px-6 py-3 text-xs text-gray-700">{{ r.service }}</td>
                   <td class="px-6 py-3 text-xs text-gray-600">{{ r.qty }}</td>
                   <td class="px-6 py-3 text-xs text-gray-600">₦{{ Number(r.rate || 0).toLocaleString() }}</td>
-                  <td class="px-6 py-3 text-xs text-gray-700 font-medium">₦{{ Number(r.amount || 0).toLocaleString() }}</td>
-                  <td class="px-6 py-3 text-xs text-red-500">{{ r.discount_amount ? '–₦' + Number(r.discount_amount).toLocaleString() : '–' }}</td>
-                </tr>
+                  <td class="px-6 py-3 text-xs text-gray-600">{{ r.discount_type || '—' }}</td>
+                  <td class="px-6 py-3 text-xs text-gray-700 font-medium">
+                     <template v-if="r.discount_type === 'Percentage'">
+                        {{ r.discount_amount }}%
+                      </template>
+
+                      <template v-else>
+                        ₦{{ Number(r.discount_amount || 0).toLocaleString() }}
+                      </template>
+                  </td>
+                    <td class="px-6 py-3 text-xs text-gray-700 font-medium"> ₦{{ Number(r.discount_value || 0).toLocaleString() }}</td>
+                    <td class="px-6 py-3 text-xs text-gray-700 font-medium">  ₦{{ Number(r.amount || 0).toLocaleString() }}</td>
+                  
+                  </tr>
               </tbody>
             </table>
           </div>
@@ -192,19 +224,83 @@
         <!-- Right -->
         <div class="space-y-4">
           <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-            <h3 class="text-sm font-bold text-gray-900 mb-3">Financial Summary</h3>
-            <div class="space-y-2 text-xs">
-              <div class="flex justify-between"><span class="text-gray-500">Total Amount</span><span class="font-medium">₦{{ Number(booking.total_amount || 0).toLocaleString() }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-500">Net Total</span><span class="font-bold text-gray-900">₦{{ Number(booking.net_total || 0).toLocaleString() }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-500">Invoice Total</span><span class="font-medium">₦{{ Number(booking.invoice_grand_total || 0).toLocaleString() }}</span></div>
-              <div class="border-t border-gray-100 pt-2 flex justify-between">
-                <span class="text-gray-500">Outstanding</span>
-                <span class="font-bold" :class="booking.outstanding_amount > 0 ? 'text-red-500' : 'text-green-600'">
-                  ₦{{ Number(booking.outstanding_amount || 0).toLocaleString() }}
-                </span>
-              </div>
-            </div>
-          </div>
+  <h3 class="text-sm font-bold text-gray-900 mb-3">Financial Summary</h3>
+
+  <div class="space-y-2 text-xs">
+    <div class="flex justify-between">
+      <span class="text-gray-500">Hall Gross</span>
+      <span class="font-medium">
+        ₦{{ Number(booking.total_amount || 0).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="flex justify-between text-red-500">
+      <span>Hall Discount</span>
+      <span>
+        –₦{{ Number(hallDiscountValue).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="flex justify-between">
+      <span class="text-gray-500">Hall Net</span>
+      <span class="font-semibold">
+        ₦{{ Number(hallNetTotal).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="border-t border-gray-100 pt-2 flex justify-between">
+      <span class="text-gray-500">Services Gross</span>
+      <span class="font-medium">
+        ₦{{ Number(servicesGrossTotal).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="flex justify-between text-red-500">
+      <span>Services Discount</span>
+      <span>
+        –₦{{ Number(servicesDiscountTotal).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="flex justify-between">
+      <span class="text-gray-500">Services Net</span>
+      <span class="font-semibold">
+        ₦{{ Number(servicesNetTotal).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="border-t border-gray-100 pt-2 flex justify-between font-bold">
+      <span class="text-gray-700">Net Total</span>
+      <span class="text-gray-900">
+        ₦{{ Number(booking.net_total || 0).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="flex justify-between">
+      <span class="text-gray-500">Invoice Total</span>
+      <span class="font-medium">
+        ₦{{ Number(booking.invoice_grand_total || 0).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="border-t border-gray-100 pt-2 flex justify-between">
+      <span class="text-gray-500">Outstanding</span>
+      <span
+        class="font-bold"
+        :class="booking.outstanding_amount > 0 ? 'text-red-500' : 'text-green-600'"
+      >
+        ₦{{ Number(booking.outstanding_amount || 0).toLocaleString() }}
+      </span>
+    </div>
+
+    <div class="flex justify-between">
+      <span class="text-gray-500">Paid Amount</span>
+      <span class="font-semibold text-green-600">
+        ₦{{ Number(booking.paid_amount || 0).toLocaleString() }}
+      </span>
+    </div>
+  </div>
+</div>
 
           <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
             <h3 class="text-sm font-bold text-gray-900 mb-3">Audit</h3>
@@ -292,12 +388,12 @@
           </div>
           <div>
             <label class="text-xs text-gray-500 mb-1 block">New Start <span class="text-red-500">*</span></label>
-            <input v-model="adjust.start_datetime" type="date"
+            <input v-model="adjust.start_datetime" type="datetime-local"
               class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label class="text-xs text-gray-500 mb-1 block">New End <span class="text-red-500">*</span></label>
-            <input v-model="adjust.end_datetime" type="date"
+            <input v-model="adjust.end_datetime" type="datetime-local"
               class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div v-if="adjustDays > 0" class="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
@@ -306,6 +402,70 @@
               :class="adjustDays > booking.total_days ? 'text-blue-600' : 'text-red-500'">
               ({{ adjustDays > booking.total_days ? '+' : '' }}{{ adjustDays - booking.total_days }} day(s) — {{ adjustDays > booking.total_days ? 'additional invoice' : 'return invoice' }} will be created)
             </span>
+          </div>
+
+          <div
+              v-if="adjustmentDiffDays !== 0"
+              class="text-xs bg-gray-50 rounded-lg px-4 py-3 space-y-2"
+            >
+              <div class="flex justify-between">
+                <span class="text-gray-500">Rate / Day</span>
+                <span class="font-semibold">
+                  ₦{{ Number(booking.rate || 0).toLocaleString() }}
+                </span>
+              </div>
+
+              <div class="flex justify-between">
+                <span class="text-gray-500">
+                  {{ adjustmentDiffDays > 0 ? 'Extra Days' : 'Reduced Days' }}
+                </span>
+                <span class="font-semibold">
+                  {{ adjustmentDiffDays }}
+                </span>
+              </div>
+
+              <div class="flex justify-between">
+                <span class="text-gray-500">Adjustment Gross</span>
+                <span class="font-semibold">
+                  ₦{{ Number(adjustmentGross || 0).toLocaleString() }}
+                </span>
+              </div>
+
+              <div class="flex justify-between text-red-500">
+                <span>Discount Impact</span>
+                <span>
+                  –₦{{ Number(adjustmentDiscountValue || 0).toLocaleString() }}
+                </span>
+              </div>
+
+              <div class="border-t border-gray-100 pt-2 flex justify-between font-bold">
+                <span>Balance Impact</span>
+                <span :class="adjustmentNetImpact >= 0 ? 'text-blue-600' : 'text-red-500'">
+                  {{ adjustmentNetImpact >= 0 ? '+' : '-' }}₦{{ Number(Math.abs(adjustmentNetImpact || 0)).toLocaleString() }}
+                </span>
+              </div>
+            </div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">Discount Type</label>
+            <select
+              v-model="adjust.discount_type"
+              class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Fixed Amount">Fixed Amount</option>
+              <option value="Percentage">Percentage</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">
+              Discount {{ adjust.discount_type === 'Percentage' ? '(%)' : '(₦)' }}
+            </label>
+            <input
+              v-model.number="adjust.discount_amount"
+              type="number"
+              min="0"
+              class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           <div>
             <label class="text-xs text-gray-500 mb-1 block">Reason</label>
@@ -342,6 +502,8 @@ const booking = ref({})
 // Submit
 const submitting = ref(false)
 
+const creatingInvoice = ref(false)
+
 // Payment modal
 const showPaymentModal = ref(false)
 const paymentSaving    = ref(false)
@@ -353,7 +515,14 @@ const payment = ref({ paid_amount: '', payment_mode: '', payment_date: today(), 
 const showAdjustModal = ref(false)
 const adjustSaving    = ref(false)
 const adjustError     = ref(null)
-const adjust = ref({ start_datetime: '', end_datetime: '', reason: '' })
+const adjust = ref({
+  start_datetime: '',
+  end_datetime: '',
+  reason: '',
+  discount_type: 'Fixed Amount',
+  discount_amount: 0,
+})
+
 
 const adjustDays = computed(() => {
   if (!adjust.value.start_datetime || !adjust.value.end_datetime) return 0
@@ -365,7 +534,15 @@ function today() { return new Date().toISOString().slice(0, 10) }
 
 function fmtDatetime(dt) {
   if (!dt) return '–'
-  return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', day:'2-digit', minute:'2-digit' })
+
+  return new Date(dt).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
 }
 
 function statusLabel(s) { return { 0: 'Draft', 1: 'Confirmed', 2: 'Cancelled' }[s] || 'Unknown' }
@@ -384,6 +561,11 @@ async function load() {
     // Pre-fill adjust modal with current times
     if (b?.start_datetime) adjust.value.start_datetime = toLocalInput(b.start_datetime)
     if (b?.end_datetime)   adjust.value.end_datetime   = toLocalInput(b.end_datetime)
+    adjust.value.discount_type =
+     b?.discount_type || 'Fixed Amount'
+
+    adjust.value.discount_amount =
+      Number(b?.discount_amount || 0)
     // Pre-fill payment amount
     payment.value.paid_amount = b?.outstanding_amount || ''
   } catch(e) { console.error(e) }
@@ -392,8 +574,16 @@ async function load() {
 
 function toLocalInput(dt) {
   if (!dt) return ''
+
   const d = new Date(dt)
-  return d.toISOString().slice(0, 16)
+
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hour = String(d.getHours()).padStart(2, '0')
+  const minute = String(d.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day}T${hour}:${minute}`
 }
 
 async function submitBooking() {
@@ -403,6 +593,22 @@ async function submitBooking() {
     await load()
   } catch(e) { alert(e.message) }
   finally { submitting.value = false }
+}
+
+async function createInvoice() {
+  creatingInvoice.value = true
+
+  try {
+    await callMethod('rhohotel.rhocom_hotel.api.hall_booking.create_invoice', {
+      booking_name: booking.value.name,
+    })
+
+    await load()
+  } catch (e) {
+    alert(e.message || 'Failed to create invoice.')
+  } finally {
+    creatingInvoice.value = false
+  }
 }
 
 async function receivePayment() {
@@ -426,21 +632,112 @@ async function receivePayment() {
 
 async function doAdjust() {
   if (!adjust.value.start_datetime || !adjust.value.end_datetime) return
+
+  const currentDays = Number(booking.value.total_days || 0)
+  const newDays = Number(adjustDays.value || 0)
+  const diffDays = Math.abs(newDays - currentDays)
+  const rate = Number(booking.value.rate || 0)
+  const adjustmentGross = diffDays * rate
+
+  let discountAmount = Number(adjust.value.discount_amount || 0)
+
+  if (adjust.value.discount_type === 'Percentage' && discountAmount > 100) {
+    adjustError.value = 'Discount percentage cannot be greater than 100%.'
+    return
+  }
+
+  if (adjust.value.discount_type === 'Fixed Amount' && discountAmount > adjustmentGross) {
+    adjustError.value = 'Discount amount cannot be greater than the adjustment amount.'
+    return
+  }
+
   adjustSaving.value = true
-  adjustError.value  = null
+  adjustError.value = null
+
   try {
     await callMethod('rhohotel.rhocom_hotel.api.hall_booking.adjust_booking', {
-      booking_name:    booking.value.name,
-      start_datetime:  adjust.value.start_datetime,
-      end_datetime:    adjust.value.end_datetime,
-      reason:          adjust.value.reason,
+      booking_name: booking.value.name,
+      start_datetime: adjust.value.start_datetime,
+      end_datetime: adjust.value.end_datetime,
+      reason: adjust.value.reason,
+      discount_type: adjust.value.discount_type,
+      discount_amount: discountAmount,
     })
+
     showAdjustModal.value = false
     await load()
-  } catch(e) {
+  } catch (e) {
     adjustError.value = e.message || 'Failed to adjust booking.'
-  } finally { adjustSaving.value = false }
+  } finally {
+    adjustSaving.value = false
+  }
 }
+
+const hallDiscountValue = computed(() => {
+  const hallTotal = Number(booking.value.total_amount || 0)
+  const discountAmount = Number(booking.value.discount_amount || 0)
+
+  if (!discountAmount) return 0
+
+  if (booking.value.discount_type === 'Percentage') {
+    return hallTotal * (discountAmount / 100)
+  }
+
+  return discountAmount
+})
+
+const hallNetTotal = computed(() =>
+  Math.max(
+    0,
+    Number(booking.value.total_amount || 0) - hallDiscountValue.value
+  )
+)
+
+const servicesGrossTotal = computed(() =>
+  (booking.value.additional_billings || []).reduce((sum, r) => {
+    return sum + ((Number(r.qty) || 0) * (Number(r.rate) || 0))
+  }, 0)
+)
+
+const servicesDiscountTotal = computed(() =>
+  (booking.value.additional_billings || []).reduce((sum, r) => {
+    return sum + (Number(r.discount_value) || 0)
+  }, 0)
+)
+
+const servicesNetTotal = computed(() =>
+  (booking.value.additional_billings || []).reduce((sum, r) => {
+    return sum + (Number(r.amount) || 0)
+  }, 0)
+)
+
+
+const adjustmentDiffDays = computed(() => {
+  const currentDays = Number(booking.value.total_days || 0)
+  return Number(adjustDays.value || 0) - currentDays
+})
+
+const adjustmentGross = computed(() => {
+  return Math.abs(adjustmentDiffDays.value) * Number(booking.value.rate || 0)
+})
+
+const adjustmentDiscountValue = computed(() => {
+  const discount = Number(adjust.value.discount_amount || 0)
+
+  if (!adjustmentGross.value || !discount) return 0
+
+  if (adjust.value.discount_type === 'Percentage') {
+    return adjustmentGross.value * (discount / 100)
+  }
+
+  return Math.min(discount, adjustmentGross.value)
+})
+
+const adjustmentNetImpact = computed(() => {
+  const net = adjustmentGross.value - adjustmentDiscountValue.value
+  return adjustmentDiffDays.value < 0 ? -net : net
+})
+
 
 onMounted(load)
 </script>

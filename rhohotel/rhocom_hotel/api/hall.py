@@ -2,46 +2,55 @@ import frappe
 from frappe.utils import flt, now_datetime, get_first_day, get_last_day, nowdate
 
 
-
-@frappe.whitelist()
-def get_all_items():
-    """Return active ERPNext Items in the Hall item group for the Hall form dropdowns."""
-    return frappe.db.sql("""
-        SELECT item_code, item_name
-        FROM `tabItem`
-        WHERE disabled = 0
-          AND item_group = 'Hall'
-        ORDER BY item_name ASC
-    """, as_dict=True)
-
-
 @frappe.whitelist()
 def get_amenity_items():
-    """Return all active ERPNext Items for the Amenities table — no item group filter."""
+    """Return active ERPNext Items in the Hall Amenities item group."""
     return frappe.db.sql("""
         SELECT item_code, item_name
         FROM `tabItem`
         WHERE disabled = 0
+          AND item_group = 'Hall Amenities'
         ORDER BY item_name ASC
     """, as_dict=True)
 
 
 @frappe.whitelist()
-def search_items(query=""):
-    """Search ERPNext Items by name or code — used by the Hall form item pickers."""
-    if not query:
-        return []
+def create_hall_amenity_item(item_name):
+    if not item_name:
+        frappe.throw("Amenity Name is required")
 
-    like = f"%{query}%"
-    rows = frappe.db.sql("""
-        SELECT item_code, item_name
-        FROM `tabItem`
-        WHERE disabled = 0
-          AND (item_name LIKE %(like)s OR item_code LIKE %(like)s)
-        ORDER BY item_name ASC
-        LIMIT 20
-    """, {"like": like}, as_dict=True)
-    return rows
+    item_name = item_name.strip()
+
+    if not frappe.db.exists("Item Group", "Hall Amenities"):
+        frappe.throw("Item Group 'Hall Amenities' does not exist. Please create it first.")
+
+    if frappe.db.exists("Item", item_name):
+        frappe.throw(
+            "An Item with this name already exists. Duplicate Item names/codes are not allowed. "
+            "Please check the Item list. If you want to use it as a Hall Amenity, confirm that it is under the 'Hall Amenities' item group."
+        )
+            
+
+        return {
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "exists": True
+        }
+
+    doc = frappe.new_doc("Item")
+    doc.item_code = item_name
+    doc.item_name = item_name
+    doc.item_group = "Hall Amenities"
+    doc.stock_uom = "Nos"
+    doc.is_stock_item = 0
+    doc.include_item_in_manufacturing = 0
+    doc.insert(ignore_permissions=True)
+
+    return {
+        "item_code": doc.item_code,
+        "item_name": doc.item_name,
+        "exists": False
+    }
 
 @frappe.whitelist()
 def update_hall(name, data):
@@ -55,7 +64,6 @@ def update_hall(name, data):
     doc.hall_type = data.get("hall_type")
     doc.capacity      = int(data.get("capacity") or 0)
     doc.rate = flt(data.get("rate") or 0)
-    doc.item_name     = data.get("item_name") or None
 
     # Replace child table rows
     doc.set("table_tdts", [])
@@ -190,7 +198,6 @@ def create_hall(data):
     doc.hall_type = data.get("hall_type")
     doc.capacity     = int(data.get("capacity") or 0)
     doc.rate = flt(data.get("rate") or 0)
-    doc.item_name    = data.get("item_name") or None
     doc.has_projector_av = 1 if data.get("has_projector_av") else 0
     doc.has_sound_system = 1 if data.get("has_sound_system") else 0
     doc.has_air_conditioning = 1 if data.get("has_air_conditioning") else 0
@@ -244,42 +251,3 @@ def create_hall_type(hall_type_name):
         "hall_type_name": doc.hall_type_name,
         "exists": False
     }
-    
-@frappe.whitelist()
-def create_hall_item(item_name):
-    """Create a new ERPNext Item under Hall item group."""
-    if not item_name:
-        frappe.throw("Item Name is required")
-
-    item_name = item_name.strip()
-
-    if not frappe.db.exists("Item Group", "Hall"):
-        frappe.throw("Item Group 'Hall' does not exist. Please create it first.")
-
-    if frappe.db.exists("Item", item_name):
-        item = frappe.get_doc("Item", item_name)
-
-        if item.item_group != "Hall":
-            frappe.throw("An Item with this name already exists, but it is not under Hall item group.")
-
-        return {
-            "item_code": item.item_code,
-            "item_name": item.item_name,
-            "exists": True
-        }
-
-    doc = frappe.new_doc("Item")
-    doc.item_code = item_name
-    doc.item_name = item_name
-    doc.item_group = "Hall"
-    doc.stock_uom = "Nos"
-    doc.is_stock_item = 1
-    doc.include_item_in_manufacturing = 0
-    doc.insert(ignore_permissions=True)
-
-    return {
-        "item_code": doc.item_code,
-        "item_name": doc.item_name,
-        "exists": False
-    }
-    

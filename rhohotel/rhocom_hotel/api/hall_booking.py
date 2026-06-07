@@ -64,10 +64,17 @@ def get_booking(name):
             "qty": r.qty,
             "rate": flt(r.rate),
             "amount": flt(r.amount),
+            "discount_type": r.discount_type,
             "discount_amount": flt(r.discount_amount),
+            "discount_value": flt(r.discount_value),
         }
         for r in doc.get("additional_billings", [])
     ]
+    
+    data["paid_amount"] = max(
+        0,
+        flt(data["invoice_grand_total"]) - flt(data["outstanding_amount"])
+    )
 
     return data
 
@@ -107,22 +114,19 @@ def create_booking(data):
     doc.end_datetime = data.get("end_datetime")
 
     doc.rate = flt(get_hall_rate(doc.hall))
-
     doc.discount_type = data.get("discount_type", "Percentage")
     doc.discount_amount = flt(data.get("discount_amount") or 0)
 
     for row in data.get("additional_billings", []):
         if row.get("service"):
-            qty = int(row.get("qty") or 1)
-            rate = flt(row.get("rate") or 0)
-            discount_amount = flt(row.get("discount_amount") or 0)
-
             doc.append("additional_billings", {
                 "service": row.get("service"),
-                "qty": qty,
-                "rate": rate,
-                "discount_amount": discount_amount,
-                "amount": (qty * rate) - discount_amount,
+                "qty": int(row.get("qty") or 1),
+                "rate": flt(row.get("rate") or 0),
+                "discount_type": row.get("discount_type") or "Fixed Amount",
+                "discount_amount": flt(row.get("discount_amount") or 0),
+                "discount_value": 0,
+                "amount": 0,
             })
 
     _compute_totals(doc)
@@ -133,6 +137,7 @@ def create_booking(data):
         doc.submit()
 
     return {"name": doc.name, "docstatus": doc.docstatus}
+
 
 
 @frappe.whitelist()
@@ -153,7 +158,6 @@ def update_booking(name, data):
     doc.end_datetime = data.get("end_datetime")
 
     doc.rate = flt(get_hall_rate(doc.hall))
-
     doc.discount_type = data.get("discount_type", "Percentage")
     doc.discount_amount = flt(data.get("discount_amount") or 0)
 
@@ -161,25 +165,27 @@ def update_booking(name, data):
 
     for row in data.get("additional_billings", []):
         if row.get("service"):
-            qty = int(row.get("qty") or 1)
-            rate = flt(row.get("rate") or 0)
-            discount_amount = flt(row.get("discount_amount") or 0)
-
             doc.append("additional_billings", {
                 "service": row.get("service"),
-                "qty": qty,
-                "rate": rate,
-                "discount_amount": discount_amount,
-                "amount": (qty * rate) - discount_amount,
+                "qty": int(row.get("qty") or 1),
+                "rate": flt(row.get("rate") or 0),
+                "discount_type": row.get("discount_type") or "Fixed Amount",
+                "discount_amount": flt(row.get("discount_amount") or 0),
+                "discount_value": 0,
+                "amount": 0,
             })
 
     _compute_totals(doc)
 
     doc.save(ignore_permissions=True)
 
-    return {"name": doc.name, "docstatus": doc.docstatus}
-
-
+    return {
+        "name": doc.name,
+        "docstatus": doc.docstatus
+    }
+    
+     
+    
 @frappe.whitelist()
 def submit_booking(name):
     doc = frappe.get_doc("Hall Booking", name)
@@ -188,7 +194,12 @@ def submit_booking(name):
         frappe.throw("Only draft bookings can be submitted.")
 
     doc.submit()
-    return {"name": doc.name, "sales_invoice": doc.sales_invoice}
+
+    return {
+        "name": doc.name,
+        "docstatus": doc.docstatus,
+        "sales_invoice": doc.sales_invoice
+    }
 
 
 @frappe.whitelist()
@@ -200,11 +211,17 @@ def get_hall_rate(hall_name):
 
 @frappe.whitelist()
 def get_services():
-    return frappe.db.get_all(
-        "Hall Service",
-        fields=["name", "service", "rate", "item_name"],
-        order_by="service asc",
-    )
+    return frappe.db.sql("""
+        SELECT
+            item_code AS name,
+            item_name AS service,
+            standard_rate AS rate,
+            item_code AS item_name
+        FROM `tabItem`
+        WHERE disabled = 0
+          AND item_group = 'Hall Service'
+        ORDER BY item_name ASC
+    """, as_dict=True)
 
 
 @frappe.whitelist()
@@ -242,7 +259,7 @@ def search_customers(query=""):
     like = "%{}%".format(query)
 
     return frappe.db.sql("""
-        SELECT name, customer_name, mobile_no
+        SELECT name, customer_name, mobile_no,email_id
         FROM `tabCustomer`
         WHERE disabled = 0
           AND (
@@ -286,58 +303,61 @@ def create_customer(customer_name, mobile_no=None, email_id=None):
         "email_id": doc.email_id,
     }
 
-
 @frappe.whitelist()
 def create_hall_service(data):
     if isinstance(data, str):
         data = json.loads(data)
 
-    item_name = data.get("item_name")
+    service = (data.get("service") or "").strip()
     rate = flt(data.get("rate") or 0)
 
-    if not item_name:
-        frappe.throw("Item is required.")
+    if not service:
+        frappe.throw("Service name is required.")
 
-    item_doc = frappe.get_doc("Item", item_name)
+    if not frappe.db.exists("Item Group", "Hall Service"):
+        frappe.throw("Item Group 'Hall Service' does not exist. Please create it first.")
 
-    doc = frappe.new_doc("Hall Service")
-    doc.item_name = item_name
-    doc.service = item_doc.item_name
-    doc.rate = rate
-    doc.insert(ignore_permissions=True)
+    if frappe.db.exists("Item", service):
+        frappe.throw("An Item with this name already exists. Please check the Item list.")
+
+    item = frappe.new_doc("Item")
+    item.item_code = service
+    item.item_name = service
+    item.item_group = "Hall Service"
+    item.is_stock_item = 0
+    item.stock_uom = "Nos"
+    item.standard_rate = rate
+    item.insert(ignore_permissions=True)
 
     return {
-        "name": doc.name,
-        "service": doc.service,
-        "rate": doc.rate,
-        "item_name": doc.item_name,
+        "name": item.item_code,
+        "service": item.item_name,
+        "rate": item.standard_rate,
+        "item_name": item.item_code,
     }
-
-
+    
+    
 @frappe.whitelist()
 def search_items(query=""):
     query = query or ""
-
-    if not query:
-        return frappe.db.sql("""
-            SELECT item_code, item_name
-            FROM `tabItem`
-            WHERE disabled = 0
-            ORDER BY item_name ASC
-            LIMIT 20
-        """, as_dict=True)
-
     like = "%{}%".format(query)
 
     return frappe.db.sql("""
-        SELECT item_code, item_name
+        SELECT item_code, item_name, standard_rate
         FROM `tabItem`
         WHERE disabled = 0
-          AND (item_name LIKE %(like)s OR item_code LIKE %(like)s)
+          AND item_group = 'Hall Service'
+          AND (
+              %(query)s = ''
+              OR item_name LIKE %(like)s
+              OR item_code LIKE %(like)s
+          )
         ORDER BY item_name ASC
         LIMIT 20
-    """, {"like": like}, as_dict=True)
-
+    """, {
+        "query": query,
+        "like": like
+    }, as_dict=True)
 
 @frappe.whitelist()
 def receive_payment(booking_name, data):
@@ -346,9 +366,24 @@ def receive_payment(booking_name, data):
 
 
 @frappe.whitelist()
-def adjust_booking(booking_name, start_datetime, end_datetime, reason=None):
+def adjust_booking(
+    booking_name,
+    start_datetime,
+    end_datetime,
+    reason=None,
+    discount_type=None,
+    discount_amount=0,
+):
     from rhohotel.rhocom_hotel.doctype.hall_booking.hall_booking import adjust_booking_datetime
-    return adjust_booking_datetime(booking_name, start_datetime, end_datetime, reason)
+
+    return adjust_booking_datetime(
+        booking_name,
+        start_datetime,
+        end_datetime,
+        reason,
+        discount_type,
+        discount_amount,
+    )
 
 
 def _compute_totals(doc):
@@ -363,24 +398,53 @@ def _compute_totals(doc):
     doc.total_days = max(1, math.ceil((end - start).total_seconds() / 86400))
     doc.total_amount = flt(doc.rate or 0) * doc.total_days
 
+    hall_total = flt(doc.total_amount or 0)
+    hall_discount_value = flt(doc.discount_amount or 0)
+
+    if doc.discount_type == "Percentage":
+        if hall_discount_value > 100:
+            frappe.throw("Hall discount percentage cannot be greater than 100%.")
+        hall_discount = hall_total * (hall_discount_value / 100)
+    else:
+        if hall_discount_value > hall_total:
+            frappe.throw("Hall discount amount cannot be greater than hall total.")
+        hall_discount = hall_discount_value
+
+    hall_net_total = max(0, hall_total - hall_discount)
+
     services_total = 0
+
     for row in doc.get("additional_billings", []):
         row.qty = flt(row.qty or 1)
         row.rate = flt(row.rate or 0)
+        row.discount_type = row.discount_type or "Fixed Amount"
         row.discount_amount = flt(row.discount_amount or 0)
-        row.amount = max(0, (row.qty * row.rate) - row.discount_amount)
+
+        gross = row.qty * row.rate
+
+        if row.discount_type == "Percentage":
+            if row.discount_amount > 100:
+                frappe.throw(
+                    "Discount percentage cannot be greater than 100% for service {0}."
+                    .format(row.service)
+                )
+
+            row.discount_value = gross * (row.discount_amount / 100)
+
+        else:
+            if row.discount_amount > gross:
+                frappe.throw(
+                    "Discount amount cannot be greater than service amount for {0}."
+                    .format(row.service)
+                )
+
+            row.discount_value = row.discount_amount
+
+        row.amount = max(0, gross - flt(row.discount_value))
         services_total += flt(row.amount)
 
-    gross_total = flt(doc.total_amount) + services_total
-
-    discount = flt(doc.discount_amount or 0)
-    if discount > 0:
-        if doc.discount_type == "Percentage":
-            discount = gross_total * (discount / 100)
-
-    doc.net_total = max(0, gross_total - discount)
-
-
+    doc.net_total = max(0, hall_net_total + services_total)
+    
 def _payment_status(doc):
     if doc.docstatus == 0:
         return "Draft"
@@ -438,3 +502,31 @@ def _get_invoice_payment_status(invoice_name):
 
 def _docstatus_label(docstatus):
     return {0: "Draft", 1: "Confirmed", 2: "Cancelled"}.get(docstatus, "Unknown")
+
+
+@frappe.whitelist()
+def create_invoice(booking_name):
+    from rhohotel.rhocom_hotel.doctype.hall_booking.hall_booking import create_invoice_for_booking
+    return create_invoice_for_booking(booking_name)
+
+@frappe.whitelist()
+def update_customer_contact(customer, mobile_no=None, email_id=None):
+    if not customer:
+        frappe.throw("Customer is required.")
+
+    if not frappe.db.exists("Customer", customer):
+        frappe.throw("Customer does not exist.")
+
+    doc = frappe.get_doc("Customer", customer)
+
+    doc.mobile_no = mobile_no or ""
+    doc.email_id = email_id or ""
+
+    doc.save(ignore_permissions=True)
+
+    return {
+        "name": doc.name,
+        "customer_name": doc.customer_name,
+        "mobile_no": doc.mobile_no,
+        "email_id": doc.email_id,
+    }

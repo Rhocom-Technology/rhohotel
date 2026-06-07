@@ -150,7 +150,7 @@
             "default": "Fixed Amount",
             "fieldname": "discount_type",
             "fieldtype": "Select",
-            "label": "Discount Type",
+            "label": "Hall Discount Type",
             "options": "Percentage\nFixed Amount"
         },
         {
@@ -158,7 +158,7 @@
             "fieldname": "discount_amount",
             "fieldtype": "Currency",
             "in_list_view": 1,
-            "label": "Discount Amount"
+            "label": "Hall Discount Amount"
         },
         {
             "fieldname": "section_break_2k5l",

@@ -26,6 +26,14 @@
             >
               + Add Customer
             </button>
+
+            <button
+              type="button"
+              @click="openEditCustomerModal"
+              class="px-4 py-2 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Edit Customer
+            </button>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -158,7 +166,7 @@
               <label class="text-xs text-gray-500 mb-1 block">Start Date <span class="text-red-500">*</span></label>
               <input
                 v-model="form.start_datetime"
-                type="date"
+                 type="datetime-local"
                 @change="computeTotals"
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -168,7 +176,7 @@
               <label class="text-xs text-gray-500 mb-1 block">End Date <span class="text-red-500">*</span></label>
               <input
                 v-model="form.end_datetime"
-                type="date"
+                 type="datetime-local"
                 @change="computeTotals"
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -262,6 +270,8 @@
                 <th class="text-left pb-2 text-xs font-semibold text-gray-500">Service</th>
                 <th class="text-left pb-2 text-xs font-semibold text-gray-500">Qty</th>
                 <th class="text-left pb-2 text-xs font-semibold text-gray-500">Rate</th>
+                <th class="text-left pb-2 text-xs font-semibold text-gray-500">Discount Type</th>
+                <th class="text-left pb-2 text-xs font-semibold text-gray-500">Discount</th>
                 <th class="text-left pb-2 text-xs font-semibold text-gray-500">Amount</th>
                 <th class="pb-2 w-6"></th>
               </tr>
@@ -294,11 +304,30 @@
 
                 <td class="py-1.5 pr-2 w-24">
                   <input
-                    v-model="row.rate"
+                      v-model="row.rate"
+                      type="number"
+                      readonly
+                      class="w-full text-xs border border-gray-100 rounded px-2 py-1.5 bg-gray-50 text-gray-600 cursor-default"
+                    />
+                </td>
+
+                <td class="py-1.5 pr-2">
+                  <select
+                    v-model="row.discount_type"
+                    @change="updateServiceRow(row)"
+                    class="w-full text-xs border border-gray-200 rounded px-2 py-1.5"
+                  >
+                    <option value="Fixed Amount">Fixed Amount</option>
+                    <option value="Percentage">Percentage</option>
+                  </select>
+                </td>
+                <td class="py-1.5 pr-2 w-24">
+                  <input
+                    v-model.number="row.discount_amount"
                     type="number"
                     min="0"
-                    @change="updateServiceRow(row)"
-                    class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    @input="updateServiceRow(row)"
+                    class="w-full text-xs border border-gray-200 rounded px-2 py-1.5"
                   />
                 </td>
 
@@ -390,75 +419,57 @@
     </div>
 
     <div v-if="showServiceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
-        <h3 class="text-sm font-bold text-gray-900 mb-4">Create Additional Service</h3>
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+    <h3 class="text-sm font-bold text-gray-900 mb-4">
+      Create Hotel Service
+    </h3>
 
-        <div class="space-y-3">
-          <div class="relative">
-            <label class="text-xs text-gray-500 mb-1 block">Item</label>
-
-            <input
-              v-model="itemSearch"
-              type="text"
-              placeholder="Search ERPNext item..."
-              @input="searchItems"
-              @focus="searchItems"
-              class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
-            />
-
-            <div
-              v-if="showItemDropdown && itemResults.length"
-              class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto"
-            >
-              <button
-                v-for="i in itemResults"
-                :key="i.item_code"
-                type="button"
-                @click="selectServiceItem(i)"
-                class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50"
-              >
-                <div class="font-medium text-gray-800">
-                  {{ i.item_name || i.item_code }}
-                </div>
-                <div class="text-gray-400">
-                  {{ i.item_code }}
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label class="text-xs text-gray-500 mb-1 block">Service</label>
-            <input
-              v-model="serviceForm.service"
-              type="text"
-              readonly
-              class="w-full text-xs border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-500"
-            />
-          </div>
-
-          <div>
-            <label class="text-xs text-gray-500 mb-1 block">Rate</label>
-            <input
-              v-model="serviceForm.rate"
-              type="number"
-              min="0"
-              class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
-            />
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-2 mt-5">
-          <button @click="showServiceModal = false" class="px-4 py-2 text-xs border rounded-lg">
-            Cancel
-          </button>
-
-          <button @click="createHallService" class="px-4 py-2 text-xs text-white bg-blue-600 rounded-lg">
-            Create Service
-          </button>
-        </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Service Name</label>
+        <input
+          v-model="serviceForm.service"
+          type="text"
+          placeholder="e.g. Chicken"
+          class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
+        />
       </div>
+
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Rate</label>
+        <input
+          v-model.number="serviceForm.rate"
+          type="number"
+          min="0"
+          placeholder="e.g. 2000"
+          class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
+        />
+      </div>
+
+      <p class="text-xs text-gray-400">
+        This will create a non-stock Item under the Hall Service item group.
+      </p>
     </div>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button
+        type="button"
+        @click="showServiceModal = false"
+        class="px-4 py-2 text-xs border rounded-lg"
+      >
+        Cancel
+      </button>
+
+      <button
+        type="button"
+        @click="createHallService"
+        class="px-4 py-2 text-xs text-white bg-blue-600 rounded-lg"
+      >
+        Create Service
+      </button>
+    </div>
+  </div>
+</div>
 
     <div v-if="showCustomerModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
       <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
@@ -489,6 +500,119 @@
     </div>
 
   </div>
+
+
+
+
+  <!-- Edit Customer Modal -->
+<div
+  v-if="showEditCustomerModal"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+>
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="text-sm font-bold text-gray-900">Edit Customer Contact</h3>
+      <button
+        type="button"
+        @click="closeEditCustomerModal"
+        class="text-gray-400 hover:text-gray-600 text-lg leading-none"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div class="px-6 py-4 space-y-3">
+      <!-- Search Customer -->
+      <div class="relative">
+        <label class="text-xs text-gray-500 mb-1 block">Search Customer</label>
+        <input
+          v-model="editCustomerSearch"
+          type="text"
+          placeholder="Search by name or phone..."
+          @input="searchEditCustomers"
+          @focus="searchEditCustomers"
+          class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+
+        <div
+          v-if="showEditCustomerDropdown && editCustomerResults.length"
+          class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto"
+        >
+          <button
+            v-for="c in editCustomerResults"
+            :key="c.name"
+            type="button"
+            @click="selectEditCustomer(c)"
+            class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50"
+          >
+            <div class="font-medium text-gray-800">
+              {{ c.customer_name || c.name }}
+            </div>
+            <div class="text-gray-400">
+              {{ c.mobile_no || 'No phone' }} <span v-if="c.email_id">• {{ c.email_id }}</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Selected Customer -->
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Customer Name</label>
+        <input
+          v-model="editCustomerForm.customer_name"
+          type="text"
+          readonly
+          class="w-full text-xs border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-500"
+        />
+      </div>
+
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Phone</label>
+        <input
+          v-model="editCustomerForm.mobile_no"
+          type="text"
+          placeholder="Enter phone number"
+          class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Email</label>
+        <input
+          v-model="editCustomerForm.email_id"
+          type="email"
+          placeholder="Enter email address"
+          class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <p v-if="editCustomerError" class="text-xs text-red-500">
+        {{ editCustomerError }}
+      </p>
+    </div>
+
+    <div class="px-6 py-4 border-t border-gray-100 flex gap-2">
+      <button
+        type="button"
+        @click="closeEditCustomerModal"
+        class="flex-1 px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+      >
+        Cancel
+      </button>
+
+      <button
+        type="button"
+        @click="saveEditCustomer"
+        :disabled="editCustomerSaving || !editCustomerForm.name"
+        class="flex-1 px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+      >
+        {{ editCustomerSaving ? 'Saving…' : 'Save Changes' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+
 </template>
 
 <script setup>
@@ -507,11 +631,6 @@ const halls = ref([])
 const services = ref([])
 const customers = ref([])
 const customerSearch = ref('')
-
-const allItems = ref([])
-const itemSearch = ref('')
-const itemResults = ref([])
-const showItemDropdown = ref(false)
 
 const showCustomerModal = ref(false)
 const newCustomerName = ref('')
@@ -563,7 +682,15 @@ const servicesTotal = computed(() =>
 
 function toDateInput(value) {
   if (!value) return ''
-  return String(value).slice(0, 10)
+
+  const d = new Date(value)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hour = String(d.getHours()).padStart(2, '0')
+  const minute = String(d.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day}T${hour}:${minute}`
 }
 
 async function load() {
@@ -571,12 +698,11 @@ async function load() {
   error.value = null
 
   try {
-    const [booking, h, s, c, items] = await Promise.all([
+    const [booking, h, s, c] = await Promise.all([
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_booking', { name: route.params.id }),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_halls'),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_services'),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_customers'),
-      callMethod('rhohotel.rhocom_hotel.api.hall.get_all_items'),
     ])
 
     if (booking.docstatus !== 0) {
@@ -587,7 +713,7 @@ async function load() {
     halls.value = h || []
     services.value = s || []
     customers.value = c || []
-    allItems.value = items || []
+    
 
     form.value.customer_name = booking.customer_name || ''
     form.value.mobile_number = booking.mobile_number || ''
@@ -607,8 +733,9 @@ async function load() {
       service: r.service || '',
       qty: Number(r.qty || 1),
       rate: Number(r.rate || 0),
-      amount: Number(r.amount || 0),
+      discount_type: r.discount_type || 'Fixed Amount',
       discount_amount: Number(r.discount_amount || 0),
+      amount: Number(r.amount || 0),
     }))
 
     const selected = customers.value.find(cus => cus.name === form.value.customer_name)
@@ -696,6 +823,7 @@ function clearSelectedCustomer() {
   showPhoneDropdown.value = false
 }
 
+
 function computeTotals() {
   const start = new Date(form.value.start_datetime)
   const end = new Date(form.value.end_datetime)
@@ -708,25 +836,55 @@ function computeTotals() {
     return
   }
 
-  const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+  const startDate = new Date(
+  start.getFullYear(),
+  start.getMonth(),
+  start.getDate()
+)
+
+const endDate = new Date(
+  end.getFullYear(),
+  end.getMonth(),
+  end.getDate()
+)
+
+const days =
+  Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1
+
   const hallTotal = Number(form.value.rate || 0) * days
-  const grossTotal = hallTotal + servicesTotal.value
+  const svcTotal = servicesTotal.value
 
-  const discountAmount = Number(form.value.discount_amount || 0)
-  let discount = 0
+  let discountValue = Number(
+    form.value.discount_amount || 0
+  )
 
-  if (discountAmount > 0) {
-    if (form.value.discount_type === 'Percentage') {
-      discount = grossTotal * (discountAmount / 100)
-    } else {
-      discount = discountAmount
+  let hallDiscount = 0
+
+  if (form.value.discount_type === 'Percentage') {
+
+    if (discountValue > 100) {
+      discountValue = 100
+      form.value.discount_amount = 100
     }
+
+    hallDiscount = hallTotal * (discountValue / 100)
+
+  } else {
+
+    if (discountValue > hallTotal) {
+      discountValue = hallTotal
+      form.value.discount_amount = hallTotal
+    }
+
+    hallDiscount = discountValue
   }
 
   form.value.total_days = days
   form.value.total_amount = hallTotal
-  form.value.discount_value = discount
-  form.value.net_total = Math.max(0, grossTotal - discount)
+  form.value.discount_value = hallDiscount
+
+  form.value.net_total =
+    (hallTotal - hallDiscount) + svcTotal
 }
 
 function addService() {
@@ -734,8 +892,9 @@ function addService() {
     service: '',
     qty: 1,
     rate: 0,
-    amount: 0,
+    discount_type: 'Fixed Amount',
     discount_amount: 0,
+    amount: 0,
   })
 }
 
@@ -751,7 +910,38 @@ function onServiceChange(row) {
 }
 
 function updateServiceRow(row) {
-  row.amount = (Number(row.qty) || 0) * (Number(row.rate) || 0)
+  const qty = Number(row.qty || 0)
+  const rate = Number(row.rate || 0)
+
+  const gross = qty * rate
+
+  let discountValue = Number(
+    row.discount_amount || 0
+  )
+
+  let discount = 0
+
+  if (row.discount_type === 'Percentage') {
+
+    if (discountValue > 100) {
+      discountValue = 100
+      row.discount_amount = 100
+    }
+
+    discount = gross * (discountValue / 100)
+
+  } else {
+
+    if (discountValue > gross) {
+      discountValue = gross
+      row.discount_amount = gross
+    }
+
+    discount = discountValue
+  }
+
+  row.amount = gross - discount
+
   computeTotals()
 }
 
@@ -798,14 +988,15 @@ async function saveCustomer() {
   }
 }
 
+
 async function createHallService() {
-  if (!serviceForm.value.item_name) return
+  if (!serviceForm.value.service) return
 
   const created = await callMethod(
     'rhohotel.rhocom_hotel.api.hall_booking.create_hall_service',
     {
       data: JSON.stringify({
-        item_name: serviceForm.value.item_name,
+        service: serviceForm.value.service,
         rate: serviceForm.value.rate,
       })
     }
@@ -819,26 +1010,8 @@ async function createHallService() {
     service: '',
     rate: 0,
   }
-
-  itemSearch.value = ''
 }
 
-async function searchItems() {
-  const data = await callMethod(
-    'rhohotel.rhocom_hotel.api.hall_booking.search_items',
-    { query: itemSearch.value || '' }
-  )
-
-  itemResults.value = data || []
-  showItemDropdown.value = true
-}
-
-function selectServiceItem(i) {
-  serviceForm.value.item_name = i.item_code
-  serviceForm.value.service = i.item_name || i.item_code
-  itemSearch.value = i.item_name || i.item_code
-  showItemDropdown.value = false
-}
 
 function normalizePhone(phone) {
   if (!phone) return ''
@@ -880,6 +1053,122 @@ async function saveChanges() {
     saving.value = false
   }
 }
+
+
+
+
+const showEditCustomerModal = ref(false)
+const editCustomerSearch = ref('')
+const editCustomerResults = ref([])
+const showEditCustomerDropdown = ref(false)
+const editCustomerSaving = ref(false)
+const editCustomerError = ref(null)
+
+const editCustomerForm = ref({
+  name: '',
+  customer_name: '',
+  mobile_no: '',
+  email_id: '',
+})
+
+function openEditCustomerModal() {
+  editCustomerError.value = null
+  showEditCustomerModal.value = true
+}
+
+function closeEditCustomerModal() {
+  showEditCustomerModal.value = false
+  editCustomerSearch.value = ''
+  editCustomerResults.value = []
+  showEditCustomerDropdown.value = false
+  editCustomerError.value = null
+  editCustomerForm.value = {
+    name: '',
+    customer_name: '',
+    mobile_no: '',
+    email_id: '',
+  }
+}
+
+let editCustomerSearchTimer = null
+
+function searchEditCustomers() {
+  clearTimeout(editCustomerSearchTimer)
+
+  editCustomerSearchTimer = setTimeout(async () => {
+    try {
+      const res = await callMethod(
+        'rhohotel.rhocom_hotel.api.hall_booking.search_customers',
+        { query: editCustomerSearch.value || '' }
+      )
+
+      editCustomerResults.value = res || []
+      showEditCustomerDropdown.value = true
+    } catch (e) {
+      console.error(e)
+    }
+  }, 250)
+}
+
+function selectEditCustomer(c) {
+  editCustomerForm.value = {
+    name: c.name,
+    customer_name: c.customer_name || c.name,
+    mobile_no: c.mobile_no || '',
+    email_id: c.email_id || '',
+  }
+
+  editCustomerSearch.value = c.customer_name || c.name
+  showEditCustomerDropdown.value = false
+}
+
+async function saveEditCustomer() {
+  if (!editCustomerForm.value.name) {
+    editCustomerError.value = 'Please select a customer first.'
+    return
+  }
+
+  editCustomerSaving.value = true
+  editCustomerError.value = null
+
+  try {
+    const updated = await callMethod(
+      'rhohotel.rhocom_hotel.api.hall_booking.update_customer_contact',
+      {
+        customer: editCustomerForm.value.name,
+        mobile_no: editCustomerForm.value.mobile_no,
+        email_id: editCustomerForm.value.email_id,
+      }
+    )
+
+    // Update customers list
+    customers.value = customers.value.map(c =>
+      c.name === updated.name ? { ...c, ...updated } : c
+    )
+
+    // Update phone search list
+    phoneResults.value = phoneResults.value.map(c =>
+      c.name === updated.name ? { ...c, ...updated } : c
+    )
+
+    // Update current selected customer immediately
+    if (form.value.customer_name === updated.name) {
+      form.value.mobile_number = updated.mobile_no || ''
+      phoneSearch.value = updated.mobile_no || ''
+      customerSearch.value = updated.customer_name || updated.name
+      customerLocked.value = true
+      phoneLocked.value = !!updated.mobile_no
+    }
+
+    closeEditCustomerModal()
+  } catch (e) {
+    editCustomerError.value = e.message || 'Failed to update customer.'
+  } finally {
+    editCustomerSaving.value = false
+  }
+}
+
+
 
 onMounted(load)
 </script>

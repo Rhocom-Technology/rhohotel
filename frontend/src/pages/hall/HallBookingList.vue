@@ -160,7 +160,15 @@ const paged      = computed(() => filtered.value.slice(pageStart.value, pageEnd.
 
 function fmtDatetime(dt) {
   if (!dt) return '–'
-  return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', day:'2-digit', minute:'2-digit' })
+
+  return new Date(dt).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
 }
 
 function statusClass(s) {
