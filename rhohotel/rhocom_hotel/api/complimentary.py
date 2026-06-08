@@ -12,7 +12,7 @@ APPROVAL_ROLES = {
     "Operations Lead": {"System Manager", "Hotel Manager", "Front Desk Manager"},
 }
 CONSUMPTION_ROLES = {
-    "Restaurant": {"System Manager", "Hotel Manager", "Front Desk Manager", "Restaurant Manager"},
+    "Restaurant": {"System Manager", "Hotel Manager", "Front Desk Manager", "Restaurant Manager","Sales User"},
     "Front Desk": {"System Manager", "Hotel Manager", "Front Desk Manager", "Hotel Receptionist", "Front Desk"},
     "Housekeeping": {"System Manager", "Hotel Manager", "Hotel Housekeeping", "Housekeeping Manager"},
     "GM Office": {"System Manager", "Hotel Manager"},
