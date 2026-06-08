@@ -620,12 +620,12 @@ function createRoomCard(room, nights) {
 
                 </div>
 
-                <div class="mb-2">
+               <!-- <div class="mb-2">
 
                     Available:
                     ${room.available_count}
 
-                </div>
+                </div> -->
 
                 <div class="fw-bold">
 
@@ -903,6 +903,18 @@ function prepareReviewStep() {
 
 	if (!emailPattern.test(guest_email)) {
 		showMessage("Enter a valid email address.");
+		return;
+	}
+
+	if (!guest_phone) {
+		showMessage("Phone number is required.");
+		return;
+	}
+
+	const phonePattern = /^[0-9]{7,15}$/;
+
+	if (!phonePattern.test(guest_phone)) {
+		showMessage("Phone number must contain only digits and be between 7 and 15 digits.");
 		return;
 	}
 
