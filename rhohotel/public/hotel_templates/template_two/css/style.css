@@ -288,11 +288,13 @@ img {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at top left, var(--web-secondary-overlay-medium), transparent 36%),
-    linear-gradient(90deg,
-      var(--web-primary-overlay-deep) 0%,
-      var(--web-primary-overlay-strong) 45%,
-      var(--web-primary-overlay-soft) 100%);
+    linear-gradient(
+      90deg,
+      rgba(0,0,0,.72) 0%,
+      rgba(0,0,0,.58) 25%,
+      rgba(0,0,0,.35) 55%,
+      rgba(0,0,0,.12) 100%
+    );
   z-index: 2;
 }
 
@@ -430,7 +432,7 @@ img {
 
 .web-actions {
   display: flex;
-  align-items: center;
+  align-items: start;
   gap: 1rem;
   flex-wrap: wrap;
 }
