@@ -17,13 +17,29 @@
       <!-- Header -->
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
         <div>
-          <div class="flex items-center">
+          <div class="flex items-center gap-2">
 
-            <h2 class="text-sm font-bold text-gray-900">{{ booking.name }}</h2> 
-            <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(booking.docstatus)">
-            {{ statusLabel(booking.docstatus) }}
-          </span> 
-          </div>
+  <h2 class="text-sm font-bold text-gray-900">
+    {{ booking.name }}
+  </h2>
+
+  <!-- Document Status -->
+  <span
+    class="px-2.5 py-1 text-xs font-semibold rounded-full"
+    :class="statusClass(booking.docstatus)"
+  >
+    {{ statusLabel(booking.docstatus) }}
+  </span>
+
+  <!-- Event Status -->
+  <span
+    class="px-2.5 py-1 text-xs font-semibold rounded-full"
+    :class="eventStatusClass(booking.event_status)"
+  >
+    {{ booking.event_status || 'Scheduled' }}
+  </span>
+
+</div>
           <p class="text-xs text-gray-400 mt-0.5">{{ booking.customer_name }} • {{ booking.hall }} • {{ booking.event_type }}</p>
         </div>
         <div class="flex items-center gap-2">
@@ -64,6 +80,33 @@
             class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Adjust Booking
           </button>
+
+
+          <button
+              v-if="booking.docstatus === 1 && booking.event_status !== 'Completed'"
+              @click="markEventStatus('Completed')" :disabled="actionSaving"
+              class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Mark Complete
+            </button>
+
+            <button
+              v-if="booking.docstatus === 1 && booking.event_status !== 'No Show'"
+              @click="markEventStatus('No Show')" :disabled="actionSaving"
+              class="px-4 py-2 text-xs font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors"
+            >
+              Mark No Show
+            </button>
+
+            <button
+              v-if="booking.docstatus === 1"
+              @click="cancelBooking" :disabled="actionSaving"
+              class="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Cancel Booking
+            </button>
+
+
         </div>
       </div>
 
@@ -97,6 +140,20 @@
           </p>
         </div>
         
+      </div>
+
+      <div
+        v-if="actionError"
+        class="bg-red-50 border border-red-100 text-red-600 text-xs px-4 py-3 rounded-lg"
+      >
+        {{ actionError }}
+      </div>
+
+      <div
+        v-if="actionSuccess"
+        class="bg-green-50 border border-green-100 text-green-700 text-xs px-4 py-3 rounded-lg"
+      >
+        {{ actionSuccess }}
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start;">
@@ -524,6 +581,11 @@ const adjust = ref({
 })
 
 
+const actionError = ref(null)
+const actionSuccess = ref(null)
+const actionSaving = ref(false)
+
+
 const adjustDays = computed(() => {
   if (!adjust.value.start_datetime || !adjust.value.end_datetime) return 0
   const diff = new Date(adjust.value.end_datetime) - new Date(adjust.value.start_datetime)
@@ -737,6 +799,57 @@ const adjustmentNetImpact = computed(() => {
   const net = adjustmentGross.value - adjustmentDiscountValue.value
   return adjustmentDiffDays.value < 0 ? -net : net
 })
+
+
+function eventStatusClass(status) {
+  return {
+    Scheduled: 'bg-blue-100 text-blue-700',
+    Completed: 'bg-green-100 text-green-700',
+    'No Show': 'bg-orange-100 text-orange-700',
+    Cancelled: 'bg-red-100 text-red-700',
+  }[status] || 'bg-gray-100 text-gray-500'
+}
+
+async function markEventStatus(status) {
+  actionSaving.value = true
+  actionError.value = null
+  actionSuccess.value = null
+
+  try {
+    await callMethod('rhohotel.rhocom_hotel.api.hall_booking.mark_event_status', {
+      booking_name: booking.value.name,
+      event_status: status,
+    })
+
+    actionSuccess.value = `Booking marked as ${status}.`
+    await load()
+  } catch (e) {
+    actionError.value = e.message || 'Failed to update event status.'
+  } finally {
+    actionSaving.value = false
+  }
+}
+
+async function cancelBooking() {
+  if (!confirm('Cancel this booking and all attached invoices?')) return
+
+  actionSaving.value = true
+  actionError.value = null
+  actionSuccess.value = null
+
+  try {
+    await callMethod('rhohotel.rhocom_hotel.api.hall_booking.cancel_hall_booking', {
+      booking_name: booking.value.name,
+    })
+
+    actionSuccess.value = 'Booking cancelled successfully.'
+    await load()
+  } catch (e) {
+    actionError.value = e.message || 'Failed to cancel booking.'
+  } finally {
+    actionSaving.value = false
+  }
+}
 
 
 onMounted(load)

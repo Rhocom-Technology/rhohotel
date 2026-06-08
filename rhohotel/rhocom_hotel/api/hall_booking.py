@@ -75,6 +75,7 @@ def get_booking(name):
         0,
         flt(data["invoice_grand_total"]) - flt(data["outstanding_amount"])
     )
+    data["event_status"] = doc.event_status or "Scheduled"
 
     return data
 
@@ -529,4 +530,92 @@ def update_customer_contact(customer, mobile_no=None, email_id=None):
         "customer_name": doc.customer_name,
         "mobile_no": doc.mobile_no,
         "email_id": doc.email_id,
+    }
+    
+    
+@frappe.whitelist()
+def mark_event_status(booking_name, event_status):
+    allowed = ["Scheduled", "Completed", "No Show"]
+
+    if event_status not in allowed:
+        frappe.throw("Invalid event status.")
+
+    booking = frappe.get_doc("Hall Booking", booking_name)
+
+    if booking.docstatus != 1:
+        frappe.throw("Only submitted bookings can be updated.")
+
+    if event_status == "Completed":
+        if not booking.sales_invoice:
+            frappe.throw("This booking cannot be marked as Completed because no invoice has been created.")
+
+        if _payment_status(booking) != "Paid":
+            frappe.throw("This booking cannot be marked as Completed until all invoices are fully paid.")
+
+    booking.event_status = event_status
+    booking.flags.ignore_validate_update_after_submit = True
+    booking.save(ignore_permissions=True)
+
+    return {
+        "name": booking.name,
+        "event_status": booking.event_status,
+    }
+
+
+@frappe.whitelist()
+def cancel_hall_booking(booking_name):
+    booking = frappe.get_doc("Hall Booking", booking_name)
+
+    if booking.docstatus != 1:
+        frappe.throw("Only submitted bookings can be cancelled.")
+
+    invoice_names = []
+
+    if booking.sales_invoice:
+        invoice_names.append(booking.sales_invoice)
+
+    for row in booking.get("adjustment_history", []):
+        if row.adjustment_invoice:
+            invoice_names.append(row.adjustment_invoice)
+
+    # Do not allow cancellation if any linked invoice has payment
+    for inv_name in invoice_names:
+        inv = frappe.get_doc("Sales Invoice", inv_name)
+
+        if inv.docstatus == 1 and flt(inv.outstanding_amount) != flt(inv.grand_total):
+            frappe.throw(
+                "Cannot cancel booking because invoice {0} has payment entries. Cancel the payment first."
+                .format(inv.name)
+            )
+
+    # Clear links from Hall Booking -> Sales Invoice first
+    booking.sales_invoice = None
+
+    for row in booking.get("adjustment_history", []):
+        row.adjustment_invoice = None
+
+    booking.event_status = "Cancelled"
+    booking.flags.ignore_validate_update_after_submit = True
+    booking.save(ignore_permissions=True)
+
+    # Now cancel invoices after links are removed
+    for inv_name in invoice_names:
+        inv = frappe.get_doc("Sales Invoice", inv_name)
+
+        if inv.docstatus == 1:
+            if hasattr(inv, "custom_hall_booking"):
+                inv.db_set("custom_hall_booking", None, update_modified=False)
+                inv.reload()
+
+            inv.cancel()
+
+    booking.reload()
+    booking.flags.ignore_validate_update_after_submit = True
+    booking.cancel()
+
+    return {
+        "name": booking.name,
+        "docstatus": booking.docstatus,
+        "event_status": "Cancelled",
+        "cancelled_invoices": invoice_names,
     }
