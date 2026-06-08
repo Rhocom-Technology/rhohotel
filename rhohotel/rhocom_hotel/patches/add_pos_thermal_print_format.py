@@ -2,6 +2,7 @@ import frappe
 
 
 PRINT_FORMAT_NAME = "Rhocom POS Thermal Receipt"
+RAW_PRINT_FORMAT_NAME = "Rhocom POS Thermal Raw Receipt"
 
 
 HTML = """
@@ -229,8 +230,57 @@ body,
 """
 
 
+RAW_COMMANDS = """
+{% set company = frappe.get_cached_doc("Company", doc.company) if doc.company else None %}
+{% set check_in = None %}
+{% if doc.get("custom_hotel_room_check_in") and frappe.db.exists("Hotel Room Check In", doc.custom_hotel_room_check_in) %}
+  {% set check_in = frappe.get_doc("Hotel Room Check In", doc.custom_hotel_room_check_in) %}
+{% endif %}
+{% macro line() -%}--------------------------------{%- endmacro %}
+{% macro center(value) -%}{{ "{:^32}".format((value or "")|string)[:32] }}{%- endmacro %}
+{% macro row(label, value) -%}{{ "{:<12}{:>20}".format((label or "")|string, (value or "")|string)[:32] }}{%- endmacro %}
+{% macro money(value) -%}NGN {{ "{:,.2f}".format(frappe.utils.flt(value or 0)) }}{%- endmacro %}
+
+{{ "\x1b@" }}{{ center(company.company_name if company else doc.company) }}
+{{ center("POS RECEIPT") }}
+{{ line() }}
+{{ row("Invoice", doc.name) }}
+{{ row("Date", frappe.utils.format_datetime(doc.posting_date|string + " " + (doc.posting_time|string if doc.posting_time else "00:00:00"), "dd-MM-yyyy HH:mm")) }}
+{% if doc.pos_profile %}{{ row("Outlet", doc.pos_profile) }}
+{% endif %}{{ row("Cashier", doc.owner) }}
+{{ row("Customer", doc.customer_name or doc.customer or "Walk In") }}
+{% if check_in %}{{ row("Room", check_in.room_number) }}
+{{ row("Check-in", check_in.name) }}
+{% endif %}{{ line() }}
+ITEM                 QTY      AMOUNT
+{{ line() }}
+{% for item in doc.items %}{{ ((item.item_name or item.item_code)|string)[:32] }}
+{{ "{:>5} x {:<8} {:>15}".format(frappe.utils.flt(item.qty, 2), frappe.utils.flt(item.rate, 2), money(item.amount))[:32] }}
+{% endfor %}{{ line() }}
+{{ row("Subtotal", money(doc.total)) }}
+{% if doc.discount_amount %}{{ row("Discount", "-" ~ money(doc.discount_amount)) }}
+{% endif %}{% if doc.total_taxes_and_charges %}{{ row("Charges", money(doc.total_taxes_and_charges)) }}
+{% endif %}{{ line() }}
+{{ row("TOTAL", money(doc.grand_total)) }}
+{{ line() }}
+{{ row("Paid", money(doc.paid_amount)) }}
+{% if doc.change_amount %}{{ row("Change", money(doc.change_amount)) }}
+{% endif %}{% if doc.outstanding_amount %}{{ row("Outstanding", money(doc.outstanding_amount)) }}
+{% endif %}{% if doc.payments %}{{ line() }}
+PAYMENTS
+{% for payment in doc.payments %}{% if payment.amount %}{{ row(payment.mode_of_payment, money(payment.amount)) }}
+{% endif %}{% endfor %}{% endif %}{{ line() }}
+{{ center("Thank you") }}
+{{ center("Please keep this receipt") }}
+
+
+
+{{ "\x1dV\x00" }}
+"""
+
+
 def execute():
-    values = {
+    html_values = {
         "doctype": "Print Format",
         "name": PRINT_FORMAT_NAME,
         "doc_type": "POS Invoice",
@@ -245,22 +295,43 @@ def execute():
         "css": CSS,
     }
 
+    raw_values = {
+        "doctype": "Print Format",
+        "name": RAW_PRINT_FORMAT_NAME,
+        "doc_type": "POS Invoice",
+        "module": "Rhocom Hotel",
+        "standard": "Yes",
+        "custom_format": 1,
+        "print_format_type": "Jinja",
+        "print_format_builder": 0,
+        "disabled": 0,
+        "raw_printing": 1,
+        "raw_commands": RAW_COMMANDS,
+    }
+
     if frappe.db.exists("Print Format", PRINT_FORMAT_NAME):
         print_format = frappe.get_doc("Print Format", PRINT_FORMAT_NAME)
-        print_format.update(values)
+        print_format.update(html_values)
         print_format.save(ignore_permissions=True)
     else:
-        frappe.get_doc(values).insert(ignore_permissions=True)
+        frappe.get_doc(html_values).insert(ignore_permissions=True)
+
+    if frappe.db.exists("Print Format", RAW_PRINT_FORMAT_NAME):
+        raw_print_format = frappe.get_doc("Print Format", RAW_PRINT_FORMAT_NAME)
+        raw_print_format.update(raw_values)
+        raw_print_format.save(ignore_permissions=True)
+    else:
+        frappe.get_doc(raw_values).insert(ignore_permissions=True)
 
     if frappe.db.has_column("POS Profile", "print_format"):
-      for profile in frappe.get_all("POS Profile", fields=["name", "print_format"]):
-        if not profile.get("print_format"):
-          frappe.db.set_value(
-            "POS Profile",
-            profile.name,
-            "print_format",
-            PRINT_FORMAT_NAME,
-            update_modified=False,
-          )
+        for profile in frappe.get_all("POS Profile", fields=["name", "print_format"]):
+            if not profile.get("print_format"):
+                frappe.db.set_value(
+                    "POS Profile",
+                    profile.name,
+                    "print_format",
+                    PRINT_FORMAT_NAME,
+                    update_modified=False,
+                )
 
     frappe.db.commit()

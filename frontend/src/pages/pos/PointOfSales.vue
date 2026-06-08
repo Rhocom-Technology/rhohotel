@@ -516,7 +516,7 @@ import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
 import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import PostToRoomModal from '@/components/pos/PostToRoomModal.vue'
 import SplitBillModal from '@/components/pos/SplitBillModal.vue'
-import { getPOSInvoicePrintUrl } from '@/lib/posPrint'
+import { printPOSInvoice } from '@/lib/posPrint'
 
 const router = useRouter()
 const route = useRoute()
@@ -972,7 +972,7 @@ const chargeResource = createResource({
     charging.value = false
     menuResource.reload()
     // Auto-print receipt
-    window.open(getPOSInvoicePrintUrl(data.pos_invoice), '_blank')
+    printPOSInvoice(data.pos_invoice)
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
@@ -1035,7 +1035,7 @@ const postToRoomDirectResource = createResource({
     charging.value = false
     menuResource.reload()
     if (invoiceName) {
-      window.open(getPOSInvoicePrintUrl(invoiceName), '_blank')
+      printPOSInvoice(invoiceName)
     }
     triggerKitchenSend(data?.pos_invoice || null, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
@@ -1235,7 +1235,7 @@ function isKitchenEligible(item) {
       setTimeout(() => { chargeError.value = '' }, 3000)
       return
     }
-    window.open(getPOSInvoicePrintUrl(lastInvoiceName.value), '_blank')
+    printPOSInvoice(lastInvoiceName.value)
   }
 
   function onResumeDraft(data) {
@@ -1500,7 +1500,7 @@ function onSplitConfirmed(data) {
   menuResource.reload()
   chargeSuccess.value = 'Split bill processed successfully'
   if (data?.pos_invoice) {
-    window.open(getPOSInvoicePrintUrl(data.pos_invoice), '_blank')
+    printPOSInvoice(data.pos_invoice)
   }
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
@@ -1523,7 +1523,7 @@ function onPostConfirmed(data) {
   menuResource.reload()
   // Auto-print the POS invoice if available
   if (invoiceName) {
-    window.open(getPOSInvoicePrintUrl(invoiceName), '_blank')
+    printPOSInvoice(invoiceName)
   }
   triggerKitchenSend(data?.pos_invoice || null, submitted, context)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
