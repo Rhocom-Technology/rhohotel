@@ -399,6 +399,15 @@ def _confirm_reservation_after_payment(reservation_name, paystack_reference, amo
             )
 
     frappe.db.commit()
+    
+    try:
+        confirmed_doc = frappe.get_doc("Hotel Reservation", reservation_name)
+        _send_confirmation_email(confirmed_doc)
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"_confirm_reservation_after_payment – confirmation email failed for {reservation_name}",
+        )
 
     # Return a fresh copy so callers get the updated status fields
     return frappe.get_doc("Hotel Reservation", reservation_name)
@@ -825,6 +834,23 @@ def submit_online_reservation(
                 "Please try again or contact the hotel directly."
             ),
         }
+        
+    # Send payment link email
+    try:
+        link_result = create_reservation_payment_link(reservation.name)
+        if link_result.get("success") and link_result.get("payment_url"):
+            _send_payment_link_email(
+                reservation_name=reservation.name,
+                guest_email=guest_email,
+                guest_name=guest_name,
+                payment_url=link_result["payment_url"],
+                amount=link_result.get("amount", 0),
+            )
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"submit_online_reservation – payment link email failed for {reservation.name}",
+        )
 
     total_amount = sum(flt(r.get("total_amount") or 0) for r in selected_rooms)
 
@@ -1156,3 +1182,60 @@ def paystack_webhook():
         return {"status": "error", "message": "Reservation confirmation failed."}
 
     return {"status": "success", "reservation": reservation_name}
+
+
+def _send_payment_link_email(reservation_name, guest_email, guest_name, payment_url, amount):
+    try:
+        template = frappe.get_doc("Email Template", "reservation-payment-link")
+        context = frappe._dict(
+            name=reservation_name,
+            guest_name=guest_name,
+            payment_url=payment_url,
+            amount=amount,
+        )
+        frappe.sendmail(
+            recipients=[guest_email],
+            subject=frappe.render_template(template.subject, {"doc": context}),
+            message=frappe.render_template(template.response_html, {"doc": context}),
+            now=True,
+        )
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"_send_payment_link_email – failed for {reservation_name}",
+        )
+
+
+def _send_confirmation_email(doc):
+    if not doc.primary_guest_email:
+        return
+
+    try:
+        template = frappe.get_doc("Email Template", "reservation-confirmation")
+
+        room_type_counts = {}
+        for room in (doc.rooms or []):
+            rt = room.room_type or "Room"
+            room_type_counts[rt] = room_type_counts.get(rt, 0) + 1
+
+        context = frappe._dict(
+            name=doc.name,
+            guest_name=doc.primary_guest_name or "Guest",
+            from_date=frappe.utils.formatdate(str(doc.from_date), "MMMM d, yyyy"),
+            to_date=frappe.utils.formatdate(str(doc.to_date), "MMMM d, yyyy"),
+            number_of_nights=doc.number_of_nights,
+            total_amount=flt(doc.total_amount or doc.net_total or 0),
+            room_type_summary=room_type_counts,
+        )
+
+        frappe.sendmail(
+            recipients=[doc.primary_guest_email],
+            subject=frappe.render_template(template.subject, {"doc": context}),
+            message=frappe.render_template(template.response_html, {"doc": context}),
+            now=True,
+        )
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"_send_confirmation_email – failed for {doc.name}",
+        )
