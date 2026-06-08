@@ -31,6 +31,7 @@ Usage
 
 import frappe
 from frappe import _
+from rhohotel.rhocom_hotel.utils.customer import get_leaf_customer_group
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +80,8 @@ def _create_customer(customer_name, custom_guest_id=None):
     """Create a Customer record with minimal required fields."""
     customer = frappe.new_doc("Customer")
     customer.customer_name = customer_name
+    customer.customer_type = "Individual"
+    customer.customer_group = get_leaf_customer_group()
     if custom_guest_id and frappe.get_meta("Customer").has_field("custom_guest_id"):
         customer.custom_guest_id = custom_guest_id
     customer.insert(ignore_permissions=True)
@@ -344,6 +347,8 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
         "Corporate":     "channel_corporate",
         "Group":         "channel_front_desk",
         "OTA":           "channel_ota",
+        "Walk In":       "channel_walk_in",
+        "Walk-in":       "channel_walk_in",
         "House Use":     "channel_front_desk",
         "Complimentary": "channel_front_desk",
     }

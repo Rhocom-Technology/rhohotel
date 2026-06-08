@@ -99,252 +99,267 @@
       </div>
 
       <div class="web-booking-panel active" data-booking-panel="rooms">
-        <form id="roomBookingForm">
-          <input type="hidden" id="selectedRoom" name="selected_room" value="" />
+        <div class="web-booking-progress mb-5">
 
-          <div id="roomStepOne" class="web-booking-step active">
-            <div class="row g-5">
-              <div class="col-lg-5">
-                <div class="web-kicker">Room Availability</div>
+          <div class="web-step active" data-step="1">
+            <span>1</span>
+            <small>Search</small>
+          </div>
 
-                <h2 class="web-section-title">
-                  Find Your Room
-                </h2>
+          <div class="web-step" data-step="2">
+            <span>2</span>
+            <small>Rooms</small>
+          </div>
 
-                <p class="web-section-text">
-                  Select your arrival and departure dates, choose a room type, and continue with your booking details.
-                </p>
+          <div class="web-step" data-step="3">
+            <span>3</span>
+            <small>Summary</small>
+          </div>
 
-                <div class="web-success-note mt-4">
-                  <i class="fa-solid fa-circle-info me-2"></i>
-                  Room types are loaded from the hotel room records on this site.
+          <div class="web-step" data-step="4">
+            <span>4</span>
+            <small>Guest</small>
+          </div>
+
+          <div class="web-step" data-step="5">
+            <span>5</span>
+            <small>Review</small>
+          </div>
+
+          <div class="web-step" data-step="6">
+            <span>6</span>
+            <small>Payment</small>
+          </div>
+
+          <div class="web-step" data-step="7">
+            <span>7</span>
+            <small>Done</small>
+          </div>
+
+        </div>
+
+        <form id="bookingWizard">
+
+          <input type="hidden" id="reservationNumber" value="">
+
+          <!-- STEP 1 -->
+          <section id="step1" class="booking-step active">
+
+            <!-- SEARCH CONTENT HERE -->
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="roomCheckIn">Check-in Date</label>
+                <input type="date" id="roomCheckIn" name="check_in_date" class="form-control" required>
+              </div>
+
+              <div class="col-md-6">
+                <label for="roomCheckOut">Check-out Date</label>
+                <input type="date" id="roomCheckOut" name="check_out_date" class="form-control" required>
+              </div>
+
+              <div class="col-md-6">
+                <label>Length of Stay</label>
+                <div id="roomStayOutput" class="web-stay-pill">
+                  <i class="fa-solid fa-moon me-2"></i>Select valid dates
                 </div>
               </div>
 
-              <div class="col-lg-7">
-                <div class="web-form">
-                  <div class="row g-3">
-                    <div class="col-md-6">
-                      <label for="roomCheckIn">Check-in Date</label>
-                      <input type="date" id="roomCheckIn" name="check_in_date" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomCheckOut">Check-out Date</label>
-                      <input type="date" id="roomCheckOut" name="check_out_date" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomType">Room Type</label>
-                      <select id="roomType" name="room_type" class="form-select">
-                        <option value="all">Any available room</option>
-
-                        {% if rooms %}
-                        {% for room in rooms %}
-                        <option value="{{ room.name }}">
-                          {{ room.display_name or room.room_type or room.room_name or room.name }}
-                        </option>
-                        {% endfor %}
-                        {% else %}
-                        <option value="">No room types currently available</option>
-                        {% endif %}
-                      </select>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label>Length of Stay</label>
-                      <div id="roomStayOutput" class="web-stay-pill">
-                        <i class="fa-solid fa-moon me-2"></i>Select valid dates
-                      </div>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomAdults">Adults</label>
-                      <input type="number" id="roomAdults" name="adults" min="1" value="1" class="form-control">
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomChildren">Children</label>
-                      <input type="number" id="roomChildren" name="children" min="0" value="0" class="form-control">
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="numRooms">Number of Rooms</label>
-                      <input type="number" id="numRooms" name="num_rooms" min="1" value="1" class="form-control">
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomExtras">Extras</label>
-                      <select id="roomExtras" name="extras" class="form-select">
-                        <option>No extras</option>
-                        <option>Airport Pickup</option>
-
-                        {% if hotel.enable_spa %}
-                        <option>Spa Package</option>
-                        {% endif %}
-
-                        {% if hotel.enable_dining %}
-                        <option>Dinner Reservation</option>
-                        {% endif %}
-
-                        <option>Special Room Setup</option>
-                      </select>
-                    </div>
-
-                    <div class="col-12">
-                      <div id="roomAvailabilityAlert" class="web-inline-alert"></div>
-                    </div>
-
-                    <div class="col-12 d-flex flex-column flex-md-row gap-3">
-                      <button type="button" id="checkAvailabilityBtn" class="web-btn-ghost">
-                        Check Available Rooms
-                      </button>
-
-                      <button type="button" id="continueRoomBookingBtn" class="web-btn-solid">
-                        Continue to Booking Details
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              <div class="col-md-6">
+                <label for="roomAdults">Adults</label>
+                <input type="number" id="roomAdults" name="adults" min="1" value="1" class="form-control">
               </div>
-            </div>
 
-            <div id="roomAvailabilityResults" class="row g-4 mt-4">
-              {% if rooms %}
-              {% for room in rooms %}
-              <div class="col-lg-4 col-md-6">
-                <div class="web-availability-card">
-                  {% if room.display_image %}
-                  <img src="{{ room.display_image }}" alt="{{ room.display_name or room.name }}">
-                  {% else %}
-                  <div class="web-image-placeholder" style="height: 240px; min-height: 240px;">
-                    <i class="fa-solid fa-bed"></i>
-                  </div>
+              <div class="col-md-6">
+                <label for="roomChildren">Children</label>
+                <input type="number" id="roomChildren" name="children" min="0" value="0" class="form-control">
+              </div>
+
+              <div class="col-md-6">
+                <label for="numRooms">Number of Rooms</label>
+                <input type="number" id="numRooms" name="num_rooms" min="1" value="1" class="form-control">
+              </div>
+
+              <div class="col-md-6">
+                <label for="roomExtras">Extras</label>
+                <select id="roomExtras" name="extras" class="form-select">
+                  <option>No extras</option>
+                  <option>Airport Pickup</option>
+
+                  {% if hotel.enable_spa %}
+                  <option>Spa Package</option>
                   {% endif %}
 
-                  <div class="web-availability-card-body">
-                    <h4>{{ room.display_name or room.name }}</h4>
+                  {% if hotel.enable_dining %}
+                  <option>Dinner Reservation</option>
+                  {% endif %}
 
-                    <div class="web-price-line">
-                      {% if room.display_price %}
-                      From {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(room.display_price|float) }} / night
-                      {% else %}
-                      Rate available on request
-                      {% endif %}
-                    </div>
-
-                    <p class="web-form-help">
-                      {{ room.short_description or "A comfortable room option for a relaxing hotel stay." }}
-                    </p>
-
-                    <button type="button" class="web-btn-solid w-100"
-                      onclick="document.getElementById('selectedRoom').value='{{ room.name }}'; document.getElementById('roomType').value='{{ room.name }}';">
-                      Select Room
-                    </button>
-                  </div>
-                </div>
+                  <option>Special Room Setup</option>
+                </select>
               </div>
-              {% endfor %}
-              {% else %}
+
               <div class="col-12">
-                <div class="text-center py-5">
-                  <h3>No room types currently available</h3>
-                  <p class="web-section-text">
-                    Room types added in Hotel Room Type will appear here.
-                  </p>
-                </div>
+                <div id="roomAvailabilityAlert" class="web-inline-alert"></div>
               </div>
-              {% endif %}
+
+              <div class="col-12 d-flex flex-column flex-md-row gap-3">
+                <button type="button" id="searchRoomsBtn" class="web-btn-solid">
+                  Check Availability
+                </button>
+
+
+              </div>
             </div>
-          </div>
 
-          <div id="roomStepTwo" class="web-booking-step">
-            <div class="row g-5">
-              <div class="col-lg-5">
-                <div class="web-kicker">Booking Details</div>
+          </section>
 
-                <h2 class="web-section-title">
-                  Review Your Stay
+          <!-- STEP 2 -->
+          <section id="step2" class="booking-step">
+
+            <div class="row mb-4">
+
+              <div class="col">
+
+                <h2>
+                  Select Room(s)
                 </h2>
 
-                <p class="web-section-text">
-                  Add your contact details, payment preference, and special requests.
+                <p>
+                  Choose one or more room types.
                 </p>
 
-                <div id="roomSummaryBox" class="web-summary-box mt-4">
-                  <div class="web-summary-row">
-                    <span class="web-summary-label">Hotel</span>
-                    <span class="web-summary-value">{{ hotel.hotel_name or "Hotel" }}</span>
-                  </div>
-
-                  <div class="web-summary-row">
-                    <span class="web-summary-label">Booking Type</span>
-                    <span class="web-summary-value">Room Stay</span>
-                  </div>
-
-                  <div class="web-summary-row">
-                    <span class="web-summary-label">Status</span>
-                    <span class="web-summary-value">Pending confirmation</span>
-                  </div>
-                </div>
               </div>
 
-              <div class="col-lg-7">
-                <div class="web-form">
-                  <div class="row g-3">
-                    <div class="col-md-6">
-                      <label for="roomGuestName">Full Name</label>
-                      <input type="text" id="roomGuestName" name="guest_name" class="form-control"
-                        placeholder="Enter full name" required>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomGuestEmail">Email Address</label>
-                      <input type="email" id="roomGuestEmail" name="guest_email" class="form-control"
-                        placeholder="Enter email" required>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomGuestPhone">Phone Number</label>
-                      <input type="tel" id="roomGuestPhone" name="guest_phone" class="form-control"
-                        placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
-                    </div>
-
-                    <div class="col-md-6">
-                      <label for="roomPaymentMethod">Payment Preference</label>
-                      <select id="roomPaymentMethod" name="payment_preference" class="form-select">
-                        <option>Pay online</option>
-                        <option>Pay at hotel</option>
-                        <option>Bank transfer</option>
-                      </select>
-                    </div>
-
-                    <div class="col-12">
-                      <label for="roomNotes">Special Requests</label>
-                      <textarea id="roomNotes" name="special_request" class="form-control" rows="5"
-                        placeholder="Any request?"></textarea>
-                    </div>
-
-                    <div class="col-12 d-flex flex-column flex-md-row gap-3">
-                      <button type="button" id="backToRoomSearchBtn" class="web-btn-ghost">
-                        Back to Room Selection
-                      </button>
-
-                      <button type="submit" class="web-btn-solid">
-                        Book and Pay
-                      </button>
-                    </div>
-
-                    <div class="col-12">
-                      <p class="web-form-help mb-0">
-                        This form is connected to the hotel booking flow.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
-          </div>
+
+            <div id="availableRoomsContainer" class="row g-4">
+
+            </div>
+
+            <div class="mt-4">
+
+              <button type="button" class="web-btn-ghost" onclick="previousStep()">
+                Back
+              </button>
+
+              <button type="button" id="continueToSummaryBtn" class="web-btn-solid">
+                Continue
+              </button>
+
+            </div>
+
+          </section>
+
+          <!-- STEP 3 -->
+          <section id="step3" class="booking-step">
+
+            <div class="row">
+
+              <div class="col-lg-8">
+
+                <div id="bookingSummaryContainer"></div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          <!-- STEP 4 -->
+          <section id="step4" class="booking-step">
+
+            <div class="row justify-content-center">
+
+              <div class="col-lg-8">
+
+                <h2 class="mb-4">
+                  Guest Information
+                </h2>
+
+                <div class="card shadow-sm">
+
+                  <div class="card-body">
+
+                    <div class="row g-3">
+
+                      <div class="col-md-6">
+                        <label class="form-label">
+                          Full Name
+                        </label>
+
+                        <input type="text" id="guestName" class="form-control" required>
+                      </div>
+
+                      <div class="col-md-6">
+                        <label class="form-label">
+                          Email
+                        </label>
+
+                        <input type="email" id="guestEmail" class="form-control" required>
+                      </div>
+
+                      <div class="col-md-6">
+                        <label class="form-label">
+                          Phone
+                        </label>
+
+                        <input type="tel" id="guestPhone" class="form-control">
+                      </div>
+
+                      <div class="col-12">
+
+                        <label class="form-label">
+                          Special Requests
+                        </label>
+
+                        <textarea id="specialRequests" class="form-control" rows="4"></textarea>
+
+                      </div>
+
+                    </div>
+
+                    <div class="mt-4">
+
+                      <button type="button" class="web-btn-ghost" onclick="goToStep(3)">
+                        Back
+                      </button>
+
+                      <button type="button" id="reviewBookingBtn" class="web-btn-solid">
+                        Continue
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+          <!-- STEP 5 -->
+          <section id="step5" class="booking-step">
+
+            <div id="reservationReviewContainer"></div>
+
+          </section>
+
+          <!-- STEP 6 -->
+          <section id="step6" class="booking-step">
+
+            <div id="paymentContainer"></div>
+
+          </section>
+
+          <!-- STEP 7 -->
+          <section id="step7" class="booking-step">
+
+            <div id="confirmationContainer"></div>
+
+          </section>
+
         </form>
       </div>
 

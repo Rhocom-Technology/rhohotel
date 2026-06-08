@@ -1,38 +1,21 @@
 <template>
   <div class="space-y-5">
 
-    <!-- Loading / Error States (inventory) -->
-    <div v-if="loading && activeTab === 'inventory'" class="flex items-center justify-center py-20">
+    <!-- Loading / Error States -->
+    <div v-if="loading" class="flex items-center justify-center py-20">
       <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
     </div>
-    <div v-else-if="loadError && activeTab === 'inventory'" class="bg-red-50 border border-red-200 rounded-xl px-6 py-10 text-center">
+    <div v-else-if="loadError" class="bg-red-50 border border-red-200 rounded-xl px-6 py-10 text-center">
       <p class="text-sm font-semibold text-red-500 mb-2">{{ loadError }}</p>
       <button @click="loadRooms" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Retry</button>
     </div>
 
-    <template v-if="(!loading && !loadError) || activeTab === 'availability'">
+    <template v-else>
 
-    <!-- Breadcrumb + Tab Bar -->
+    <!-- Breadcrumb -->
     <div class="flex items-center justify-between">
-      <p class="text-xs text-gray-400">Front desk • room inventory and occupancy view</p>
+      <p class="text-xs text-gray-400">Rooms • room inventory and occupancy view</p>
     </div>
-    <div class="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-      <button
-        @click="activeTab = 'inventory'"
-        class="px-5 py-2 text-xs font-semibold rounded-lg transition-colors"
-        :class="activeTab === 'inventory' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
-        Room Inventory
-      </button>
-      <button
-        @click="activeTab = 'availability'"
-        class="px-5 py-2 text-xs font-semibold rounded-lg transition-colors"
-        :class="activeTab === 'availability' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
-        Available Rooms
-      </button>
-    </div>
-
-    <!-- ===== INVENTORY TAB ===== -->
-    <template v-if="activeTab === 'inventory'">
 
     <!-- Control Bar -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
@@ -170,135 +153,12 @@
     </div>
 
     </template>
-    <!-- ===== END INVENTORY TAB ===== -->
-
-    <!-- ===== AVAILABILITY TAB ===== -->
-    <template v-if="activeTab === 'availability'">
-
-    <!-- Search Panel -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-      <h3 class="text-sm font-bold text-gray-900 mb-4">Check Room Availability</h3>
-      <div class="flex items-end gap-3 flex-wrap">
-        <div style="min-width:160px;">
-          <p class="text-xs text-gray-500 mb-1.5">Check-in Date</p>
-          <input v-model="avCheckIn" type="date"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div style="min-width:160px;">
-          <p class="text-xs text-gray-500 mb-1.5">Check-out Date</p>
-          <input v-model="avCheckOut" type="date"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div style="min-width:160px;">
-          <p class="text-xs text-gray-500 mb-1.5">Room Type</p>
-          <select v-model="avRoomType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-            <option value="">All Types</option>
-            <option v-for="rt in roomTypeOptions" :key="rt" :value="rt">{{ rt }}</option>
-          </select>
-        </div>
-        <button
-          @click="checkAvailability"
-          :disabled="avLoading || !avCheckIn || !avCheckOut"
-          class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
-          <span v-if="avLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block"></span>
-          {{ avLoading ? 'Checking...' : 'Check Availability' }}
-        </button>
-        <button
-          @click="avCheckIn = avDefaultCheckIn; avCheckOut = avDefaultCheckOut; avRoomType = ''; avResults = null; avError = ''"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          Reset
-        </button>
-      </div>
-      <p v-if="avError" class="mt-3 text-xs text-red-500 font-medium">{{ avError }}</p>
-    </div>
-
-    <!-- Availability Results -->
-    <div v-if="avResults !== null" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div>
-          <h3 class="text-sm font-bold text-gray-900">Available Rooms</h3>
-          <p class="text-xs text-gray-400 mt-0.5">
-            {{ avResults.length }} room{{ avResults.length !== 1 ? 's' : '' }} available
-            from {{ avCheckIn }} to {{ avCheckOut }}
-            <template v-if="avRoomType"> · {{ avRoomType }}</template>
-          </p>
-        </div>
-        <span class="px-2.5 py-0.5 text-xs font-medium rounded-full"
-          :class="avResults.length > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'">
-          {{ avResults.length > 0 ? 'Rooms Available' : 'No Availability' }}
-        </span>
-      </div>
-      <div v-if="avResults.length === 0" class="px-6 py-12 text-center">
-        <p class="text-sm text-gray-400">No rooms available for the selected dates and criteria.</p>
-        <p class="text-xs text-gray-300 mt-1">Try adjusting the date range or room type.</p>
-      </div>
-      <table v-else class="w-full">
-        <thead>
-          <tr class="border-b border-gray-100 bg-gray-50">
-            <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Room No.</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Room Type</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Floor</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Capacity</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Rate / Night</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Total Amount</th>
-            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in avResults" :key="r.name" class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 text-xs font-bold text-gray-900">{{ r.name }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ r.room_type }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ r.floor }}</td>
-            <td class="px-4 py-4 text-xs text-gray-600">{{ r.capacity || '—' }}</td>
-            <td class="px-4 py-4 text-xs font-semibold text-gray-900">{{ formatCurrency(r.rate_per_night) }}</td>
-            <td class="px-4 py-4 text-xs font-semibold text-blue-700">{{ formatCurrency(r.total_amount) }}</td>
-            <td class="px-4 py-4">
-              <button class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                @click="$router.push('/rooms/' + r.name)">View</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Idle state before first search -->
-    <div v-else class="bg-white rounded-xl border border-gray-200 px-6 py-14 text-center">
-      <p class="text-sm text-gray-400">Select a date range and click <span class="font-semibold text-gray-500">Check Availability</span> to see available rooms.</p>
-      <p class="text-xs text-gray-300 mt-1">Check-ins, reservations, and holds are all taken into account.</p>
-    </div>
-
-    </template>
-    <!-- ===== END AVAILABILITY TAB ===== -->
-
-    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-
-// ---------------------------------------------------------------------------
-// Shared
-// ---------------------------------------------------------------------------
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10)
-}
-function tomorrowStr() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
-}
-
-// ---------------------------------------------------------------------------
-// Tab
-// ---------------------------------------------------------------------------
-
-const activeTab = ref('inventory')
-
-// ---------------------------------------------------------------------------
-// Inventory tab state
-// ---------------------------------------------------------------------------
+import { callMethod } from '@/lib/api'
 
 const search = ref('')
 const filterType = ref('')
@@ -313,83 +173,16 @@ const rooms = ref([])
 const roomTypeOptions = ref([])
 const floorOptions = ref([])
 
-// ---------------------------------------------------------------------------
-// Availability tab state
-// ---------------------------------------------------------------------------
-
-const avDefaultCheckIn = todayStr()
-const avDefaultCheckOut = tomorrowStr()
-
-const avCheckIn = ref(avDefaultCheckIn)
-const avCheckOut = ref(avDefaultCheckOut)
-const avRoomType = ref('')
-const avLoading = ref(false)
-const avError = ref('')
-const avResults = ref(null)   // null = not yet searched; [] = searched, none found
-
-async function checkAvailability() {
-  if (!avCheckIn.value || !avCheckOut.value) return
-  if (avCheckOut.value <= avCheckIn.value) {
-    avError.value = 'Check-out date must be after check-in date.'
-    return
-  }
-  avLoading.value = true
-  avError.value = ''
-  avResults.value = null
-  try {
-    const body = new URLSearchParams({
-      check_in_dt: avCheckIn.value,
-      check_out_dt: avCheckOut.value,
-    })
-    if (avRoomType.value) body.append('room_type', avRoomType.value)
-
-    const res = await fetch(
-      '/api/method/rhohotel.rhocom_hotel.utils.room_availability.get_available_rooms',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Frappe-CSRF-Token': window.csrf_token || '',
-        },
-        body: body.toString(),
-      }
-    )
-    const data = await res.json()
-    if (data.exc) {
-      avError.value = 'Failed to fetch availability. Please try again.'
-    } else {
-      avResults.value = data.message || []
-    }
-  } catch (e) {
-    avError.value = 'Network error — please check connection.'
-    console.error(e)
-  } finally {
-    avLoading.value = false
-  }
-}
-
 onMounted(loadRooms)
 
 async function loadRooms() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.room.get_room_inventory', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Frappe-CSRF-Token': window.csrf_token || ''
-      }
-    })
-    const data = await res.json()
-    if (data.exc) {
-      loadError.value = 'Failed to load room inventory.'
-    } else {
-      const msg = data.message || {}
-      rooms.value = msg.rooms || []
-      roomTypeOptions.value = msg.room_types || []
-      floorOptions.value = msg.floors || []
-    }
+    const msg = await callMethod('rhohotel.rhocom_hotel.api.room.get_room_inventory') || {}
+    rooms.value = msg.rooms || []
+    roomTypeOptions.value = msg.room_types || []
+    floorOptions.value = msg.floors || []
   } catch (e) {
     loadError.value = 'Network error — please check connection.'
     console.error(e)

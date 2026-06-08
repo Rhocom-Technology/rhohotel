@@ -14,7 +14,7 @@
       <div class="flex items-center gap-2">
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           @click="$router.push('/complimentary/list')">Complimentary List</button>
-        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export Register</button>
+        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors" @click="exportRegister">Export Register</button>
         <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           @click="$router.push('/complimentary/new')">New Complimentary</button>
       </div>
@@ -63,6 +63,7 @@
         <select v-model="filterType" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Types</option>
           <option>Food Voucher</option>
+          <option>Room Voucher</option>
           <option>Airport Transfer</option>
           <option>Room Upgrade</option>
           <option>Amenity</option>
@@ -70,8 +71,9 @@
         </select>
         <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Statuses</option>
-          <option>Approved</option>
+          <option>Draft</option>
           <option>Pending</option>
+          <option>Approved</option>
           <option>In Progress</option>
           <option>Consumed</option>
         </select>
@@ -140,22 +142,27 @@
       <div class="space-y-3">
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Top Complimentary Types</p>
-          <p class="text-sm font-bold text-gray-900 mb-1">Late Checkout • Food Voucher • Amenity Basket</p>
-          <p class="text-xs text-gray-400">Most issued across VIP and service-recovery cases</p>
+          <p class="text-sm font-bold text-gray-900 mb-1">{{ topTypesText }}</p>
+          <p class="text-xs text-gray-400">Based on the current complimentary register view</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-sm font-bold text-gray-900 mb-3">Pending Approval Queue</p>
-          <p class="text-xs text-gray-600 py-1 border-b border-gray-100">• 2 food vouchers awaiting GM approval</p>
-          <p class="text-xs text-gray-600 py-1 border-b border-gray-100">• 1 room upgrade pending availability</p>
-          <p class="text-xs text-gray-600 py-1">• 3 transport requests pending dispatch</p>
+          <template v-if="pendingQueueItems.length">
+            <p v-for="(item, index) in pendingQueueItems" :key="item"
+              class="text-xs text-gray-600 py-1"
+              :class="index < pendingQueueItems.length - 1 ? 'border-b border-gray-100' : ''">
+              {{ item }}
+            </p>
+          </template>
+          <p v-else class="text-xs text-gray-500 py-1">No pending approvals in the current view.</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-sm font-bold text-gray-900 mb-2">Consumption Summary</p>
-          <p class="text-xs text-gray-500 leading-relaxed">4 complimentary items consumed today. Usage rate this week is 78% of issued benefits.</p>
+          <p class="text-xs text-gray-500 leading-relaxed">{{ consumptionSummaryText }}</p>
         </div>
         <div class="bg-blue-50 rounded-xl border border-blue-200 px-5 py-4">
           <p class="text-sm font-bold text-blue-700 mb-2">Suggested Action</p>
-          <p class="text-xs text-blue-600 leading-relaxed">Review pending dinner voucher for Room 511 and close consumed items awaiting confirmation.</p>
+          <p class="text-xs text-blue-600 leading-relaxed">{{ suggestedActionText }}</p>
         </div>
       </div>
     </div>
@@ -214,7 +221,7 @@ function fetchList() {
     search: search.value || null,
     filter_type: filterType.value || null,
     filter_status: showPendingOnly.value ? 'Pending' : (filterStatus.value || null),
-    filter_approver: filterDept.value || null,
+    filter_department: filterDept.value || null,
     page: 1,
     page_size: 10,
   })
@@ -231,6 +238,42 @@ const controlBarText = computed(() => {
   return `${active} active complimentary items • ${pending} pending approvals • ${consumed} consumed today • ${expired} expired unused`
 })
 
+const topTypesText = computed(() => {
+  if (!records.value.length) return 'No complimentary records yet'
+  const counts = records.value.reduce((acc, record) => {
+    const type = record.complimentary_type || 'Unspecified'
+    acc[type] = (acc[type] || 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([type]) => type)
+    .join(' • ')
+})
+
+const pendingQueueItems = computed(() => {
+  return records.value
+    .filter((record) => record.status === 'Pending')
+    .slice(0, 3)
+    .map((record) => `${record.complimentary_type} for ${record.guest || 'guest'} awaiting ${record.approval_level}`)
+})
+
+const consumptionSummaryText = computed(() => {
+  const consumedToday = stats.value.consumed_today || 0
+  const active = stats.value.active_count || 0
+  const expired = stats.value.expired_unused || 0
+  return `${consumedToday} consumed today. ${active} approved or in-progress items remain active, with ${expired} expired unused.`
+})
+
+const suggestedActionText = computed(() => {
+  const pending = records.value.find((record) => record.status === 'Pending')
+  if (pending) return `Review ${pending.complimentary_type} for ${pending.guest || pending.room || 'guest'} and approve or cancel it.`
+  const active = records.value.find((record) => ['Approved', 'In Progress'].includes(record.status))
+  if (active) return `Confirm usage for ${active.complimentary_type} linked to ${active.guest || active.room || 'guest'} when redeemed.`
+  return 'No immediate complimentary action is required in the current view.'
+})
+
 function formatValue(v) {
   if (!v && v !== 0) return '—'
   return '₦' + Number(v).toLocaleString()
@@ -244,8 +287,25 @@ function resetFilters() {
   showPendingOnly.value = false
 }
 
+
+function exportRegister() {
+  const header = ['Code', 'Guest', 'Room', 'Type', 'Department', 'Status', 'Value', 'Approval Level']
+  const rows = records.value.map((r) => [r.name, r.guest, r.room || '', r.complimentary_type, r.department, r.status, r.value || 0, r.approval_level])
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'complimentary-register.csv'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 function statusClass(s) {
   return {
+    'Draft':       'bg-gray-100 text-gray-500',
     'Approved':    'bg-green-50 text-green-600',
     'In Progress': 'bg-blue-50 text-blue-600',
     'Consumed':    'bg-green-100 text-green-700',

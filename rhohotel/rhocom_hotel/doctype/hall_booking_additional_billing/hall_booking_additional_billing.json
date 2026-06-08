@@ -9,7 +9,11 @@
         "service",
         "qty",
         "rate",
+        "discount_type",
+        "discount_amount",
+        "discount_value",
         "amount"
+        
     ],
     "fields": [
         {
@@ -17,14 +21,14 @@
             "fieldtype": "Link",
             "in_list_view": 1,
             "label": "Service",
-            "options": "Hall Service"
+            "options": "Item"
         },
         {
             "default": "1",
             "fieldname": "qty",
             "fieldtype": "Int",
             "in_list_view": 1,
-            "label": "qty"
+            "label": "Qty"
         },
         {
             "fieldname": "rate",
@@ -40,10 +44,26 @@
             "read_only": 1
         },
         {
+            "default": "Fixed Amount",
+            "fieldname": "discount_type",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Discount Type",
+            "options": "Percentage\nFixed Amount"
+        },
+        {
+            "default": "0",
             "fieldname": "discount_amount",
             "fieldtype": "Currency",
-            "in_list_view": 0,
-            "label": "Line Discount"
+            "in_list_view": 1,
+            "label": "Discount Value"
+        },
+        {
+            "fieldname": "discount_value",
+            "fieldtype": "Currency",
+            "label": "Discount Amount",
+            "read_only": 1,
+            "in_list_view": 1
         }
     ],
     "grid_page_length": 50,

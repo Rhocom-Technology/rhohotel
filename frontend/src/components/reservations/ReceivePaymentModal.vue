@@ -40,23 +40,53 @@
                     <thead>
                       <tr class="border-b border-gray-100 bg-gray-50">
                         <th class="text-left text-xs font-medium text-gray-500 px-4 py-3">Invoice</th>
+                        <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Payer / Room</th>
                         <th class="text-left text-xs font-medium text-gray-500 px-3 py-3">Date</th>
-                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Grand Total</th>
+                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Invoice Total</th>
+                        <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Credit Note</th>
                         <th class="text-right text-xs font-medium text-gray-500 px-4 py-3">Outstanding</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="inv in invoices" :key="inv.name" class="border-b border-gray-50 last:border-0">
-                        <td class="px-4 py-3 text-xs text-blue-600 font-medium">{{ inv.name }}</td>
+                      <tr
+                        v-for="inv in invoices"
+                        :key="inv.name"
+                        class="border-b border-gray-50 last:border-0 cursor-pointer"
+                        :class="isSelected(inv.name) ? 'bg-blue-50' : 'hover:bg-gray-50'"
+                        @click="toggleInvoice(inv.name)"
+                      >
+                        <td class="px-4 py-3 text-xs text-blue-600 font-medium">
+                          <label class="inline-flex items-center gap-2 cursor-pointer" @click.stop>
+                            <input
+                              type="checkbox"
+                              class="rounded border-gray-300"
+                              :checked="isSelected(inv.name)"
+                              @click.stop
+                              @change="toggleInvoice(inv.name)"
+                            />
+                            <span>{{ inv.name }}</span>
+                          </label>
+                        </td>
+                        <td class="px-3 py-3 text-xs text-gray-600">
+                          <p class="font-semibold text-gray-800">{{ inv.occupant_name || inv.customer_name || inv.customer || '—' }}</p>
+                          <p class="text-[10px] text-gray-400">{{ inv.room_number || inv.invoice_scope || 'Reservation' }}</p>
+                        </td>
                         <td class="px-3 py-3 text-xs text-gray-500">{{ inv.posting_date || '—' }}</td>
                         <td class="px-4 py-3 text-xs text-right text-gray-700">{{ fmt(inv.grand_total) }}</td>
+                        <td class="px-4 py-3 text-xs text-right font-semibold" :class="Number(inv.credit_note_amount || 0) > 0 ? 'text-teal-600' : 'text-gray-400'">
+                          {{ Number(inv.credit_note_amount || 0) > 0 ? '- ' : '' }}{{ fmt(inv.credit_note_amount || 0) }}
+                        </td>
                         <td class="px-4 py-3 text-xs text-right font-semibold text-red-500">{{ fmt(inv.outstanding_amount) }}</td>
                       </tr>
                     </tbody>
                     <tfoot>
                       <tr class="border-t border-gray-200 bg-gray-50">
-                        <td colspan="3" class="px-4 py-3 text-xs font-bold text-gray-900">Total Outstanding</td>
+                        <td colspan="5" class="px-4 py-3 text-xs font-bold text-gray-900">Total Outstanding</td>
                         <td class="px-4 py-3 text-xs font-bold text-right text-red-500">{{ fmt(totalOutstanding) }}</td>
+                      </tr>
+                      <tr class="bg-blue-50">
+                        <td colspan="5" class="px-4 py-3 text-xs font-bold text-blue-700">Selected for Payment</td>
+                        <td class="px-4 py-3 text-xs font-bold text-right text-blue-700">{{ fmt(selectedOutstanding) }}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -102,11 +132,11 @@
                 </div>
               </div>
 
-              <div v-if="form.paid_amount > 0 && form.paid_amount < totalOutstanding"
+              <div v-if="form.paid_amount > 0 && form.paid_amount < selectedOutstanding"
                 class="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
                 <p class="text-xs text-yellow-700">
                   Partial payment of {{ fmt(form.paid_amount) }} will be allocated proportionally.
-                  Remaining balance: {{ fmt(totalOutstanding - form.paid_amount) }}
+                  Remaining balance: {{ fmt(selectedOutstanding - form.paid_amount) }}
                 </p>
               </div>
             </template>
@@ -116,7 +146,7 @@
             <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               @click="$emit('close')">Cancel</button>
             <button
-              :disabled="submitting || invoices.length === 0 || !form.mode_of_payment || !(form.paid_amount > 0)"
+              :disabled="submitting || invoices.length === 0 || selectedOutstanding <= 0 || !form.mode_of_payment || !(form.paid_amount > 0)"
               @click="submit"
               class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {{ submitting ? 'Processing…' : 'Confirm Payment' }}
@@ -129,7 +159,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { callMethod, callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
@@ -140,6 +170,7 @@ const invoices = ref([])
 const paymentModes = ref([])
 const submitting = ref(false)
 const error = ref('')
+const selectedInvoiceNames = ref([])
 
 const today = new Date().toISOString().slice(0, 10)
 const form = reactive({
@@ -153,6 +184,16 @@ const form = reactive({
 
 const totalOutstanding = computed(() =>
   invoices.value.reduce((s, i) => s + (Number(i.outstanding_amount) || 0), 0)
+)
+const selectedInvoices = computed(() =>
+  invoices.value.filter((inv) => selectedInvoiceNames.value.includes(inv.name))
+)
+const selectedOutstanding = computed(() =>
+  selectedInvoices.value.reduce((s, i) => s + (Number(i.outstanding_amount) || 0), 0)
+)
+const isGroupSplit = computed(() =>
+  String(props.reservation?.reservation_type || '').toLowerCase() === 'group'
+  && String(props.reservation?.group_billing_mode || '').toLowerCase().startsWith('split')
 )
 
 const rawAmountInput = ref('')
@@ -175,6 +216,23 @@ function onAmountBlur() {
   rawAmountInput.value = form.paid_amount > 0 ? fmt(form.paid_amount) : ''
 }
 
+function isSelected(invoiceName) {
+  return selectedInvoiceNames.value.includes(invoiceName)
+}
+
+function toggleInvoice(invoiceName) {
+  if (isSelected(invoiceName)) {
+    selectedInvoiceNames.value = selectedInvoiceNames.value.filter((name) => name !== invoiceName)
+  } else {
+    selectedInvoiceNames.value = [...selectedInvoiceNames.value, invoiceName]
+  }
+}
+
+function syncAmountToSelection() {
+  form.paid_amount = selectedOutstanding.value
+  rawAmountInput.value = fmt(selectedOutstanding.value)
+}
+
 onMounted(async () => {
   try {
     const [invRows, mops] = await Promise.all([
@@ -190,13 +248,19 @@ onMounted(async () => {
 
     invoices.value = invRows || []
     paymentModes.value = mops || []
-    form.paid_amount = totalOutstanding.value
-    rawAmountInput.value = fmt(totalOutstanding.value)
+    selectedInvoiceNames.value = isGroupSplit.value && invoices.value.length
+      ? [invoices.value[0].name]
+      : invoices.value.map((inv) => inv.name)
+    syncAmountToSelection()
   } catch (e) {
     error.value = String(e?.message || 'Failed to load invoices. Please try again.')
   } finally {
     loadingInvoices.value = false
   }
+})
+
+watch(selectedInvoiceNames, () => {
+  syncAmountToSelection()
 })
 
 async function submit() {
@@ -211,6 +275,7 @@ async function submit() {
         payment_info: JSON.stringify({
           mode_of_payment: form.mode_of_payment,
           paid_amount: form.paid_amount,
+          selected_invoices: selectedInvoiceNames.value,
           payment_date: form.payment_date,
           reference_no: form.reference_no,
           reference_date: form.reference_date,

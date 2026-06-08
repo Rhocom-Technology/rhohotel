@@ -20,7 +20,7 @@
         "section_break_5h3m",
         "rate",
         "column_break_1h2k",
-        "total_hours",
+        "total_days",
         "column_break_1j4k",
         "total_amount",
         "additional_services_section",
@@ -112,7 +112,7 @@
             "fieldname": "rate",
             "fieldtype": "Currency",
             "in_list_view": 1,
-            "label": "Rate Per Hour",
+            "label": "Hall Daily Rate",
             "options": "0",
             "read_only": 1
         },
@@ -123,10 +123,10 @@
         {
             "allow_on_submit": 1,
             "default": "0",
-            "fieldname": "total_hours",
+            "fieldname": "total_days",
             "fieldtype": "Float",
             "in_list_view": 1,
-            "label": "Total Hours",
+            "label": "Total Days",
             "read_only": 1
         },
         {
@@ -150,7 +150,7 @@
             "default": "Fixed Amount",
             "fieldname": "discount_type",
             "fieldtype": "Select",
-            "label": "Discount Type",
+            "label": "Hall Discount Type",
             "options": "Percentage\nFixed Amount"
         },
         {
@@ -158,7 +158,7 @@
             "fieldname": "discount_amount",
             "fieldtype": "Currency",
             "in_list_view": 1,
-            "label": "Discount Amount"
+            "label": "Hall Discount Amount"
         },
         {
             "fieldname": "section_break_2k5l",
@@ -171,6 +171,15 @@
             "label": "Invoice",
             "options": "Sales Invoice",
             "read_only": 1
+        },
+        {
+            "allow_on_submit": 1,
+            "default": "Scheduled",
+            "fieldname": "event_status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Event Status",
+            "options": "Scheduled\nCompleted\nNo Show\nCancelled"
         },
         {
             "fieldname": "section_break_invoice",
@@ -250,6 +259,7 @@
     "modified": "2025-12-18 07:38:56.627704",
     "modified_by": "Administrator",
     "module": "Rhocom Hotel",
+    "autoname": "format:HALL-BK-{YYYY}-{#####}",
     "name": "Hall Booking",
     "owner": "Administrator",
     "permissions": [
@@ -301,6 +311,33 @@
             "read": 1,
             "report": 1,
             "role": "Hotel Reservation User",
+            "select": 1,
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk User",
+            "select": 1,
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Front Desk Manager",
             "select": 1,
             "share": 1,
             "submit": 1,

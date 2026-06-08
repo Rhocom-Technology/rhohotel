@@ -27,7 +27,7 @@
           <!-- Billing summary -->
           <div v-if="!loadingAmount" class="bg-gray-50 rounded-xl border border-gray-200 px-5 py-4 space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-xs text-gray-500">Total Charges</span>
+              <span class="text-xs text-gray-500">Net Bill</span>
               <span class="text-xs font-semibold text-gray-800">{{ fmt(totalCharged) }}</span>
             </div>
             <div class="flex items-center justify-between">
@@ -97,6 +97,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const reason = ref('')
@@ -116,47 +117,25 @@ async function apiPost(m, p) {
   return r.json()
 }
 
+function applyBillingSummary(summary) {
+  totalPaid.value = Number(summary.total_received || 0)
+  totalCharged.value = Number(summary.net_bill || 0)
+  totalAlreadyRefunded.value = Number(summary.reserved_refunds_total || 0)
+  refundAmount.value = Number(summary.refundable_balance || overpayment.value || 0)
+}
+
 onMounted(async () => {
   try {
-    const [pData, sData, rData] = await Promise.all([
-      // Total Receive payments
-      apiPost('frappe.client.get_list', {
-        doctype: 'Payment Entry',
-        filters: JSON.stringify([
-          ['custom_hotel_room_check_in', '=', props.checkIn.name],
-          ['docstatus', '=', 1],
-          ['payment_type', '=', 'Receive'],
-        ]),
-        fields: JSON.stringify(['paid_amount']),
-        limit: 100,
-      }),
-      // Total invoiced charges (non-return SIs)
-      apiPost('frappe.client.get_list', {
-        doctype: 'Sales Invoice',
-        filters: JSON.stringify([
-          ['custom_hotel_room_check_in', '=', props.checkIn.name],
-          ['docstatus', '=', 1],
-          ['is_return', '=', 0],
-        ]),
-        fields: JSON.stringify(['grand_total']),
-        limit: 100,
-      }),
-      // Previously submitted Hotel Refunds for this check-in
-      apiPost('frappe.client.get_list', {
-        doctype: 'Hotel Refund',
-        filters: JSON.stringify([
-          ['check_in', '=', props.checkIn.name],
-          ['docstatus', '=', 1],
-        ]),
-        fields: JSON.stringify(['refund_amount']),
-        limit: 100,
-      }),
-    ])
-    totalPaid.value = (pData.message || []).reduce((s, p) => s + (p.paid_amount || 0), 0)
-    totalCharged.value = (sData.message || []).reduce((s, i) => s + (i.grand_total || 0), 0)
-    totalAlreadyRefunded.value = (rData.message || []).reduce((s, r) => s + (r.refund_amount || 0), 0)
-    // Default to net overpayment; leave at 0 if none
-    refundAmount.value = overpayment.value
+    if (props.checkIn.billing_summary && Object.keys(props.checkIn.billing_summary).length) {
+      applyBillingSummary(props.checkIn.billing_summary)
+      return
+    }
+
+    const detail = await apiPost('rhohotel.rhocom_hotel.api.checkin.get_checkin_detail', {
+      name: props.checkIn.name,
+    })
+    const summary = detail.message?.billing_summary || {}
+    applyBillingSummary(summary)
   } catch {
     error.value = 'Failed to load billing data.'
   } finally {
@@ -174,7 +153,11 @@ async function submit() {
       amount: refundAmount.value,
     })
     if (data.exc) {
-      try { error.value = JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { error.value = 'Refund failed.' }
+      try {
+        error.value = humanizeErrorMessage(JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message)
+      } catch {
+        error.value = humanizeErrorMessage(data.exception || data._error_message || 'Refund failed.')
+      }
       return
     }
     emit('done', data.message); emit('close')

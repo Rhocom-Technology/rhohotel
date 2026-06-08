@@ -156,8 +156,8 @@
               <p class="text-xs text-gray-500 mb-1.5">ID Type <span class="text-red-500">*</span></p>
               <select v-model="form.id_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
                 <option value="">Select ID type</option>
-                <option>Passport</option>
-                <option>International</option>
+                
+                <option>International Passport</option>
                 <option>National ID</option>
                 <option>Driver's License</option>
                 <option>Voter's Card</option>
@@ -274,6 +274,7 @@
 import { reactive, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { callMethodForm, requestApi } from '@/lib/api'
+import { buildPhoneWithCountry, isValidPhone, phoneError } from '@/lib/phone'
 
 const router = useRouter()
 const route = useRoute()
@@ -380,6 +381,15 @@ async function createGuest() {
     saveError.value = 'Phone number is required.'
     return
   }
+  const fullPhone = buildPhoneWithCountry(form.country_code, form.phone_number)
+  if (!isValidPhone(fullPhone, { required: true })) {
+    saveError.value = phoneError('Phone number')
+    return
+  }
+  if (form.contact_number && !isValidPhone(form.contact_number)) {
+    saveError.value = phoneError('Contact person number')
+    return
+  }
   if (!form.id_type) {
     saveError.value = 'ID type is required.'
     return
@@ -391,8 +401,6 @@ async function createGuest() {
 
   saving.value = true
   try {
-    // Build the phone with country code
-    const fullPhone = form.phone_number ? `${form.country_code}${form.phone_number}` : ''
     const created = await callMethodForm('rhohotel.rhocom_hotel.api.guest.create_guest', {
       hotel_guest_name: form.hotel_guest_name,
       guest_type: form.guest_type,

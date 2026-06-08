@@ -3,7 +3,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, cstr, now_datetime, nowdate, add_days, getdate
 from frappe.utils.nestedset import get_descendants_of
-
+from erpnext.accounts.doctype.pos_invoice.pos_invoice import get_stock_availability
 
 _TABLE_NAME_RE = re.compile(r'^(Table|Bar|Pool)\s*\S', re.IGNORECASE)
 
@@ -215,6 +215,33 @@ def _resolve_pos_customer(explicit_customer=None, profile_doc=None, allow_guest_
     return None
 
 
+def _get_complimentary_discount(complimentary_name, bill_total, manual_discount=0):
+    if not complimentary_name:
+        return 0
+    from rhohotel.rhocom_hotel.api.complimentary import get_complimentary_pos_discount
+
+    return flt(get_complimentary_pos_discount(
+        complimentary_name,
+        bill_total,
+        manual_discount=manual_discount,
+        department="Restaurant",
+    ))
+
+
+def _redeem_complimentary(complimentary_name, pos_invoice_name, bill_total, manual_discount=0):
+    if not complimentary_name:
+        return None
+    from rhohotel.rhocom_hotel.api.complimentary import redeem_complimentary_for_pos
+
+    return redeem_complimentary_for_pos(
+        complimentary_name,
+        pos_invoice_name,
+        bill_total,
+        manual_discount=manual_discount,
+        department="Restaurant",
+    )
+
+
 @frappe.whitelist()
 def get_pos_opening_profiles():
     """Return opening-entry modal setup data for current POS user."""
@@ -320,11 +347,6 @@ def create_pos_opening_entry(pos_profile=None, opening_cash=0):
 
 @frappe.whitelist()
 def get_pos_menu_items(search=None, category=None):
-    """Return items available for POS billing.
-
-    Fetches from ERPNext Item doctype. Falls back gracefully if no items
-    are configured for POS.
-    """
     conditions = ["i.disabled = 0", "i.is_sales_item = 1"]
     args = []
 
@@ -332,16 +354,20 @@ def get_pos_menu_items(search=None, category=None):
     if not pos_profile:
         return []
 
+    profile = frappe.get_cached_doc("POS Profile", pos_profile)
+    pos_warehouse = profile.warehouse
+    price_list = profile.selling_price_list or "Standard Selling"
+
     allowed_item_groups = _get_allowed_item_groups_for_profile(pos_profile)
     if not allowed_item_groups:
         return []
 
     placeholders = ", ".join(["%s"] * len(allowed_item_groups))
-    conditions.append(f"i.item_group IN ({placeholders})")
+    conditions.append("i.item_group IN ({0})".format(placeholders))
     args.extend(allowed_item_groups)
 
     if search:
-        q = f"%{cstr(search).strip()}%"
+        q = "%{0}%".format(frappe.utils.cstr(search).strip())
         conditions.append("(i.item_name LIKE %s OR i.item_code LIKE %s OR i.item_group LIKE %s)")
         args.extend([q, q, q])
 
@@ -351,34 +377,46 @@ def get_pos_menu_items(search=None, category=None):
 
     where = " AND ".join(conditions)
 
-    # Filter stock by the POS profile's warehouse so the correct bin is used.
-    pos_warehouse = frappe.db.get_value("POS Profile", pos_profile, "warehouse") or None
-    warehouse_join = "AND b.warehouse = %s" if pos_warehouse else ""
-    join_args = [pos_warehouse] if pos_warehouse else []
-
-    items = frappe.db.sql(f"""
+    items = frappe.db.sql("""
         SELECT
             i.name AS item_code,
             i.item_name AS name,
             i.item_group AS category,
-            COALESCE(p.price_list_rate, i.standard_rate, 0) AS price,
+            COALESCE(ip.price_list_rate, i.standard_rate, 0) AS price,
             i.image,
             i.stock_uom AS uom,
-            i.is_stock_item,
-            COALESCE(SUM(b.actual_qty), 0) AS stock
+            i.is_stock_item
         FROM `tabItem` i
-        LEFT JOIN `tabItem Price` p ON p.item_code = i.name
-            AND p.selling = 1
-            AND (p.price_list = 'Standard Selling' OR p.price_list IS NULL)
-        LEFT JOIN `tabBin` b ON b.item_code = i.name
-            {warehouse_join}
+        LEFT JOIN (
+            SELECT
+                item_code,
+                MAX(price_list_rate) AS price_list_rate
+            FROM `tabItem Price`
+            WHERE selling = 1
+              AND price_list = %s
+            GROUP BY item_code
+        ) ip ON ip.item_code = i.name
         WHERE {where}
-        GROUP BY i.name
         ORDER BY i.item_group, i.item_name
-        LIMIT 100
-    """, tuple(join_args + args), as_dict=1)
+        LIMIT 500
+    """.format(where=where), tuple([price_list] + args), as_dict=True)
+
+    for item in items:
+        if item.get("is_stock_item") and pos_warehouse:
+            available_qty, is_stock_item, _ = get_stock_availability(
+                item.get("item_code"),
+                pos_warehouse
+            )
+            item["stock"] = available_qty
+            item["actual_qty"] = available_qty
+            item["available_qty"] = available_qty
+        else:
+            item["stock"] = 0
+            item["actual_qty"] = 0
+            item["available_qty"] = 0
 
     return items
+
 
 
 @frappe.whitelist()
@@ -419,56 +457,74 @@ def get_pos_item_categories():
 
 @frappe.whitelist()
 def search_pos_bill_to(query=""):
-    """Search active check-in guests, walk-in customer, and table/bar entries for Bill To."""
-    results = []
+    from frappe.utils import cstr
 
-    # Resolve the actual walk-in customer name that exists in the system
-    _walk_in_customer = None
-    for _candidate in ("Walk In", "Guest", "Walk-in Customer", "Walk In Customer", "POS Customer", "Cash Customer"):
-        if frappe.db.exists("Customer", _candidate):
-            _walk_in_customer = _candidate
-            break
-    walk_in_entry = {"id": _walk_in_customer or "Walk In", "name": "Walk In", "room": None, "type": "Walk In"}
+    query = cstr(query or "").strip()
+    like_query = "%{0}%".format(query)
+
+    filters = ["c.disabled = 0"]
+    args = []
 
     if query:
-        q_raw = cstr(query).strip()
-        q = f"%{q_raw}%"
-        q_lower = q_raw.lower()
+        filters.append("""
+            (
+                c.name LIKE %s
+                OR c.customer_name LIKE %s
+                OR IFNULL(c.email_id, '') LIKE %s
+                OR IFNULL(c.mobile_no, '') LIKE %s
+            )
+        """)
+        args.extend([like_query, like_query, like_query, like_query])
 
-        # Walk-in appears when query matches "walk" or "walk in"
-        if q_lower in "walk in" or "walk" in q_lower:
-            results.append(walk_in_entry)
+    customers = frappe.db.sql("""
+        SELECT
+            c.name AS id,
+            c.name AS customer,
+            COALESCE(NULLIF(c.customer_name, ''), c.name) AS name,
+            c.email_id,
+            c.mobile_no
+        FROM `tabCustomer` c
+        WHERE {filters}
+        ORDER BY c.customer_name
+        LIMIT 5
+    """.format(filters=" AND ".join(filters)), tuple(args), as_dict=True)
 
-        # Active check-in guests
+    customer_names = [c.customer for c in customers]
+
+    room_map = {}
+
+    if customer_names:
+        placeholders = ", ".join(["%s"] * len(customer_names))
+
         checkins = frappe.db.sql("""
-            SELECT name AS id, guest AS name, room_number AS room, 'Direct Guest' AS type
+            SELECT
+                guest AS customer,
+                room_number AS room
             FROM `tabHotel Room Check In`
-            WHERE status = 'Checked In' AND docstatus = 1
-              AND (guest LIKE %s OR room_number LIKE %s)
-            ORDER BY guest
-            LIMIT 10
-        """, (q, q), as_dict=1)
-        results.extend(checkins)
+            WHERE status = 'Checked In'
+            AND docstatus = 1
+            AND guest IN ({placeholders})
+            ORDER BY modified DESC
+        """.format(placeholders=placeholders), tuple(customer_names), as_dict=True)
 
-        # Tables / bars from POS (just return generic label matches)
-        table_names = ["Table 01", "Table 02", "Table 03", "Table 04", "Table 05",
-                       "Bar 01", "Bar 02", "Bar 03"]
-        for t in table_names:
-            if q_lower in t.lower():
-                typ = "Table" if t.startswith("Table") else "Bar"
-                results.append({"id": t, "name": t, "room": None, "type": typ})
-    else:
-        # Walk-in always first in default results
-        results.append(walk_in_entry)
-        # Return first 5 active guests
-        checkins = frappe.db.sql("""
-            SELECT name AS id, guest AS name, room_number AS room, 'Direct Guest' AS type
-            FROM `tabHotel Room Check In`
-            WHERE status = 'Checked In' AND docstatus = 1
-            ORDER BY guest
-            LIMIT 5
-        """, as_dict=1)
-        results.extend(checkins)
+        for ci in checkins:
+            if ci.customer not in room_map:
+                room_map[ci.customer] = ci.room
+
+    results = []
+
+    for c in customers:
+        room = room_map.get(c.customer)
+
+        results.append({
+            "id": c.customer,
+            "customer": c.customer,
+            "name": c.name,
+            "room": room,
+            "email": c.email_id,
+            "phone": c.mobile_no,
+            "type": "Checked In" if room else "Customer"
+        })
 
     return results
 
@@ -515,7 +571,7 @@ def get_occupied_rooms_for_pos(search=None):
 @frappe.whitelist()
 def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
                         service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0,
-                        existing_draft=None):
+                        existing_draft=None, complimentary_name=None):
     """Create and submit a POS Invoice for non-room-posting settlements."""
     import json
 
@@ -586,11 +642,16 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
                 "rate": flt(it.get("price", 0)),
             })
 
-        _items_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items))
-        pi.discount_amount = flt(discount_amount)
+        _items_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + flt(service_charge)
+        manual_discount = flt(discount_amount)
+        complimentary_discount = _get_complimentary_discount(complimentary_name, _items_total, manual_discount)
+        total_discount = min(_items_total, manual_discount + complimentary_discount)
+        pi.discount_amount = total_discount
+        if total_discount > 0:
+            pi.apply_discount_on = "Grand Total"
         pi.append("payments", {
             "mode_of_payment": mode_of_payment,
-            "amount": max(0, _items_total - flt(discount_amount)),
+            "amount": max(0, _items_total - total_discount),
         })
 
         pi.flags.ignore_permissions = True
@@ -603,6 +664,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         if table_display_name:
             frappe.db.set_value("POS Invoice", pi.name, "customer_name",
                                 table_display_name, update_modified=False)
+        complimentary = _redeem_complimentary(complimentary_name, pi.name, _items_total, manual_discount)
         frappe.db.commit()
     except Exception as e:
         safe_items = []
@@ -632,7 +694,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
             raise
         frappe.throw(_("Failed to create POS Invoice: {0}").format(cstr(e)))
 
-    return {"pos_invoice": pi.name, "grand_total": flt(pi.grand_total)}
+    return {"pos_invoice": pi.name, "grand_total": flt(pi.grand_total), "complimentary": complimentary}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -640,7 +702,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None, existing_draft=None):
+def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None, existing_draft=None, complimentary_name=None):
     """Create a Sales Invoice linked to a Hotel Room Check In folio, then immediately
     create and consolidate a POS Invoice against the open shift so the transaction
     appears in shift reports without waiting for the end-of-shift consolidation job."""
@@ -724,8 +786,14 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
         if svc_item:
             si.append("items", {"item_code": svc_item, "qty": 1, "rate": svc})
 
+    items_total = flt(sum(
+        flt(it.get("price", 0)) * flt(it.get("qty", 1)) for it in items
+    )) + flt(service_charge)
+    manual_discount = flt(discount_amount)
+    complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount)
+
     # Discount
-    disc = flt(discount_amount)
+    disc = min(items_total, manual_discount + complimentary_discount)
     if disc > 0:
         si.discount_amount = disc
         si.apply_discount_on = "Grand Total"
@@ -782,10 +850,7 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
                         "rate": flt(it.get("price", 0)),
                     })
 
-                items_total = flt(sum(
-                    flt(it.get("price", 0)) * flt(it.get("qty", 1)) for it in items
-                )) + flt(service_charge)
-                net_amount = max(0.0, items_total - flt(discount_amount))
+                net_amount = max(0.0, items_total - disc)
 
                 if disc > 0:
                     pi.discount_amount = disc
@@ -804,11 +869,21 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
                 # Mark as immediately consolidated — the room folio Sales Invoice
                 # serves as the consolidated invoice; no end-of-shift re-processing needed.
                 frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", si.name)
+                _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount)
                 frappe.db.commit()
                 pos_invoice_name = pi.name
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Post to Room POS Invoice consolidation failed")
         # Non-fatal: the room folio Sales Invoice was already committed; continue.
+
+    if complimentary_name and not pos_invoice_name:
+        _redeem_complimentary(
+            complimentary_name,
+            _("Sales Invoice {0}").format(si.name),
+            items_total,
+            manual_discount,
+        )
+        frappe.db.commit()
 
     return {
         "sales_invoice": si.name,
@@ -1649,3 +1724,151 @@ def get_open_pos_terminals():
         r["open_drafts"] = int(r["open_drafts"])
 
     return rows
+
+
+
+@frappe.whitelist()
+def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
+                             kitchen_note=None, pos_profile=None, discount_amount=0,
+                             existing_draft=None, complimentary_name=None):
+    import json
+
+    items = json.loads(items) if isinstance(items, str) else items
+    portions = json.loads(portions) if isinstance(portions, str) else portions
+
+    if not items:
+        frappe.throw(_("No items in cart"))
+
+    if not portions:
+        frappe.throw(_("No split portions found"))
+
+    if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+        try:
+            old_pi = frappe.get_doc("POS Invoice", existing_draft)
+            if old_pi.docstatus == 0:
+                old_pi.flags.ignore_permissions = True
+                old_pi.delete()
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Failed to delete POS draft on split invoice creation")
+
+    if not pos_profile:
+        pos_profile = _get_user_pos_profile()
+
+    if not pos_profile:
+        frappe.throw(_("No POS Profile is mapped to your user."))
+
+    pos_opening_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
+    if not pos_opening_entry:
+        frappe.throw(_("No open POS Opening Entry found for your user. Please open a shift before charging."))
+
+    pos_profile = pos_opening_entry.get("pos_profile") or pos_profile
+    profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
+
+    allowed_modes = [
+        row.mode_of_payment
+        for row in (profile_doc.get("payments") or [])
+        if row.mode_of_payment
+    ]
+
+    if not allowed_modes:
+        frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
+
+    def resolve_payment_mode(method):
+        method = cstr(method or "").strip()
+
+        if method in allowed_modes:
+            return method
+
+        if method.lower() == "pos":
+            for mode in allowed_modes:
+                if "pos" in mode.lower() or "card" in mode.lower():
+                    return mode
+
+        if method.lower() == "cash":
+            for mode in allowed_modes:
+                if mode.lower() == "cash":
+                    return mode
+
+        if method.lower() == "post to room":
+            return _get_room_posting_mop(profile_doc, allowed_modes)
+
+        return allowed_modes[0]
+
+    company = profile_doc.company or frappe.db.get_single_value("Global Defaults", "default_company") or ""
+
+    customer = _resolve_pos_customer(customer, profile_doc=profile_doc, allow_guest_fallback=True)
+
+    if not customer:
+        frappe.throw(_("Set a valid default customer on POS Profile {0}.").format(pos_profile))
+
+    items_total = flt(sum(
+        flt(i.get("price", 0)) * flt(i.get("qty", 1))
+        for i in items
+    )) + flt(service_charge)
+
+    manual_discount = flt(discount_amount)
+    complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount)
+    total_discount = min(items_total, manual_discount + complimentary_discount)
+    net_total = max(0, items_total - total_discount)
+
+    portions_total = flt(sum(flt(p.get("amount", 0)) for p in portions), 2)
+
+    if flt(portions_total, 2) != flt(net_total, 2):
+        frappe.throw(_("Split total must equal invoice total."))
+
+    pi = frappe.new_doc("POS Invoice")
+    pi.customer = customer
+    pi.company = company
+    pi.posting_date = nowdate()
+    pi.pos_profile = pos_profile
+
+    if _has_pos_opening_entry_on_invoice():
+        pi.pos_opening_entry = pos_opening_entry.get("name")
+
+    if kitchen_note:
+        pi.remarks = kitchen_note
+
+    room_check_in = None
+
+    for p in portions:
+        if cstr(p.get("paymentType")) == "Post to Room" and p.get("checkIn"):
+            room_check_in = p.get("checkIn")
+            break
+
+    if room_check_in and frappe.db.has_column("POS Invoice", "custom_hotel_room_check_in"):
+        pi.custom_hotel_room_check_in = room_check_in
+
+    for it in items:
+        pi.append("items", {
+            "item_code": it.get("item_code") or it.get("id"),
+            "qty": flt(it.get("qty", 1)),
+            "rate": flt(it.get("price", 0)),
+        })
+
+    if total_discount > 0:
+        pi.discount_amount = total_discount
+        pi.apply_discount_on = "Grand Total"
+
+    for p in portions:
+        amount = flt(p.get("amount", 0))
+        if amount <= 0:
+            continue
+
+        pi.append("payments", {
+            "mode_of_payment": resolve_payment_mode(p.get("paymentType")),
+            "amount": amount,
+        })
+
+    pi.flags.ignore_permissions = True
+    pi.set_missing_values()
+    pi.insert()
+    pi.submit()
+    complimentary = _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount)
+    frappe.db.commit()
+
+    return {
+        "pos_invoice": pi.name,
+        "grand_total": flt(pi.grand_total),
+        "split": True,
+        "complimentary": complimentary,
+    }

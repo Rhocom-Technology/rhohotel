@@ -147,6 +147,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
@@ -190,10 +191,10 @@ function extractError(data) {
     const msgs = JSON.parse(data._server_messages || '[]')
     if (msgs.length) {
       const parsed = JSON.parse(msgs[0])
-      return parsed.message || 'Request failed.'
+      return humanizeErrorMessage(parsed.message || 'Request failed.')
     }
   } catch {}
-  return data.exc_type || 'Request failed.'
+  return humanizeErrorMessage(data.exception || data._error_message || data.exc_type || 'Request failed.')
 }
 
 onMounted(async () => {

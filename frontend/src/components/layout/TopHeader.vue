@@ -93,6 +93,18 @@ const pageMeta = {
   'AssetManagement': { title: 'Asset Management Dashboard', subtitle: 'Operations • asset inventory, maintenance, lifecycle, and utilization monitoring' },
   'AssetList':       { title: 'Asset List',                  subtitle: 'Operations • central asset register for rooms, facilities, and equipment' },
 
+  
+  // Hall Management
+  'HallBookingList': { title: 'Hall Bookings',    subtitle: 'Front desk • all hall bookings, payment status, and booking management' },
+  'HallDashboard': { title: 'Hall Dashboard',    subtitle: 'Monitor hall reservation performance from one screen' },
+  'NewHallBooking':  { title: 'New Hall Booking', subtitle: 'Front desk • create a new hall booking and generate invoice' },
+  'HallBooking':     { title: 'Hall Booking',     subtitle: 'Front desk • booking details, payment, and adjustment' },
+  'HallList':  { title: 'Hall List',  subtitle: 'Front desk • view all halls, monitor availability, and manage hall setup, rates, and operational status' },
+  'NewHall':   { title: 'New Hall',   subtitle: 'Front desk • create and configure a new hall or banquet space' },
+  'EditHall':  { title: 'Edit Hall',  subtitle: 'Front desk • update hall profile, facilities, pricing, and configuration' },
+  'SavedHall': { title: 'Saved Hall', subtitle: 'Front desk • hall profile, facilities, rates, bookings, and operating status' },
+
+
   // Billing
   'Billing':          { title: 'Billing Dashboard',    subtitle: 'Billing • individual and corporate account monitoring with invoice and payment controls' },
   'CorporateBillList':{ title: 'Corporate Bills List',  subtitle: 'Corporate billing • company bills, statements, outstanding balances, and payment follow-up' },
@@ -105,6 +117,7 @@ const pageMeta = {
   'NightAuditSummaryReport': { title: 'Night Audit Summary Report', subtitle: 'Operations, finance, and control overview for end-of-day review' },
   'CorporateAccountStatement':              { title: 'Corporate Account Statement', subtitle: 'Hotel performance and occupancy overview' },
   'CorporateBillingStatementReport':              { title: 'Corporate Billing Statement', subtitle: 'Corporate account ledger with running balance, payments, outstanding exposure, and date filter controls' },
+  'ComplimentaryHouseUseReport':              { title: 'Complimentary & House Use Report', subtitle: 'Internal stays, authorisation, room nights, and theoretical revenue' },
   'PosSalesReport':              { title: 'POS Sales Report', subtitle: 'Point of Sales performance and sales overview' },
   'HousekeepingProductivityReport':              { title: 'Housekeeping Productivity Report', subtitle: 'Housekeeping performance and productivity overview' },
 }

@@ -13,17 +13,20 @@ import {
 import { getCsrfToken } from './lib/api'
 import { useSessionStore } from './stores/session'
 
-setConfig('resourceFetcher', (url, options) => {
-    if (!options) options = {}
-    if (!options.headers) options.headers = {}
-    options.credentials = 'include'
+const csrfToken = getCsrfToken()
+if (csrfToken && !window.csrf_token) {
+    window.csrf_token = csrfToken
+}
+
+setConfig('resourceFetcher', (options = {}) => {
+    options.headers = { ...(options.headers || {}) }
 
     const token = getCsrfToken()
     if (token && token !== 'Guest') {
         options.headers['X-Frappe-CSRF-Token'] = token
     }
 
-    return frappeRequest(url, options)
+    return frappeRequest(options)
 })
 
 setConfig('cache', false)

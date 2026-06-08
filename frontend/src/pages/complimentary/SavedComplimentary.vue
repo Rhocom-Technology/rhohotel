@@ -11,10 +11,20 @@
       <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         @click="$router.push('/complimentary/list')">Back to List</button>
       <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        @click="window.print()">Print Record</button>
+        @click="printRecord">Print Record</button>
+      <button v-if="canEdit" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        @click="startEdit">Edit Record</button>
+      <button v-if="canSubmit" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+        :disabled="submitResource.loading" @click="submitRecord">
+        {{ submitResource.loading ? 'Submitting...' : 'Submit for Approval' }}
+      </button>
       <button v-if="canApprove" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
         :disabled="approveResource.loading" @click="approveRecord">
         {{ approveResource.loading ? 'Approving...' : 'Approve' }}
+      </button>
+      <button v-if="canProgress" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+        :disabled="progressResource.loading" @click="markInProgress">
+        {{ progressResource.loading ? 'Starting...' : 'Mark In Progress' }}
       </button>
       <button v-if="canConsume" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
         :disabled="consumeResource.loading" @click="markConsumed">
@@ -26,6 +36,70 @@
     <div v-if="actionMsg" class="px-4 py-3 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg">{{ actionMsg }}</div>
     <div v-if="errorMsg" class="px-4 py-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg">{{ errorMsg }}</div>
     <div v-if="isLoading" class="px-4 py-3 text-xs text-gray-400">Loading...</div>
+
+    <div v-if="showEdit && record" class="bg-white rounded-xl border border-blue-200 px-6 py-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-gray-900">Edit Complimentary</h3>
+        <button class="text-xs text-gray-500 hover:text-gray-700" @click="showEdit = false">Close</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Guest</p>
+          <input v-model="editForm.guest" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Room</p>
+          <input v-model="editForm.room" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Type</p>
+          <select v-model="editForm.complimentary_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg">
+            <option>Food Voucher</option><option>Room Voucher</option><option>Airport Transfer</option><option>Room Upgrade</option><option>Amenity Basket</option><option>Late Checkout</option><option>Laundry</option><option>Transport / Food</option><option>Amenity / Late CO</option><option>Laundry / Amenity</option>
+          </select>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Department</p>
+          <select v-model="editForm.department" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg">
+            <option>Restaurant</option><option>Front Desk</option><option>Housekeeping</option><option>GM Office</option><option>Operations</option>
+          </select>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Value</p>
+          <input v-model="editForm.value" type="number" min="0" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Approval Level</p>
+          <select v-model="editForm.approval_level" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg">
+            <option>General Manager</option><option>Duty Manager</option><option>Front Desk Supervisor</option><option>Operations Lead</option>
+          </select>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Issue Date</p>
+          <input v-model="editForm.issue_date" type="date" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg" />
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1.5">Expiry Date</p>
+          <input v-model="editForm.expiry_date" type="date" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg" />
+        </div>
+      </div>
+      <div class="mt-3">
+        <p class="text-xs text-gray-500 mb-1.5">Reason</p>
+        <textarea v-model="editForm.reason" rows="2" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg"></textarea>
+      </div>
+      <div class="mt-3">
+        <p class="text-xs text-gray-500 mb-1.5">Redemption Rule</p>
+        <textarea v-model="editForm.redemption_rule" rows="2" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg"></textarea>
+      </div>
+      <div class="mt-3">
+        <p class="text-xs text-gray-500 mb-1.5">Internal Note</p>
+        <textarea v-model="editForm.note" rows="2" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 mt-4">
+        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg" @click="showEdit = false">Cancel</button>
+        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg disabled:opacity-50" :disabled="updateResource.loading" @click="saveEdit(false)">Save</button>
+        <button v-if="record.status === 'Draft'" class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg disabled:opacity-50" :disabled="updateResource.loading" @click="saveEdit(true)">Save & Submit</button>
+      </div>
+    </div>
 
     <!-- Status Stats -->
     <div v-if="record" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
@@ -148,7 +222,7 @@
         <div>
           <p class="text-xs text-gray-500 mb-2">Related Actions</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <button class="px-4 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Edit Record</button>
+            <button v-if="canEdit" class="px-4 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="startEdit">Edit Record</button>
             <button v-if="canCancel" class="px-4 py-2.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
               :disabled="cancelResource.loading" @click="cancelRecord">
               {{ cancelResource.loading ? 'Cancelling...' : 'Cancel Record' }}
@@ -178,6 +252,8 @@ const record = ref(null)
 const audit = ref([])
 const errorMsg = ref('')
 const actionMsg = ref('')
+const showEdit = ref(false)
+const editForm = ref({})
 
 // ── Fetch record ──────────────────────────────────────────────────────────────
 const fetchResource = createResource({
@@ -194,6 +270,46 @@ const fetchResource = createResource({
 function loadRecord() {
   fetchResource.fetch({ complimentary_name: route.params.id })
 }
+
+const updateResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.update_complimentary',
+  onSuccess(res) {
+    if (res.success) {
+      actionMsg.value = res.status === 'Pending' ? 'Record saved and submitted for approval.' : 'Record updated.'
+      showEdit.value = false
+      loadRecord()
+    } else {
+      errorMsg.value = res.error || 'Update failed'
+    }
+  },
+  onError(err) { errorMsg.value = err?.message || 'Update failed' },
+})
+
+const submitResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.submit_complimentary',
+  onSuccess(res) {
+    if (res.success) {
+      actionMsg.value = 'Submitted for approval.'
+      loadRecord()
+    } else {
+      errorMsg.value = res.error || 'Submit failed'
+    }
+  },
+  onError(err) { errorMsg.value = err?.message || 'Submit failed' },
+})
+
+const progressResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.mark_in_progress',
+  onSuccess(res) {
+    if (res.success) {
+      actionMsg.value = 'Marked as in progress.'
+      loadRecord()
+    } else {
+      errorMsg.value = res.error || 'Failed to mark in progress'
+    }
+  },
+  onError(err) { errorMsg.value = err?.message || 'Failed to mark in progress' },
+})
 
 // ── Approve ───────────────────────────────────────────────────────────────────
 const approveResource = createResource({
@@ -243,10 +359,21 @@ function approveRecord() {
   approveResource.fetch({ complimentary_name: route.params.id })
 }
 
+function markInProgress() {
+  errorMsg.value = ''
+  actionMsg.value = ''
+  progressResource.fetch({ complimentary_name: route.params.id })
+}
+
 function markConsumed() {
   errorMsg.value = ''
   actionMsg.value = ''
-  consumeResource.fetch({ complimentary_name: route.params.id })
+  const consumptionReference = window.prompt('Enter outlet/POS/reference number for this consumption')
+  if (!consumptionReference || !consumptionReference.trim()) {
+    errorMsg.value = 'Consumption reference is required.'
+    return
+  }
+  consumeResource.fetch({ complimentary_name: route.params.id, consumption_reference: consumptionReference.trim() })
 }
 
 function cancelRecord() {
@@ -255,10 +382,47 @@ function cancelRecord() {
   cancelResource.fetch({ complimentary_name: route.params.id })
 }
 
+function printRecord() {
+  window.print()
+}
+
+function startEdit() {
+  if (!record.value) return
+  editForm.value = {
+    guest: record.value.guest || '',
+    room: record.value.room || '',
+    reservation: record.value.reservation || null,
+    check_in: record.value.check_in || null,
+    complimentary_type: record.value.complimentary_type || 'Food Voucher',
+    department: record.value.department || 'Restaurant',
+    value: record.value.value || 0,
+    quantity: record.value.quantity || '1',
+    issue_date: record.value.issue_date || '',
+    expiry_date: record.value.expiry_date || '',
+    reason: record.value.reason || '',
+    redemption_rule: record.value.redemption_rule || '',
+    note: record.value.note || '',
+    approval_level: record.value.approval_level || 'General Manager',
+    source_category: record.value.source_category || 'Service Recovery',
+  }
+  showEdit.value = true
+}
+
+function saveEdit(submitForApproval) {
+  errorMsg.value = ''
+  actionMsg.value = ''
+  updateResource.fetch({
+    complimentary_name: route.params.id,
+    complimentary_data: editForm.value,
+    submit_for_approval: submitForApproval ? 1 : 0,
+  })
+}
+
 // ── Computed display helpers ──────────────────────────────────────────────────
 const statusBadgeClass = computed(() => {
   const s = record.value?.status
   return {
+    'Draft':       'bg-gray-100 text-gray-500',
     'Approved':    'bg-green-100 text-green-600',
     'In Progress': 'bg-blue-100 text-blue-600',
     'Consumed':    'bg-green-100 text-green-700',
@@ -280,6 +444,7 @@ function formatDate(d) {
 
 const approvalStatusText = computed(() => {
   const s = record.value?.status
+  if (s === 'Draft') return 'Draft • not submitted'
   if (s === 'Approved') return 'Approved • waiting consumption confirmation'
   if (s === 'Consumed') return 'Consumed and closed'
   if (s === 'Cancelled') return 'Cancelled'
@@ -312,7 +477,10 @@ const consumptionStatusText = computed(() => {
 })
 
 const isLoading = computed(() => fetchResource.loading)
-const canApprove = computed(() => ['Pending', 'In Progress'].includes(record.value?.status))
+const canEdit = computed(() => ['Draft', 'Pending'].includes(record.value?.status))
+const canSubmit = computed(() => record.value?.status === 'Draft')
+const canApprove = computed(() => record.value?.status === 'Pending')
+const canProgress = computed(() => record.value?.status === 'Approved')
 const canConsume = computed(() => ['Approved', 'In Progress'].includes(record.value?.status))
 const canCancel  = computed(() => !['Consumed', 'Cancelled', 'Expired'].includes(record.value?.status))
 

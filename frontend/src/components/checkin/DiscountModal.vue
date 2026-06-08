@@ -28,6 +28,40 @@
             <p class="text-xs text-blue-500 mt-0.5">Room {{ checkIn.room_number }}</p>
           </div>
 
+          <!-- Room Voucher -->
+          <div class="bg-emerald-50 rounded-xl border border-emerald-200 px-4 py-3">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <p class="text-xs font-bold text-emerald-800">Room Voucher</p>
+                <p class="text-xs text-emerald-600 mt-0.5">Apply an approved room voucher as a credit note on a room invoice.</p>
+              </div>
+              <button @click="loadRoomVouchers" class="text-xs font-medium text-blue-600 hover:text-blue-700">Refresh</button>
+            </div>
+            <div v-if="roomVoucherError" class="mb-2 text-xs text-red-600">{{ roomVoucherError }}</div>
+            <select v-model="selectedVoucherName"
+              :disabled="loadingVouchers || roomVouchers.length === 0"
+              class="w-full px-3 py-2.5 text-xs border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-700 bg-white">
+              <option value="">{{ loadingVouchers ? 'Loading vouchers...' : roomVouchers.length ? 'Select room voucher' : 'No approved room voucher found' }}</option>
+              <option v-for="voucher in roomVouchers" :key="voucher.name" :value="voucher.name">
+                {{ voucherLabel(voucher) }}
+              </option>
+            </select>
+            <div v-if="selectedVoucher" class="mt-2 flex items-center justify-between gap-3">
+              <p class="text-xs text-emerald-700">
+                Voucher will apply {{ fmt(voucherApplyAmount) }} to {{ selectedInvoice?.invoice || 'the selected invoice' }}.
+              </p>
+              <button
+                :disabled="applyingVoucher || !selectedInvoice || voucherApplyAmount <= 0 || selectedInvoice.invoice_type === 'POS Invoice'"
+                @click="applyVoucher"
+                class="px-3 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {{ applyingVoucher ? 'Applying...' : 'Apply Voucher' }}
+              </button>
+            </div>
+            <p v-if="selectedInvoice?.invoice_type === 'POS Invoice'" class="text-xs text-amber-600 mt-2">
+              Room vouchers can only be applied to Sales Invoice room charges.
+            </p>
+          </div>
+
           <!-- Step 1: Invoice Selector -->
           <div>
             <h3 class="text-sm font-bold text-gray-900 mb-2">1. Select Invoice</h3>
@@ -151,7 +185,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
@@ -163,6 +198,11 @@ const reason = ref('')
 const submitting = ref(false)
 const error = ref('')
 const selectedInvoice = ref(null)
+const roomVouchers = ref([])
+const selectedVoucherName = ref('')
+const loadingVouchers = ref(false)
+const applyingVoucher = ref(false)
+const roomVoucherError = ref('')
 
 // Only positive, non-return invoices with remaining outstanding are valid targets
 const chargeableInvoices = computed(() =>
@@ -178,6 +218,17 @@ const computedDiscountAmount = computed(() => {
     return Math.min(Math.round(((pct / 100) * max) * 100) / 100, max)
   }
   return Math.min(Number(discountAmount.value) || 0, max)
+})
+const selectedVoucher = computed(() =>
+  roomVouchers.value.find(v => v.name === selectedVoucherName.value) || null
+)
+const voucherApplyAmount = computed(() => {
+  if (!selectedVoucher.value || !selectedInvoice.value) return 0
+  return Math.min(voucherRemainingValue(selectedVoucher.value), Number(selectedInvoice.value.outstanding_amount || 0))
+})
+
+onMounted(() => {
+  loadRoomVouchers()
 })
 
 function selectInvoice(inv) {
@@ -195,6 +246,85 @@ function formatType(type) {
   if (type === 'Sales Invoice') return 'Room Charge'
   if (type === 'POS Invoice') return 'Restaurant'
   return type || 'Room Charge'
+}
+
+function voucherLabel(voucher) {
+  const expiry = voucher.expiry_date ? ` - expires ${voucher.expiry_date}` : ''
+  const redeemed = Number(voucher.redeemed_amount || 0)
+  const usage = redeemed > 0 ? ` remaining of ${fmt(voucher.value)}` : ''
+  return `${voucher.name} - ${fmt(voucherRemainingValue(voucher))}${usage}${expiry}`
+}
+
+function voucherRemainingValue(voucher) {
+  if (!voucher) return 0
+  if (voucher.remaining_value !== undefined && voucher.remaining_value !== null) {
+    return Number(voucher.remaining_value || 0)
+  }
+  return Math.max(0, Number(voucher.value || 0) - Number(voucher.redeemed_amount || 0))
+}
+
+async function loadRoomVouchers() {
+  loadingVouchers.value = true
+  roomVoucherError.value = ''
+  try {
+    const params = new URLSearchParams({
+      check_in: props.checkIn.name || '',
+      room: props.checkIn.room_number || '',
+      guest: props.checkIn.guest || '',
+      department: 'Front Desk',
+      complimentary_type: 'Room Voucher',
+    })
+    const res = await fetch(`/api/method/rhohotel.rhocom_hotel.api.complimentary.get_redeemable_complimentaries?${params.toString()}`)
+    const data = await res.json()
+    if (data.exc) {
+      roomVoucherError.value = 'Could not load room vouchers.'
+      return
+    }
+    roomVouchers.value = Array.isArray(data.message) ? data.message : []
+    if (selectedVoucherName.value && !roomVouchers.value.some(v => v.name === selectedVoucherName.value)) {
+      selectedVoucherName.value = ''
+    }
+  } catch {
+    roomVoucherError.value = 'Network error while loading room vouchers.'
+  } finally {
+    loadingVouchers.value = false
+  }
+}
+
+async function applyVoucher() {
+  if (!selectedVoucher.value || !selectedInvoice.value || !(voucherApplyAmount.value > 0)) return
+  applyingVoucher.value = true
+  roomVoucherError.value = ''
+  try {
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.doctype.hotel_room_check_in.hotel_room_check_in.apply_room_voucher', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Frappe-CSRF-Token': window.csrf_token || '',
+      },
+      body: new URLSearchParams({
+        check_in_name: props.checkIn.name,
+        complimentary_name: selectedVoucher.value.name,
+        source_invoice: selectedInvoice.value.invoice,
+      }),
+    })
+    const data = await res.json()
+    if (data.exc) {
+      try {
+        const msgs = JSON.parse(data._server_messages || '[]')
+        roomVoucherError.value = humanizeErrorMessage(JSON.parse(msgs[0]).message || 'Failed to apply room voucher.')
+      } catch {
+        roomVoucherError.value = humanizeErrorMessage(data.exception || data._error_message || 'Failed to apply room voucher.')
+      }
+      return
+    }
+    emit('done', data.message)
+    emit('close')
+  } catch {
+    roomVoucherError.value = 'Network error. Please try again.'
+  } finally {
+    applyingVoucher.value = false
+  }
 }
 
 async function submit() {
@@ -219,8 +349,10 @@ async function submit() {
     if (data.exc) {
       try {
         const msgs = JSON.parse(data._server_messages || '[]')
-        error.value = JSON.parse(msgs[0]).message || 'Failed to apply discount.'
-      } catch { error.value = 'Failed to apply discount.' }
+        error.value = humanizeErrorMessage(JSON.parse(msgs[0]).message || 'Failed to apply discount.')
+      } catch {
+        error.value = humanizeErrorMessage(data.exception || data._error_message || 'Failed to apply discount.')
+      }
       return
     }
     emit('done', data.message)

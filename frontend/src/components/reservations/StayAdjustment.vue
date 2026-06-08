@@ -157,6 +157,7 @@
           <input v-model.number="discountValue" type="number" min="0" step="0.01"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             :placeholder="discountType === 'Percentage' ? 'e.g. 10 for 10%' : 'e.g. 5000'" />
+          <p class="text-xs text-gray-400 mt-1.5">{{ discountHelpText }}</p>
         </div>
 
         <p class="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">
@@ -214,6 +215,45 @@
           <p class="text-xs text-gray-400 mt-2">Current room remains available for the selected extension period.</p>
         </div>
 
+        <div v-if="isCreditAdjustment" class="bg-white border border-gray-200 rounded-xl p-4">
+          <h4 class="text-sm font-bold text-gray-900 mb-1">Link Credit Note To Invoice</h4>
+          <p class="text-xs text-gray-400 mb-3">Select the invoice this reduction should reconcile against.</p>
+          <div v-if="chargeableInvoices.length === 0" class="bg-yellow-50 border border-yellow-100 rounded-lg px-3 py-2.5">
+            <p class="text-xs text-yellow-700">No submitted charge invoice found for this reservation.</p>
+          </div>
+          <div v-else class="rounded-xl border border-gray-200 overflow-hidden">
+            <table class="w-full">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-100">
+                  <th class="w-6 px-2 py-2"></th>
+                  <th class="text-left text-xs font-medium text-gray-500 px-2 py-2">Invoice</th>
+                  <th class="text-right text-xs font-medium text-gray-500 px-3 py-2">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="inv in chargeableInvoices"
+                  :key="inv.name"
+                  class="border-b border-gray-50 last:border-0 cursor-pointer transition-colors"
+                  :class="selectedInvoice?.name === inv.name ? 'bg-blue-50 hover:bg-blue-50' : 'hover:bg-gray-50'"
+                  @click="selectedInvoice = inv"
+                >
+                  <td class="px-2 py-2.5 text-center">
+                    <div
+                      class="w-3.5 h-3.5 rounded-full border-2 mx-auto flex items-center justify-center"
+                      :class="selectedInvoice?.name === inv.name ? 'border-blue-600 bg-blue-600' : 'border-gray-300'"
+                    >
+                      <div v-if="selectedInvoice?.name === inv.name" class="w-1 h-1 rounded-full bg-white"></div>
+                    </div>
+                  </td>
+                  <td class="px-2 py-2.5 text-xs font-medium text-blue-600">{{ inv.name }}</td>
+                  <td class="px-3 py-2.5 text-xs text-right font-semibold text-red-500">{{ formatCurrency(inv.outstanding_amount) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="bg-white border border-gray-200 rounded-xl p-4">
           <h4 class="text-sm font-bold text-gray-900 mb-2">Approval & Audit</h4>
           <div class="flex items-center justify-between">
@@ -238,7 +278,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { callMethodForm } from '@/lib/api'
 
 const props = defineProps({ reservation: { type: Object, required: true } })
@@ -254,6 +294,7 @@ const discountValue = ref(Number(props.reservation.discount || 0))
 const adjustmentNotes = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
+const selectedInvoice = ref(null)
 
 // Invoice status
 const invoiceGrandTotal = ref(0)
@@ -262,6 +303,20 @@ const invoiceResult = ref(null)
 
 const invoicePaidAmount = computed(() => invoiceGrandTotal.value - invoiceOutstanding.value)
 const invoiceIsPaid = computed(() => invoicePaidAmount.value > 0.01)
+const isSplitGroup = computed(() => {
+  const reservationType = String(props.reservation?.reservation_type || '').trim().toLowerCase()
+  const billingMode = String(props.reservation?.group_billing_mode || '').trim().toLowerCase()
+  return reservationType === 'group' && billingMode.startsWith('split')
+})
+const discountHelpText = computed(() => {
+  if (!isSplitGroup.value) {
+    return 'This discount is applied to the adjusted reservation total before the adjustment invoice is created.'
+  }
+  if (discountType.value === 'Fixed Amount') {
+    return 'For split billing, a fixed discount is divided equally across the new room adjustment invoices.'
+  }
+  return 'For split billing, a percentage discount is applied according to each room adjustment value.'
+})
 
 const invoiceResultLabel = computed(() => {
   if (!invoiceResult.value) return ''
@@ -370,6 +425,23 @@ const newNetTotal = computed(() => round2(Math.max(0, Number(newSubtotalAmount.v
 const totalImpact = computed(() => round2(newNetTotal.value - currentNetTotal.value))
 const subtotalImpact = computed(() => round2(newSubtotalAmount.value - currentSubtotalAmount.value))
 const discountImpact = computed(() => round2(computedNewDiscountAmount.value - currentDiscountAmount.value))
+const isCreditAdjustment = computed(() => totalImpact.value < -0.01)
+const chargeableInvoices = computed(() => {
+  const rows = Array.isArray(props.reservation.reservation_invoices)
+    ? props.reservation.reservation_invoices
+    : Array.isArray(props.reservation.linked_invoices)
+      ? props.reservation.linked_invoices
+      : []
+  return rows
+    .map((row) => ({
+      name: row?.name || row?.invoice || '',
+      outstanding_amount: Number(row?.outstanding_amount || 0),
+      grand_total: Number(row?.grand_total ?? row?.amount ?? 0),
+      is_return: Number(row?.is_return || 0),
+      status: row?.status || '',
+    }))
+    .filter((row) => row.name && !row.is_return && row.grand_total > 0 && row.outstanding_amount > 0)
+})
 
 const hasDateChanges = computed(() => {
   return (
@@ -385,6 +457,20 @@ const isRangeValid = computed(() => {
 
 const canApply = computed(() => hasDateChanges.value && isRangeValid.value)
 
+watch(
+  [chargeableInvoices, isCreditAdjustment],
+  () => {
+    if (!isCreditAdjustment.value || chargeableInvoices.value.length === 0) {
+      selectedInvoice.value = null
+      return
+    }
+    if (!selectedInvoice.value || !chargeableInvoices.value.some((row) => row.name === selectedInvoice.value?.name)) {
+      selectedInvoice.value = chargeableInvoices.value[0]
+    }
+  },
+  { immediate: true },
+)
+
 async function apply() {
   if (!canApply.value) return
   submitting.value = true; errorMsg.value = ''; invoiceResult.value = null
@@ -395,27 +481,13 @@ async function apply() {
       new_checkout: asISODate(newCheckoutDate.value),
       new_discount_type: discountType.value,
       new_discount: discountValue.value,
+      ...(isCreditAdjustment.value && selectedInvoice.value ? { source_invoice: selectedInvoice.value.name } : {}),
     }
-    await callMethodForm(
+    const result = await callMethodForm(
       'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.adjust_reservation',
       params,
     )
-
-    // Reconcile the linked invoice based on payment status
-    if (props.reservation.sales_invoice) {
-      try {
-        const result = await callMethodForm(
-          'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.adjust_invoice_for_reservation',
-          { reservation_name: props.reservation.name },
-        )
-        invoiceResult.value = result
-      } catch (invErr) {
-        // Invoice adjustment failed — still succeeded with dates, show warning
-        invoiceResult.value = { status: 'error', message: String(invErr?.message || 'Invoice update failed. Please amend manually.') }
-        submitting.value = false
-        return
-      }
-    }
+    invoiceResult.value = result?.invoice_adjustment || null
 
     emit('done'); emit('close')
   } catch (error) {

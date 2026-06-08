@@ -4,7 +4,23 @@ function getCookie(name) {
 }
 
 export function getCsrfToken() {
-  return getCookie('csrf_token') || window.frappe?.csrf_token || ''
+  return getCookie('csrf_token') || window.frappe?.csrf_token || window.csrf_token || ''
+}
+
+function serializeArgs(args = {}) {
+  const body = new URLSearchParams()
+
+  for (const [key, value] of Object.entries(args || {})) {
+    if (value === '' || value === null || value === undefined) continue
+    body.append(
+      key,
+      typeof value === 'object' && !(value instanceof Date)
+        ? JSON.stringify(value)
+        : String(value)
+    )
+  }
+
+  return body
 }
 
 function parseServerMessages(serverMessages) {
@@ -31,7 +47,7 @@ function stripHtml(value) {
   return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function humanizeErrorMessage(rawMessage) {
+export function humanizeErrorMessage(rawMessage) {
   let message = stripHtml(rawMessage || '')
   if (!message) return 'Something went wrong. Please try again.'
 
@@ -40,6 +56,8 @@ function humanizeErrorMessage(rawMessage) {
     .replace(/Traceback \(most recent call last\):[\s\S]*/i, '')
     .replace(/\bFile ".*"[\s\S]*/i, '')
     .replace(/\{\"exc_type\"[\s\S]*/i, '')
+    .replace(/^(?:frappe|erpnext)(?:\.[\w]+)*\.[\w]+:\s*/i, '')
+    .replace(/^builtins\.[\w]+:\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -96,32 +114,37 @@ export async function requestApi(url, options = {}) {
 
 export async function callMethod(method, args = {}, options = {}) {
   const httpMethod = String(options.method || 'POST').toUpperCase()
+  const { method: _method, headers, ...requestOptions } = options
+
   const payload = await requestApi(
     '/api/method/' + method,
     httpMethod === 'GET'
-      ? { ...options, method: 'GET' }
-      : { ...options, method: httpMethod, body: args }
+      ? { ...requestOptions, headers, method: 'GET' }
+      : {
+          ...requestOptions,
+          method: httpMethod,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(headers || {}),
+          },
+          body: serializeArgs(args),
+        }
   )
 
   return payload?.message
 }
 
 export async function callMethodForm(method, args = {}, options = {}) {
-  const body = new URLSearchParams()
-  for (const [key, value] of Object.entries(args || {})) {
-    if (value !== '' && value !== null && value !== undefined) {
-      body.append(key, String(value))
-    }
-  }
+  const { method: _method, headers, ...requestOptions } = options
 
   const payload = await requestApi('/api/method/' + method, {
+    ...requestOptions,
     method: String(options.method || 'POST').toUpperCase(),
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      ...(options.headers || {}),
+      ...(headers || {}),
     },
-    body,
-    ...options,
+    body: serializeArgs(args),
   })
 
   return payload?.message

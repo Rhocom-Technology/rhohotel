@@ -27,9 +27,17 @@
         <span class="px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-600 rounded-full border border-blue-200">
           Room {{ checkIn.room_number || '—' }}
         </span>
-        <span v-if="(checkIn.total_outstanding_amount || 0) > 0"
+        <span v-if="unusedComplimentaryCount > 0"
+          class="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
+          {{ unusedComplimentaryCount }} unused voucher{{ unusedComplimentaryCount === 1 ? '' : 's' }}
+        </span>
+        <span v-if="grandNetOutstanding > 0"
           class="px-2.5 py-1 text-xs font-semibold bg-orange-50 text-orange-600 rounded-full border border-orange-200">
-          Balance {{ formatCurrency(checkIn.total_outstanding_amount) }}
+          Balance {{ formatCurrency(grandNetOutstanding) }}
+        </span>
+        <span v-else-if="grandNetOutstanding < 0"
+          class="px-2.5 py-1 text-xs font-semibold bg-teal-50 text-teal-600 rounded-full border border-teal-200">
+          Credit {{ formatCurrency(Math.abs(grandNetOutstanding)) }}
         </span>
       </div>
       <p class="text-xs text-gray-400">
@@ -39,6 +47,27 @@
         Check-out {{ formatDateTime(checkIn.expected_check_out_datetime) }} •
         {{ checkIn.number_of_nights }} nights
       </p>
+    </div>
+
+    <div v-if="unusedComplimentaryCount > 0" class="bg-emerald-50 rounded-xl border border-emerald-200 px-5 py-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-bold text-emerald-800">Unused Complimentary Voucher Available</p>
+          <p class="text-xs text-emerald-600 mt-0.5">{{ unusedComplimentarySummary }}</p>
+        </div>
+        <button
+          v-if="checkIn.status === 'Checked In'"
+          @click="showDiscount = true"
+          class="px-3 py-2 text-xs font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-100">
+          Review
+        </button>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap mt-2">
+        <span v-for="voucher in unusedComplimentaries.slice(0, 4)" :key="voucher.name"
+          class="px-2.5 py-1 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-full">
+          {{ voucher.complimentary_type }} • {{ formatCurrency(voucherRemainingValue(voucher)) }}
+        </span>
+      </div>
     </div>
 
     <!-- Action Buttons -->
@@ -73,15 +102,21 @@
         class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
         Print
       </button>
-      <button 
-      class="px-4 py-2 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
-      @click="$router.push('/check-outs/' + checkIn.name)">
-      Check Out
-    </button>
+      <button
+        class="px-4 py-2 text-xs font-semibold text-white rounded-lg transition-colors"
+        :class="checkingOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-800'"
+        :disabled="checkingOut"
+        @click="startCheckout">
+        {{ checkingOut ? 'Processing...' : 'Check Out' }}
+      </button>
       <button @click="$router.back()"
         class="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">
         Cancel
       </button>
+    </div>
+    <div v-if="checkoutError" class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
+      <p class="text-xs font-bold text-amber-700 mb-1">Checkout Pending</p>
+      <p class="text-xs text-amber-600">{{ checkoutError }}</p>
     </div>
 
     <!-- Tabs -->
@@ -125,7 +160,7 @@
             <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ checkIn.number_of_nights || '—' }}</div>
           </div>
           <div>
-            <p class="text-xs text-gray-400 mb-1">Contact Number</p>
+            <p class="text-xs text-gray-400 mb-1">Guest Phone Number</p>
             <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg">{{ checkIn.contact_number || '—' }}</div>
           </div>
           <div>
@@ -170,6 +205,10 @@
                 {{ pref }}
               </span>
             </div>
+          </div>
+          <div style="grid-column:span 2;" v-if="housekeepingNotes">
+            <p class="text-xs text-gray-400 mb-1">Housekeeping Notes</p>
+            <div class="px-3 py-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg whitespace-pre-line">{{ housekeepingNotes }}</div>
           </div>
           <div style="grid-column:span 2;">
             <p class="text-xs text-gray-400 mb-1">Total Charges</p>
@@ -305,7 +344,7 @@
             </thead>
             <tbody>
               <tr v-if="payments.length === 0">
-                <td colspan="7" class="py-6 text-center text-xs text-gray-400">No payment or refund entries</td>
+                <td colspan="6" class="py-6 text-center text-xs text-gray-400">No payment or refund entries</td>
               </tr>
               <tr v-for="pmt in payments" :key="pmt.payment_id"
                 class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -333,7 +372,7 @@
             </tbody>
             <tfoot v-if="payments.length > 0">
               <tr class="border-t border-gray-200">
-                <td colspan="6" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Received</td>
+                <td colspan="5" class="px-4 py-2.5 text-xs font-bold text-gray-900">Total Received</td>
                 <td class="px-4 py-2.5 text-xs font-bold text-right text-green-600">
                   {{ formatCurrency(totalPaid) }}
                 </td>
@@ -436,13 +475,42 @@
       :paymentType="selectedPayment.payment_type"
       @close="showPaymentDetail = false; selectedPayment = null" />
 
+    <div v-if="showLateCheckoutPrompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div class="w-full max-w-md bg-white rounded-xl border border-gray-200 shadow-xl">
+        <div class="px-6 py-5 border-b border-gray-100">
+          <p class="text-sm font-bold text-gray-900">Charge Late Check-out?</p>
+          <p class="text-xs text-gray-500 mt-1">
+            {{ formatHoursLate(checkIn.late_checkout_charge?.hours_late) }} overdue • {{ formatCurrency(lateCheckoutAmount) }}
+          </p>
+        </div>
+        <div class="px-6 py-5">
+          <p class="text-xs text-gray-600 leading-relaxed">
+            This stay is past the expected check-out time. Posting the charge will create a Sales Invoice on the guest folio before checkout is completed.
+          </p>
+          <p v-if="checkoutError" class="text-xs font-semibold text-red-500 mt-3">{{ checkoutError }}</p>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button @click="continueCheckout(false)"
+            :disabled="checkingOut"
+            class="px-4 py-2 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-60">
+            Skip Charge
+          </button>
+          <button @click="continueCheckout(true)"
+            :disabled="checkingOut"
+            class="px-4 py-2 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-60">
+            Charge and Check Out
+          </button>
+        </div>
+      </div>
+    </div>
+
     </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import RoomTransferModal from '@/components/checkin/RoomTransferModal.vue'
 import StayAdjustmentModal from '@/components/checkin/StayAdjustmentModal.vue'
 import RefundRequestModal from '@/components/checkin/RefundRequestModal.vue'
@@ -466,13 +534,19 @@ const selectedPayment = ref(null)
 
 
 const route = useRoute()
+const router = useRouter()
 const activeTab = ref('Details')
 const showCreateMenu = ref(false)
 const invoices = ref([])
 const acquiredBills = ref([])
 const payments = ref([])
+const unusedComplimentaries = ref([])
 const loading = ref(true)
 const loadError = ref('')
+const checkingOut = ref(false)
+const checkoutError = ref('')
+const showLateCheckoutPrompt = ref(false)
+const lateCheckoutDecision = ref(null)
 
 const checkIn = ref({
   name: route.params.id,
@@ -495,6 +569,7 @@ async function loadCheckIn(silent = false) {
       invoices.value = data.invoices || []
       acquiredBills.value = data.acquired_bills || []
       payments.value = data.payments || []
+      await loadUnusedComplimentaryIndicator(data)
     }
   } catch (e) {
     loadError.value = 'Network error — please refresh.'
@@ -531,17 +606,70 @@ async function onActionDone() {
   await loadCheckIn(true)
 }
 
+async function loadUnusedComplimentaryIndicator(data = checkIn.value) {
+  try {
+    const summary = await callMethodForm('rhohotel.rhocom_hotel.api.complimentary.get_unused_complimentary_indicator', {
+      check_in: data?.name || route.params.id || '',
+      room: data?.room_number || '',
+      guest: data?.guest || '',
+    })
+    unusedComplimentaries.value = summary?.items || []
+  } catch (e) {
+    unusedComplimentaries.value = []
+  }
+}
+
+const billingSummary = computed(() => checkIn.value?.billing_summary || {})
+const unusedComplimentaryCount = computed(() => unusedComplimentaries.value.length)
+const unusedComplimentarySummary = computed(() => {
+  if (!unusedComplimentaries.value.length) return ''
+  const counts = unusedComplimentaries.value.reduce((acc, voucher) => {
+    const type = voucher.complimentary_type || 'Voucher'
+    acc[type] = (acc[type] || 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts)
+    .map(([type, count]) => `${count} ${type}`)
+    .join(' • ')
+})
+function summaryNumber(field, fallback) {
+  const value = billingSummary.value?.[field]
+  return value === undefined || value === null || value === '' ? fallback : Number(value) || 0
+}
+
+function voucherRemainingValue(voucher) {
+  if (!voucher) return 0
+  if (voucher.remaining_value !== undefined && voucher.remaining_value !== null) {
+    return Number(voucher.remaining_value || 0)
+  }
+  return Math.max(0, Number(voucher.value || 0) - Number(voucher.redeemed_amount || 0))
+}
+
 // Gross positive charges (room, restaurant, extensions) — exclude credit notes which
 // have positive grand_total in this Frappe version (is_return handles accounting reversal)
 const chargesTotal = computed(() =>
-  invoices.value.filter(inv => !inv.is_return && (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
+  summaryNumber(
+    'sales_charges_total',
+    invoices.value.filter(inv => !inv.is_return && (inv.amount || 0) > 0).reduce((s, inv) => s + inv.amount, 0)
+  )
 )
 // Credit notes — is_return=1 invoices with positive amounts
 const creditsTotal = computed(() =>
-  invoices.value.filter(inv => inv.is_return).reduce((s, inv) => s + Math.abs(inv.amount || 0), 0)
+  summaryNumber(
+    'credit_notes_total',
+    invoices.value.filter(inv => inv.is_return).reduce((s, inv) => s + Math.abs(inv.amount || 0), 0)
+  )
+)
+const sourceTransfersTotal = computed(() =>
+  summaryNumber(
+    'source_transfers_total',
+    invoices.value
+      .filter(inv => !inv.is_return)
+      .reduce((s, inv) => s + (Number(inv.source_transfer_amount) || 0), 0)
+  )
 )
 // Net for invoice table footer
-const invoiceTotal = computed(() => chargesTotal.value - creditsTotal.value)
+const invoiceTotal = computed(() => summaryNumber('invoice_net_total', chargesTotal.value - creditsTotal.value - sourceTransfersTotal.value))
 // Outstanding the guest still owes — only regular (non-return) invoices
 // If Frappe reconciled the credit note via return_against, the original invoice's
 // outstanding_amount is already reduced; credit note outstanding = 0.
@@ -553,32 +681,50 @@ const creditBalance = computed(() =>
   invoices.value.filter(inv => (inv.outstanding_amount || 0) < 0).reduce((s, inv) => s + Math.abs(inv.outstanding_amount), 0)
 )
 // Net for invoice table footer
-const outstandingTotal = computed(() => outstandingDue.value - creditBalance.value)
+const outstandingTotal = computed(() => summaryNumber('invoice_outstanding', outstandingDue.value - creditBalance.value))
 const acquiredTotal = computed(() =>
-  acquiredBills.value
-    .filter(b => b.status === 'Approved')
-    .reduce((s, b) => s + (b.total_amount || 0), 0)
+  summaryNumber(
+    'acquired_total',
+    acquiredBills.value
+      .filter(b => b.status === 'Approved')
+      .reduce((s, b) => s + (b.total_amount || 0), 0)
+  )
 )
 const acquiredOutstanding = computed(() =>
-  acquiredBills.value
-    .filter(b => b.status === 'Approved')
-    .reduce((s, b) => s + (b.outstanding_amount || 0), 0)
+  summaryNumber(
+    'acquired_outstanding',
+    acquiredBills.value
+      .filter(b => b.status === 'Approved')
+      .reduce((s, b) => s + (b.outstanding_amount || 0), 0)
+  )
 )
 // Grand billing summary values
-const grandCharges = computed(() => chargesTotal.value + acquiredTotal.value)
-const grandCredits = computed(() => creditsTotal.value)
-const grandNetBill = computed(() => grandCharges.value - grandCredits.value)
+const grandCharges = computed(() => summaryNumber('total_charges', chargesTotal.value + acquiredTotal.value))
+const grandCredits = computed(() => summaryNumber('total_credits', creditsTotal.value + sourceTransfersTotal.value))
+const grandNetBill = computed(() => summaryNumber('net_bill', grandCharges.value - grandCredits.value))
 const totalPaid = computed(() =>
-  payments.value
-    .filter(p => p.payment_type === 'Receive' && p.docstatus === 1)
-    .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  summaryNumber(
+    'total_received',
+    payments.value
+      .filter(p => p.payment_type === 'Receive' && p.docstatus === 1)
+      .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  )
 )
 const totalRefunded = computed(() =>
-  payments.value
-    .filter(p => p.payment_type === 'Pay' && p.docstatus === 1)
-    .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  summaryNumber(
+    'total_refunded',
+    payments.value
+      .filter(p => p.payment_type === 'Pay' && p.docstatus === 1)
+      .reduce((s, p) => s + (p.paid_amount || 0), 0)
+  )
 )
-const grandNetOutstanding = computed(() => grandNetBill.value - totalPaid.value + totalRefunded.value)
+const grandNetOutstanding = computed(() => summaryNumber('balance_amount', outstandingTotal.value + acquiredOutstanding.value))
+const lateCheckoutAmount = computed(() => Number(checkIn.value?.late_checkout_charge?.amount || 0))
+const shouldPromptLateCheckout = computed(() =>
+  checkIn.value?.status === 'Checked In'
+  && lateCheckoutAmount.value > 0
+  && !!checkIn.value?.late_checkout_charge
+)
 const isOverdue = computed(() => {
   if (!checkIn.value?.expected_check_out_datetime) return false
   return new Date(checkIn.value.expected_check_out_datetime) < new Date()
@@ -592,6 +738,13 @@ const preferenceList = computed(() =>
     .split(',')
     .map(v => v.trim())
     .filter(Boolean)
+)
+const housekeepingNotes = computed(() =>
+  String(checkIn.value?.housekeeping_notes || '')
+    .split('\n')
+    .filter(line => !/^Room Preferences:\s*/i.test(line.trim()))
+    .join('\n')
+    .trim()
 )
 
 function formatDateTime(dt) {
@@ -611,6 +764,7 @@ function formatInvoiceType(type) {
   if (type === 'Sales Invoice') return 'Room Charge'
   if (type === 'POS Invoice') return 'Restaurant'
   if (type === 'Restaurant') return 'Restaurant'
+  if (type === 'Late Check-out' || type === 'Late Checkout' || type === 'Late Charges') return 'Late Charges'
   return type || 'Room Charge'
 }
 function openInvoiceDetail(inv) {
@@ -629,8 +783,49 @@ function printFolio() {
     '_blank'
   )
 }
+async function startCheckout() {
+  checkoutError.value = ''
+  if (shouldPromptLateCheckout.value && lateCheckoutDecision.value === null) {
+    showLateCheckoutPrompt.value = true
+    return
+  }
+
+  checkingOut.value = true
+  try {
+    const result = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.process_checkout', {
+      check_in_name: checkIn.value.name || route.params.id,
+      charge_late_checkout: lateCheckoutDecision.value ? 1 : 0,
+    })
+    if (result?.name) {
+      await router.push('/check-outs/' + (result.check_in || checkIn.value.name || route.params.id))
+      return
+    }
+    if (result?.status === 'Payment Required') {
+      checkoutError.value = result.message || 'Please collect payment before completing checkout.'
+      lateCheckoutDecision.value = null
+      await loadCheckIn(true)
+      return
+    }
+    checkoutError.value = 'Unexpected response from server.'
+  } catch (e) {
+    checkoutError.value = String(e?.message || 'Network error — please try again.')
+    console.error('Failed to check out guest', e)
+  } finally {
+    checkingOut.value = false
+  }
+}
+function continueCheckout(chargeLateCheckout) {
+  lateCheckoutDecision.value = !!chargeLateCheckout
+  showLateCheckoutPrompt.value = false
+  startCheckout()
+}
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦ 0.00'
   return `₦ ${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+}
+function formatHoursLate(hours) {
+  const value = Number(hours || 0)
+  if (!value) return '0 hours'
+  return `${value.toLocaleString('en-NG', { maximumFractionDigits: 2 })} hour${value === 1 ? '' : 's'}`
 }
 </script>

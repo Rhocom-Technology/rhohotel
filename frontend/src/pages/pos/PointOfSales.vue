@@ -150,11 +150,27 @@
               {{ selectedBillTo.name?.[0] || '?' }}
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-xs font-semibold text-gray-900">{{ selectedBillTo.name }}</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="text-xs font-semibold text-gray-900">{{ selectedBillTo.name }}</p>
+                <span v-if="unusedComplimentaryCount > 0"
+                  class="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full">
+                  {{ unusedComplimentaryCount }} voucher{{ unusedComplimentaryCount === 1 ? '' : 's' }}
+                </span>
+              </div>
               <p class="text-xs text-gray-400 mt-0.5">{{ selectedBillTo.room ? `Room ${selectedBillTo.room}` : selectedBillTo.type }}</p>
             </div>
             <button @click="clearBillTo"
               class="text-gray-300 hover:text-red-500 transition-colors w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-50 text-xs">✕</button>
+          </div>
+          <div v-if="selectedBillTo && unusedComplimentaryCount > 0"
+            class="mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <p class="text-xs font-semibold text-emerald-800">Unused complimentary available</p>
+            <div class="flex items-center gap-1.5 flex-wrap mt-1">
+              <span v-for="voucher in unusedComplimentaries.slice(0, 3)" :key="voucher.name"
+                class="px-2 py-0.5 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-full">
+                {{ voucher.complimentary_type }} • ₦{{ voucherRemainingValue(voucher).toLocaleString() }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -206,8 +222,8 @@
         <div class="mb-4">
           <button @click="showDiscountPanel = !showDiscountPanel"
             class="w-full py-2 text-xs font-medium border border-dashed rounded-lg transition-all"
-            :class="discountAmount > 0 ? 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100' : 'text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300'">
-            {{ discountAmount > 0 ? `Discount applied: −₦${discountAmount.toLocaleString()}` : '+ Add Discount' }}
+            :class="manualDiscountAmount > 0 ? 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100' : 'text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300'">
+            {{ manualDiscountAmount > 0 ? `Manual discount: −₦${manualDiscountAmount.toLocaleString()}` : '+ Add Discount' }}
           </button>
           <div v-if="showDiscountPanel" class="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
             <div class="flex gap-1.5">
@@ -228,6 +244,30 @@
           </div>
         </div>
 
+        <!-- Complimentary Voucher -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold text-emerald-700">Complimentary Voucher</p>
+            <button @click="loadComplimentaries" class="text-xs text-blue-600 hover:text-blue-700">Refresh</button>
+          </div>
+          <select v-model="selectedComplimentaryName"
+            :disabled="complimentaryResource.loading"
+            class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+            <option value="">{{ complimentaryResource.loading ? 'Loading vouchers...' : 'No voucher applied' }}</option>
+            <option v-for="voucher in redeemableComplimentaries" :key="voucher.name" :value="voucher.name">
+              {{ voucher.name }} — {{ voucher.complimentary_type }} — ₦{{ voucherRemainingValue(voucher).toLocaleString() }} remaining
+            </option>
+          </select>
+          <div v-if="selectedComplimentary" class="mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold text-emerald-800">{{ selectedComplimentary.name }} applies −₦{{ complimentaryDiscountAmount.toLocaleString() }}</p>
+              <button @click="selectedComplimentaryName = ''" class="text-xs text-emerald-600 hover:text-emerald-800">Remove</button>
+            </div>
+            <p class="text-xs text-emerald-700 mt-1">Guest: {{ selectedComplimentary.guest || selectedBillTo?.name || 'Walk In' }}<template v-if="selectedComplimentary.expiry_date"> • Expires {{ selectedComplimentary.expiry_date }}</template></p>
+          </div>
+          <p v-else class="text-[11px] text-gray-400 mt-1">Approved restaurant complimentaries for the selected guest or room appear here.</p>
+        </div>
+
         <!-- Totals -->
         <div class="space-y-1.5 mb-4 border-t border-gray-100 pt-3">
           <div class="flex items-center justify-between">
@@ -237,6 +277,10 @@
           <div v-if="discountAmount > 0" class="flex items-center justify-between">
             <span class="text-xs text-green-600">Discount</span>
             <span class="text-xs font-medium text-green-600">−₦{{ discountAmount.toLocaleString() }}</span>
+          </div>
+          <div v-if="selectedComplimentary" class="flex items-center justify-between">
+            <span class="text-xs text-emerald-600">Voucher</span>
+            <span class="text-xs font-medium text-emerald-600">{{ selectedComplimentary.name }}</span>
           </div>
           <div class="flex items-center justify-between pt-2.5 mt-1 border-t border-gray-200">
             <span class="text-sm font-bold text-gray-900">Grand Total</span>
@@ -284,7 +328,7 @@
           <p class="text-[11px] text-gray-400 mt-1">Only items in configured kitchen item groups are sent.</p>
           <!-- Send to Kitchen Now -->
           <button @click="sendToKitchenNow"
-            :disabled="sendingKitchenNow || cart.length === 0"
+           :disabled="sendingKitchenNow || cart.length === 0 || !hasKitchenItems"
             class="btn-hover mt-2 w-full py-2 text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             :class="Object.keys(kitchenSentMap).length > 0
               ? 'text-orange-700 bg-orange-50 border border-orange-300 hover:bg-orange-100'
@@ -342,6 +386,8 @@
       :cart-items="cart"
       :service-charge="serviceCharge"
       :discount-amount="discountAmount"
+      :manual-discount-amount="manualDiscountAmount"
+      :complimentary-name="selectedComplimentaryName"
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
@@ -356,6 +402,8 @@
       :cart-items="cart"
       :service-charge="serviceCharge"
       :discount-amount="discountAmount"
+      :manual-discount-amount="manualDiscountAmount"
+      :complimentary-name="selectedComplimentaryName"
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
@@ -637,27 +685,48 @@ const occupiedRoomsResource = createResource({
 })
 
 // ── API: Bill-To search ────────────────────────────────────────────
+// REPLACE with:
 const billToResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.search_pos_bill_to',
-  params: { query: '' },
   auto: false,
 })
 
+// let billToTimer = null
+// watch(billToSearch, (q) => {
+//   clearTimeout(billToTimer)
+//   billToTimer = setTimeout(() => {
+//     billToResource.params = { query: q }
+//     billToResource.reload()
+//   }, 300)
+// })
+
+// // Load default results (including Walk In) when the Bill-To input gains focus
+// watch(billToFocused, (focused) => {
+//   if (focused && !billToSearch.value) {
+//     billToResource.params = { query: '' }
+//     billToResource.reload()
+//   }
+// })
+
+
+const clearingCart = ref(false)
+
+// REPLACE with:
 let billToTimer = null
+
+function reloadBillTo(q) {
+  try {
+    billToResource.submit({ query: q || '' })
+  } catch (_) {}
+}
+
 watch(billToSearch, (q) => {
   clearTimeout(billToTimer)
-  billToTimer = setTimeout(() => {
-    billToResource.params = { query: q }
-    billToResource.reload()
-  }, 300)
+  billToTimer = setTimeout(() => reloadBillTo(q), 300)
 })
 
-// Load default results (including Walk In) when the Bill-To input gains focus
 watch(billToFocused, (focused) => {
-  if (focused && !billToSearch.value) {
-    billToResource.params = { query: '' }
-    billToResource.reload()
-  }
+  if (focused && !billToSearch.value) reloadBillTo('')
 })
 
 // ── Computed: categories ───────────────────────────────────────────
@@ -740,13 +809,78 @@ const serviceCharge = computed(() => 0)
 const showDiscountPanel = ref(false)
 const discountType = ref('flat')
 const discountInput = ref('')
-const discountAmount = computed(() => {
+const selectedComplimentaryName = ref('')
+const redeemableComplimentaries = ref([])
+const unusedComplimentaries = ref([])
+
+const manualDiscountAmount = computed(() => {
   const val = parseFloat(discountInput.value) || 0
   if (!val) return 0
   if (discountType.value === 'percent') return Math.min(Math.round(subTotal.value * val / 100), subTotal.value)
   return Math.min(val, subTotal.value)
 })
+const selectedComplimentary = computed(() =>
+  redeemableComplimentaries.value.find(v => v.name === selectedComplimentaryName.value) || null
+)
+const complimentaryDiscountAmount = computed(() => {
+  if (!selectedComplimentary.value) return 0
+  return Math.min(voucherRemainingValue(selectedComplimentary.value), Math.max(0, subTotal.value - manualDiscountAmount.value))
+})
+const discountAmount = computed(() => Math.min(subTotal.value, manualDiscountAmount.value + complimentaryDiscountAmount.value))
 const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
+const unusedComplimentaryCount = computed(() => unusedComplimentaries.value.length)
+
+const complimentaryResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_redeemable_complimentaries',
+  auto: false,
+  onSuccess(data) {
+    redeemableComplimentaries.value = Array.isArray(data) ? data : []
+    if (selectedComplimentaryName.value && !redeemableComplimentaries.value.some(v => v.name === selectedComplimentaryName.value)) {
+      selectedComplimentaryName.value = ''
+    }
+  },
+  onError() {
+    redeemableComplimentaries.value = []
+    selectedComplimentaryName.value = ''
+  },
+})
+
+const complimentaryIndicatorResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.complimentary.get_unused_complimentary_indicator',
+  auto: false,
+  onSuccess(data) {
+    unusedComplimentaries.value = data?.items || []
+  },
+  onError() {
+    unusedComplimentaries.value = []
+  },
+})
+
+function loadComplimentaries() {
+  complimentaryResource.submit({
+    check_in: selectedBillTo.value?.id || null,
+    room: selectedBillTo.value?.room || roomNumber.value || null,
+    guest: selectedBillTo.value?.name || billToSearch.value || null,
+    department: 'Restaurant',
+  })
+  loadComplimentaryIndicator()
+}
+
+function loadComplimentaryIndicator() {
+  complimentaryIndicatorResource.submit({
+    check_in: selectedBillTo.value?.id || null,
+    room: selectedBillTo.value?.room || roomNumber.value || null,
+    guest: selectedBillTo.value?.name || billToSearch.value || null,
+  })
+}
+
+function voucherRemainingValue(voucher) {
+  if (!voucher) return 0
+  if (voucher.remaining_value !== undefined && voucher.remaining_value !== null) {
+    return Number(voucher.remaining_value || 0)
+  }
+  return Math.max(0, Number(voucher.value || 0) - Number(voucher.redeemed_amount || 0))
+}
 
 // ── Kitchen send tracking ─────────────────────────────────────────
 const kitchenSentMap = ref({}) // { item_code: qty_already_sent_to_kitchen }
@@ -759,6 +893,10 @@ const kitchenSentIds = computed(() => {
   }
   return sent
 })
+
+const hasKitchenItems = computed(() =>
+  cart.value.some(i => kitchenItemGroups.value.has(i.category))
+)
 
 // ── Bill-To interaction ────────────────────────────────────────────
 function delayBlur(field) {
@@ -775,20 +913,24 @@ function selectBillTo(guest) {
   if (settlementMethod.value === 'Post to Room' && guest.room) {
     roomNumber.value = guest.room
   }
+  loadComplimentaries()
 }
 
+// REPLACE with:
 function clearBillTo() {
   selectedBillTo.value = null
   billToSearch.value = ''
   roomNumber.value = ''
-  billToResource.params = { query: '' }
-  billToResource.reload()
+  selectedComplimentaryName.value = ''
+  redeemableComplimentaries.value = []
+  unusedComplimentaries.value = []
 }
 
 function selectRoomFromNumber(r) {
   roomNumber.value = r.room
   roomFocused.value = false
   selectedBillTo.value = { id: r.check_in, name: r.guest, room: r.room, type: r.payment_type || 'Direct Guest' }
+  loadComplimentaries()
 }
 
 function extractApiErrorMessage(err, fallback = 'Request failed') {
@@ -1198,8 +1340,27 @@ function restorePosState() {
 
 onMounted(() => {
   restorePosState()
+  if (selectedBillTo.value?.id || selectedBillTo.value?.room) {
+    loadComplimentaries()
+  }
 })
 
+// function clearCart() {
+//   cart.value = []
+//   selectedKitchenItemMap.value = {}
+//   kitchenSentMap.value = {}
+//   selectedBillTo.value = null
+//   roomNumber.value = ''
+//   kitchenNote.value = ''
+//   billToSearch.value = ''
+//   discountInput.value = ''
+//   showDiscountPanel.value = false
+//   resumedDraftInvoice.value = null
+//   try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}
+// }
+
+
+// REPLACE with:
 function clearCart() {
   cart.value = []
   selectedKitchenItemMap.value = {}
@@ -1209,6 +1370,9 @@ function clearCart() {
   kitchenNote.value = ''
   billToSearch.value = ''
   discountInput.value = ''
+  selectedComplimentaryName.value = ''
+  redeemableComplimentaries.value = []
+  unusedComplimentaries.value = []
   showDiscountPanel.value = false
   resumedDraftInvoice.value = null
   try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}
@@ -1278,7 +1442,8 @@ function onChargeNow() {
         }))),
         check_in: selectedBillTo.value.id,
         service_charge: serviceCharge.value,
-        discount_amount: discountAmount.value,
+        discount_amount: manualDiscountAmount.value,
+        complimentary_name: selectedComplimentaryName.value || null,
         kitchen_note: kitchenNote.value || null,
         pos_profile: terminalInfo.value?.pos_profile || null,
         existing_draft: resumedDraftInvoice.value || null,
@@ -1307,17 +1472,29 @@ function onChargeNow() {
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
     customer: selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
-    discount_amount: discountAmount.value,
+    discount_amount: manualDiscountAmount.value,
+    complimentary_name: selectedComplimentaryName.value || null,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
     existing_draft: resumedDraftInvoice.value || null,
   })
 }
 
-function onSplitConfirmed() {
+// function onSplitConfirmed() {
+//   console.log('onSplitConfirmed called')
+//   clearCart()
+//   menuResource.reload()
+//   chargeSuccess.value = 'Split bill processed successfully'
+//   setTimeout(() => { chargeSuccess.value = '' }, 4000)
+// }
+
+function onSplitConfirmed(data) {
   clearCart()
   menuResource.reload()
   chargeSuccess.value = 'Split bill processed successfully'
+  if (data?.pos_invoice) {
+    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(data.pos_invoice)}&trigger_print=1`, '_blank')
+  }
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
 

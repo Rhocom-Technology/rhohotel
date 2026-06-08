@@ -102,6 +102,16 @@ class BillTransfer(Document):
         self.journal_entry = je.name
         self.db_set("journal_entry", je.name)
 
+        try:
+            from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+            if self.from_check_in:
+                sync_checkin_folio_totals(self.from_check_in)
+            if self.to_check_in:
+                sync_checkin_folio_totals(self.to_check_in)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Bill Transfer folio sync failed")
+
         frappe.msgprint(f"Journal Entry <b>{je.name}</b> created successfully.")
 
 

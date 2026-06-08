@@ -77,12 +77,18 @@ const navGroups = [
     icon: LayoutGrid,
     children: [
       { label: 'Room View', to: '/room-view' },
+      { label: 'Available Rooms', to: '/available-rooms' },
       { label: 'Check-ins', to: '/check-ins' },
       { label: 'Check-outs', to: '/check-outs' },
       { label: 'Reservations', to: '/reservations' },
       { label: 'Payments', to: '/payments' },
       { label: 'Guest List', to: '/guests' },
       { label: 'Night Audit', to: '/night-audit' },
+
+      //  Hall
+      { label: 'Hall List',     to: '/hall' },
+      { label: 'Hall Bookings', to: '/hall/booking' },
+      { label: 'Hall Dashboard', to: '/hall-dashboard' },
     ],
   },
   {
@@ -130,6 +136,7 @@ const navGroups = [
       { label: 'Night Audit Summary Report',    to: '/reports/night-audit-summary-report' },
       { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement' },
       { label: 'Corporate Billing Statement', to: '/reports/corporate-billing-statement' },
+      { label: 'Complimentary & House Use', to: '/reports/complimentary-house-use-report' },
       { label: 'POS Sales Report', to: '/reports/pos-sales-report' },
       { label: 'Housekeeping Productivity Report', to: '/reports/house-keeping-productivity-report' },
     ],

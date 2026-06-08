@@ -53,10 +53,55 @@
           <input v-model="search" type="text" placeholder="Search client, bill no., statement..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <select v-model="filterClient" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-          <option value="">All Clients</option>
-          <option v-for="c in clients" :key="c" :value="c">{{ c }}</option>
-        </select>
+     <div
+  id="corporate-client-dropdown"
+  class="relative"
+  style="min-width:220px;"
+>
+  <input
+  v-model="clientSearch"
+  @focus="showClientDropdown = true"
+  type="text"
+  placeholder="Search corporate customer..."
+  class="w-full px-3 py-2.5 pr-8 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600"
+/>
+
+<span
+  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"
+>
+  ▼
+</span>
+
+  <div
+    v-if="showClientDropdown"
+    class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+  >
+    <button
+      type="button"
+      @click="filterClient = ''; clientSearch = ''; showClientDropdown = false"
+      class="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 font-medium text-gray-700"
+    >
+      All Corporate Customers
+    </button>
+
+    <button
+      v-for="c in filteredClients"
+      :key="c.name"
+      type="button"
+      @click="filterClient = c.name; clientSearch = c.customer_name || c.name; showClientDropdown = false"
+      class="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 text-gray-700"
+    >
+      {{ c.customer_name || c.name }}
+    </button>
+
+    <div
+      v-if="!filteredClients.length"
+      class="px-3 py-2 text-xs text-gray-400"
+    >
+      No corporate customer found.
+    </div>
+  </div>
+</div>
         <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Statuses</option>
           <option>Unpaid</option>
@@ -70,8 +115,12 @@
           <option>This Month</option>
           <option>Overdue</option>
         </select>
-        <button @click="search='';filterClient='';filterStatus='';filterDueDate='';showOverdueOnly=false;currentPage=1"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
+        <button
+  @click="search='';filterClient='';clientSearch='';filterStatus='';filterDueDate='';showOverdueOnly=false;currentPage=1"
+  class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+>
+  Reset
+</button>
         <button
           class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
           :class="showOverdueOnly ? 'text-white bg-red-500 hover:bg-red-600' : 'text-white bg-blue-600 hover:bg-blue-700'"
@@ -151,11 +200,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { callMethodForm } from '@/lib/api'
 
 const search = ref('')
 const filterClient = ref('')
+const clientSearch = ref('')
+const showClientDropdown = ref(false)
 const filterStatus = ref('')
 const filterDueDate = ref('')
 const showOverdueOnly = ref(false)
@@ -167,20 +218,69 @@ const summary = ref({ activeBills: 0, outstandingValue: '₦0', paidThisMonth: '
 const loading = ref(false)
 const error = ref('')
 
+
+function handleClickOutside(event) {
+  const dropdown = document.getElementById('corporate-client-dropdown')
+
+  if (dropdown && !dropdown.contains(event.target)) {
+    showClientDropdown.value = false
+  }
+}
+
+onMounted(() => {
+  fetchBills()
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
+
 const clients = computed(() =>
-  [...new Set(bills.value.map(b => b.client).filter(Boolean))].sort()
+  [...new Map(
+    bills.value
+      .filter(b => b.client_id)
+      .map(b => [b.client_id, {
+        name: b.client_id,
+        customer_name: b.client || b.client_id
+      }])
+  ).values()].sort((a, b) =>
+    String(a.customer_name || '').localeCompare(String(b.customer_name || ''))
+  )
 )
+
+const filteredClients = computed(() => {
+  const q = clientSearch.value.toLowerCase().trim()
+
+  if (!q) return clients.value
+
+  return clients.value.filter(c =>
+    String(c.customer_name || c.name || '').toLowerCase().includes(q)
+  )
+})
 
 async function fetchBills() {
   loading.value = true
   error.value = ''
+
   try {
     const result = await callMethodForm(
       'rhohotel.rhocom_hotel.api.corporate_billing.get_corporate_bills',
       { page: 1, page_size: 500 }
     )
+
     bills.value = result?.bills || []
-    summary.value = result?.summary || { activeBills: 0, outstandingValue: '₦0', paidThisMonth: '₦0', overdueCount: 0 }
+
+    summary.value = result?.summary || {
+      activeBills: 0,
+      outstandingValue: '₦0',
+      paidThisMonth: '₦0',
+      overdueCount: 0
+    }
+
+    // clients.value = result?.customers || []
+
   } catch (e) {
     error.value = e.message || 'Failed to load bills'
   } finally {
@@ -194,7 +294,7 @@ const filtered = computed(() => {
     const q = search.value.toLowerCase()
     list = list.filter(b => b.billNo.toLowerCase().includes(q) || b.client.toLowerCase().includes(q))
   }
-  if (filterClient.value) list = list.filter(b => b.client === filterClient.value)
+  if (filterClient.value) list = list.filter(b => b.client_id === filterClient.value)
   if (filterStatus.value) list = list.filter(b => b.status === filterStatus.value)
   if (showOverdueOnly.value) list = list.filter(b => b.status === 'Overdue')
   return list
@@ -214,5 +314,5 @@ function billStatusClass(s) {
   }[s] || 'bg-gray-100 text-gray-500'
 }
 
-onMounted(fetchBills)
+// onMounted(fetchBills)
 </script>

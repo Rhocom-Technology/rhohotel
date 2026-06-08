@@ -238,13 +238,14 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, computed } from 'vue'
+import { reactive, ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { callMethodForm, requestApi } from '@/lib/api'
+import { isValidPhone, phoneError } from '@/lib/phone'
 
 const route = useRoute()
 const router = useRouter()
-const guestId = route.params.id
+const guestId = computed(() => String(route.params.id || ''))
 
 const loading = ref(true)
 const loadError = ref(null)
@@ -331,11 +332,12 @@ async function uploadIdDocument(guestName) {
   form.id_document_scan = payload?.message?.file_url || form.id_document_scan
 }
 
-async function loadGuest() {
+async function loadGuest(name = guestId.value) {
+  if (!name) return
   loading.value = true
   loadError.value = null
   try {
-    const g = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guest', { name: guestId })
+    const g = await callMethodForm('rhohotel.rhocom_hotel.api.guest.get_guest', { name })
     originalName.value = g.name
     const nameParts = (g.hotel_guest_name || '').trim().split(/\s+/)
     const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0] || ''
@@ -389,6 +391,14 @@ async function saveGuest() {
     saveError.value = 'Guest name is required.'
     return
   }
+  if (!isValidPhone(form.phone_number, { required: true })) {
+    saveError.value = phoneError('Phone number')
+    return
+  }
+  if (form.contact_number && !isValidPhone(form.contact_number)) {
+    saveError.value = phoneError('Contact person number')
+    return
+  }
   saving.value = true
   try {
     const body = new URLSearchParams()
@@ -419,16 +429,16 @@ async function saveGuest() {
       body,
     })
 
-    await uploadIdDocument(originalName.value)
-
     const data = payload?.message
+    const updatedName = data?.name || originalName.value
+    await uploadIdDocument(updatedName)
+
     saveSuccess.value = true
-    const updated = data
-    // If name changed, navigate to new route
-    if (updated.name !== originalName.value) {
-      router.replace({ name: 'EditGuest', params: { id: updated.name } })
+    // If the document was renamed, keep route actions and future saves on the new id.
+    if (updatedName !== guestId.value) {
+      await router.replace({ name: 'EditGuest', params: { id: updatedName } })
     }
-    originalName.value = updated.name
+    await loadGuest(updatedName)
     setTimeout(() => { saveSuccess.value = false }, 3000)
   } catch (e) {
     saveError.value = e.message || 'Failed to save guest. Please try again.'
@@ -438,4 +448,10 @@ async function saveGuest() {
 }
 
 onMounted(loadGuest)
+
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    loadGuest(String(newId))
+  }
+})
 </script>

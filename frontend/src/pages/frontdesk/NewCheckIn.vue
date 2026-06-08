@@ -174,12 +174,12 @@
                 placeholder="Auto-filled from guest"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg bg-gray-50" />
             </div>
-            <div>
-              <p class="text-xs text-gray-500 mb-1.5">Contact Number</p>
+            <!-- <div>
+              <p class="text-xs text-gray-500 mb-1.5">Guest Phone Number</p>
               <input type="text" v-model="form.contact_number"
                 placeholder="Direct contact for this stay"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+            </div> -->
           </div>
         </div>
 
@@ -228,7 +228,18 @@
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+            <div>
+              <p class="text-xs text-gray-500 mb-1.5">Rate Card</p>
+              <select v-model="form.rate_type" @change="onRateCardSelect"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                :disabled="loadingRateCards || !!form.canonical_reservation || !!form.reservation">
+                <option value="">{{ loadingRateCards ? 'Loading...' : 'Standard / Manual Rate' }}</option>
+                <option v-for="rate in rateCards" :key="rate.name" :value="rate.name">
+                  {{ rate.rate_code || rate.name }} — {{ formatCurrency(rate.rate_amount) }}
+                </option>
+              </select>
+            </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Nightly Rate <span class="text-red-400">*</span></p>
               <input type="number" v-model.number="form.rate_amount" min="0"
@@ -381,9 +392,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
+import { isValidPhone, phoneError } from '@/lib/phone'
 
 const router = useRouter()
 const route = useRoute()
@@ -436,6 +448,8 @@ async function selectReservation(r) {
   }
   reservationQuery.value = r.name
   showReservationDropdown.value = false
+
+  form.rate_type = ''
 
   if (!form.reservation_source) {
     form.reservation_source = 'Reservation'
@@ -499,6 +513,7 @@ function clearReservation() {
   form.canonical_reservation = ''
   reservationQuery.value = ''
   reservationResults.value = []
+  loadRateCards()
 }
 
 // ---- Guest search ----
@@ -621,6 +636,8 @@ const availableRooms = ref([])
 const loadingRooms = ref(false)
 const selectedRoomType = ref('')
 const roomTypes = ref([])
+const rateCards = ref([])
+const loadingRateCards = ref(false)
 
 async function loadRoomTypes() {
   try {
@@ -668,7 +685,9 @@ async function loadAvailableRooms() {
           room_number: preRoom,
           room_type: preRoomType || '',
           floor: '',
-          default_rate: 0,
+          default_rate: getNumericRate(route.query.rate_amount),
+          rate_per_night: getNumericRate(route.query.rate_amount),
+          rate: getNumericRate(route.query.rate_amount),
         }
         availableRooms.value = [injected, ...availableRooms.value]
         form.room_number = preRoom
@@ -689,8 +708,10 @@ async function loadAvailableRooms() {
 function onRoomTypeChange() {
   form.room_number = ''
   form.room_type = selectedRoomType.value
+  form.rate_type = ''
   form.rate_amount = 0
   loadAvailableRooms()
+  loadRateCards({ preserveSelection: false })
 }
 
 function onRoomSelect() {
@@ -698,8 +719,65 @@ function onRoomSelect() {
   if (room) {
     form.room_type = room.room_type
     selectedRoomType.value = room.room_type
-    if (room.default_rate) form.rate_amount = room.default_rate
+    const rate = getRoomRate(room)
+    if (rate > 0) form.rate_amount = rate
+    loadRateCards()
   }
+}
+
+function getCheckInDateForRates() {
+  if (!form.check_in_datetime) return ''
+  return String(form.check_in_datetime).slice(0, 10)
+}
+
+async function loadRateCards(options = {}) {
+  const { preserveSelection = true } = options
+  loadingRateCards.value = true
+  try {
+    const rows = await callMethodForm('rhohotel.rhocom_hotel.utils.billing_routing.get_eligible_rate_codes', {
+      reservation_type: 'Walk In',
+      check_in_date: getCheckInDateForRates(),
+      room_type: form.room_type || selectedRoomType.value || '',
+      nights: form.number_of_nights || 1,
+    })
+    rateCards.value = Array.isArray(rows) ? rows : []
+
+    if (!preserveSelection) {
+      form.rate_type = ''
+      return
+    }
+
+    if (form.rate_type) {
+      const selected = rateCards.value.find(rate => rate.name === form.rate_type)
+      if (selected) {
+        form.rate_amount = getNumericRate(selected.rate_amount)
+      } else {
+        form.rate_type = ''
+      }
+    }
+  } catch {
+    rateCards.value = []
+    if (!preserveSelection) form.rate_type = ''
+  } finally {
+    loadingRateCards.value = false
+  }
+}
+
+function onRateCardSelect() {
+  const selected = rateCards.value.find(rate => rate.name === form.rate_type)
+  if (selected) {
+    form.rate_amount = getNumericRate(selected.rate_amount)
+  }
+}
+
+function getNumericRate(value) {
+  const rate = Number(value || 0)
+  return Number.isFinite(rate) ? rate : 0
+}
+
+function getRoomRate(room) {
+  const rateFields = [room?.default_rate, room?.rate_per_night, room?.rate, room?.rate_amount]
+  return rateFields.map(getNumericRate).find(rate => rate > 0) || 0
 }
 
 // ---- Form ----
@@ -725,6 +803,14 @@ const form = reactive({
   id_type: '',
   contact_number: '',
 })
+
+watch(
+  () => [form.check_in_datetime, form.number_of_nights],
+  () => {
+    loadAvailableRooms()
+    loadRateCards()
+  }
+)
 
 const defaultPreferenceTags = [
   { label: 'High Floor',   active: false, activeClass: 'bg-blue-100 text-blue-600' },
@@ -844,6 +930,17 @@ function formatCurrency(amount) {
   return `₦ ${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 }
 
+function toUserError(error, fallback = 'Could not complete check-in. Please try again.') {
+  const raw = String(error?.message || '').trim()
+  if (!raw) return fallback
+
+  const technicalPattern = /traceback|frappe\.|pymysql|sql|exception|line\s+\d+|doctype|\n/i
+  if (raw.length > 220 || technicalPattern.test(raw)) {
+    return fallback
+  }
+  return raw
+}
+
 // ---- Submit ----
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -863,6 +960,10 @@ async function submitCheckIn() {
   }
   if (!form.number_of_nights || form.number_of_nights < 1) {
     errorMsg.value = 'Number of nights must be at least 1.'; return
+  }
+  if (!isValidPhone(form.contact_number, { required: true })) {
+    errorMsg.value = phoneError('Guest phone number')
+    return
   }
 
   submitting.value = true
@@ -897,7 +998,7 @@ async function submitCheckIn() {
       errorMsg.value = 'Unexpected response from server.'
     }
   } catch (e) {
-    errorMsg.value = String(e?.message || 'Network error — please try again.')
+    errorMsg.value = toUserError(e, 'Network error — please try again.')
   } finally {
     submitting.value = false
   }
@@ -906,6 +1007,7 @@ async function submitCheckIn() {
 onMounted(() => {
   loadRoomTypes()
   loadAvailableRooms()
+  loadRateCards()
   loadMarketPlaces()
 
   const preReservation = String(route.query.reservation || '').trim()

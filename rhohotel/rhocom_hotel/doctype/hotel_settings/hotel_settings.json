@@ -11,6 +11,8 @@
   "default_taxes_and_charges",
   "default_invoice_naming_series",
   "default_check_out_time",
+  "reservation_features_section",
+  "enable_group_room_blocks",
   "sb_late_checkout",
   "enable_late_checkout_charges",
   "late_checkout_grace_hours",
@@ -60,6 +62,18 @@
    "fieldname": "default_check_out_time",
    "fieldtype": "Time",
    "label": "Default Check-Out Time"
+  },
+  {
+   "fieldname": "reservation_features_section",
+   "fieldtype": "Section Break",
+   "label": "Reservation Features"
+  },
+  {
+   "default": "0",
+   "description": "Allow group reservations to hold room-type inventory without assigning specific room numbers. When disabled, group reservations must use selected reserved rooms.",
+   "fieldname": "enable_group_room_blocks",
+   "fieldtype": "Check",
+   "label": "Enable Group Room Blocks"
   },
   {
    "fieldname": "sb_late_checkout",

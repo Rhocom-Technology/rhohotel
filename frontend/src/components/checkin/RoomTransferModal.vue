@@ -49,8 +49,8 @@
                   </select>
                 </div>
                 <div v-if="selectedRoom" class="bg-green-50 rounded-lg border border-green-200 px-4 py-3">
-                  <p class="text-xs font-bold text-green-700">Selected: Room {{ selectedRoom.name }}</p>
-                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(selectedRoom.default_rate) }} / night</p>
+                  <p class="text-xs font-bold text-green-700">Selected: Room {{ selectedRoom.room_number || selectedRoom.name }}</p>
+                  <p class="text-xs text-green-600 mt-0.5">{{ selectedRoom.room_type }} • {{ fmt(roomRate(selectedRoom)) }} / night</p>
                 </div>
                 <div v-else class="bg-gray-50 rounded-lg border border-gray-200 px-4 py-3">
                   <p class="text-xs text-gray-400">Select a room from the list →</p>
@@ -63,6 +63,14 @@
                 <h3 class="text-sm font-bold text-gray-900">Available Rooms</h3>
                 <button @click="loadRooms" class="text-xs text-blue-500 hover:text-blue-700">Refresh</button>
               </div>
+              <div class="mb-3">
+                <input
+                  v-model="roomSearch"
+                  type="text"
+                  placeholder="Search room, type, or floor..."
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div v-if="loadingRooms" class="py-6 text-center">
                 <div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                 <p class="text-xs text-gray-400">Loading…</p>
@@ -70,14 +78,17 @@
               <div v-else-if="availableRooms.length === 0" class="py-6 text-center">
                 <p class="text-xs text-gray-400">No vacant rooms available.</p>
               </div>
+              <div v-else-if="filteredRooms.length === 0" class="py-6 text-center">
+                <p class="text-xs text-gray-400">No vacant rooms match your search.</p>
+              </div>
               <div v-else class="space-y-2 max-h-64 overflow-y-auto">
-                <div v-for="r in availableRooms" :key="r.name"
+                <div v-for="r in filteredRooms" :key="r.name"
                   class="rounded-xl border px-4 py-3 flex items-center justify-between"
                   :class="selectedRoom?.name === r.name ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200'">
                   <div>
-                    <p class="text-sm font-bold text-gray-900">{{ r.name }}</p>
+                    <p class="text-sm font-bold text-gray-900">{{ r.room_number || r.name }}</p>
                     <p class="text-xs text-gray-500 mt-0.5">{{ r.room_type }} • {{ r.floor || '' }}</p>
-                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(r.default_rate) }} / night</p>
+                    <p class="text-xs text-blue-600 mt-0.5">{{ fmt(roomRate(r)) }} / night</p>
                   </div>
                   <button
                     class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
@@ -102,23 +113,45 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { humanizeErrorMessage } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const availableRooms = ref([])
 const selectedRoom = ref(null)
+const roomSearch = ref('')
 const note = ref('')
 const loadingRooms = ref(true)
 const submitting = ref(false)
 const error = ref('')
 const invoiceInfo = ref('')
 function fmt(v) { return v || v === 0 ? `₦ ${Number(v).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '₦ 0.00' }
+function roomRate(room) {
+  const fields = [room?.default_rate, room?.rate_per_night, room?.rate, room?.rate_amount]
+  return fields.map((value) => Number(value || 0)).find((rate) => Number.isFinite(rate) && rate > 0) || 0
+}
+const filteredRooms = computed(() => {
+  const q = roomSearch.value.trim().toLowerCase()
+  if (!q) return availableRooms.value
+  return availableRooms.value.filter((room) => [
+    room.name,
+    room.room_number,
+    room.room_type,
+    room.floor,
+  ].some(value => String(value || '').toLowerCase().includes(q)))
+})
 async function apiPost(m, p) {
   const r = await fetch(`/api/method/${m}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' }, body: new URLSearchParams(p) })
   return r.json()
 }
 function parseErr(data) {
-  try { return JSON.parse(JSON.parse(data._server_messages || '[]')[0]).message } catch { return 'Request failed.' }
+  try {
+    const messages = JSON.parse(data._server_messages || '[]')
+    if (messages.length) return humanizeErrorMessage(JSON.parse(messages[0]).message)
+  } catch {}
+  if (data?._error_message) return humanizeErrorMessage(data._error_message)
+  if (data?.exception) return humanizeErrorMessage(data.exception)
+  return 'Request failed.'
 }
 async function loadRooms() {
   loadingRooms.value = true
@@ -128,6 +161,7 @@ async function loadRooms() {
       current_room: props.checkIn.room_number || '',
       check_in_dt: props.checkIn.check_in_datetime || '',
       check_out_dt: props.checkIn.expected_check_out_datetime || '',
+      exclude_reservation: props.checkIn.canonical_reservation || props.checkIn.reservation || '',
     })
     if (data.exc) { error.value = parseErr(data); return }
     availableRooms.value = data.message || []

@@ -10,6 +10,8 @@
     @check-in-room="goToIndividualCheckIn"
     @bulk-check-in="goToBulkCheckIn"
     @update-occupant="saveRoomOccupant"
+    @update-room-discount="saveRoomDiscount"
+    @distribute-room-discount="distributeRoomDiscount"
     @cancel-reservation="cancelReservation"
     @create-invoice="createInvoice"
     @submit-reservation="submitReservation"
@@ -22,6 +24,48 @@ import { useRoute, useRouter } from 'vue-router'
 import SavedReservationDetails from '@/components/reservations/SavedReservation.vue'
 import { callMethod } from '@/lib/api'
 
+// Utility: Check if a guest exists by name or id
+async function ensureGroupMasterPayerExists(payerName, payerDetails = {}) {
+  if (!payerName) return null;
+  // Try to get the guest by name
+  try {
+    const guest = await callMethod('frappe.client.get_value', {
+      doctype: 'Hotel Guest',
+      filters: { guest_name: payerName },
+      fieldname: ['name'],
+    });
+    if (guest && guest.name) {
+      return guest.name;
+    }
+  } catch (e) {
+    // Not found, will create
+  }
+  // Create new guest
+  try {
+    const newGuest = await callMethod('frappe.client.insert', {
+      doc: {
+        doctype: 'Hotel Guest',
+        guest_name: payerName,
+        ...payerDetails,
+      },
+    });
+    return newGuest.name;
+  } catch (e) {
+    throw new Error('Could not create group master payer: ' + (e?.message || e));
+  }
+}
+
+// Utility: Update reservation with group master payer
+async function updateReservationGroupMaster(reservationName, groupMasterName) {
+  if (!reservationName || !groupMasterName) return;
+  await callMethod('frappe.client.set_value', {
+    doctype: 'Hotel Reservation',
+    name: reservationName,
+    fieldname: 'group_master_customer',
+    value: groupMasterName,
+  });
+}
+
 const route = useRoute()
 const router = useRouter()
 
@@ -29,6 +73,17 @@ const loading = ref(true)
 const actionLoading = ref(false)
 const reservation = ref({})
 const errorMessage = ref('')
+
+function toUserError(error, fallback) {
+  const raw = String(error?.message || '').trim()
+  if (!raw) return fallback
+
+  const technicalPattern = /traceback|frappe\.|pymysql|sql|exception|line\s+\d+|doctype|\n/i
+  if (raw.length > 220 || technicalPattern.test(raw)) {
+    return fallback
+  }
+  return raw
+}
 
 function getPaymentValue(entry) {
   return Number(entry?.amount ?? entry?.paid_amount ?? entry?.allocated_amount ?? 0)
@@ -43,6 +98,9 @@ function normalizeInvoiceRow(row) {
     outstanding_amount: Number(row?.outstanding_amount ?? 0),
     status: row?.status || '',
     is_return: Number(row?.is_return || 0),
+    room_row: row?.room_row || row?.room_row_name || '',
+    room_number: row?.room_number || '',
+    invoice_scope: row?.invoice_scope || '',
   }
 }
 
@@ -59,6 +117,11 @@ function normalizePaymentRow(row) {
 
 function getReservationId() {
   return String(route.params.id || '').trim()
+}
+
+function isReservationCancelled() {
+  return Number(reservation.value?.docstatus || 0) === 2
+    || String(reservation.value?.status || reservation.value?.reservation_status || '').toLowerCase() === 'cancelled'
 }
 
 async function loadReservation() {
@@ -93,13 +156,13 @@ async function loadReservation() {
       .map(normalizeInvoiceRow)
     const fallbackInvoices = (Array.isArray(paymentSummary?.invoices) ? paymentSummary.invoices : [])
       .map(normalizeInvoiceRow)
-    const invoiceEntries = reservationInvoices.length ? reservationInvoices : fallbackInvoices
+    const invoiceEntries = fallbackInvoices.length ? fallbackInvoices : reservationInvoices
 
     const reservationPayments = (Array.isArray(doc.reservation_payments) ? doc.reservation_payments : [])
       .map(normalizePaymentRow)
     const fallbackPayments = (Array.isArray(paymentSummary?.payment_entries) ? paymentSummary.payment_entries : [])
       .map(normalizePaymentRow)
-    const paymentEntries = reservationPayments.length ? reservationPayments : fallbackPayments
+    const paymentEntries = fallbackPayments.length ? fallbackPayments : reservationPayments
 
     const fallbackPaidAmount = paymentEntries.reduce((sum, row) => sum + getPaymentValue(row), 0)
     const paidAmount = Number(paymentSummary?.paid_amount ?? fallbackPaidAmount)
@@ -122,7 +185,7 @@ async function loadReservation() {
     }
   } catch (error) {
     reservation.value = {}
-    errorMessage.value = String(error?.message || 'Could not load reservation details.')
+    errorMessage.value = toUserError(error, 'Could not load reservation details.')
   } finally {
     loading.value = false
   }
@@ -134,6 +197,7 @@ function openPayments() {
 }
 
 function goToCheckIn() {
+  if (isReservationCancelled()) return
   const id = getReservationId()
   const res = reservation.value
   const rooms = Array.isArray(res?.rooms) ? res.rooms : []
@@ -254,11 +318,16 @@ function goToIndividualCheckIn(row) {
 }
 
 function goToBulkCheckIn() {
+  if (isReservationCancelled()) return
   const id = getReservationId()
   router.push({ name: 'NewCheckIn', query: id ? { reservation: id, canonical_reservation: id } : undefined })
 }
 
 async function saveRoomOccupant(payload) {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
   const row = payload?.row || payload
   const guest = payload?.guest || null
   if (!row?.name) {
@@ -296,13 +365,73 @@ async function saveRoomOccupant(payload) {
 
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not save room occupant.')
+    errorMessage.value = toUserError(error, 'Could not save room occupant.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function saveRoomDiscount(payload) {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
+  const row = payload?.row || payload
+  if (!row?.name) {
+    errorMessage.value = 'Could not save discount: missing room row id.'
+    return
+  }
+
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.apply_split_room_discount',
+      {
+        reservation_name: reservation.value.name,
+        room_row_name: row.name,
+        discount: Number(row.discount || 0),
+        reason: 'Front desk split room discount',
+      },
+    )
+    await loadReservation()
+  } catch (error) {
+    errorMessage.value = toUserError(error, 'Could not save room discount.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function distributeRoomDiscount(payload) {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
+  if (!reservation.value?.name) return
+
+  actionLoading.value = true
+  errorMessage.value = ''
+  try {
+    await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.distribute_split_room_discount',
+      {
+        reservation_name: reservation.value.name,
+        discount: Number(payload?.discount || 0),
+        discount_type: payload?.discount_type || 'Fixed Amount',
+        room_row_names: payload?.room_row_names || [],
+        reason: 'Front desk split discount distribution',
+      },
+    )
+    await loadReservation()
+  } catch (error) {
+    errorMessage.value = toUserError(error, 'Could not distribute room discount.')
   } finally {
     actionLoading.value = false
   }
 }
 
 async function submitReservation() {
+  if (isReservationCancelled()) return
   if (!reservation.value?.name || Number(reservation.value.docstatus) !== 0) return
 
   actionLoading.value = true
@@ -320,7 +449,7 @@ async function submitReservation() {
     await callMethod('frappe.client.submit', { doc: docToSubmit })
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not submit reservation.')
+    errorMessage.value = toUserError(error, 'Could not submit reservation.')
   } finally {
     actionLoading.value = false
   }
@@ -344,13 +473,17 @@ async function cancelReservation() {
     )
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not cancel reservation.')
+    errorMessage.value = toUserError(error, 'Could not cancel reservation.')
   } finally {
     actionLoading.value = false
   }
 }
 
 async function createInvoice() {
+  if (isReservationCancelled()) {
+    errorMessage.value = 'Cancelled reservations cannot be edited.'
+    return
+  }
   if (!reservation.value?.name) return
 
   const reservationType = String(reservation.value?.reservation_type || '').trim().toLowerCase()
@@ -400,7 +533,7 @@ async function createInvoice() {
     }
     await loadReservation()
   } catch (error) {
-    errorMessage.value = String(error?.message || 'Could not create invoice.')
+    errorMessage.value = toUserError(error, 'Could not create invoice.')
   } finally {
     actionLoading.value = false
   }

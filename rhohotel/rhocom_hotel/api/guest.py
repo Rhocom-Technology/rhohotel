@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import cstr, flt, nowdate
+from rhohotel.rhocom_hotel.utils.phone import validate_phone_number
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +279,9 @@ def create_guest(
 	if frappe.db.exists("Hotel Guest", hotel_guest_name):
 		frappe.throw(_("A guest with the name '{0}' already exists.").format(hotel_guest_name))
 
+	phone_number = validate_phone_number(phone_number, label=_("Phone Number"), required=True)
+	contact_number = validate_phone_number(contact_number, label=_("Contact Person Number"))
+
 	doc = frappe.new_doc("Hotel Guest")
 	doc.hotel_guest_name = hotel_guest_name
 	doc.guest_type = guest_type or "Individual"
@@ -334,6 +338,11 @@ def update_guest(
 
 	doc = frappe.get_doc("Hotel Guest", name)
 
+	if phone_number is not None:
+		phone_number = validate_phone_number(phone_number, label=_("Phone Number"), required=True)
+	if contact_number is not None:
+		contact_number = validate_phone_number(contact_number, label=_("Contact Person Number"))
+
 	# hotel_guest_name is handled separately below (rename logic)
 	if guest_type is not None:
 		doc.guest_type = guest_type
@@ -379,9 +388,7 @@ def update_guest(
 		doc.hotel_guest_name = name
 		doc.save(ignore_permissions=True)
 		# Now rename: this updates `name` and `hotel_guest_name` atomically
-		frappe.rename_doc("Hotel Guest", name, new_name, ignore_permissions=True, merge=False)
-		# Update the field on the renamed doc
-		frappe.db.set_value("Hotel Guest", new_name, "hotel_guest_name", new_name)
+		frappe.rename_doc("Hotel Guest", name, new_name, force=True, merge=False)
 		# Also update the linked Customer display name
 		customer = frappe.db.get_value("Hotel Guest", new_name, "customer")
 		if customer:
@@ -390,9 +397,9 @@ def update_guest(
 			except Exception:
 				pass
 		frappe.db.commit()
-		return {"name": new_name, "hotel_guest_name": new_name}
+		return get_guest(new_name)
 
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 
-	return {"name": doc.name, "hotel_guest_name": doc.hotel_guest_name}
+	return get_guest(doc.name)

@@ -269,6 +269,13 @@
           <p class="text-xs text-gray-500 mb-1.5">Discount</p>
           <input v-model.number="form.discount" type="number" min="0" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
         </div>
+        <div v-if="isSplitGroup" class="flex items-end">
+          <button
+            type="button"
+            @click="distributeSplitDiscount"
+            class="w-full px-3 py-2.5 text-xs font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50"
+          >Distribute</button>
+        </div>
       </div>
 
       <div class="mt-4 overflow-x-auto border border-gray-100 rounded-lg">
@@ -281,13 +288,14 @@
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Meal Plan</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate/Night</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Nights</th>
+              <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Discount</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Total</th>
               <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Action</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="selectedRooms.length === 0">
-              <td colspan="8" class="px-3 py-4 text-center text-xs text-gray-300">No rooms selected</td>
+              <td colspan="9" class="px-3 py-4 text-center text-xs text-gray-300">No rooms selected</td>
             </tr>
             <tr v-for="room in selectedRooms" :key="room.name" class="border-t border-gray-100">
               <td class="px-3 py-2 text-xs text-gray-700">{{ room.name }}</td>
@@ -296,7 +304,17 @@
               <td class="px-3 py-2 text-xs text-gray-500">{{ room.meal_plan_snapshot || '—' }}</td>
               <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(room.rate_per_night) }}</td>
               <td class="px-3 py-2 text-xs text-gray-700">{{ nightsCount }}</td>
-              <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(room.rate_per_night * nightsCount) }}</td>
+              <td class="px-3 py-2 text-xs text-gray-700">
+                <input
+                  v-model.number="room.discount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  @input="syncRoomTotal(room)"
+                  class="w-24 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </td>
+              <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(getRoomAmount(room)) }}</td>
               <td class="px-3 py-2 text-xs">
                 <button @click="removeRoom(room.name)" class="text-red-500 hover:text-red-600">Remove</button>
               </td>
@@ -307,7 +325,7 @@
     </div>
 
     <!-- Group Room Blocks -->
-    <div v-if="reservationType === 'Group'" class="bg-white rounded-xl border border-amber-200 p-5">
+    <div v-if="reservationType === 'Group' && roomBlocksEnabled" class="bg-white rounded-xl border border-amber-200 p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-sm font-bold text-gray-900">Room Blocks</h3>
         <button @click="addRoomBlock" type="button" class="px-3 py-1.5 text-xs font-medium text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-50">+ Add Block</button>
@@ -441,6 +459,23 @@ const roomPickerRef = ref(null)
 const selectedRateCode = ref('')
 const eligibleRateCodes = ref([])
 const roomBlocks = ref([])
+const roomBlocksEnabled = ref(false)
+const preselectedRoomName = ref(String(route.query.room || '').trim())
+const preselectedRoomAdded = ref(false)
+const isSplitGroup = computed(() => reservationType.value === 'Group' && form.value.group_billing_mode === 'Split')
+
+if (String(route.query.room_type || '').trim()) {
+  selectedRoomType.value = String(route.query.room_type).trim()
+}
+
+if (preselectedRoomName.value) {
+  roomSearch.value = preselectedRoomName.value
+  const today = new Date()
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  form.value.from_date = String(route.query.from_date || formatISODate(today))
+  form.value.to_date = String(route.query.to_date || formatISODate(tomorrow))
+}
 
 // Customer search for group master payer
 const customerSearch = ref('')
@@ -463,6 +498,22 @@ async function loadCustomers() {
     })
     allCustomers.value = Array.isArray(rows) ? rows : []
   } catch { allCustomers.value = [] }
+}
+
+async function loadReservationFeatureSettings() {
+  try {
+    const enabled = await callMethod(
+      'rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings.are_group_room_blocks_enabled',
+      {},
+    )
+    roomBlocksEnabled.value = Boolean(enabled)
+    if (!roomBlocksEnabled.value) {
+      roomBlocks.value = []
+    }
+  } catch {
+    roomBlocksEnabled.value = false
+    roomBlocks.value = []
+  }
 }
 
 function onCustomerSearch() {
@@ -521,6 +572,7 @@ onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside)
   document.addEventListener('mousedown', handleCustomerClickOutside)
   window.addEventListener('focus', loadCustomers)
+  loadReservationFeatureSettings()
   loadCustomers()
 })
 onUnmounted(() => {
@@ -638,8 +690,52 @@ function getRoomDiscount(room) {
 function getRoomAmount(room) {
   const rate = getRoomRate(room)
   const discount = getRoomDiscount(room)
-  const fallbackAmount = (rate * nightsCount.value) - discount
+  const fallbackAmount = Math.max(0, (rate * nightsCount.value) - discount)
   return Number(room?.room_total ?? room?.total_amount ?? room?.amount ?? fallbackAmount)
+}
+
+function syncRoomTotal(room) {
+  if (!room) return
+  const gross = getRoomRate(room) * nightsCount.value
+  const discount = Math.min(Math.max(Number(room.discount || 0), 0), gross)
+  room.discount = Number(discount.toFixed(2))
+  room.room_total = Number(Math.max(0, gross - discount).toFixed(2))
+}
+
+function calculateDiscountAmount(baseTotal = subTotal.value) {
+  const discount = Number(form.value.discount || 0)
+  if (!discount || !form.value.discount_type) return 0
+  if (form.value.discount_type === 'Percentage') return Math.min(baseTotal, (baseTotal * discount) / 100)
+  return Math.min(baseTotal, discount)
+}
+
+function distributeSplitDiscount() {
+  if (!isSplitGroup.value || selectedRooms.value.length === 0) return
+
+  const grossRows = selectedRooms.value.map((room) => ({
+    room,
+    gross: Number((getRoomRate(room) * nightsCount.value).toFixed(2)),
+  }))
+  const totalGross = grossRows.reduce((sum, row) => sum + row.gross, 0)
+  const totalDiscount = Number(calculateDiscountAmount(totalGross).toFixed(2))
+  let allocated = 0
+
+  grossRows.forEach((entry, index) => {
+    let roomDiscount = 0
+    if (totalDiscount > 0) {
+      if (index === grossRows.length - 1) {
+        roomDiscount = totalDiscount - allocated
+      } else if (totalGross > 0) {
+        roomDiscount = Number(((totalDiscount * entry.gross) / totalGross).toFixed(2))
+      } else {
+        roomDiscount = Number((totalDiscount / grossRows.length).toFixed(2))
+      }
+    }
+    roomDiscount = Math.min(Math.max(roomDiscount, 0), entry.gross)
+    allocated += roomDiscount
+    entry.room.discount = Number(roomDiscount.toFixed(2))
+    syncRoomTotal(entry.room)
+  })
 }
 
 function getPricedRoomRate(room) {
@@ -664,13 +760,20 @@ async function resolveRateForRoom(room) {
 }
 
 const subTotal = computed(() => selectedRooms.value.reduce((acc, room) => acc + (getRoomRate(room) * nightsCount.value), 0))
-const discountAmount = computed(() => {
-  const discount = Number(form.value.discount || 0)
-  if (!discount || !form.value.discount_type) return 0
-  if (form.value.discount_type === 'Percentage') return (subTotal.value * discount) / 100
-  return discount
-})
-const grandTotal = computed(() => Math.max(0, subTotal.value - discountAmount.value))
+const roomDiscountTotal = computed(() => selectedRooms.value.reduce((sum, room) => sum + getRoomDiscount(room), 0))
+const discountAmount = computed(() => (isSplitGroup.value ? roomDiscountTotal.value : calculateDiscountAmount()))
+const grandTotal = computed(() => (
+  isSplitGroup.value
+    ? selectedRooms.value.reduce((sum, room) => sum + getRoomAmount(room), 0)
+    : Math.max(0, subTotal.value - discountAmount.value)
+))
+
+watch(
+  () => [isSplitGroup.value, form.value.discount_type, form.value.discount, selectedRooms.value.length, subTotal.value, nightsCount.value],
+  () => {
+    if (isSplitGroup.value) distributeSplitDiscount()
+  },
+)
 
 watch(
   () => [form.value.from_date, form.value.to_date, selectedRoomType.value, selectedRateCode.value],
@@ -717,9 +820,29 @@ async function loadAvailableRooms() {
       rate_code: selectedRateCode.value || undefined,
     })
     availableRooms.value = Array.isArray(rows) ? rows : []
+    await applyPreselectedRoom()
   } catch {
     availableRooms.value = []
   }
+}
+
+async function applyPreselectedRoom() {
+  if (!preselectedRoomName.value || preselectedRoomAdded.value) return
+  if (!form.value.from_date || !form.value.to_date || nightsCount.value < 1) return
+
+  const room = availableRooms.value.find((r) =>
+    r.name === preselectedRoomName.value || r.room_number === preselectedRoomName.value
+  )
+  if (!room) {
+    roomSearch.value = preselectedRoomName.value
+    return
+  }
+
+  if (!selectedRooms.value.some((r) => r.name === room.name)) {
+    selectedRoom.value = [room.name]
+    await addRoom()
+  }
+  preselectedRoomAdded.value = true
 }
 
 async function addRoom() {
@@ -820,7 +943,7 @@ function validateForm() {
   if (reservationType.value === 'Corporate' && !form.value.corporate_guest) return 'Corporate reservation requires a corporate guest.'
   if (reservationType.value === 'Group') {
     if (!form.value.primary_guest_name) return 'Group contact name is required.'
-    if (selectedRooms.value.length === 0 && roomBlocks.value.length === 0) return 'Add at least one room or room block for a Group reservation.'
+    if (selectedRooms.value.length === 0 && (!roomBlocksEnabled.value || roomBlocks.value.length === 0)) return 'Add at least one room for a Group reservation.'
     if (form.value.group_billing_mode === 'Central' && !form.value.group_master_customer) return 'A master payer customer is required for Central billing mode.'
     return ''
   }
@@ -852,6 +975,10 @@ async function saveReservation(submitAfterSave) {
       ? (selectedBooker.value?.name === form.value.corporate_guest ? selectedBooker.value : corporateGuests.value.find((g) => g.name === form.value.corporate_guest))
       : (selectedBooker.value?.name === form.value.individual_guest ? selectedBooker.value : individualGuests.value.find((g) => g.name === form.value.individual_guest))
 
+    const parentDiscountType = isSplitGroup.value ? undefined : (form.value.discount_type || undefined)
+    const parentDiscount = isSplitGroup.value ? 0 : Number(form.value.discount || 0)
+    const parentDiscountAmount = isSplitGroup.value ? 0 : Number(discountAmount.value || 0)
+
     const doc = {
       doctype: 'Hotel Reservation',
       source_channel: form.value.source_channel || '',
@@ -877,10 +1004,10 @@ async function saveReservation(submitAfterSave) {
       comp_reason: (reservationType.value === 'House Use' || reservationType.value === 'Complimentary') ? form.value.comp_reason : undefined,
       internal_cost_center: (reservationType.value === 'House Use' || reservationType.value === 'Complimentary') ? form.value.internal_cost_center : undefined,
       // Pricing
-      discount_type: form.value.discount_type || undefined,
-      discount: Number(form.value.discount || 0),
+      discount_type: parentDiscountType,
+      discount: parentDiscount,
       subtotal: Number(subTotal.value || 0),
-      discount_amount: Number(discountAmount.value || 0),
+      discount_amount: parentDiscountAmount,
       total_amount: Number(grandTotal.value || 0),
       net_total: Number(grandTotal.value || 0),
       rooms: selectedRooms.value.map((room) => ({
@@ -896,7 +1023,7 @@ async function saveReservation(submitAfterSave) {
         occupant_email: form.value.primary_guest_email,
         occupant_phone: form.value.primary_guest_phone,
       })),
-      room_blocks: reservationType.value === 'Group' ? roomBlocks.value.filter((b) => b.room_type && b.quantity > 0).map((b) => ({
+      room_blocks: (reservationType.value === 'Group' && roomBlocksEnabled.value) ? roomBlocks.value.filter((b) => b.room_type && b.quantity > 0).map((b) => ({
         room_type: b.room_type,
         quantity: b.quantity,
         rate_code: b.rate_code || undefined,
@@ -932,5 +1059,12 @@ async function saveReservation(submitAfterSave) {
 
 function formatCurrency(amount) {
   return `₦${Number(amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+}
+
+function formatISODate(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 </script>

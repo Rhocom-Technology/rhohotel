@@ -39,17 +39,23 @@
         </div>
 
         <div class="flex items-center gap-2 flex-wrap mt-4">
-          <button v-if="reservation.docstatus === 0" :disabled="actionLoading" @click="emit('submit-reservation')"
+          <button v-if="reservation.docstatus === 0" :disabled="actionLoading || isCancelled" @click="emit('submit-reservation')"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">Submit Reservation</button>
-          <button @click="showPaymentModal = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
-          <button v-if="!hasAnyCheckedIn" @click="showAdjustModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Adjust Reservation</button>
-          <button @click="changeRoomTargetRoom = ''; showChangeRoomModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Change Room</button>
+          <button :disabled="actionLoading || isCancelled" @click="!isCancelled && (showPaymentModal = true)" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Receive Payment</button>
+          <button
+            v-if="hasTransferableInvoices"
+            :disabled="actionLoading || isCancelled"
+            @click="!isCancelled && (showBillTransferModal = true)"
+            class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >Bill Transfer</button>
+          <button v-if="!hasAnyCheckedIn" :disabled="actionLoading || isCancelled" @click="!isCancelled && (showAdjustModal = true)" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Adjust Reservation</button>
+          <button v-if="!hasAnyCheckedIn" :disabled="actionLoading || isCancelled" @click="openChangeRoomModal" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Change Room</button>
           <button v-if="showTopCreateInvoice"
-            :disabled="actionLoading" @click="emit('create-invoice')"
+            :disabled="actionLoading || isCancelled" @click="emit('create-invoice')"
             class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40">Create Invoice</button>
           <button
             v-if="showTopSplitBulkInvoice"
-            :disabled="actionLoading"
+            :disabled="actionLoading || isCancelled"
             @click="emit('create-invoice')"
             class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-40"
           >Create Invoices (Pending Guests)</button>
@@ -67,7 +73,7 @@
             class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40"
           >Bulk Check In</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
-          <button v-if="!isCancelled" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
+          <button v-if="!isCancelled && !hasAnyCheckedIn" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
           <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
         </div>
       </div>
@@ -77,15 +83,15 @@
          
           <div class="px-6">
             <p class="text-xs text-gray-400 mb-1">Subtotal</p>
-            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(reservation.subtotal) }}</p>
+            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(displaySubtotal) }}</p>
           </div>
           <div class="px-6">
             <p class="text-xs text-gray-400 mb-1">Discount</p>
-            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(reservation.discount_amount) }}</p>
+            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(displayDiscountAmount) }}</p>
           </div>
            <div class="pr-6">
             <p class="text-xs text-gray-400 mb-1">Grand Total</p>
-            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(reservation.total_amount) }}</p>
+            <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(displayGrandTotal) }}</p>
           </div>
           <div class="pl-6">
             <p class="text-xs text-gray-400 mb-1">Paid Amount</p>
@@ -103,24 +109,70 @@
           <h3 class="text-sm font-bold text-gray-900">Reserved Rooms</h3>
           <button v-if="canTopBulkCheckIn" @click="openBulkCheckInPicker" class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Bulk Check In</button>
         </div>
+        <div v-if="canModifyReservation && isSplitGroup && hasDiscountEditableRows" class="mb-3 flex flex-wrap items-end gap-2">
+          <label class="flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              :checked="allDiscountRoomsSelected"
+              :disabled="actionLoading"
+              class="accent-blue-600"
+              @change="toggleAllDiscountRooms($event.target.checked)"
+            />
+            Select all
+          </label>
+          <div>
+            <p class="mb-1 text-xs text-gray-500">Discount Type</p>
+            <select v-model="distributionDiscountType" :disabled="actionLoading" class="w-36 rounded border border-gray-200 px-2 py-2 text-xs focus:outline-none disabled:bg-gray-50 disabled:text-gray-400">
+              <option>Fixed Amount</option>
+              <option>Percentage</option>
+            </select>
+          </div>
+          <div>
+            <p class="mb-1 text-xs text-gray-500">Discount</p>
+            <input
+              v-model.number="distributionDiscount"
+              type="number"
+              min="0"
+              step="0.01"
+              class="w-28 rounded border border-gray-200 px-2 py-2 text-xs focus:outline-none"
+              :disabled="actionLoading"
+            />
+          </div>
+          <button
+            :disabled="actionLoading || selectedDiscountRoomNames.length === 0"
+            @click="distributeRoomDiscount"
+            class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >Distribute</button>
+        </div>
         <div class="overflow-x-auto border border-gray-100 rounded-lg">
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr>
+                <th v-if="isSplitGroup" class="text-left text-xs font-medium text-gray-500 px-3 py-2">Select</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Room</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Type</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate / Plan</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Guest</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Rate/Night</th>
+                <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Discount</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Total</th>
                 <th class="text-left text-xs font-medium text-gray-500 px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="rooms.length === 0">
-                <td colspan="7" class="px-3 py-4 text-center text-xs text-gray-300">No room rows found.</td>
+                <td :colspan="isSplitGroup ? 9 : 8" class="px-3 py-4 text-center text-xs text-gray-300">No room rows found.</td>
               </tr>
               <tr v-for="row in rooms" :key="row.name || row.idx" class="border-t border-gray-100">
+                <td v-if="isSplitGroup" class="px-3 py-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    :checked="selectedDiscountRoomNames.includes(row.name)"
+                    :disabled="isRowInvoiced(row)"
+                    class="accent-blue-600"
+                    @change="toggleDiscountRoom(row.name, $event.target.checked)"
+                  />
+                </td>
                 <td class="px-3 py-2 text-xs text-gray-700">
                   <button
                     v-if="row.check_in_reference"
@@ -130,12 +182,12 @@
                   <span v-else>{{ row.room_number || '—' }}</span>
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ row.room_type || '—' }}</td>
-                <td class="px-3 py-2 text-xs text-gray-500 text-right">
+                <td class="px-3 py-2 text-xs text-gray-500 text-left">
                   <span v-if="row.rate_code" class="inline-flex items-center px-1.5 py-0.5 text-xs bg-blue-50 text-blue-600 rounded border border-blue-100">{{ row.rate_code }}</span>
                   <span v-if="row.meal_plan_snapshot" class="ml-1 inline-flex items-center px-1.5 py-0.5 text-xs bg-green-50 text-green-600 rounded border border-green-100">{{ row.meal_plan_snapshot }}</span>
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">
-                  <template v-if="isRoomCheckedIn(row) || (reservation.docstatus === 1 && reservation.reservation_type === 'Individual')">
+                  <template v-if="isCancelled || isRoomCheckedIn(row) || (reservation.docstatus === 1 && reservation.reservation_type === 'Individual')">
                     <span class="text-xs text-gray-700">{{ row.occupant_name || row.guest_name || reservation.primary_guest_name || '—' }}</span>
                   </template>
                   <GuestSelector
@@ -147,10 +199,36 @@
                   />
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.rate_per_night) }}</td>
-                <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(row.room_total) }}</td>
+                <td class="px-3 py-2 text-xs text-gray-700 min-w-[150px]">
+                  <div v-if="canModifyReservation && isSplitGroup && !isRowInvoiced(row)" class="flex items-center gap-1">
+                    <input
+                      v-model.number="row.discount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      :disabled="props.actionLoading || isRowInvoiced(row)"
+                      class="w-24 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      :disabled="props.actionLoading || isRowInvoiced(row)"
+                      @click="saveRoomDiscount(row)"
+                      class="px-2 py-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 disabled:opacity-50"
+                    >{{ props.actionLoading ? 'Saving' : 'Apply' }}</button>
+                  </div>
+                  <div v-else-if="isSplitGroup" class="flex items-center gap-2">
+                    <span>{{ formatCurrency(row.discount || 0) }}</span>
+                    <span class="inline-flex px-1.5 py-0.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 rounded">Invoiced</span>
+                  </div>
+                  <span v-else>{{ formatCurrency(displayRoomDiscount(row)) }}</span>
+                </td>
+                <td class="px-3 py-2 text-xs text-gray-700">{{ formatCurrency(displayRoomTotal(row)) }}</td>
                 <td class="px-3 py-2 text-xs text-gray-700">
                   <div class="flex flex-col gap-1">
-                    <template v-if="isRoomCheckedIn(row)">
+                    <span
+                      v-if="isCancelled"
+                      class="inline-flex px-2 py-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded"
+                    >Cancelled</span>
+                    <template v-else-if="isRoomCheckedIn(row)">
                       <button
                         v-if="row.check_in_reference"
                         @click="goCheckOut(row)"
@@ -167,12 +245,8 @@
                       >View Check In</button>
                     </template>
                     <button v-else-if="canCheckInReservation" @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
-                    <span
-                      v-else-if="isCancelled"
-                      class="inline-flex px-2 py-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded"
-                    >Cancelled</span>
                     <!-- Per-room invoice for Group Split billing -->
-                    <template v-if="isSplitGroup">
+                    <template v-if="canModifyReservation && isSplitGroup">
                       <span
                         v-if="isRowInvoiced(row)"
                         class="inline-flex px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded"
@@ -349,7 +423,17 @@
             </thead>
             <tbody>
               <tr v-for="invoice in invoiceLedger" :key="invoice.name" class="border-t border-gray-100">
-                <td class="px-3 py-2 text-xs text-gray-800 font-medium">{{ invoice.name || '—' }}</td>
+                <td class="px-3 py-2 text-xs">
+                  <button
+                    v-if="invoice.name"
+                    type="button"
+                    class="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    @click="openInvoiceDetail(invoice)"
+                  >
+                    {{ invoice.name }}
+                  </button>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
                 <td class="px-3 py-2 text-xs" :class="invoice.is_return ? 'text-teal-600 font-semibold' : 'text-gray-600'">
                   {{ invoice.invoice_type || (invoice.is_return ? 'Credit Note' : 'Invoice') }}
                 </td>
@@ -370,7 +454,7 @@
     </template>
 
     <Teleport to="body">
-      <div v-if="showAdjustModal" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
+      <div v-if="showAdjustModal && canModifyReservation" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
         <div class="min-h-screen flex items-start justify-center py-8 px-4">
           <div class="bg-white rounded-2xl shadow-2xl w-full" style="max-width:900px;">
             <StayAdjustment 
@@ -385,7 +469,7 @@
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="showChangeRoomModal" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
+      <div v-if="showChangeRoomModal && canModifyReservation" class="fixed inset-0 z-50 overflow-y-auto" style="background:rgba(0,0,0,0.55);">
         <div class="min-h-screen flex items-start justify-center py-8 px-4">
           <div class="bg-white rounded-2xl shadow-2xl w-full" style="max-width:900px;">
             <ChangeRoom :reservation="reservation" :preselected-room="changeRoomTargetRoom" @close="showChangeRoomModal = false" @done="handleModalDone" />
@@ -395,10 +479,17 @@
     </Teleport>
 
     <ReceivePaymentModal
-      v-if="showPaymentModal"
+      v-if="showPaymentModal && canModifyReservation"
       :reservation="reservation"
       @close="showPaymentModal = false"
       @done="handlePaymentDone"
+    />
+
+    <BillTransferModal
+      v-if="showBillTransferModal && canModifyReservation"
+      :reservation="reservation"
+      @close="showBillTransferModal = false"
+      @done="handleBillTransferDone"
     />
 
     <PrintReservationModal
@@ -406,6 +497,13 @@
       :reservation="reservation"
       @close="showPrintModal = false"
       @done="handleModalDone"
+    />
+
+    <InvoiceDetailModal
+      v-if="showInvoiceDetail && selectedInvoice"
+      :invoiceName="selectedInvoice.name"
+      :invoiceType="selectedInvoice.invoice_type || (selectedInvoice.is_return ? 'Credit Note' : 'Sales Invoice')"
+      @close="showInvoiceDetail = false; selectedInvoice = null"
     />
 
     <Teleport to="body">
@@ -461,13 +559,15 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import StayAdjustment from '@/components/reservations/StayAdjustment.vue'
 import ChangeRoom from '@/components/reservations/ChangeRoom.vue'
 import ReceivePaymentModal from '@/components/reservations/ReceivePaymentModal.vue'
+import BillTransferModal from '@/components/reservations/BillTransferModal.vue'
 import PrintReservationModal from '@/components/reservations/PrintReservationModal.vue'
 import GuestSelector from '@/components/reservations/GuestSelector.vue'
+import InvoiceDetailModal from '@/components/checkin/InvoiceDetailModal.vue'
 import { callMethod } from '@/lib/api'
 
 const router = useRouter()
@@ -487,6 +587,8 @@ const emit = defineEmits([
   'bulk-check-in',
   'update-room',
   'update-occupant',
+  'update-room-discount',
+  'distribute-room-discount',
   'cancel-reservation',
   'create-invoice',
   'submit-reservation',
@@ -496,7 +598,10 @@ const showAdjustModal = ref(false)
 const showChangeRoomModal = ref(false)
 const changeRoomTargetRoom = ref('')
 const showPaymentModal = ref(false)
+const showBillTransferModal = ref(false)
 const showPrintModal = ref(false)
+const showInvoiceDetail = ref(false)
+const selectedInvoice = ref(null)
 const printFormat = ref('summary')
 const showCheckInToast = ref(false)
 const checkInToastMessage = ref('')
@@ -504,13 +609,25 @@ const showPaymentToast = ref(false)
 const paymentToastMessage = ref('')
 const showBulkCheckInPicker = ref(false)
 const selectedBulkRoomNames = ref([])
+const selectedDiscountRoomNames = ref([])
+const distributionDiscountType = ref('Fixed Amount')
+const distributionDiscount = ref(0)
 
 function handleModalDone() {
   showAdjustModal.value = false
   showChangeRoomModal.value = false
   showPaymentModal.value = false
+  showBillTransferModal.value = false
   showPrintModal.value = false
+  showInvoiceDetail.value = false
+  selectedInvoice.value = null
   emit('refresh')
+}
+
+function openInvoiceDetail(invoice) {
+  if (!invoice?.name) return
+  selectedInvoice.value = invoice
+  showInvoiceDetail.value = true
 }
 
 function handlePaymentDone() {
@@ -522,17 +639,78 @@ function handlePaymentDone() {
   }, 3200)
 }
 
+function handleBillTransferDone() {
+  handleModalDone()
+  paymentToastMessage.value = 'Bill transfer completed successfully.'
+  showPaymentToast.value = true
+  setTimeout(() => {
+    showPaymentToast.value = false
+  }, 3200)
+}
+
 const rooms = computed(() => props.reservation?.rooms || [])
 const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn(row)))
 const hasAnyCheckedIn = computed(() => rooms.value.some((row) => isRoomCheckedIn(row)))
 const isCancelled = computed(() => Number(props.reservation?.docstatus || 0) === 2 || String(props.reservation?.status || props.reservation?.reservation_status || '').toLowerCase() === 'cancelled')
-const canCheckInReservation = computed(() => Number(props.reservation?.docstatus || 0) === 1 && !isCancelled.value && pendingRooms.value.length > 0)
+const canModifyReservation = computed(() => !isCancelled.value)
+const canCheckInReservation = computed(() => canModifyReservation.value && Number(props.reservation?.docstatus || 0) === 1 && pendingRooms.value.length > 0)
 const canSingleTopCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length === 1)
 const canTopBulkCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length > 1)
 const singleTopCheckInRoom = computed(() => (canSingleTopCheckIn.value ? pendingRooms.value[0] : null))
 const reservationType = computed(() => String(props.reservation?.reservation_type || '').trim().toLowerCase())
 const groupBillingMode = computed(() => String(props.reservation?.group_billing_mode || '').trim().toLowerCase())
 const isSplitGroup = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('split'))
+const splitRoomDiscountTotal = computed(() =>
+  rooms.value.reduce((sum, row) => sum + Number(row?.discount || 0), 0)
+)
+const splitRoomNetTotal = computed(() =>
+  rooms.value.reduce((sum, row) => sum + Number(row?.room_total || 0), 0)
+)
+const splitRoomGrossTotal = computed(() =>
+  rooms.value.reduce((sum, row) => {
+    const roomTotal = Number(row?.room_total || 0)
+    const discount = Number(row?.discount || 0)
+    return sum + roomTotal + discount
+  }, 0)
+)
+const reservationRoomSubtotal = computed(() =>
+  rooms.value.reduce((sum, row) => sum + Number(row?.room_total || 0), 0)
+)
+const reservationLevelDiscountAmount = computed(() =>
+  isSplitGroup.value ? 0 : Number(props.reservation?.discount_amount || 0)
+)
+const displayDiscountAmount = computed(() =>
+  isSplitGroup.value ? splitRoomDiscountTotal.value : Number(props.reservation?.discount_amount || 0)
+)
+const displaySubtotal = computed(() =>
+  isSplitGroup.value ? splitRoomGrossTotal.value : Number(props.reservation?.subtotal || 0)
+)
+const displayGrandTotal = computed(() =>
+  isSplitGroup.value ? splitRoomNetTotal.value : Number(props.reservation?.total_amount || props.reservation?.net_total || 0)
+)
+const allDiscountRoomsSelected = computed(() => {
+  const roomNames = discountEditableRooms.value.map((row) => row?.name).filter(Boolean)
+  return roomNames.length > 0 && roomNames.every((name) => selectedDiscountRoomNames.value.includes(name))
+})
+
+function allocatedReservationDiscount(row) {
+  if (isSplitGroup.value) return 0
+  const total = Number(reservationRoomSubtotal.value || 0)
+  const discount = Number(reservationLevelDiscountAmount.value || 0)
+  if (total <= 0 || discount <= 0) return 0
+  const rowTotal = Math.max(0, Number(row?.room_total || 0))
+  return Math.min(rowTotal, (discount * rowTotal) / total)
+}
+
+function displayRoomDiscount(row) {
+  return Number(row?.discount || 0) + allocatedReservationDiscount(row)
+}
+
+function displayRoomTotal(row) {
+  if (isSplitGroup.value) return Number(row?.room_total || 0)
+  return Math.max(0, Number(row?.room_total || 0) - allocatedReservationDiscount(row))
+}
+
 const invoiceLedger = computed(() => {
   const reservationInvoices = Array.isArray(props.reservation?.reservation_invoices)
     ? props.reservation.reservation_invoices
@@ -543,9 +721,23 @@ const invoiceLedger = computed(() => {
   return reservationInvoices.length ? reservationInvoices : fallbackInvoices
 })
 
+const hasTransferableInvoices = computed(() =>
+  invoiceLedger.value.some((invoice) => !Number(invoice?.is_return || 0) && Number(invoice?.outstanding_amount || 0) > 0)
+)
+
 const splitInvoiceLedgerCount = computed(() => invoiceLedger.value
   .filter((invoice) => Number(invoice?.is_return || 0) === 0)
   .length)
+
+const invoicedRoomKeys = computed(() => {
+  const keys = new Set()
+  for (const invoice of invoiceLedger.value) {
+    if (Number(invoice?.is_return || 0)) continue
+    if (invoice?.room_row) keys.add(String(invoice.room_row))
+    if (invoice?.room_number) keys.add(String(invoice.room_number))
+  }
+  return keys
+})
 
 const allSplitRoomsInvoicedByLedger = computed(() => {
   if (!isSplitGroup.value || rooms.value.length === 0) return false
@@ -555,17 +747,52 @@ const allSplitRoomsInvoicedByLedger = computed(() => {
 const invoicedRowNames = reactive(new Set())
 function isRowInvoiced(row) {
   if (allSplitRoomsInvoicedByLedger.value) return true
-  return Boolean(row?.split_invoice || row?.sales_invoice) || invoicedRowNames.has(row?.name)
+  return Boolean(row?.split_invoice || row?.sales_invoice)
+    || invoicedRowNames.has(row?.name)
+    || invoicedRoomKeys.value.has(String(row?.name || ''))
+    || invoicedRoomKeys.value.has(String(row?.room_number || ''))
 }
+const discountEditableRooms = computed(() => (isSplitGroup.value ? rooms.value.filter((row) => !isRowInvoiced(row)) : []))
+const hasDiscountEditableRows = computed(() => discountEditableRooms.value.length > 0)
 const splitInvoicePendingRooms = computed(() => (isSplitGroup.value ? rooms.value.filter((row) => !isRowInvoiced(row)) : []))
-const showTopCreateInvoice = computed(() => !isSplitGroup.value && !props.reservation?.sales_invoice && Number(props.reservation?.docstatus || 0) === 1)
-const showTopSplitBulkInvoice = computed(() => isSplitGroup.value && Number(props.reservation?.docstatus || 0) === 1 && splitInvoicePendingRooms.value.length > 0)
+const showTopCreateInvoice = computed(() => canModifyReservation.value && !isSplitGroup.value && !props.reservation?.sales_invoice && Number(props.reservation?.docstatus || 0) === 1)
+const showTopSplitBulkInvoice = computed(() => canModifyReservation.value && isSplitGroup.value && Number(props.reservation?.docstatus || 0) === 1 && splitInvoicePendingRooms.value.length > 0)
+
+watch(
+  rooms,
+  () => {
+    if (!isSplitGroup.value) {
+      selectedDiscountRoomNames.value = []
+      return
+    }
+    const names = discountEditableRooms.value.map((row) => row?.name).filter(Boolean)
+    selectedDiscountRoomNames.value = selectedDiscountRoomNames.value.length
+      ? selectedDiscountRoomNames.value.filter((name) => names.includes(name))
+      : names
+  },
+  { immediate: true },
+)
+
+watch(isCancelled, (cancelled) => {
+  if (!cancelled) return
+  showAdjustModal.value = false
+  showChangeRoomModal.value = false
+  showPaymentModal.value = false
+  showBillTransferModal.value = false
+  showBulkCheckInPicker.value = false
+})
 
 const splitInvoiceLoading = ref(null)
 const splitInvoiceError = ref('')
 
+function openChangeRoomModal() {
+  if (!canModifyReservation.value || hasAnyCheckedIn.value) return
+  changeRoomTargetRoom.value = ''
+  showChangeRoomModal.value = true
+}
+
 async function createSplitInvoice(row) {
-  if (!row?.name || row?.split_invoice || splitInvoiceLoading.value) return
+  if (!canModifyReservation.value || !row?.name || row?.split_invoice || splitInvoiceLoading.value) return
   splitInvoiceLoading.value = row.name
   splitInvoiceError.value = ''
   try {
@@ -581,6 +808,42 @@ async function createSplitInvoice(row) {
   } finally {
     splitInvoiceLoading.value = null
   }
+}
+
+function saveRoomDiscount(row) {
+  if (!canModifyReservation.value || !row?.name || props.actionLoading || isRowInvoiced(row)) return
+  emit('update-room-discount', { row })
+}
+
+function toggleDiscountRoom(roomName, checked) {
+  if (!roomName) return
+  const room = rooms.value.find((row) => row?.name === roomName)
+  if (isRowInvoiced(room)) return
+  if (checked) {
+    if (!selectedDiscountRoomNames.value.includes(roomName)) {
+      selectedDiscountRoomNames.value = [...selectedDiscountRoomNames.value, roomName]
+    }
+    return
+  }
+  selectedDiscountRoomNames.value = selectedDiscountRoomNames.value.filter((name) => name !== roomName)
+}
+
+function toggleAllDiscountRooms(checked) {
+  selectedDiscountRoomNames.value = checked
+    ? discountEditableRooms.value.map((row) => row?.name).filter(Boolean)
+    : []
+}
+
+function distributeRoomDiscount() {
+  if (!canModifyReservation.value || !isSplitGroup.value || props.actionLoading || selectedDiscountRoomNames.value.length === 0) return
+  const editableNames = new Set(discountEditableRooms.value.map((row) => row?.name).filter(Boolean))
+  const roomRowNames = selectedDiscountRoomNames.value.filter((name) => editableNames.has(name))
+  if (roomRowNames.length === 0) return
+  emit('distribute-room-discount', {
+    discount: Number(distributionDiscount.value || 0),
+    discount_type: distributionDiscountType.value || 'Fixed Amount',
+    room_row_names: roomRowNames,
+  })
 }
 
 function getPaymentValue(payment) {
@@ -630,15 +893,18 @@ function formatCurrency(amount) {
 }
 
 function updateRoom(row) {
+  if (!canModifyReservation.value) return
   // Logic to update room and recalculate rate
   emit('update-room', row);
 }
 
 function updateOccupant(row) {
+  if (!canModifyReservation.value) return
   emit('update-occupant', { row })
 }
 
 function onGuestSelected(row, guest) {
+  if (!canModifyReservation.value) return
   row.occupant_name = guest.hotel_guest_name
   row.guest_name = guest.hotel_guest_name
   row.hotel_guest = guest.name
@@ -661,7 +927,7 @@ function goCheckInDetail(row) {
 }
 
 async function checkIn(row) {
-  if (!row || !row.name || isRoomCheckedIn(row)) return
+  if (!canModifyReservation.value || !row || !row.name || isRoomCheckedIn(row)) return
   if (typeof window !== 'undefined') {
     const confirmed = window.confirm(`Check in ${row?.occupant_name || row?.guest_name || row?.room_number || 'this guest'} now?`)
     if (!confirmed) return

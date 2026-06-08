@@ -54,7 +54,7 @@ Pricing totals
 """
 
 from frappe.model.document import Document
-from frappe.utils import date_diff, getdate, now_datetime
+from frappe.utils import date_diff, flt, getdate, now_datetime
 
 import frappe
 from frappe import _
@@ -89,10 +89,32 @@ _ALLOWED_TRANSITIONS = {
 # Statuses where room allocation conflicts must be validated
 _CONFLICT_CHECK_STATUSES = {STATUS_HOLD, STATUS_CONFIRMED, STATUS_CHECKED_IN}
 
+
+def _is_cancelled_reservation(doc):
+    return int(getattr(doc, "docstatus", 0) or 0) == 2 or (getattr(doc, "reservation_status", "") or "") == STATUS_CANCELLED
+
+
+def _assert_reservation_mutable(doc, action=None):
+    if _is_cancelled_reservation(doc):
+        frappe.throw(_("{0} is cancelled and cannot be edited.").format(doc.name))
+
 # Statuses that mean a room is no longer occupied / unavailable
 STATUS_COMPLETED = STATUS_CHECKED_OUT   # alias for readability in queries
 _TERMINAL_STATUSES = {STATUS_CANCELLED, STATUS_COMPLETED, STATUS_NO_SHOW, STATUS_EXPIRED}
 _DEFAULT_HOLD_HOURS = 1
+
+
+def _mark_reservation_room_checked_in(row_name, check_in_reference, check_in_time):
+    frappe.db.set_value(
+        "Hotel Reservation Room",
+        row_name,
+        {
+            "status": STATUS_CHECKED_IN,
+            "check_in_time": check_in_time,
+            "check_in_reference": check_in_reference,
+        },
+        update_modified=False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +150,7 @@ class HotelReservation(Document):
         self._validate_corporate_guest()
         self._validate_house_use_comp()
         self._validate_room_availability()
+        self._distribute_split_parent_discount()
         self._recalculate_room_totals()
         self._recalculate_totals()
         self._recalculate_block_pickup_counts()
@@ -158,6 +181,7 @@ class HotelReservation(Document):
 
         Forces reservation_status to Cancelled and releases rooms.
         """
+        _cancel_reservation_invoices(self)
         self.reservation_status = STATUS_CANCELLED
         self._release_rooms()
 
@@ -230,11 +254,20 @@ class HotelReservation(Document):
         but in practice they typically have explicit room rows.
         """
         if self.reservation_type == "Group":
-            if not self.rooms and not self._child_rows("room_blocks"):
+            room_blocks = self._child_rows("room_blocks")
+            room_blocks_enabled = bool(frappe.db.get_single_value("Hotel Settings", "enable_group_room_blocks"))
+            if room_blocks and not room_blocks_enabled:
                 frappe.throw(
                     _(
-                        "Group reservations require at least one Room Allocation or one Room Block. "
-                        "Add rooms to the Rooms table or define room blocks."
+                        "Room Blocks are disabled in Hotel Settings. "
+                        "Enable Group Room Blocks or remove the room block rows."
+                    )
+                )
+            if not self.rooms and (not room_blocks_enabled or not room_blocks):
+                frappe.throw(
+                    _(
+                        "Group reservations require at least one reserved room. "
+                        "Enable Group Room Blocks in Hotel Settings if you want to create block-only group reservations."
                     )
                 )
         else:
@@ -337,6 +370,59 @@ class HotelReservation(Document):
                         row.rate_type = rate_doc.rate_type or ""
                 except Exception:
                     pass
+
+    def _distribute_split_parent_discount(self):
+        """Move a split-group parent discount into room-level discounts."""
+        reservation_type = (self.reservation_type or "").strip().lower()
+        billing_mode = (self.group_billing_mode or "").strip().lower()
+        if reservation_type != "group" or not billing_mode.startswith("split"):
+            return
+        if not self.rooms or not self.discount_type or not flt(self.discount or 0):
+            return
+
+        nights = date_diff(getdate(self.to_date), getdate(self.from_date)) if self.from_date and self.to_date else 0
+        gross_rows = []
+        for row in self.rooms:
+            gross = max(flt(row.rate_per_night or 0) * nights, 0)
+            gross_rows.append((row, gross))
+
+        total_gross = sum(gross for _row, gross in gross_rows)
+        if total_gross <= 0:
+            return
+
+        if self.discount_type == "Percentage":
+            total_discount = total_gross * min(max(flt(self.discount or 0), 0), 100) / 100
+        elif self.discount_type == "Fixed Amount":
+            total_discount = min(flt(self.discount or 0), total_gross)
+        else:
+            total_discount = 0
+        total_discount = flt(total_discount, 2)
+
+        allocated = 0
+        if self.discount_type == "Fixed Amount":
+            eligible_rows = [(row, gross) for row, gross in gross_rows if gross > 0]
+            if not eligible_rows:
+                return
+            equal_share = flt(total_discount / len(eligible_rows), 2)
+            for idx, (row, gross) in enumerate(eligible_rows):
+                if idx == len(eligible_rows) - 1:
+                    row_discount = total_discount - allocated
+                else:
+                    row_discount = equal_share
+                row.discount = min(max(flt(row_discount, 2), 0), gross)
+                allocated += flt(row.discount or 0)
+        else:
+            for idx, (row, gross) in enumerate(gross_rows):
+                if idx == len(gross_rows) - 1:
+                    row_discount = total_discount - allocated
+                else:
+                    row_discount = flt((total_discount * gross / total_gross) if total_gross else 0, 2)
+                row.discount = min(max(flt(row_discount, 2), 0), gross)
+                allocated += flt(row.discount or 0)
+
+        self.discount_type = ""
+        self.discount = 0
+        self.discount_amount = 0
 
     def _recalculate_totals(self):
         """
@@ -449,6 +535,7 @@ def adjust_reservation(
     new_check_in,
     new_discount_type=None,
     new_discount=None,
+    source_invoice=None,
 ):
     """
     Adjust the arrival and/or departure dates of a submitted Hotel Reservation.
@@ -457,6 +544,11 @@ def adjust_reservation(
     from frappe.utils import getdate, date_diff, flt
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
+    old_room_totals = {row.name: flt(row.room_total or 0) for row in doc.rooms or []}
+    old_room_discounts = {row.name: flt(row.discount or 0) for row in doc.rooms or []}
+    old_subtotal = flt(doc.subtotal or 0)
+    old_discount_amount = flt(doc.discount_amount or 0)
 
     new_from = getdate(new_check_in)
     new_to = getdate(new_checkout)
@@ -487,9 +579,54 @@ def adjust_reservation(
         doc.discount = new_discount
 
     # Recalculate per-room totals and reservation totals using the new night count
+    if _is_group_split_billing(doc):
+        doc._distribute_split_parent_discount()
     doc._recalculate_room_totals()
     doc._recalculate_totals()
     doc.save(ignore_permissions=True)
+
+    invoice_adjustment = None
+    linked_invoice_names = [
+        name for name in _get_reservation_invoice_names(doc) if name
+    ]
+    has_submitted_invoice = any(
+        frappe.db.get_value(
+            "Sales Invoice",
+            {"name": invoice_name, "docstatus": 1},
+            "name",
+        )
+        for invoice_name in set(linked_invoice_names)
+    )
+
+    if has_submitted_invoice:
+        if _is_group_split_billing(doc):
+            created = _adjust_split_invoices_for_reservation(
+                doc,
+                old_room_totals=old_room_totals,
+                old_room_discounts=old_room_discounts,
+                adjustment_discount_type=new_discount_type,
+                adjustment_discount=new_discount,
+                reason="Stay adjustment",
+            )
+            invoice_adjustment = {
+                "status": "split_adjustments_created" if created else "no_change",
+                "adjustments": [
+                    {
+                        "sales_invoice": inv.name,
+                        "is_return": int(inv.is_return or 0),
+                        "grand_total": flt(inv.grand_total),
+                    }
+                    for inv in created
+                ],
+            }
+        else:
+            invoice_adjustment = adjust_invoice_for_reservation(
+                reservation_name,
+                source_invoice=source_invoice,
+                old_subtotal=old_subtotal,
+                old_discount_amount=old_discount_amount,
+            )
+
     frappe.db.commit()
 
     return {
@@ -501,6 +638,7 @@ def adjust_reservation(
         "discount": flt(doc.discount),
         "discount_amount": flt(doc.discount_amount),
         "total_amount": flt(doc.total_amount),
+        "invoice_adjustment": invoice_adjustment,
     }
 
 
@@ -511,6 +649,10 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
     Validates the new room is not already reserved for the same period.
     """
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
+
+    if any(getattr(row, "check_in_reference", None) or getattr(row, "status", None) == STATUS_CHECKED_IN for row in doc.rooms or []):
+        frappe.throw(_("Cannot change room on a reservation that has already been checked in. Use room transfer from Check In Details."))
 
     # Find the row to replace
     target_row = None
@@ -524,6 +666,8 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
 
     if old_room_number == new_room_number:
         frappe.throw("New room is the same as the current room.")
+
+    old_room_total = float(target_row.room_total or 0)
 
     # Fetch new room details
     new_room = frappe.get_doc("Hotel Room", new_room_number)
@@ -601,7 +745,26 @@ def change_room_in_reservation(reservation_name, old_room_number, new_room_numbe
 
     # Adjustment invoice/credit note is created only when reservation already has invoice(s).
     if has_submitted_invoice:
-        adjustment = adjust_invoice_for_reservation(reservation_name)
+        if _is_group_split_billing(doc):
+            adjustment_doc = _adjust_split_invoice_for_room(
+                doc,
+                target_row,
+                difference=float(target_row.room_total or 0) - old_room_total,
+                reason=reason or "Room change",
+            )
+            if adjustment_doc:
+                doc.flags.ignore_validate_update_after_submit = True
+                doc.save(ignore_permissions=True)
+                adjustment = {
+                    "status": "split_adjustment_created",
+                    "sales_invoice": adjustment_doc.name,
+                    "is_return": int(adjustment_doc.is_return or 0),
+                    "difference": float(adjustment_doc.grand_total or 0),
+                }
+            else:
+                adjustment = {"status": "no_change"}
+        else:
+            adjustment = adjust_invoice_for_reservation(reservation_name)
 
     frappe.db.commit()
 
@@ -623,6 +786,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
     from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
     row = next((r for r in doc.rooms if r.name == room_row_name), None)
     if not row:
         return {"status": "error", "message": f"Room row not found: {room_row_name}"}
@@ -645,13 +809,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
             "name",
         )
         if existing_ci:
-            frappe.db.set_value(
-                "Hotel Reservation Room",
-                row.name,
-                "check_in_reference",
-                existing_ci,
-                update_modified=False,
-            )
+            _mark_reservation_room_checked_in(row.name, existing_ci, ci_dt)
             frappe.clear_document_cache("Hotel Reservation", reservation_name)
             frappe.db.commit()
             return {
@@ -698,21 +856,14 @@ def check_in_reservation_room(reservation_name, room_row_name):
         ci_doc.expected_check_out_datetime = expected_out
         ci_doc.reservation = reservation_name
         ci_doc.canonical_reservation = reservation_name
-        _source = doc.source_channel or ""
-        ci_doc.reservation_source = _source if (_source and frappe.db.exists("Market Place", _source)) else "Reservation"
+        ci_doc.reservation_source = _valid_marketplace_source(doc.source_channel)
         ci_doc.discount_type = doc.discount_type or "None"
         ci_doc.discount = flt(doc.discount or 0)
         ci_doc.flags.skip_availability_check = True
         ci_doc.insert(ignore_permissions=True)
         ci_doc.submit()
 
-        frappe.db.set_value(
-            "Hotel Reservation Room",
-            row.name,
-            "check_in_reference",
-            ci_doc.name,
-            update_modified=False,
-        )
+        _mark_reservation_room_checked_in(row.name, ci_doc.name, ci_dt)
         # Update reservation-level status atomically without loading the full doc
         current_res_status = frappe.db.get_value("Hotel Reservation", reservation_name, "reservation_status")
         if current_res_status not in (STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
@@ -732,7 +883,10 @@ def check_in_reservation_room(reservation_name, room_row_name):
         }
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "check_in_reservation_room failed")
-        return {"status": "error", "message": str(e)}
+        message = str(e) or "Could not check in room. Please try again."
+        if any(token in message.lower() for token in ["traceback", "frappe.", "pymysql", "line ", "sql", "doctype", "\n"]):
+            message = "Could not check in room. Please try again or contact front desk support."
+        return {"status": "error", "message": message}
 
 
 @frappe.whitelist()
@@ -798,6 +952,7 @@ def bulk_check_in_reservation(reservation_name):
                 row.status = STATUS_CHECKED_IN
                 row.check_in_time = ci_dt
                 row.check_in_reference = existing_ci
+                _mark_reservation_room_checked_in(row.name, existing_ci, ci_dt)
                 already_checked_in += 1
                 continue
 
@@ -837,8 +992,7 @@ def bulk_check_in_reservation(reservation_name):
             ci_doc.expected_check_out_datetime = expected_out
             ci_doc.reservation = reservation_name
             ci_doc.canonical_reservation = reservation_name
-            _source = doc.source_channel or ""
-            ci_doc.reservation_source = _source if (_source and frappe.db.exists("Market Place", _source)) else "Reservation"
+            ci_doc.reservation_source = _valid_marketplace_source(doc.source_channel)
             ci_doc.discount_type = doc.discount_type or "None"
             ci_doc.discount = flt(doc.discount or 0)
             ci_doc.flags.skip_availability_check = True
@@ -863,12 +1017,15 @@ def bulk_check_in_reservation(reservation_name):
                 continue
 
             row.check_in_reference = ci_doc.name
+            row.status = STATUS_CHECKED_IN
+            row.check_in_time = ci_dt
+            _mark_reservation_room_checked_in(row.name, ci_doc.name, ci_dt)
             checked_in_count += 1
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), f"bulk_check_in: room {room_label}")
             errors.append(f"Room {room_label}: {str(e)}")
 
-    if checked_in_count > 0:
+    if checked_in_count > 0 or already_checked_in > 0:
         doc.reservation_status = STATUS_CHECKED_IN
         doc.check_in_time = ci_dt
         doc.flags.ignore_validate_update_after_submit = True
@@ -912,8 +1069,8 @@ def _find_or_create_customer_for_reservation(doc):
             "doctype": "Customer",
             "customer_name": doc.primary_guest_name or doc.corporate_guest or doc.name,
             "customer_type": "Company" if doc.reservation_type == "Corporate" else "Individual",
-            "customer_group": selling_settings.default_customer_group,
-            "territory": selling_settings.default_territory,
+            "customer_group": selling_settings.customer_group,
+            "territory": selling_settings.territory,
             "mobile_number": doc.primary_guest_phone or "",
             "email_id": doc.primary_guest_email or "",
         }
@@ -921,6 +1078,329 @@ def _find_or_create_customer_for_reservation(doc):
     customer_doc.insert(ignore_permissions=True)
     doc.db_set("customer", customer_doc.name, update_modified=False)
     return customer_doc.name
+
+
+def _valid_marketplace_source(source):
+    source = (source or "").strip()
+    if source and frappe.db.exists("Market Place", source):
+        return source
+    return ""
+
+
+def _get_room_item_code(room_number):
+    item_code = frappe.db.get_value("Hotel Room", room_number, "erpnext_item") or room_number
+    if item_code and frappe.db.exists("Item", item_code):
+        return item_code
+    return None
+
+
+def _get_source_invoice_item_code(source_invoice):
+    for item in getattr(source_invoice, "items", []) or []:
+        if item.item_code and frappe.db.exists("Item", item.item_code):
+            return item.item_code
+    return None
+
+
+def _resolve_customer_for_reservation_room(doc, room_row):
+    """Resolve the payer/customer for one room row in a split group reservation."""
+    customer = None
+
+    if getattr(room_row, "hotel_guest", None):
+        customer = frappe.db.get_value("Hotel Guest", room_row.hotel_guest, "customer")
+
+    if not customer:
+        guest_name = getattr(room_row, "occupant_name", None) or getattr(room_row, "guest_name", None) or ""
+        if guest_name:
+            existing_guest = frappe.db.get_value(
+                "Hotel Guest", {"hotel_guest_name": guest_name}, "name"
+            )
+            if existing_guest:
+                customer = frappe.db.get_value("Hotel Guest", existing_guest, "customer")
+
+    return customer or doc.customer or _find_or_create_customer_for_reservation(doc)
+
+
+def _get_split_room_adjustment_invoice_names(doc, room_row):
+    """Find adjustment invoices already created for one split-billed room row."""
+    try:
+        rows = frappe.db.sql(
+            """
+            SELECT DISTINCT si.name
+            FROM `tabSales Invoice` si
+            INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+            WHERE si.docstatus = 1
+              AND sii.description LIKE %(reservation)s
+              AND sii.description LIKE %(row_name)s
+            """,
+            {
+                "reservation": f"%{doc.name}%",
+                "row_name": f"%row {room_row.name}%",
+            },
+            as_dict=True,
+        )
+        return [row.name for row in rows]
+    except Exception:
+        return []
+
+
+def _get_split_room_billed_total(doc, room_row):
+    invoice_names = []
+    if getattr(room_row, "split_invoice", None):
+        invoice_names.append(room_row.split_invoice)
+    invoice_names.extend(_get_split_room_adjustment_invoice_names(doc, room_row))
+    invoice_names = list(dict.fromkeys([name for name in invoice_names if name]))
+    if not invoice_names:
+        return 0
+
+    return frappe.utils.flt(
+        frappe.db.sql(
+            """
+            SELECT COALESCE(SUM(grand_total), 0)
+            FROM `tabSales Invoice`
+            WHERE name IN %(invoice_names)s
+              AND docstatus = 1
+            """,
+            {"invoice_names": tuple(invoice_names)},
+        )[0][0]
+        or 0
+    )
+
+
+def _create_reservation_adjustment_invoice(
+    doc,
+    source_invoice,
+    difference,
+    item_code,
+    description,
+    invoice_source="Reservation Adjustment",
+    gross_difference=None,
+    discount_amount=0,
+):
+    from frappe.utils import flt
+
+    difference = flt(difference)
+    if abs(difference) < 0.01:
+        return None
+
+    if not source_invoice or int(source_invoice.docstatus or 0) != 1:
+        frappe.throw(_("Cannot create adjustment invoice: source invoice must be submitted."))
+    if not source_invoice.customer:
+        frappe.throw(_("Cannot create adjustment invoice: no customer on source invoice."))
+    if difference < 0:
+        item_code = _get_source_invoice_item_code(source_invoice) or item_code
+
+    if not item_code or not frappe.db.exists("Item", item_code):
+        frappe.throw(_("Cannot create adjustment invoice: no valid item is configured for the room."))
+
+    invoice_data = {
+        "doctype": "Sales Invoice",
+        "customer": source_invoice.customer,
+        "company": source_invoice.company,
+        "posting_date": frappe.utils.today(),
+        "due_date": frappe.utils.today(),
+        "update_stock": 0,
+    }
+
+    if difference > 0:
+        charge_amount = flt(gross_difference) if gross_difference is not None else flt(abs(difference))
+        invoice_discount = min(max(flt(discount_amount), 0), charge_amount)
+        if charge_amount <= 0:
+            charge_amount = flt(abs(difference))
+            invoice_discount = 0
+        invoice_data["is_return"] = 0
+        invoice_data["items"] = [
+            {
+                "item_code": item_code,
+                "qty": 1,
+                "rate": charge_amount,
+                "description": description,
+            }
+        ]
+        if invoice_discount:
+            invoice_data["apply_discount_on"] = "Grand Total"
+            invoice_data["discount_amount"] = invoice_discount
+    else:
+        invoice_data["is_return"] = 1
+        invoice_data["return_against"] = source_invoice.name
+        invoice_data["update_outstanding_for_self"] = 1
+        if getattr(source_invoice, "debit_to", None):
+            invoice_data["debit_to"] = source_invoice.debit_to
+        invoice_data["items"] = [
+            {
+                "item_code": item_code,
+                "qty": -1,
+                "rate": flt(abs(difference)),
+                "description": description,
+            }
+        ]
+
+    adjustment_doc = frappe.get_doc(invoice_data)
+    if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+        adjustment_doc.custom_invoice_source = invoice_source
+    adjustment_doc.set_taxes()
+    adjustment_doc.insert(ignore_permissions=True)
+    adjustment_doc.submit()
+    if int(adjustment_doc.is_return or 0) and adjustment_doc.return_against:
+        from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import enqueue_credit_note_reconciliation
+
+        enqueue_credit_note_reconciliation(
+            adjustment_doc.name,
+            source_invoice=adjustment_doc.return_against,
+            reservation=doc.name,
+        )
+    return adjustment_doc
+
+
+def _adjust_split_invoice_for_room(doc, room_row, difference=None, reason=None, gross_difference=None, discount_amount=0):
+    from frappe.utils import flt
+
+    if not getattr(room_row, "split_invoice", None):
+        return None
+
+    source_invoice = frappe.get_doc("Sales Invoice", room_row.split_invoice)
+    if int(source_invoice.docstatus or 0) != 1:
+        return None
+
+    if difference is None:
+        difference = flt(room_row.room_total or 0) - _get_split_room_billed_total(doc, room_row)
+    difference = flt(difference)
+    if abs(difference) < 0.01:
+        return None
+
+    item_code = _get_room_item_code(room_row.room_number)
+    room_number = room_row.room_number or "Unassigned"
+    label = "charge" if difference > 0 else "credit"
+    description = _(
+        "Split reservation {0} {1} for room {2}, row {3} ({4} night(s), {5} to {6})."
+    ).format(
+        doc.name,
+        label,
+        room_number,
+        room_row.name,
+        room_row.number_of_nights or doc.number_of_nights or 0,
+        doc.from_date,
+        doc.to_date,
+    )
+    if reason:
+        description = f"{description} Reason: {reason}"
+
+    adjustment_doc = _create_reservation_adjustment_invoice(
+        doc,
+        source_invoice,
+        difference,
+        item_code,
+        description,
+        invoice_source="Reservation Split Adjustment",
+        gross_difference=gross_difference,
+        discount_amount=discount_amount,
+    )
+    if not adjustment_doc:
+        return None
+
+    _upsert_reservation_invoice_row(
+        doc,
+        adjustment_doc.name,
+        invoice_type="Credit Note" if int(adjustment_doc.is_return or 0) else "Split Adjustment",
+    )
+    return adjustment_doc
+
+
+def _get_split_adjustment_discount_allocations(doc, old_room_totals, old_room_discounts, discount_type=None, discount_value=0):
+    from frappe.utils import flt
+
+    discount_type = (discount_type or "").strip()
+    discount_value = flt(discount_value or 0)
+    if not discount_type or discount_value <= 0 or not old_room_totals:
+        return {}
+
+    positive_rows = []
+    for room_row in doc.rooms or []:
+        if not getattr(room_row, "split_invoice", None) or room_row.name not in old_room_totals:
+            continue
+
+        old_gross = flt(old_room_totals.get(room_row.name)) + flt(old_room_discounts.get(room_row.name))
+        new_gross = flt(room_row.room_total or 0) + flt(room_row.discount or 0)
+        gross_difference = flt(new_gross - old_gross)
+        if gross_difference > 0:
+            positive_rows.append((room_row.name, gross_difference))
+
+    if not positive_rows:
+        return {}
+
+    allocations = {}
+    if discount_type == "Percentage":
+        pct = min(max(discount_value, 0), 100)
+        for row_name, gross_difference in positive_rows:
+            allocations[row_name] = min(flt(gross_difference * pct / 100, 2), gross_difference)
+        return allocations
+
+    if discount_type == "Fixed Amount":
+        total_discount = min(discount_value, sum(gross for _row_name, gross in positive_rows))
+        equal_share = flt(total_discount / len(positive_rows), 2)
+        allocated = 0
+        for idx, (row_name, gross_difference) in enumerate(positive_rows):
+            row_discount = total_discount - allocated if idx == len(positive_rows) - 1 else equal_share
+            allocations[row_name] = min(max(flt(row_discount, 2), 0), gross_difference)
+            allocated += flt(allocations[row_name])
+
+    return allocations
+
+
+def _adjust_split_invoices_for_reservation(
+    doc,
+    old_room_totals=None,
+    old_room_discounts=None,
+    adjustment_discount_type=None,
+    adjustment_discount=0,
+    reason=None,
+):
+    from frappe.utils import flt
+
+    created = []
+    old_room_totals = old_room_totals or {}
+    old_room_discounts = old_room_discounts or {}
+    adjustment_discount_allocations = _get_split_adjustment_discount_allocations(
+        doc,
+        old_room_totals,
+        old_room_discounts,
+        adjustment_discount_type,
+        adjustment_discount,
+    )
+    for room_row in doc.rooms or []:
+        if not getattr(room_row, "split_invoice", None):
+            continue
+
+        gross_difference = None
+        discount_difference = 0
+        if room_row.name in old_room_totals:
+            difference = flt(room_row.room_total or 0) - flt(old_room_totals.get(room_row.name))
+            old_gross = flt(old_room_totals.get(room_row.name)) + flt(old_room_discounts.get(room_row.name))
+            new_gross = flt(room_row.room_total or 0) + flt(room_row.discount or 0)
+            gross_difference = flt(new_gross - old_gross)
+            discount_difference = flt(room_row.discount or 0) - flt(old_room_discounts.get(room_row.name))
+            adjustment_discount_amount = flt(adjustment_discount_allocations.get(room_row.name))
+            if gross_difference > 0 and adjustment_discount_amount > 0:
+                difference = flt(gross_difference - adjustment_discount_amount)
+                discount_difference = adjustment_discount_amount
+        else:
+            difference = None
+
+        adjustment_doc = _adjust_split_invoice_for_room(
+            doc,
+            room_row,
+            difference=difference,
+            reason=reason,
+            gross_difference=gross_difference if gross_difference and gross_difference > 0 and discount_difference >= 0 else None,
+            discount_amount=discount_difference if discount_difference > 0 else 0,
+        )
+        if adjustment_doc:
+            created.append(adjustment_doc)
+
+    if created:
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.save(ignore_permissions=True)
+
+    return created
 
 
 def _upsert_reservation_invoice_row(doc, invoice_name, invoice_type=None):
@@ -1028,6 +1508,7 @@ def create_invoice_for_reservation(reservation_name):
     from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
 
     if _is_group_split_billing(doc):
         frappe.throw(
@@ -1113,12 +1594,21 @@ def create_invoice_for_reservation(reservation_name):
 def _get_reservation_invoice_names(doc):
     invoice_names = []
 
-    for row in doc.get("reservation_invoices") or []:
-        if row.invoice:
-            invoice_names.append(row.invoice)
+    get_value = getattr(doc, "get", None)
+    reservation_invoices = get_value("reservation_invoices") if callable(get_value) else getattr(doc, "reservation_invoices", None)
+    for row in reservation_invoices or []:
+        invoice = row.get("invoice") if hasattr(row, "get") else getattr(row, "invoice", None)
+        if invoice:
+            invoice_names.append(invoice)
 
-    if doc.sales_invoice:
+    if getattr(doc, "sales_invoice", None):
         invoice_names.append(doc.sales_invoice)
+
+    rooms = get_value("rooms") if callable(get_value) else getattr(doc, "rooms", None)
+    for row in rooms or []:
+        if getattr(row, "split_invoice", None):
+            invoice_names.append(row.split_invoice)
+        invoice_names.extend(_get_split_room_adjustment_invoice_names(doc, row))
 
     try:
         adjustment_rows = frappe.db.sql(
@@ -1139,10 +1629,269 @@ def _get_reservation_invoice_names(doc):
     return list(dict.fromkeys([name for name in invoice_names if name]))
 
 
+def _get_reservation_invoice_context(doc, invoice_name):
+    for row in doc.get("rooms") or []:
+        if getattr(row, "split_invoice", None) == invoice_name:
+            return {
+                "room_row": row.name,
+                "room_number": row.room_number,
+                "occupant_name": row.occupant_name or row.guest_name or doc.primary_guest_name,
+                "hotel_guest": row.hotel_guest,
+                "invoice_scope": "Room",
+            }
+
+        if invoice_name in _get_split_room_adjustment_invoice_names(doc, row):
+            return {
+                "room_row": row.name,
+                "room_number": row.room_number,
+                "occupant_name": row.occupant_name or row.guest_name or doc.primary_guest_name,
+                "hotel_guest": row.hotel_guest,
+                "invoice_scope": "Room Adjustment",
+            }
+
+    return {
+        "room_row": "",
+        "room_number": "",
+        "occupant_name": doc.primary_guest_name or doc.corporate_guest or doc.customer or "",
+        "hotel_guest": "",
+        "invoice_scope": "Reservation",
+    }
+
+
+def _get_approved_bill_transfer_totals(invoice_names):
+    if not invoice_names or not frappe.db.exists("DocType", "Bill Transfer"):
+        return {}
+
+    rows = frappe.db.sql(
+        """
+        SELECT source_invoice, COALESCE(SUM(total_amount), 0) AS total
+        FROM `tabBill Transfer`
+        WHERE source_invoice IN %(invoice_names)s
+          AND status = 'Approved'
+          AND docstatus = 1
+        GROUP BY source_invoice
+        """,
+        {"invoice_names": tuple(invoice_names)},
+        as_dict=True,
+    ) or []
+    return {row.source_invoice: flt(row.total) for row in rows}
+
+
+def _get_invoice_payment_allocations(invoice_names):
+    if not invoice_names:
+        return {}
+
+    rows = frappe.db.sql(
+        """
+        SELECT
+            per.reference_name,
+            COALESCE(SUM(ABS(per.allocated_amount)), 0) AS allocated
+        FROM `tabPayment Entry Reference` per
+        INNER JOIN `tabPayment Entry` pe ON pe.name = per.parent
+        WHERE per.reference_doctype = 'Sales Invoice'
+          AND per.reference_name IN %(invoice_names)s
+          AND pe.docstatus = 1
+          AND pe.payment_type = 'Receive'
+        GROUP BY per.reference_name
+        """,
+        {"invoice_names": tuple(invoice_names)},
+        as_dict=True,
+    ) or []
+    return {row.reference_name: flt(row.allocated) for row in rows}
+
+
+def _apply_reservation_invoice_netting(invoices, invoice_names=None):
+    """Net reservation invoices for payments, credit notes, and bill transfers."""
+    invoices = invoices or []
+    invoice_names = list(dict.fromkeys(invoice_names or [inv.name for inv in invoices if inv.get("name")]))
+    if not invoices or not invoice_names:
+        return invoices
+
+    transfer_totals = _get_approved_bill_transfer_totals(invoice_names)
+    payment_allocations = _get_invoice_payment_allocations(invoice_names)
+    linked_credits = {}
+    for inv in invoices:
+        if int(inv.get("is_return") or 0) and inv.get("return_against"):
+            linked_credits[inv.return_against] = linked_credits.get(inv.return_against, 0) + abs(flt(inv.get("grand_total")))
+
+    for inv in invoices:
+        raw_outstanding = flt(inv.get("outstanding_amount"))
+        inv["raw_outstanding_amount"] = raw_outstanding
+        inv["source_transfer_amount"] = flt(transfer_totals.get(inv.name))
+
+        if int(inv.get("is_return") or 0):
+            continue
+
+        gross = abs(flt(inv.get("grand_total")))
+        expected_after_adjustments = max(
+            0,
+            gross
+            - flt(payment_allocations.get(inv.name))
+            - flt(linked_credits.get(inv.name))
+            - flt(transfer_totals.get(inv.name)),
+        )
+        inv["outstanding_amount"] = min(max(0, raw_outstanding), expected_after_adjustments)
+
+    return invoices
+
+
+def _get_reservation_payment_entry_names(doc, invoice_names=None):
+    payment_entries = set()
+    if getattr(doc, "payment_entry", None):
+        payment_entries.add(doc.payment_entry)
+
+    get_value = getattr(doc, "get", None)
+    reservation_payments = get_value("reservation_payments") if callable(get_value) else getattr(doc, "reservation_payments", None)
+    for row in reservation_payments or []:
+        payment_entry = row.get("payment_entry") if hasattr(row, "get") else getattr(row, "payment_entry", None)
+        if payment_entry:
+            payment_entries.add(payment_entry)
+
+    if invoice_names:
+        rows = frappe.db.sql(
+            """
+            SELECT DISTINCT pe.name
+            FROM `tabPayment Entry Reference` per
+            INNER JOIN `tabPayment Entry` pe ON pe.name = per.parent
+            WHERE pe.docstatus = 1
+              AND per.reference_doctype = 'Sales Invoice'
+              AND per.reference_name IN %(invoice_names)s
+            """,
+            {"invoice_names": tuple(invoice_names)},
+            as_dict=True,
+        ) or []
+        payment_entries.update(row.name for row in rows if row.name)
+
+    if not payment_entries:
+        return []
+
+    submitted = frappe.get_all(
+        "Payment Entry",
+        filters={"name": ["in", list(payment_entries)], "docstatus": 1},
+        pluck="name",
+    )
+    return list(dict.fromkeys(submitted or []))
+
+
+def _assert_reservation_has_no_payments(doc, invoice_names=None):
+    payment_entries = _get_reservation_payment_entry_names(doc, invoice_names)
+    if payment_entries:
+        frappe.throw(
+            _(
+                "Reservation {0} cannot be cancelled because payment has already been recorded: {1}. "
+                "Cancel or refund the payment before cancelling the reservation."
+            ).format(doc.name, ", ".join(payment_entries))
+        )
+
+
+def _cancel_reservation_invoices(doc):
+    invoice_names = _get_reservation_invoice_names(doc)
+    _assert_reservation_has_no_payments(doc, invoice_names)
+    if not invoice_names:
+        return []
+
+    invoice_rows = frappe.get_all(
+        "Sales Invoice",
+        filters={"name": ["in", invoice_names], "docstatus": 1},
+        fields=["name", "is_return", "return_against", "posting_date", "creation"],
+        order_by="posting_date desc, creation desc",
+    )
+    linked_returns = {
+        row.return_against
+        for row in invoice_rows
+        if int(row.get("is_return") or 0) and row.get("return_against")
+    }
+    ordered_invoice_names = [
+        row.name
+        for row in sorted(
+            invoice_rows,
+            key=lambda row: (
+                0 if int(row.get("is_return") or 0) else 1,
+                0 if row.name in linked_returns else 1,
+                str(row.get("posting_date") or ""),
+                str(row.get("creation") or ""),
+            ),
+        )
+    ]
+
+    cancelled = []
+    failed = []
+    current_user = frappe.session.user
+    for invoice_name in ordered_invoice_names:
+        try:
+            try:
+                if current_user != "Administrator":
+                    frappe.set_user("Administrator")
+                invoice = frappe.get_doc("Sales Invoice", invoice_name)
+                invoice.flags.ignore_permissions = True
+                invoice.cancel()
+            finally:
+                if frappe.session.user != current_user:
+                    frappe.set_user(current_user)
+            cancelled.append(invoice_name)
+        except Exception:
+            failed.append(invoice_name)
+            frappe.log_error(
+                frappe.get_traceback(),
+                _("Reservation invoice cancellation failed for {0}").format(invoice_name),
+            )
+
+    if failed:
+        frappe.throw(
+            _(
+                "Reservation {0} was not cancelled because these submitted invoice(s) "
+                "could not be cancelled: {1}. Please cancel dependent payments, credit notes, "
+                "or bill transfers first."
+            ).format(doc.name, ", ".join(failed))
+        )
+
+    for invoice_name in cancelled:
+        get_value = getattr(doc, "get", None)
+        reservation_invoices = get_value("reservation_invoices") if callable(get_value) else getattr(doc, "reservation_invoices", None)
+        row = next((item for item in (reservation_invoices or []) if getattr(item, "invoice", None) == invoice_name), None)
+        if row:
+            row.status = "Cancelled"
+            row.outstanding_amount = 0
+        elif invoice_name == getattr(doc, "sales_invoice", None):
+            _upsert_reservation_invoice_row(doc, invoice_name)
+
+    return cancelled
+
+
+def _reconcile_pending_reservation_credit_notes(reservation_name):
+    """Apply open reservation credit notes before reading payable balances."""
+    if not reservation_name:
+        return []
+
+    from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import (
+        reconcile_credit_notes_for_reservation,
+    )
+
+    return reconcile_credit_notes_for_reservation(reservation_name, sync_folio=False)
+
+
+def _get_payment_status_from_amounts(paid_amount, outstanding_amount, invoice_total=0):
+    from frappe.utils import flt
+
+    paid_amount = flt(paid_amount)
+    outstanding_amount = flt(outstanding_amount)
+    invoice_total = flt(invoice_total)
+
+    if invoice_total <= 0 and paid_amount <= 0:
+        return "Pending"
+    if outstanding_amount <= 0:
+        return "Paid"
+    if paid_amount > 0:
+        return "Partly Paid"
+    return "Pending"
+
+
 @frappe.whitelist()
 def get_payment_summary_for_reservation(reservation_name):
     """Return paid amount, balance, invoices and payment entries from submitted ledger docs."""
     from frappe.utils import flt
+
+    _reconcile_pending_reservation_credit_notes(reservation_name)
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     invoice_names = _get_reservation_invoice_names(doc)
@@ -1152,9 +1901,10 @@ def get_payment_summary_for_reservation(reservation_name):
         invoices = frappe.get_all(
             "Sales Invoice",
             filters={"name": ["in", invoice_names], "docstatus": 1},
-            fields=["name", "posting_date", "grand_total", "outstanding_amount", "status", "is_return"],
+            fields=["name", "posting_date", "grand_total", "outstanding_amount", "status", "is_return", "return_against"],
             order_by="posting_date asc",
         )
+        invoices = _apply_reservation_invoice_netting(invoices, invoice_names)
 
     invoice_total = sum(flt(inv.grand_total) for inv in invoices)
     outstanding_total = sum(flt(inv.outstanding_amount) for inv in invoices)
@@ -1197,24 +1947,31 @@ def get_payment_summary_for_reservation(reservation_name):
 
     ledger_changed = False
     for invoice in invoices:
+        invoice.update(_get_reservation_invoice_context(doc, invoice.name))
         row_type = "Credit Note" if int(invoice.get("is_return") or 0) else "Invoice"
         ledger_changed = _upsert_reservation_invoice_row(doc, invoice.name, row_type) or ledger_changed
     for payment in payments:
         ledger_changed = _upsert_reservation_payment_row(doc, payment.name, amount=flt(payment.amount or 0)) or ledger_changed
 
-    if ledger_changed:
-        _persist_reservation_ledger_updates(doc)
-        frappe.db.commit()
-
     paid_amount = sum(flt(payment.amount) for payment in payments)
     reservation_total = flt(doc.net_total or doc.total_amount or 0)
     balance = outstanding_total if invoices else max(0, reservation_total - paid_amount)
+    payment_status = _get_payment_status_from_amounts(paid_amount, balance, invoice_total)
+    if doc.get("payment_status") != payment_status:
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.payment_status = payment_status
+        ledger_changed = True
+
+    if ledger_changed:
+        _persist_reservation_ledger_updates(doc)
+        frappe.db.commit()
 
     return {
         "paid_amount": paid_amount,
         "balance": max(0, flt(balance)),
         "invoice_total": invoice_total,
         "outstanding_amount": outstanding_total,
+        "payment_status": payment_status,
         "invoices": invoices,
         "payment_entries": payments,
     }
@@ -1222,24 +1979,193 @@ def get_payment_summary_for_reservation(reservation_name):
 
 @frappe.whitelist()
 def get_outstanding_invoices_for_reservation(reservation_name):
+    _reconcile_pending_reservation_credit_notes(reservation_name)
+
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     invoices = []
+    invoice_names = _get_reservation_invoice_names(doc)
+    invoice_rows = []
 
-    for invoice_name in _get_reservation_invoice_names(doc):
+    for invoice_name in invoice_names:
         inv = frappe.db.get_value(
             "Sales Invoice",
             invoice_name,
-            ["name", "posting_date", "grand_total", "outstanding_amount"],
+            ["name", "customer", "customer_name", "posting_date", "grand_total", "outstanding_amount", "is_return", "return_against"],
             as_dict=True,
         )
-        if inv and float(inv.get("outstanding_amount") or 0) > 0:
+        if inv:
+            invoice_rows.append(inv)
+
+    _apply_reservation_invoice_netting(invoice_rows, invoice_names)
+
+    for inv in invoice_rows:
+        if float(inv.get("outstanding_amount") or 0) > 0:
+            invoice_name = inv.get("name")
+            inv.update(_get_reservation_invoice_context(doc, invoice_name))
+            inv["credit_note_amount"] = _get_invoice_credit_note_amount(invoice_name)
+            inv["amount_due"] = inv.get("outstanding_amount")
             invoices.append(inv)
 
     return invoices
 
 
+def _get_invoice_credit_note_amount(invoice_name):
+    if not invoice_name:
+        return 0
+
+    from frappe.utils import flt
+
+    return flt(
+        frappe.db.sql(
+            """
+            SELECT COALESCE(SUM(ABS(grand_total)), 0)
+            FROM `tabSales Invoice`
+            WHERE docstatus = 1
+              AND is_return = 1
+              AND return_against = %s
+            """,
+            invoice_name,
+        )[0][0]
+        or 0
+    )
+
+
 @frappe.whitelist()
-def adjust_invoice_for_reservation(reservation_name):
+def create_bill_transfer_for_reservation(reservation_name, to_guest, invoices, reason="", note=""):
+    """Create Bill Transfer document(s) for outstanding reservation invoices."""
+    import json
+    from frappe.utils import flt, cint
+
+    if isinstance(invoices, str):
+        try:
+            invoices = json.loads(invoices)
+        except Exception:
+            invoices = [name.strip() for name in invoices.split(",") if name.strip()]
+    invoices = [str(name).strip() for name in (invoices or []) if str(name).strip()]
+    if not invoices:
+        frappe.throw(_("Please select at least one invoice to transfer."))
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
+    reservation_invoice_names = set(_get_reservation_invoice_names(doc))
+    invalid = [name for name in invoices if name not in reservation_invoice_names]
+    if invalid:
+        frappe.throw(_("Selected invoice(s) do not belong to reservation {0}: {1}").format(
+            reservation_name,
+            ", ".join(invalid),
+        ))
+
+    if not frappe.db.exists("Hotel Guest", to_guest):
+        frappe.throw(_("Target corporate account {0} was not found.").format(to_guest))
+
+    to_guest_doc = frappe.db.get_value(
+        "Hotel Guest", to_guest, ["hotel_guest_name", "guest_type", "customer"], as_dict=True
+    ) or {}
+    if (to_guest_doc.get("guest_type") or "").lower() != "corporate":
+        frappe.throw(_("Reservation bill transfer target must be a Corporate guest/account."))
+    if not to_guest_doc.get("customer"):
+        frappe.throw(
+            _("Corporate account {0} does not have a linked Customer record.").format(
+                to_guest_doc.get("hotel_guest_name") or to_guest
+            )
+        )
+
+    full_reason = reason
+    if note:
+        full_reason = f"{reason} — {note}" if reason else note
+
+    created = []
+    for inv_name in invoices:
+        inv_doc = frappe.get_doc("Sales Invoice", inv_name)
+        if int(inv_doc.docstatus or 0) != 1 or cint(inv_doc.is_return):
+            continue
+
+        total_amount = flt(inv_doc.outstanding_amount)
+        if total_amount <= 0:
+            continue
+
+        from_guest = _resolve_reservation_invoice_guest(doc, inv_doc)
+        from_customer = frappe.db.get_value("Hotel Guest", from_guest, "customer")
+        if from_customer == to_guest_doc.get("customer"):
+            frappe.throw(_("Invoice {0} is already billed to the selected corporate account.").format(inv_name))
+
+        bt = frappe.new_doc("Bill Transfer")
+        bt.from_guest = from_guest
+        bt.to_guest = to_guest
+        bt.source_invoice = inv_name
+        bt.total_amount = total_amount
+        bt.reason = full_reason
+        bt.status = "Pending Approval"
+        bt.append("items", {
+            "description": _("Reservation {0} invoice transfer").format(reservation_name),
+            "amount": total_amount,
+            "reference_document": inv_name,
+        })
+        bt.insert(ignore_permissions=True)
+
+        created.append({
+            "name": bt.name,
+            "invoice": inv_name,
+            "amount": total_amount,
+        })
+
+    if not created:
+        frappe.throw(_("No eligible outstanding Sales Invoices found for this reservation."))
+
+    return created
+
+
+def _resolve_reservation_invoice_guest(doc, invoice_doc):
+    context = _get_reservation_invoice_context(doc, invoice_doc.name)
+    if context.get("hotel_guest") and frappe.db.exists("Hotel Guest", context.get("hotel_guest")):
+        return context.get("hotel_guest")
+
+    for guest_name in [doc.get("corporate_guest")]:
+        if guest_name and frappe.db.exists("Hotel Guest", guest_name):
+            customer = frappe.db.get_value("Hotel Guest", guest_name, "customer")
+            if customer == invoice_doc.customer:
+                return guest_name
+
+    for row in doc.get("rooms") or []:
+        guest_name = getattr(row, "hotel_guest", None)
+        if guest_name and frappe.db.exists("Hotel Guest", guest_name):
+            customer = frappe.db.get_value("Hotel Guest", guest_name, "customer")
+            if customer == invoice_doc.customer:
+                return guest_name
+
+    guest_name = frappe.db.get_value("Hotel Guest", {"customer": invoice_doc.customer}, "name")
+    if guest_name:
+        return guest_name
+
+    return _get_or_create_transfer_guest_for_customer(invoice_doc.customer)
+
+
+def _get_or_create_transfer_guest_for_customer(customer):
+    if not customer or not frappe.db.exists("Customer", customer):
+        frappe.throw(_("Invoice customer {0} was not found.").format(customer))
+
+    guest_name = frappe.db.get_value("Hotel Guest", {"customer": customer}, "name")
+    if guest_name:
+        return guest_name
+
+    customer_name = frappe.db.get_value("Customer", customer, "customer_name") or customer
+    candidate_name = customer_name
+    if frappe.db.exists("Hotel Guest", candidate_name):
+        candidate_name = f"{customer_name} Billing"
+
+    doc = frappe.new_doc("Hotel Guest")
+    doc.hotel_guest_name = candidate_name
+    doc.guest_type = "Individual"
+    doc.phone_number = "+2340000000000"
+    doc.customer = customer
+    doc.notes = _("Auto-created as reservation bill-transfer source for Customer {0}.").format(customer)
+    doc.insert(ignore_permissions=True)
+
+    return doc.name
+
+
+@frappe.whitelist()
+def adjust_invoice_for_reservation(reservation_name, source_invoice=None, old_subtotal=None, old_discount_amount=None):
     """
     Reconcile the linked Sales Invoice after a stay adjustment.
 
@@ -1251,15 +2177,35 @@ def adjust_invoice_for_reservation(reservation_name):
     from frappe.utils import flt
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
 
-    source_invoice_name = doc.sales_invoice
+    if _is_group_split_billing(doc):
+        created = _adjust_split_invoices_for_reservation(doc)
+        if created:
+            frappe.db.commit()
+            return {
+                "status": "split_adjustments_created",
+                "adjustments": [
+                    {
+                        "sales_invoice": inv.name,
+                        "is_return": int(inv.is_return or 0),
+                        "grand_total": flt(inv.grand_total),
+                    }
+                    for inv in created
+                ],
+            }
+        return {"status": "no_change", "message": "Split room invoices already match room totals."}
+
+    invoice_names = _get_reservation_invoice_names(doc)
+    source_invoice_name = source_invoice or doc.sales_invoice
     if not source_invoice_name:
-        invoice_names = _get_reservation_invoice_names(doc)
         if invoice_names:
             source_invoice_name = invoice_names[0]
 
     if not source_invoice_name:
         return {"status": "no_invoice", "message": "No invoice linked to this reservation."}
+    if source_invoice_name not in set(invoice_names):
+        frappe.throw(_("Source invoice {0} is not linked to this reservation.").format(source_invoice_name))
 
     source_invoice = frappe.get_doc("Sales Invoice", source_invoice_name)
     if int(source_invoice.docstatus) != 1:
@@ -1273,6 +2219,8 @@ def adjust_invoice_for_reservation(reservation_name):
             "sales_invoice": recreate.get("sales_invoice"),
             "message": "Linked invoice was not submitted. Recreated the main reservation invoice.",
         }
+    if int(source_invoice.is_return or 0):
+        frappe.throw(_("Source invoice {0} is already a credit note.").format(source_invoice.name))
 
     invoice_names = _get_reservation_invoice_names(doc)
     invoices = []
@@ -1286,6 +2234,12 @@ def adjust_invoice_for_reservation(reservation_name):
     billed_total = flt(sum(flt(inv.grand_total) for inv in invoices))
     new_total = flt(doc.total_amount or doc.net_total or 0)
     difference = flt(new_total - billed_total)
+    gross_difference = None
+    discount_difference = 0
+    if old_subtotal is not None:
+        gross_difference = flt(doc.subtotal or 0) - flt(old_subtotal)
+    if old_discount_amount is not None:
+        discount_difference = flt(doc.discount_amount or 0) - flt(old_discount_amount)
 
     if abs(difference) < 0.01:
         return {
@@ -1300,56 +2254,29 @@ def adjust_invoice_for_reservation(reservation_name):
 
     item_code = None
     for room in doc.rooms:
-        candidate = frappe.db.get_value("Hotel Room", room.room_number, "erpnext_item") or room.room_number
-        if frappe.db.exists("Item", candidate):
-            item_code = candidate
+        item_code = _get_room_item_code(room.room_number)
+        if item_code:
             break
 
     if not item_code:
         frappe.throw(_("Cannot create adjustment invoice: no valid Item found for this reservation's rooms."))
 
-    invoice_data = {
-        "doctype": "Sales Invoice",
-        "customer": customer,
-        "company": source_invoice.company,
-        "posting_date": frappe.utils.today(),
-        "due_date": frappe.utils.today(),
-        "update_stock": 0,
-    }
+    description = (
+        _("Stay extension charge for reservation {0} ({1} to {2}, {3} night(s)).")
+        if difference > 0
+        else _("Stay reduction credit for reservation {0} ({1} to {2}, {3} night(s)).")
+    ).format(doc.name, doc.from_date, doc.to_date, doc.number_of_nights)
 
-    if difference > 0:
-        invoice_data["is_return"] = 0
-        invoice_data["items"] = [
-            {
-                "item_code": item_code,
-                "qty": 1,
-                "rate": flt(abs(difference)),
-                "description": _(
-                    "Stay extension charge for reservation {0} ({1} to {2}, {3} night(s))."
-                ).format(doc.name, doc.from_date, doc.to_date, doc.number_of_nights),
-            }
-        ]
-    else:
-        invoice_data["is_return"] = 1
-        invoice_data["return_against"] = source_invoice.name
-        invoice_data["update_outstanding_for_self"] = 1
-        if getattr(source_invoice, "debit_to", None):
-            invoice_data["debit_to"] = source_invoice.debit_to
-        invoice_data["items"] = [
-            {
-                "item_code": item_code,
-                "qty": -1,
-                "rate": flt(abs(difference)),
-                "description": _(
-                    "Stay reduction credit for reservation {0} ({1} to {2}, {3} night(s))."
-                ).format(doc.name, doc.from_date, doc.to_date, doc.number_of_nights),
-            }
-        ]
-
-    adjustment_doc = frappe.get_doc(invoice_data)
-    adjustment_doc.set_taxes()
-    adjustment_doc.insert(ignore_permissions=True)
-    adjustment_doc.submit()
+    adjustment_doc = _create_reservation_adjustment_invoice(
+        doc,
+        source_invoice,
+        difference,
+        item_code,
+        description,
+        invoice_source="Reservation Stay Adjustment",
+        gross_difference=gross_difference if gross_difference and gross_difference > 0 and discount_difference >= 0 else None,
+        discount_amount=discount_difference if discount_difference > 0 else 0,
+    )
 
     # Update net_total on reservation to reflect new combined total
     doc.flags.ignore_validate_update_after_submit = True
@@ -1389,6 +2316,7 @@ def create_invoice_for_reservation_room(reservation_name, room_row_name):
     from frappe.utils import getdate, flt
 
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
 
     if not _is_group_split_billing(doc):
         frappe.throw(_("Per-room invoicing is only available for Group reservations with Split billing mode."))
@@ -1398,32 +2326,26 @@ def create_invoice_for_reservation_room(reservation_name, room_row_name):
         frappe.throw(_("Room row {0} not found in reservation {1}.").format(room_row_name, reservation_name))
 
     if room_row.split_invoice:
+        updated = _upsert_reservation_invoice_row(doc, room_row.split_invoice, invoice_type="Split")
+        if updated:
+            _persist_reservation_ledger_updates(doc)
+            frappe.db.commit()
         return {"sales_invoice": room_row.split_invoice, "already_exists": True}
 
-    # Resolve customer: prefer hotel_guest link → occupant name lookup → reservation fallback
-    customer = None
-    if room_row.hotel_guest:
-        customer = frappe.db.get_value("Hotel Guest", room_row.hotel_guest, "customer")
-
-    if not customer:
-        guest_name = room_row.occupant_name or room_row.guest_name or ""
-        if guest_name:
-            existing_guest = frappe.db.get_value(
-                "Hotel Guest", {"hotel_guest_name": guest_name}, "name"
-            )
-            if existing_guest:
-                customer = frappe.db.get_value("Hotel Guest", existing_guest, "customer")
-
-    if not customer:
-        customer = doc.customer or _find_or_create_customer_for_reservation(doc)
-
+    customer = _resolve_customer_for_reservation_room(doc, room_row)
     if not customer:
         frappe.throw(_("Cannot create invoice: no customer resolved for room {0}. Assign a guest to this room first.").format(room_row.room_number))
 
     room_number = room_row.room_number
-    item_code = frappe.db.get_value("Hotel Room", room_number, "erpnext_item") or room_number
-    if not frappe.db.exists("Item", item_code):
+    item_code = _get_room_item_code(room_number)
+    if not item_code:
         frappe.throw(_("No billable Item found for room {0}. Configure Hotel Room.erpnext_item.").format(room_number))
+
+    nights = int(room_row.number_of_nights or doc.number_of_nights or 0)
+    gross_room_charge = flt(room_row.rate_per_night or 0) * nights
+    if gross_room_charge <= 0:
+        gross_room_charge = flt(room_row.room_total or 0) + flt(room_row.discount or 0)
+    room_discount = min(max(flt(room_row.discount or 0), 0), gross_room_charge)
 
     si = frappe.get_doc({
         "doctype": "Sales Invoice",
@@ -1434,13 +2356,16 @@ def create_invoice_for_reservation_room(reservation_name, room_row_name):
         "items": [{
             "item_code": item_code,
             "qty": 1,
-            "rate": flt(room_row.room_total or 0),
+            "rate": gross_room_charge,
             "description": _("Reservation charge for {0}, room {1} ({2} night(s), {3} to {4})").format(
-                doc.name, room_number, room_row.number_of_nights or doc.number_of_nights or 0,
+                doc.name, room_number, nights,
                 doc.from_date, doc.to_date,
             ),
         }],
     })
+    if room_discount:
+        si.discount_amount = room_discount
+        si.apply_discount_on = "Net Total"
     si.set_taxes()
     si.insert(ignore_permissions=True)
     si.submit()
@@ -1467,9 +2392,171 @@ def _is_group_split_billing(doc):
 
 
 @frappe.whitelist()
+def apply_split_room_discount(reservation_name, room_row_name, discount=0, reason=None):
+    """Apply an individual room discount on a split-billing group reservation."""
+    from frappe.utils import flt
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
+    if not _is_group_split_billing(doc):
+        frappe.throw(_("Individual room discounts are only available for Group reservations with Split billing mode."))
+
+    room_row = next((row for row in (doc.rooms or []) if row.name == room_row_name), None)
+    if not room_row:
+        frappe.throw(_("Room row {0} not found in reservation {1}.").format(room_row_name, reservation_name))
+    if getattr(room_row, "split_invoice", None):
+        frappe.throw(_("Discount cannot be changed after invoice {0} has been created for this room.").format(room_row.split_invoice))
+
+    nights = int(room_row.number_of_nights or doc.number_of_nights or 0)
+    base_total = flt(room_row.rate_per_night or 0) * nights
+    requested_discount = flt(discount or 0)
+    if requested_discount < 0:
+        frappe.throw(_("Discount cannot be negative."))
+    if requested_discount > base_total:
+        frappe.throw(_("Discount cannot be greater than the room charge."))
+
+    old_room_total = flt(room_row.room_total or 0)
+    room_row.discount = requested_discount
+    room_row.room_total = max(flt(base_total - requested_discount), 0)
+
+    doc.flags.ignore_validate_update_after_submit = True
+    doc._recalculate_totals()
+    doc.save(ignore_permissions=True)
+
+    adjustment_doc = _adjust_split_invoice_for_room(
+        doc,
+        room_row,
+        difference=flt(room_row.room_total or 0) - old_room_total,
+        reason=reason or _("Individual room discount adjustment"),
+    )
+
+    if adjustment_doc:
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.save(ignore_permissions=True)
+
+    frappe.db.commit()
+
+    return {
+        "reservation": doc.name,
+        "room_row": room_row.name,
+        "discount": room_row.discount,
+        "room_total": room_row.room_total,
+        "split_invoice": room_row.split_invoice,
+        "adjustment_invoice": adjustment_doc.name if adjustment_doc else None,
+        "is_return": int(adjustment_doc.is_return or 0) if adjustment_doc else 0,
+    }
+
+
+@frappe.whitelist()
+def distribute_split_room_discount(reservation_name, discount=0, discount_type="Fixed Amount", room_row_names=None, reason=None):
+    """Distribute a discount across selected split-billing room rows."""
+    import json
+    from frappe.utils import flt
+
+    if isinstance(room_row_names, str):
+        try:
+            room_row_names = json.loads(room_row_names)
+        except Exception:
+            room_row_names = [name.strip() for name in room_row_names.split(",") if name.strip()]
+    room_row_names = [str(name).strip() for name in (room_row_names or []) if str(name).strip()]
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
+    if not _is_group_split_billing(doc):
+        frappe.throw(_("Discount distribution is only available for Group reservations with Split billing mode."))
+
+    target_rows = [row for row in (doc.rooms or []) if not room_row_names or row.name in room_row_names]
+    if not target_rows:
+        frappe.throw(_("Select at least one reservation room row."))
+    invoiced_rows = [row for row in target_rows if getattr(row, "split_invoice", None)]
+    if invoiced_rows:
+        room_labels = ", ".join(row.room_number or row.name for row in invoiced_rows)
+        frappe.throw(_("Discount cannot be changed after invoice has been created for room(s): {0}.").format(room_labels))
+
+    nights = int(doc.number_of_nights or 0)
+    if not nights and doc.from_date and doc.to_date:
+        nights = date_diff(getdate(doc.to_date), getdate(doc.from_date))
+
+    gross_rows = []
+    for row in target_rows:
+        gross_rows.append((row, max(flt(row.rate_per_night or 0) * nights, 0)))
+
+    total_gross = sum(gross for _row, gross in gross_rows)
+    if total_gross <= 0:
+        frappe.throw(_("Selected rooms do not have a billable room charge."))
+
+    requested_discount = flt(discount or 0)
+    if requested_discount < 0:
+        frappe.throw(_("Discount cannot be negative."))
+
+    discount_type = discount_type or "Fixed Amount"
+    if discount_type == "Percentage":
+        total_discount = total_gross * min(max(requested_discount, 0), 100) / 100
+    elif discount_type == "Fixed Amount":
+        total_discount = min(requested_discount, total_gross)
+    else:
+        total_discount = 0
+    total_discount = flt(total_discount, 2)
+
+    old_room_totals = {row.name: flt(row.room_total or 0) for row in target_rows}
+    allocated = 0
+    updated_rows = []
+    for idx, (row, gross) in enumerate(gross_rows):
+        if idx == len(gross_rows) - 1:
+            row_discount = total_discount - allocated
+        else:
+            row_discount = flt((total_discount * gross / total_gross) if total_gross else 0, 2)
+        row.discount = min(max(flt(row_discount, 2), 0), gross)
+        row.room_total = max(flt(gross - row.discount, 2), 0)
+        allocated += flt(row.discount or 0)
+        updated_rows.append(row)
+
+    doc.discount_type = "None"
+    doc.discount = 0
+    doc.discount_amount = 0
+    doc.flags.ignore_validate_update_after_submit = True
+    doc._recalculate_totals()
+    doc.save(ignore_permissions=True)
+
+    adjustments = []
+    for row in updated_rows:
+        adjustment_doc = _adjust_split_invoice_for_room(
+            doc,
+            row,
+            difference=flt(row.room_total or 0) - old_room_totals.get(row.name, 0),
+            reason=reason or _("Split room discount distribution"),
+        )
+        if adjustment_doc:
+            adjustments.append(adjustment_doc)
+
+    if adjustments:
+        doc.flags.ignore_validate_update_after_submit = True
+        doc.save(ignore_permissions=True)
+
+    frappe.db.commit()
+
+    return {
+        "reservation": doc.name,
+        "discount_amount": total_discount,
+        "rooms": [
+            {
+                "room_row": row.name,
+                "room_number": row.room_number,
+                "discount": flt(row.discount or 0),
+                "room_total": flt(row.room_total or 0),
+                "split_invoice": row.split_invoice,
+            }
+            for row in updated_rows
+        ],
+        "adjustment_invoices": [invoice.name for invoice in adjustments],
+    }
+
+
+@frappe.whitelist()
 def create_pending_split_invoices(reservation_name):
     """Create invoices only for split-group room rows that do not yet have split_invoice."""
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
 
     if not _is_group_split_billing(doc):
         frappe.throw(_("Bulk split invoicing is only available for Group reservations with Split billing mode."))
@@ -1531,12 +2618,28 @@ def collect_payment_for_reservation(reservation_name, payment_info=None):
         payment_info = json.loads(payment_info)
     payment_info = payment_info or {}
 
+    _reconcile_pending_reservation_credit_notes(reservation_name)
+
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    _assert_reservation_mutable(doc)
+    selected_invoice_names = payment_info.get("selected_invoices") or payment_info.get("invoice_names") or []
+    if isinstance(selected_invoice_names, str):
+        try:
+            selected_invoice_names = json.loads(selected_invoice_names)
+        except Exception:
+            selected_invoice_names = [name.strip() for name in selected_invoice_names.split(",") if name.strip()]
+    selected_invoice_names = [str(name).strip() for name in (selected_invoice_names or []) if str(name).strip()]
 
     # Collect ALL outstanding invoices, ordered oldest first
     invoice_names = _get_reservation_invoice_names(doc)
     if not invoice_names:
         frappe.throw(_("No outstanding Sales Invoice found for this reservation."))
+
+    if selected_invoice_names:
+        invalid = [name for name in selected_invoice_names if name not in invoice_names]
+        if invalid:
+            frappe.throw(_("Selected invoice(s) do not belong to this reservation: {0}").format(", ".join(invalid)))
+        invoice_names = selected_invoice_names
 
     outstanding_rows = frappe.get_all(
         "Sales Invoice",
@@ -1546,6 +2649,15 @@ def collect_payment_for_reservation(reservation_name, payment_info=None):
     )
     if not outstanding_rows:
         frappe.throw(_("No outstanding Sales Invoice found for this reservation."))
+
+    invoice_customers = {row.customer for row in outstanding_rows if row.customer}
+    if len(invoice_customers) > 1:
+        frappe.throw(
+            _(
+                "Selected invoices belong to different customers. "
+                "Please receive payment for one guest/customer at a time."
+            )
+        )
 
     paid_amount = float(payment_info.get("paid_amount") or 0)
     if paid_amount <= 0:
@@ -1623,7 +2735,11 @@ def collect_payment_for_reservation(reservation_name, payment_info=None):
     doc.save(ignore_permissions=True)
     frappe.db.commit()
 
-    return {"payment_entry": pe.name, "allocated_invoices": len(allocations)}
+    return {
+        "payment_entry": pe.name,
+        "allocated_invoices": len(allocations),
+        "invoice_names": [name for name, _amount in allocations],
+    }
 
 
 @frappe.whitelist()
@@ -1639,6 +2755,7 @@ def cancel_reservation(reservation_name, reason=None):
         doc.cancel()
     else:
         # Draft/Hold docs can be cancelled in-place
+        _cancel_reservation_invoices(doc)
         doc.reservation_status = STATUS_CANCELLED
         doc.flags.ignore_validate_update_after_submit = True
         doc._release_rooms()

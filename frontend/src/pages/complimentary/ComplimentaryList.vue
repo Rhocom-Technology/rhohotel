@@ -68,27 +68,36 @@
         <select v-model="filterType" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Types</option>
           <option>Food Voucher</option>
-          <option>Transport</option>
+          <option>Room Voucher</option>
+          <option>Airport Transfer</option>
           <option>Room Upgrade</option>
-          <option>Amenity</option>
+          <option>Amenity Basket</option>
           <option>Laundry / Amenity</option>
         </select>
         <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Statuses</option>
+          <option>Draft</option>
+          <option>Pending</option>
           <option>Approved</option>
           <option>In Progress</option>
           <option>Consumed</option>
-          <option>Pending</option>
           <option>Expired</option>
           <option>Cancelled</option>
         </select>
         <select v-model="filterApprover" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
           <option value="">All Approvers</option>
-          <option>Duty Mgr</option>
+          <option>General Manager</option>
+          <option>Duty Manager</option>
+          <option>Front Desk Supervisor</option>
+          <option>Operations Lead</option>
+        </select>
+        <select v-model="filterDepartment" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+          <option value="">All Departments</option>
+          <option>Restaurant</option>
           <option>Front Desk</option>
           <option>Housekeeping</option>
-          <option>GM</option>
-          <option>Ops Lead</option>
+          <option>GM Office</option>
+          <option>Operations</option>
         </select>
         <button @click="resetFilters()"
           class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
@@ -178,6 +187,7 @@ const search = ref('')
 const filterType = ref('')
 const filterStatus = ref('')
 const filterApprover = ref('')
+const filterDepartment = ref('')
 const showConsumedOnly = ref(false)
 const currentPage = ref(1)
 const PAGE_SIZE = 25
@@ -211,12 +221,13 @@ function fetchList() {
     filter_type: filterType.value || null,
     filter_status: showConsumedOnly.value ? 'Consumed' : (filterStatus.value || null),
     filter_approver: filterApprover.value || null,
+    filter_department: filterDepartment.value || null,
     page: currentPage.value,
     page_size: PAGE_SIZE,
   })
 }
 
-watch([search, filterType, filterStatus, filterApprover], () => {
+watch([search, filterType, filterStatus, filterApprover, filterDepartment], () => {
   currentPage.value = 1
   fetchList()
 })
@@ -231,6 +242,7 @@ function resetFilters() {
   filterType.value = ''
   filterStatus.value = ''
   filterApprover.value = ''
+  filterDepartment.value = ''
   showConsumedOnly.value = false
   currentPage.value = 1
 }
@@ -254,6 +266,7 @@ function actionLabel(status) {
 
 function statusClass(s) {
   return {
+    'Draft':       'bg-gray-100 text-gray-500',
     'Approved':    'bg-green-50 text-green-600',
     'In Progress': 'bg-blue-50 text-blue-600',
     'Consumed':    'bg-green-100 text-green-700',

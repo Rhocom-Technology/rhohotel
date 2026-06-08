@@ -3,6 +3,64 @@ import json
 from frappe.utils import nowdate, get_first_day_of_week
 
 
+RH_FIELDS = [
+    "rh_reported_by",
+    "rh_priority",
+    "rh_issue_type",
+    "rh_approved",
+    "rh_approved_by",
+    "rh_approved_on",
+    "rh_assigned_technician",
+    "rh_location_type",
+    "rh_hotel_room",
+    "rh_asset_location",
+]
+
+
+def _has_column(doctype, fieldname):
+    return frappe.db.has_column(doctype, fieldname)
+
+
+def _existing_fields(doctype, fields):
+    return [field for field in fields if field in ("name", "owner", "creation", "modified", "docstatus") or _has_column(doctype, field)]
+
+
+def _fallback_approval(row):
+    if row.get("repair_status") == "Cancelled":
+        return "Rejected"
+    if int(row.get("docstatus") or 0) == 1:
+        return "Approved"
+    return "Pending"
+
+
+def _apply_rh_defaults(records):
+    for row in records:
+        for field in RH_FIELDS:
+            row.setdefault(field, None)
+        row["rh_approved"] = row.get("rh_approved") or _fallback_approval(row)
+        row["rh_priority"] = row.get("rh_priority") or "Medium"
+    return records
+
+
+def _build_filters(filter_status=None, filter_asset=None):
+    filters = {}
+    if filter_asset:
+        filters["asset"] = filter_asset
+
+    if filter_status:
+        if _has_column("Asset Repair", "repair_status") and filter_status in ("Pending", "Completed", "Cancelled"):
+            filters["repair_status"] = filter_status
+        elif _has_column("Asset Repair", "rh_approved"):
+            filters["rh_approved"] = filter_status
+        elif filter_status == "Approved":
+            filters["docstatus"] = 1
+        elif filter_status == "Rejected":
+            filters["repair_status"] = "Cancelled"
+        else:
+            filters["docstatus"] = 0
+    return filters
+
+
 @frappe.whitelist()
 def get_repair_dashboard():
     """Stats for the asset repair list page."""
@@ -11,11 +69,12 @@ def get_repair_dashboard():
     cancelled = frappe.db.count("Asset Repair", {"repair_status": "Cancelled"})
     total = pending + completed + cancelled
 
-    # Approved via rh_approved field
-    approved = frappe.db.count("Asset Repair", {"rh_approved": "Approved"})
-
-    # Rejected via rh_approved field
-    rejected = frappe.db.count("Asset Repair", {"rh_approved": "Rejected"})
+    if _has_column("Asset Repair", "rh_approved"):
+        approved = frappe.db.count("Asset Repair", {"rh_approved": "Approved"})
+        rejected = frappe.db.count("Asset Repair", {"rh_approved": "Rejected"})
+    else:
+        approved = frappe.db.count("Asset Repair", {"docstatus": 1})
+        rejected = cancelled
 
     return {
         "total": total,
@@ -41,64 +100,40 @@ def get_repair_list(
     except (TypeError, ValueError):
         page, page_size = 1, 25
 
-    filters = {}
-    if filter_status:
-        filters["repair_status"] = filter_status
-    if filter_asset:
-        filters["asset"] = filter_asset
-
+    filters = _build_filters(filter_status, filter_asset)
+    fields = _existing_fields("Asset Repair", [
+        "name", "asset", "asset_name", "repair_status", "failure_date",
+        "completion_date", "description", "repair_cost", "total_repair_cost",
+        "docstatus", "owner", "creation",
+        *RH_FIELDS,
+    ])
+    search_fields = _existing_fields("Asset Repair", ["name", "asset", "asset_name", "description"])
+    or_filters = []
     if search:
         q = f"%{search}%"
-        repairs = frappe.db.sql("""
-            SELECT name, asset, asset_name, repair_status, failure_date,
-                   completion_date, description, repair_cost, total_repair_cost,
-                   docstatus, owner, creation,
-                   rh_reported_by, rh_priority, rh_issue_type, rh_approved,
-                   rh_approved_by, rh_approved_on, rh_assigned_technician,
-                   rh_location_type, rh_hotel_room, rh_asset_location
-            FROM `tabAsset Repair`
-            WHERE (name LIKE %(q)s OR asset LIKE %(q)s OR asset_name LIKE %(q)s
-                   OR description LIKE %(q)s)
-            {status_filter}
-            ORDER BY creation DESC
-            LIMIT %(limit)s OFFSET %(offset)s
-        """.format(
-            status_filter="AND repair_status = %(status)s" if filter_status else ""
-        ), {
-            "q": q,
-            "limit": page_size,
-            "offset": (page - 1) * page_size,
-            "status": filter_status,
-        }, as_dict=1)
+        or_filters = [[field, "like", q] for field in search_fields]
 
-        count_sql = """
-            SELECT COUNT(name) as cnt
-            FROM `tabAsset Repair`
-            WHERE (name LIKE %(q)s OR asset LIKE %(q)s OR asset_name LIKE %(q)s
-                   OR description LIKE %(q)s)
-            {status_filter}
-        """.format(
-            status_filter="AND repair_status = %(status)s" if filter_status else ""
-        )
-        result = frappe.db.sql(count_sql, {"q": q, "status": filter_status}, as_dict=1)
-        total = result[0].cnt if result else 0
-    else:
-        repairs = frappe.get_all(
+    repairs = frappe.get_all(
+        "Asset Repair",
+        filters=filters,
+        or_filters=or_filters or None,
+        fields=fields,
+        order_by="creation desc",
+        limit_page_length=page_size,
+        limit_start=(page - 1) * page_size
+    )
+    if or_filters:
+        total = len(frappe.get_all(
             "Asset Repair",
             filters=filters,
-            fields=[
-                "name", "asset", "asset_name", "repair_status", "failure_date",
-                "completion_date", "description", "repair_cost", "total_repair_cost",
-                "docstatus", "owner", "creation",
-                "rh_reported_by", "rh_priority", "rh_issue_type", "rh_approved",
-                "rh_approved_by", "rh_approved_on", "rh_assigned_technician",
-                "rh_location_type", "rh_hotel_room", "rh_asset_location"
-            ],
-            order_by="creation desc",
-            limit_page_length=page_size,
-            limit_start=(page - 1) * page_size
-        )
+            or_filters=or_filters,
+            fields=["name"],
+            limit_page_length=100000,
+        ))
+    else:
         total = frappe.db.count("Asset Repair", filters)
+
+    repairs = _apply_rh_defaults(repairs)
 
     # Add approval info
     for repair in repairs:
