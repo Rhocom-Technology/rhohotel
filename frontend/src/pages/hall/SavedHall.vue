@@ -90,6 +90,46 @@
           </div>
         </div>
 
+        <!-- Facilities & Setup Options -->
+<div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+  <h3 class="text-sm font-bold text-gray-900 mb-1">Facilities & Setup Options</h3>
+  <p class="text-xs text-gray-400 mb-4">Available facilities and support options for this hall.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="text-xs font-medium" :class="hall.has_projector_av ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_projector_av ? '✓' : '✗' }} Projector / AV
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_sound_system ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_sound_system ? '✓' : '✗' }} Sound System
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_air_conditioning ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_air_conditioning ? '✓' : '✗' }} Air Conditioning
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_stage ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_stage ? '✓' : '✗' }} Stage
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_restroom_access ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_restroom_access ? '✓' : '✗' }} Restroom Access
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_parking_access ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_parking_access ? '✓' : '✗' }} Parking Access
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_kitchen_support ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_kitchen_support ? '✓' : '✗' }} Kitchen Support
+    </div>
+
+    <div class="text-xs font-medium" :class="hall.has_private_entrance ? 'text-green-700' : 'text-gray-400'">
+      {{ hall.has_private_entrance ? '✓' : '✗' }} Private Entrance
+    </div>
+  </div>
+</div>
+
         <!-- Amenities -->
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div class="px-6 py-4 border-b border-gray-100">
