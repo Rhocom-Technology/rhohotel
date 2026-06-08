@@ -5,6 +5,8 @@
 (function () {
     'use strict';
 
+    const THERMAL_PRINT_FORMAT = 'Rhocom POS Thermal Receipt';
+
     // Method: Wait for window load and then extend
     function extendPOS() {
         // Check if POS is available
@@ -82,7 +84,7 @@
                 frappe.utils.print(
                     this.doc.doctype,
                     this.doc.name,
-                    frm.pos_print_format || 'Standard',
+                    frm.pos_print_format || THERMAL_PRINT_FORMAT,
                     this.doc.letter_head,
                     this.doc.language || frappe.boot.lang
                 );

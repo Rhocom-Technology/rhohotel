@@ -172,6 +172,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
+import { getPOSInvoicePrintUrl } from '@/lib/posPrint'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -332,10 +333,7 @@ function deleteDraft() {
 
 function printDraftBill() {
   if (!selectedDraft.value) return
-  window.open(
-    `/printview?doctype=POS%20Invoice&name=${encodeURIComponent(selectedDraft.value.invoice)}&trigger_print=1`,
-    '_blank'
-  )
+  window.open(getPOSInvoicePrintUrl(selectedDraft.value.invoice), '_blank')
 }
 </script>
 

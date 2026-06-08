@@ -516,6 +516,7 @@ import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
 import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import PostToRoomModal from '@/components/pos/PostToRoomModal.vue'
 import SplitBillModal from '@/components/pos/SplitBillModal.vue'
+import { getPOSInvoicePrintUrl } from '@/lib/posPrint'
 
 const router = useRouter()
 const route = useRoute()
@@ -769,10 +770,15 @@ const selectedKitchenCount = computed(() =>
 // ── Computed: bill-to results ──────────────────────────────────────
 const billToResults = computed(() =>
   (billToResource.data || []).map(r => ({
-    id: r.id,
+    id: r.check_in || r.id,
+    check_in: r.check_in || null,
+    customer: r.customer || r.id,
+    guest: r.guest || null,
     name: r.name,
     room: r.room || null,
+    room_type: r.room_type || null,
     type: r.type,
+    payment_type: r.payment_type || null,
   }))
 )
 
@@ -907,10 +913,13 @@ function delayBlur(field) {
 }
 
 function selectBillTo(guest) {
-  selectedBillTo.value = guest
+  selectedBillTo.value = {
+    ...guest,
+    id: guest.check_in || guest.id,
+  }
   billToSearch.value = ''
   billToFocused.value = false
-  if (settlementMethod.value === 'Post to Room' && guest.room) {
+  if (guest.room) {
     roomNumber.value = guest.room
   }
   loadComplimentaries()
@@ -963,7 +972,7 @@ const chargeResource = createResource({
     charging.value = false
     menuResource.reload()
     // Auto-print receipt
-    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(data.pos_invoice)}&trigger_print=1`, '_blank')
+    window.open(getPOSInvoicePrintUrl(data.pos_invoice), '_blank')
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
@@ -1026,7 +1035,7 @@ const postToRoomDirectResource = createResource({
     charging.value = false
     menuResource.reload()
     if (invoiceName) {
-      window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(invoiceName)}&trigger_print=1`, '_blank')
+      window.open(getPOSInvoicePrintUrl(invoiceName), '_blank')
     }
     triggerKitchenSend(data?.pos_invoice || null, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
@@ -1226,10 +1235,7 @@ function isKitchenEligible(item) {
       setTimeout(() => { chargeError.value = '' }, 3000)
       return
     }
-    window.open(
-      `/printview?doctype=POS%20Invoice&name=${encodeURIComponent(lastInvoiceName.value)}&trigger_print=1`,
-      '_blank'
-    )
+    window.open(getPOSInvoicePrintUrl(lastInvoiceName.value), '_blank')
   }
 
   function onResumeDraft(data) {
@@ -1398,7 +1404,7 @@ function onHoldSale() {
       price: i.price,
     }))),
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
-    customer: selectedBillTo.value?.name || billToSearch.value || null,
+    customer: selectedBillTo.value?.customer || selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
     discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
@@ -1412,6 +1418,7 @@ function onHoldSale() {
 function setSettlementMethod(method) {
   settlementMethod.value = method
   if (method === 'Post to Room') {
+    if (selectedBillTo.value?.room) roomNumber.value = selectedBillTo.value.room
     occupiedRoomsResource.reload()
     return
   }
@@ -1431,7 +1438,7 @@ function onChargeNow() {
 
   if (settlementMethod.value === 'Post to Room') {
     // If a room is already selected, post directly without showing the modal
-    if (selectedBillTo.value?.room && selectedBillTo.value?.id) {
+    if (selectedBillTo.value?.room && (selectedBillTo.value?.check_in || selectedBillTo.value?.id)) {
       captureSubmissionSnapshot()
       charging.value = true
       postToRoomDirectResource.submit({
@@ -1440,7 +1447,7 @@ function onChargeNow() {
           qty: i.qty,
           price: i.price,
         }))),
-        check_in: selectedBillTo.value.id,
+        check_in: selectedBillTo.value.check_in || selectedBillTo.value.id,
         service_charge: serviceCharge.value,
         discount_amount: manualDiscountAmount.value,
         complimentary_name: selectedComplimentaryName.value || null,
@@ -1470,7 +1477,7 @@ function onChargeNow() {
     }))),
     mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
-    customer: selectedBillTo.value?.name || billToSearch.value || null,
+    customer: selectedBillTo.value?.customer || selectedBillTo.value?.name || billToSearch.value || null,
     service_charge: serviceCharge.value,
     discount_amount: manualDiscountAmount.value,
     complimentary_name: selectedComplimentaryName.value || null,
@@ -1493,7 +1500,7 @@ function onSplitConfirmed(data) {
   menuResource.reload()
   chargeSuccess.value = 'Split bill processed successfully'
   if (data?.pos_invoice) {
-    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(data.pos_invoice)}&trigger_print=1`, '_blank')
+    window.open(getPOSInvoicePrintUrl(data.pos_invoice), '_blank')
   }
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
@@ -1516,7 +1523,7 @@ function onPostConfirmed(data) {
   menuResource.reload()
   // Auto-print the POS invoice if available
   if (invoiceName) {
-    window.open(`/printview?doctype=POS%20Invoice&name=${encodeURIComponent(invoiceName)}&trigger_print=1`, '_blank')
+    window.open(getPOSInvoicePrintUrl(invoiceName), '_blank')
   }
   triggerKitchenSend(data?.pos_invoice || null, submitted, context)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)

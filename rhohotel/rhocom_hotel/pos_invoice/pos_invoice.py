@@ -864,6 +864,8 @@ class POSInvoice(SalesInvoice):
 		super(SalesInvoice, self).set_missing_values(for_validate)
 
 		print_format = profile.get("print_format") if profile else None
+		if not print_format and frappe.db.exists("Print Format", "Rhocom POS Thermal Receipt"):
+			print_format = "Rhocom POS Thermal Receipt"
 		if not print_format and not cint(frappe.db.get_value("Print Format", "POS Invoice", "disabled")):
 			print_format = "POS Invoice"
 

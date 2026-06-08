@@ -167,6 +167,68 @@
       </div>
     </div>
 
+    <!-- Payment Detail Modal -->
+    <Teleport to="body">
+      <div v-if="selectedPayment" class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background:rgba(15,23,42,0.6);" @click.self="closePaymentDetails">
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full overflow-hidden" style="max-width:640px;">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <p class="text-xs text-gray-400 mb-1">Payment Receipt</p>
+              <h3 class="text-sm font-bold text-gray-900">{{ selectedPayment.id }}</h3>
+            </div>
+            <button @click="closePaymentDetails" class="w-7 h-7 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">✕</button>
+          </div>
+
+          <div class="px-6 py-5 space-y-5">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs text-gray-400 mb-1">Amount Received</p>
+                <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(selectedPayment.amount) }}</p>
+              </div>
+              <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(selectedPayment.status)">
+                {{ selectedPayment.status }}
+              </span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+              <div class="border border-gray-100 rounded-xl px-4 py-3 bg-gray-50">
+                <p class="text-xs text-gray-400 mb-1">Guest / Party</p>
+                <p class="text-sm font-semibold text-gray-900">{{ selectedPayment.guest }}</p>
+              </div>
+              <div class="border border-gray-100 rounded-xl px-4 py-3 bg-gray-50">
+                <p class="text-xs text-gray-400 mb-1">Check-in / Folio</p>
+                <p class="text-sm font-semibold text-gray-900">{{ selectedPayment.reservation }}</p>
+              </div>
+              <div class="border border-gray-100 rounded-xl px-4 py-3 bg-gray-50">
+                <p class="text-xs text-gray-400 mb-1">Payment Method</p>
+                <p class="text-sm font-semibold text-gray-900">{{ selectedPayment.method }}</p>
+              </div>
+              <div class="border border-gray-100 rounded-xl px-4 py-3 bg-gray-50">
+                <p class="text-xs text-gray-400 mb-1">Reference No.</p>
+                <p class="text-sm font-semibold text-gray-900">{{ selectedPayment.reference }}</p>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <div class="flex items-center justify-between py-2">
+                <p class="text-xs text-gray-400">Posting Date</p>
+                <p class="text-xs font-semibold text-gray-700">{{ selectedPayment.date }}</p>
+              </div>
+              <div class="flex items-center justify-between py-2">
+                <p class="text-xs text-gray-400">Receipt ID</p>
+                <p class="text-xs font-semibold text-gray-700">{{ selectedPayment.id }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end">
+            <button @click="closePaymentDetails" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Receive Payment Modal -->
     <Teleport to="body">
       <div v-if="showReceiveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -247,11 +309,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import { callMethod } from '@/lib/api'
-
-const router = useRouter()
 
 const search = ref('')
 const filterMethod = ref('')
@@ -259,6 +318,7 @@ const filterStatus = ref('')
 const filterDate = ref('')
 const page = ref(1)
 const pageSize = 10
+const selectedPayment = ref(null)
 const showReceiveModal = ref(false)
 const receivingPayment = ref(false)
 const receiveError = ref('')
@@ -283,7 +343,8 @@ const checkInResource = createResource({
   auto: true,
 })
 
-const checkinOptions = computed(() => checkInResource.data || [])
+const checkins = computed(() => checkInResource.data || [])
+const checkinOptions = computed(() => checkins.value)
 
 const payments = computed(() => (paymentResource.data || []).map((row) => {
   const amount = Number(row.received_amount || row.paid_amount || 0)
@@ -304,11 +365,15 @@ const stats = computed(() => {
   const today = new Date().toISOString().slice(0, 10)
   const todayPosted = payments.value.filter((p) => p.paymentDate === today && p.status === 'Posted')
   const pending = payments.value.filter((p) => p.status === 'Pending')
+  const pendingAmount = checkins.value.reduce((sum, row) => {
+    const outstanding = Number(row.total_outstanding ?? row.total_outstanding_amount ?? 0)
+    return outstanding > 0 ? sum + outstanding : sum
+  }, 0)
   return {
     paymentsToday: todayPosted.length,
     totalCollectedToday: todayPosted.reduce((sum, p) => sum + p.amount, 0),
     unallocated: pending.length,
-    pendingAmount: pending.reduce((sum, p) => sum + p.amount, 0),
+    pendingAmount,
   }
 })
 
@@ -387,7 +452,11 @@ function closeReceivePaymentModal() {
 
 function openPayment(item) {
   if (!item?.id) return
-  window.open(`/app/payment-entry/${encodeURIComponent(item.id)}`, '_blank')
+  selectedPayment.value = item
+}
+
+function closePaymentDetails() {
+  selectedPayment.value = null
 }
 
 async function submitReceivePayment() {
@@ -420,6 +489,7 @@ async function submitReceivePayment() {
       },
     })
     paymentResource.reload()
+    checkInResource.reload()
     closeReceivePaymentModal()
   } catch (e) {
     receiveError.value = String(e?.message || 'Failed to receive payment.')

@@ -491,42 +491,94 @@ def search_pos_bill_to(query=""):
 
     customer_names = [c.customer for c in customers]
 
-    room_map = {}
+    checkin_match_parts = []
+    checkin_args = []
+
+    if query:
+        checkin_match_parts.append("""
+            (
+                ci.name LIKE %s
+                OR ci.room_number LIKE %s
+                OR ci.guest LIKE %s
+                OR IFNULL(hg.hotel_guest_name, '') LIKE %s
+                OR IFNULL(hg.phone_number, '') LIKE %s
+                OR IFNULL(hg.email, '') LIKE %s
+                OR IFNULL(hg.customer, '') LIKE %s
+            )
+        """)
+        checkin_args.extend([like_query] * 7)
 
     if customer_names:
         placeholders = ", ".join(["%s"] * len(customer_names))
+        checkin_match_parts.append(f"IFNULL(hg.customer, '') IN ({placeholders})")
+        checkin_args.extend(customer_names)
+        checkin_match_parts.append(f"ci.guest IN ({placeholders})")
+        checkin_args.extend(customer_names)
 
+    checkins = []
+    if checkin_match_parts:
         checkins = frappe.db.sql("""
             SELECT
-                guest AS customer,
-                room_number AS room
-            FROM `tabHotel Room Check In`
-            WHERE status = 'Checked In'
-            AND docstatus = 1
-            AND guest IN ({placeholders})
-            ORDER BY modified DESC
-        """.format(placeholders=placeholders), tuple(customer_names), as_dict=True)
-
-        for ci in checkins:
-            if ci.customer not in room_map:
-                room_map[ci.customer] = ci.room
+                ci.name AS check_in,
+                ci.guest AS guest,
+                ci.room_number AS room,
+                r.room_type,
+                COALESCE(NULLIF(hg.customer, ''), ci.guest) AS customer,
+                COALESCE(NULLIF(hg.hotel_guest_name, ''), ci.guest) AS name,
+                hg.email AS email_id,
+                hg.phone_number AS mobile_no,
+                ci.reservation_source AS payment_type
+            FROM `tabHotel Room Check In` ci
+            LEFT JOIN `tabHotel Guest` hg ON hg.name = ci.guest
+            LEFT JOIN `tabHotel Room` r ON r.room_number = ci.room_number
+            WHERE ci.status = 'Checked In'
+              AND ci.docstatus = 1
+              AND ({matches})
+            ORDER BY ci.modified DESC
+            LIMIT 10
+        """.format(matches=" OR ".join(checkin_match_parts)), tuple(checkin_args), as_dict=True)
 
     results = []
 
+    seen_customers = set()
+    seen_checkins = set()
+
+    for ci in checkins:
+        if ci.check_in in seen_checkins:
+            continue
+        seen_checkins.add(ci.check_in)
+        if ci.customer:
+            seen_customers.add(ci.customer)
+
+        results.append({
+            "id": ci.check_in,
+            "check_in": ci.check_in,
+            "customer": ci.customer,
+            "guest": ci.guest,
+            "name": ci.name,
+            "room": ci.room,
+            "room_type": ci.room_type,
+            "email": ci.email_id,
+            "phone": ci.mobile_no,
+            "type": "Checked In",
+            "payment_type": ci.payment_type,
+        })
+
     for c in customers:
-        room = room_map.get(c.customer)
+        if c.customer in seen_customers:
+            continue
 
         results.append({
             "id": c.customer,
             "customer": c.customer,
             "name": c.name,
-            "room": room,
+            "room": None,
             "email": c.email_id,
             "phone": c.mobile_no,
-            "type": "Checked In" if room else "Customer"
+            "type": "Customer",
         })
 
-    return results
+    return results[:10]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
