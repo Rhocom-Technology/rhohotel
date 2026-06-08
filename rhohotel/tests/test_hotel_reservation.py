@@ -345,6 +345,42 @@ class TestHotelReservation(unittest.TestCase):
 
         self.assertEqual(allocations, {"ROW-1": 5000, "ROW-2": 6000})
 
+    def test_link_reservation_invoices_to_check_in_links_only_split_room_invoices(self):
+        doc = types.SimpleNamespace(
+            reservation_type="Group",
+            group_billing_mode="Split",
+            rooms=[
+                Row(name="ROW-1", split_invoice="INV-ROOM-1"),
+                Row(name="ROW-2", split_invoice="INV-ROOM-2"),
+            ],
+        )
+        linked_values = {}
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+
+        def fake_exists(doctype, name):
+            return True
+
+        def fake_get_value(doctype, name, fieldname=None, **kwargs):
+            return linked_values.get(name)
+
+        def fake_set_value(doctype, name, fieldname, value, **kwargs):
+            linked_values[name] = value
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module.frappe.db, "exists", side_effect=fake_exists, create=True),
+            patch.object(hr_module.frappe.db, "has_column", return_value=True, create=True),
+            patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value),
+            patch.object(hr_module.frappe.db, "set_value", side_effect=fake_set_value, create=True),
+            patch.object(hr_module, "_get_split_room_adjustment_invoice_names", return_value=["INV-ADJ-1"]),
+            patch("rhohotel.rhocom_hotel.utils.folio.sync_checkin_folio_totals", return_value={}),
+        ):
+            linked = hr_module.link_reservation_invoices_to_check_in("RES-TEST-0001", "CHK-1", "ROW-1")
+
+        self.assertEqual(linked, ["INV-ROOM-1", "INV-ADJ-1"])
+        self.assertEqual(linked_values, {"INV-ROOM-1": "CHK-1", "INV-ADJ-1": "CHK-1"})
+
     def test_saved_reservation_invoice_ledger_opens_invoice_detail_modal(self):
         app_root = Path(__file__).resolve().parents[2]
         source = (app_root / "frontend/src/components/reservations/SavedReservation.vue").read_text()

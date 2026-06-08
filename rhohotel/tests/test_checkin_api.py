@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from datetime import date, datetime
 from unittest.mock import Mock, patch
 
 
@@ -17,6 +18,8 @@ if "frappe" not in sys.modules:
     frappe_stub.throw = lambda message: (_ for _ in ()).throw(RuntimeError(message))
     frappe_stub.whitelist = _whitelist
     frappe_stub.get_doc = lambda *args, **kwargs: None
+    frappe_stub.log_error = lambda *args, **kwargs: None
+    frappe_stub.get_traceback = lambda: ""
     frappe_stub.db = types.SimpleNamespace(
         exists=lambda *args, **kwargs: False,
         sql=lambda *args, **kwargs: [],
@@ -28,13 +31,20 @@ if "frappe" not in sys.modules:
     utils_stub.add_days = lambda dt, days: dt
     utils_stub.flt = lambda value: float(value or 0)
     utils_stub.cint = lambda value: int(value or 0)
-    utils_stub.get_datetime = lambda value: value
+    utils_stub.get_datetime = lambda value: value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    utils_stub.getdate = lambda value: value if isinstance(value, date) and not isinstance(value, datetime) else utils_stub.get_datetime(value).date()
+    utils_stub.today = lambda: "2026-05-23"
 
     sys.modules["frappe"] = frappe_stub
     sys.modules["frappe.utils"] = utils_stub
+    sys.modules["frappe.model"] = types.ModuleType("frappe.model")
+    document_stub = types.ModuleType("frappe.model.document")
+    document_stub.Document = object
+    sys.modules["frappe.model.document"] = document_stub
 
 
 from rhohotel.rhocom_hotel.api import checkin as checkin_api
+from rhohotel.rhocom_hotel.doctype.hotel_settings import hotel_settings as hotel_settings_api
 
 
 class FakeCheckinDoc(types.SimpleNamespace):
@@ -44,6 +54,10 @@ class FakeCheckinDoc(types.SimpleNamespace):
             "reservation": self.reservation,
             "reservation_source": self.reservation_source,
         }
+
+
+class FakeReservationDoc(types.SimpleNamespace):
+    pass
 
 
 class TestCheckinApi(unittest.TestCase):
@@ -69,9 +83,14 @@ class TestCheckinApi(unittest.TestCase):
                 return True
             return False
 
+        def fake_get_doc(doctype, name):
+            if doctype == "Hotel Reservation" and name == "RES-CORP-0001":
+                return FakeReservationDoc(name=name, reservation_type="Corporate", rooms=[])
+            return doc
+
         with (
             patch.object(checkin_api.frappe.db, "exists", side_effect=fake_exists),
-            patch.object(checkin_api.frappe, "get_doc", return_value=doc),
+            patch.object(checkin_api.frappe, "get_doc", side_effect=fake_get_doc),
             patch.object(checkin_api.frappe.db, "sql", return_value=[]),
             patch.object(checkin_api.frappe.db, "get_value", return_value="Corporate"),
             patch.dict(
@@ -126,9 +145,14 @@ class TestCheckinApi(unittest.TestCase):
                 return True
             return False
 
+        def fake_get_doc(doctype, name):
+            if doctype == "Hotel Reservation" and name == "RES-IND-0001":
+                return FakeReservationDoc(name=name, reservation_type="Individual", rooms=[])
+            return doc
+
         with (
             patch.object(checkin_api.frappe.db, "exists", side_effect=fake_exists),
-            patch.object(checkin_api.frappe, "get_doc", return_value=doc),
+            patch.object(checkin_api.frappe, "get_doc", side_effect=fake_get_doc),
             patch.object(checkin_api.frappe.db, "sql", return_value=[]),
             patch.object(checkin_api.frappe.db, "get_value", return_value="Individual"),
             patch.dict(
@@ -146,6 +170,42 @@ class TestCheckinApi(unittest.TestCase):
         self.assertEqual(result["invoices"][0]["invoice_type"], "Reservation Invoice")
         self.assertEqual(len(result.get("payments") or []), 1)
         self.assertEqual(result["payments"][0]["payment_id"], "PAY-RES-2")
+
+
+class TestHotelSettingsCheckInTime(unittest.TestCase):
+    def test_default_check_in_datetime_moves_noon_to_configured_check_in_time(self):
+        settings = types.SimpleNamespace(
+            default_check_in_time="13:00:00",
+            default_check_out_time="12:00:00",
+        )
+
+        with patch.object(hotel_settings_api, "_get_hotel_settings", return_value=settings):
+            result = hotel_settings_api.get_default_check_in_datetime("2026-06-08 12:00:00")
+
+        self.assertEqual(result, datetime(2026, 6, 8, 13, 0, 0))
+
+    def test_default_check_in_datetime_keeps_late_arrival_time(self):
+        settings = types.SimpleNamespace(
+            default_check_in_time="13:00:00",
+            default_check_out_time="12:00:00",
+        )
+
+        with patch.object(hotel_settings_api, "_get_hotel_settings", return_value=settings):
+            result = hotel_settings_api.get_default_check_in_datetime("2026-06-08 16:30:00")
+
+        self.assertEqual(result, datetime(2026, 6, 8, 16, 30, 0))
+
+
+class TestLateCheckoutApproval(unittest.TestCase):
+    def test_approved_late_checkout_does_not_return_charge(self):
+        with patch.object(
+            hotel_settings_api.frappe.db,
+            "get_value",
+            return_value=1,
+        ):
+            result = hotel_settings_api.check_late_checkout("CHK-LATE-APPROVED")
+
+        self.assertEqual(result, {"late": False, "approved": True})
 
 
 if __name__ == "__main__":

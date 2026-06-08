@@ -161,13 +161,42 @@
                   class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white file:mr-3 file:px-3 file:py-1.5 file:text-xs file:font-medium file:border-0 file:rounded-md file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <p v-if="idDocumentName" class="mt-1 text-xs text-green-600">Selected: {{ idDocumentName }}</p>
-                <a
+                <div
                   v-if="form.id_document_scan"
-                  :href="form.id_document_scan"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="mt-1 inline-block text-xs text-blue-600 hover:underline"
-                >View current uploaded document</a>
+                  class="mt-3 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden"
+                >
+                  <button
+                    v-if="isIdImage"
+                    type="button"
+                    @click="showDocPreview = true"
+                    class="block w-full bg-white"
+                  >
+                    <img
+                      :src="form.id_document_scan"
+                      alt="Current ID document"
+                      class="w-full max-h-56 object-contain"
+                    />
+                  </button>
+                  <div v-else class="px-4 py-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold text-gray-800">{{ idDocFileName }}</p>
+                      <p class="text-xs text-gray-400 mt-0.5">Current uploaded document</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="showDocPreview = true"
+                      class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >Preview</button>
+                  </div>
+                  <div v-if="isIdImage" class="px-3 py-2 border-t border-gray-200 flex items-center justify-between">
+                    <span class="text-xs text-gray-500 truncate">{{ idDocFileName }}</span>
+                    <button
+                      type="button"
+                      @click="showDocPreview = true"
+                      class="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                    >Preview</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -234,6 +263,51 @@
         </div>
       </div>
     </template>
+
+    <Teleport to="body">
+      <div
+        v-if="showDocPreview && form.id_document_scan"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style="background:rgba(15,23,42,0.75);backdrop-filter:blur(4px);"
+        @click.self="showDocPreview = false"
+      >
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-width:900px;width:100%;max-height:92vh;">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+            <div>
+              <p class="text-sm font-bold text-gray-900">ID Document Preview</p>
+              <p class="text-xs text-gray-400">{{ idDocFileName }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <a
+                :href="form.id_document_scan"
+                download
+                class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >Download</a>
+              <button
+                type="button"
+                @click="showDocPreview = false"
+                class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-sm"
+              >x</button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4" style="min-height:400px;">
+            <img
+              v-if="isIdImage"
+              :src="form.id_document_scan"
+              alt="ID document preview"
+              class="max-w-full max-h-full object-contain rounded-lg shadow"
+            />
+            <iframe
+              v-else
+              :src="form.id_document_scan"
+              class="w-full rounded-lg"
+              style="height:70vh;border:none;"
+              title="ID document preview"
+            ></iframe>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -253,6 +327,7 @@ const saving = ref(false)
 const saveError = ref(null)
 const saveSuccess = ref(false)
 const idDocumentFile = ref(null)
+const showDocPreview = ref(false)
 
 const allPreferences = [
   'Quiet room / High floor',
@@ -296,6 +371,14 @@ const availablePreferences = computed(() =>
 )
 
 const idDocumentName = computed(() => idDocumentFile.value?.name || '')
+const idDocFileName = computed(() => {
+  const url = form.id_document_scan || ''
+  return url.split('/').pop().split('?')[0] || 'document'
+})
+const isIdImage = computed(() => {
+  const url = form.id_document_scan || ''
+  return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url.split('?')[0])
+})
 
 function addPreference(event) {
   const val = event.target.value
@@ -330,6 +413,14 @@ async function uploadIdDocument(guestName) {
   })
 
   form.id_document_scan = payload?.message?.file_url || form.id_document_scan
+  if (form.id_document_scan) {
+    await callMethodForm('frappe.client.set_value', {
+      doctype: 'Hotel Guest',
+      name: guestName,
+      fieldname: 'id_document_scan',
+      value: form.id_document_scan,
+    })
+  }
 }
 
 async function loadGuest(name = guestId.value) {

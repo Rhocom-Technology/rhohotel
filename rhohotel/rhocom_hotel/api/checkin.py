@@ -565,8 +565,18 @@ def search_reservations(query=""):
     # Canonical: Hotel Reservation
     # -----------------------------------------------------------------------
     canonical_base = """
-        hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
+        hr.reservation_status NOT IN ('Cancelled', 'Checked In', 'Checked Out', 'No Show', 'Expired')
         AND hr.docstatus != 2
+        AND NOT EXISTS (
+            SELECT 1
+            FROM `tabHotel Reservation Room` hrr
+            WHERE hrr.parent = hr.name
+              AND hrr.parenttype = 'Hotel Reservation'
+              AND (
+                  COALESCE(hrr.check_in_reference, '') != ''
+                  OR hrr.status IN ('Checked In', 'Checked Out')
+              )
+        )
     """
 
     if query and len(query.strip()) >= 1:
@@ -831,7 +841,12 @@ def create_checkin(
     frappe.has_permission("Hotel Room Check In", "create", throw=True)
 
     if not check_in_datetime:
-        check_in_datetime = now_datetime()
+        if canonical_reservation:
+            from rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings import get_default_check_in_datetime
+
+            check_in_datetime = get_default_check_in_datetime()
+        else:
+            check_in_datetime = now_datetime()
 
     ci_dt = get_datetime(check_in_datetime)
     expected_out = add_days(ci_dt, cint(number_of_nights))
@@ -924,6 +939,17 @@ def create_checkin(
                         doc.name,
                         update_modified=False,
                     )
+                    try:
+                        from rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation import (
+                            link_reservation_invoices_to_check_in,
+                        )
+
+                        link_reservation_invoices_to_check_in(canonical_reservation, doc.name, row.name)
+                    except Exception:
+                        frappe.log_error(
+                            frappe.get_traceback(),
+                            "Reservation invoice link failed at check-in",
+                        )
                     break
         except Exception:
             frappe.log_error(frappe.get_traceback(), "Canonical reservation update failed at check-in")
@@ -942,6 +968,13 @@ def create_refund(check_in_name, reason="", amount=None):
 
     if not frappe.db.exists("Hotel Room Check In", check_in_name):
         frappe.throw(f"Check-in {check_in_name} not found")
+
+    reason = (reason or "").strip()
+    valid_reasons = _get_hotel_refund_reason_options()
+    if not reason:
+        frappe.throw("Please select a refund reason.")
+    if valid_reasons and reason not in valid_reasons:
+        frappe.throw("Please select a valid refund reason.")
 
     check_in = frappe.get_doc("Hotel Room Check In", check_in_name)
     from rhohotel.rhocom_hotel.utils.folio import get_checkin_folio
@@ -980,7 +1013,7 @@ def create_refund(check_in_name, reason="", amount=None):
     refund.guest = check_in.guest
     refund.check_in = check_in.name
     refund.refund_amount = refund_amount
-    refund.reason = reason or f"Refund for Check In {check_in.name}"
+    refund.reasons = reason
     refund.insert(ignore_permissions=True)
     refund.submit()
     try:
@@ -991,6 +1024,13 @@ def create_refund(check_in_name, reason="", amount=None):
         frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after refund request")
 
     return {"name": refund.name, "refund_amount": refund_amount, "total_paid": total_paid, "total_charged": total_charged, "total_refunded": total_refunded}
+
+
+def _get_hotel_refund_reason_options():
+    meta = frappe.get_meta("Hotel Refund")
+    field = meta.get_field("reasons") if meta else None
+    options = (field.options or "") if field else ""
+    return [row.strip() for row in options.splitlines() if row.strip()]
 
 
 @frappe.whitelist()

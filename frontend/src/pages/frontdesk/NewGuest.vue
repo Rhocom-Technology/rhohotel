@@ -357,10 +357,19 @@ async function uploadIdDocument(guestName) {
   body.append('fieldname', 'id_document_scan')
   body.append('is_private', '1')
 
-  await requestApi('/api/method/upload_file', {
+  const payload = await requestApi('/api/method/upload_file', {
     method: 'POST',
     body,
   })
+  const fileUrl = payload?.message?.file_url || ''
+  if (fileUrl) {
+    await callMethodForm('frappe.client.set_value', {
+      doctype: 'Hotel Guest',
+      name: guestName,
+      fieldname: 'id_document_scan',
+      value: fileUrl,
+    })
+  }
 }
 
 async function createGuest() {

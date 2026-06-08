@@ -70,7 +70,7 @@
             "fieldname": "reasons",
             "fieldtype": "Select",
             "label": "Reasons",
-            "options": "Reservation Cancellation\nEarly Check-out\nService Complaints\nBilling Errors",
+            "options": "\nReservation Cancellation\nEarly Check-out\nService Complaints\nBilling Errors",
             "reqd": 1
         },
         {

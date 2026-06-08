@@ -323,7 +323,7 @@ def resolve_payer(reservation_name, charge_category="Room"):
 
 
 @frappe.whitelist()
-def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None, nights=None):
+def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None, nights=None, strict_room_type=0):
     """
     Return Hotel Room Rate records eligible for the given reservation type / source channel.
 
@@ -332,6 +332,7 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
         check_in_date:    Date string for validity window filtering (optional)
         room_type:        Optional Hotel Room Type to require a tariff for
         nights:           Optional stay length for min/max stay checks
+        strict_room_type: When true, require each returned rate to be tied to the selected room type
 
     Returns:
         list[dict] with rate_code, market_segment, meal_plan, description
@@ -340,6 +341,7 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
 
     today = getdate(check_in_date or nowdate())
     stay_nights = int(nights or 0)
+    strict_room_type = str(strict_room_type or "").strip().lower() in {"1", "true", "yes", "on"}
 
     # Map reservation type to channel eligibility field
     channel_field_map = {
@@ -385,7 +387,10 @@ def get_eligible_rate_codes(reservation_type, check_in_date=None, room_type=None
             continue
         if stay_nights and r.max_stay and stay_nights > int(r.max_stay):
             continue
-        # If the rate is bound to a specific room type, only include it when it matches
+        # If the rate is bound to a specific room type, only include it when it matches.
+        # Check-in uses strict mode so agents only see rate cards for the selected room type.
+        if strict_room_type and room_type and not r.room_type:
+            continue
         if room_type and r.room_type and r.room_type != room_type:
             continue
         eligible.append(r)

@@ -71,9 +71,11 @@
 
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Reason <span class="text-red-400">*</span></p>
-            <textarea v-model="reason" rows="4"
-              placeholder="Explain why the refund is required"
-              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+            <select v-model="reason"
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Select refund reason</option>
+              <option v-for="item in reasonOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
           </div>
 
           <div class="bg-yellow-50 rounded-xl border border-yellow-200 px-4 py-3">
@@ -101,6 +103,12 @@ import { humanizeErrorMessage } from '@/lib/api'
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
 const reason = ref('')
+const reasonOptions = [
+  'Reservation Cancellation',
+  'Early Check-out',
+  'Service Complaints',
+  'Billing Errors',
+]
 const totalPaid = ref(0)
 const totalCharged = ref(0)
 const totalAlreadyRefunded = ref(0)

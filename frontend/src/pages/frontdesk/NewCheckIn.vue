@@ -739,8 +739,12 @@ async function loadRateCards(options = {}) {
       check_in_date: getCheckInDateForRates(),
       room_type: form.room_type || selectedRoomType.value || '',
       nights: form.number_of_nights || 1,
+      strict_room_type: 1,
     })
-    rateCards.value = Array.isArray(rows) ? rows : []
+    const selectedType = String(form.room_type || selectedRoomType.value || '').trim()
+    rateCards.value = Array.isArray(rows)
+      ? rows.filter(rate => !selectedType || String(rate.room_type || '').trim() === selectedType)
+      : []
 
     if (!preserveSelection) {
       form.rate_type = ''

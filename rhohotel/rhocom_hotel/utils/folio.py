@@ -190,6 +190,15 @@ def get_checkin_folio(check_in):
 	if not frappe.db.exists("Hotel Room Check In", check_in):
 		frappe.throw(f"Check-in {check_in} not found")
 
+	try:
+		from rhohotel.rhocom_hotel.utils.credit_note_reconciliation import (
+			reconcile_credit_notes_for_checkin,
+		)
+
+		reconcile_credit_notes_for_checkin(check_in, sync_folio=False)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Check-in credit note reconciliation failed")
+
 	invoices = _get_sales_invoice_rows(check_in)
 	invoice_names = [row.name for row in invoices]
 	payment_allocations = _get_invoice_payment_allocations(invoice_names)

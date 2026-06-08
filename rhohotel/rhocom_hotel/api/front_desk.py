@@ -446,6 +446,24 @@ def collect_payment_for_checkin(check_in, allocations=None, payment_info=None):
 	except Exception:
 		customer = None
 
+	allocation_invoice_names = []
+	for alloc in allocations:
+		ref_doctype = alloc.get("doctype") or "Sales Invoice"
+		ref_name = alloc.get("invoice") or alloc.get("invoice_name") or alloc.get("name")
+		if ref_doctype == "Sales Invoice" and ref_name:
+			allocation_invoice_names.append(ref_name)
+	if allocation_invoice_names:
+		invoice_customers = frappe.get_all(
+			"Sales Invoice",
+			filters={"name": ["in", list(dict.fromkeys(allocation_invoice_names))], "docstatus": 1},
+			pluck="customer",
+		)
+		invoice_customers = list(dict.fromkeys([name for name in invoice_customers if name]))
+		if len(invoice_customers) > 1:
+			frappe.throw(_("Selected invoices belong to different customers. Please receive payment for one customer at a time."))
+		if invoice_customers:
+			customer = invoice_customers[0]
+
 	total_paid = float(payment_info.get("paid_amount") or 0)
 	if total_paid <= 0:
 		total_paid = sum(float(a.get("amount") or 0) for a in allocations)

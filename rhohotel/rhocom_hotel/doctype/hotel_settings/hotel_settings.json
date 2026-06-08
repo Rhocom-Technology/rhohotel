@@ -10,6 +10,7 @@
   "default_customer",
   "default_taxes_and_charges",
   "default_invoice_naming_series",
+  "default_check_in_time",
   "default_check_out_time",
   "reservation_features_section",
   "enable_group_room_blocks",
@@ -56,6 +57,13 @@
    "fieldname": "default_invoice_naming_series",
    "fieldtype": "Data",
    "label": "Default Invoice Naming Series"
+  },
+  {
+   "default": "13:00:00",
+   "description": "Default arrival/check-in time used when checking in reservations before the normal arrival time. This must be later than the default check-out time.",
+   "fieldname": "default_check_in_time",
+   "fieldtype": "Time",
+   "label": "Default Check-In Time"
   },
   {
    "default": "12:00:00",

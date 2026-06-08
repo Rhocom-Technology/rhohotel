@@ -53,6 +53,17 @@ def reconcile_sales_credit_note(credit_note, source_invoice=None, check_in=None,
 
 	credit_available = _get_credit_note_open_amount(credit_doc.name)
 	source_outstanding = _get_invoice_open_amount(source_doc.name)
+	if credit_available > 0 and source_outstanding <= 0:
+		alternate_invoice = _find_alternate_outstanding_invoice(
+			credit_doc,
+			check_in=check_in or credit_doc.get("custom_hotel_room_check_in"),
+			reservation=reservation,
+			exclude={credit_doc.name, source_doc.name},
+		)
+		if alternate_invoice:
+			source_doc = frappe.get_doc("Sales Invoice", alternate_invoice)
+			source_invoice = source_doc.name
+			source_outstanding = _get_invoice_open_amount(source_doc.name)
 	allocated_amount = min(credit_available, source_outstanding)
 
 	if allocated_amount <= 0:
@@ -127,9 +138,11 @@ def reconcile_sales_credit_note(credit_note, source_invoice=None, check_in=None,
 
 
 @frappe.whitelist()
-def reconcile_credit_notes_for_checkin(check_in):
+def reconcile_credit_notes_for_checkin(check_in, sync_folio=True):
 	if not check_in:
 		frappe.throw(_("Check-in is required."))
+	if isinstance(sync_folio, str):
+		sync_folio = sync_folio.lower() not in {"0", "false", "no"}
 
 	rows = frappe.get_all(
 		"Sales Invoice",
@@ -146,6 +159,7 @@ def reconcile_credit_notes_for_checkin(check_in):
 			row.name,
 			source_invoice=row.return_against,
 			check_in=check_in,
+			sync_folio=sync_folio,
 		)
 		for row in rows
 		if row.return_against
@@ -206,6 +220,56 @@ def _get_credit_note_cost_center(credit_doc):
 		if item.cost_center:
 			return item.cost_center
 	return None
+
+
+def _find_alternate_outstanding_invoice(credit_doc, check_in=None, reservation=None, exclude=None):
+	exclude = set(exclude or [])
+	invoice_names = []
+	if check_in and frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in"):
+		invoice_names.extend(
+			frappe.get_all(
+				"Sales Invoice",
+				filters={
+					"custom_hotel_room_check_in": check_in,
+					"docstatus": 1,
+					"is_return": 0,
+					"customer": credit_doc.customer,
+					"outstanding_amount": [">", 0],
+				},
+				pluck="name",
+				order_by="posting_date asc, creation asc",
+			)
+		)
+
+	if reservation and frappe.db.exists("Hotel Reservation", reservation):
+		res_doc = frappe.get_doc("Hotel Reservation", reservation)
+		if res_doc.get("sales_invoice"):
+			invoice_names.append(res_doc.sales_invoice)
+		invoice_names.extend(
+			frappe.get_all(
+				"Hotel Reservation Invoice",
+				filters={"parent": reservation},
+				pluck="invoice",
+			)
+		)
+
+	invoice_names = [name for name in dict.fromkeys(invoice_names) if name and name not in exclude]
+	if not invoice_names:
+		return None
+
+	row = frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"name": ["in", invoice_names],
+			"docstatus": 1,
+			"is_return": 0,
+			"customer": credit_doc.customer,
+			"outstanding_amount": [">", 0],
+		},
+		"name",
+		order_by="posting_date asc, creation asc",
+	)
+	return row
 
 
 def _sync_related_folio(check_in=None, reservation=None):

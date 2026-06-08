@@ -117,6 +117,59 @@ def _mark_reservation_room_checked_in(row_name, check_in_reference, check_in_tim
     )
 
 
+def link_reservation_invoices_to_check_in(reservation_name, check_in_name, room_row_name=None):
+    """Back-link submitted reservation invoices to a Hotel Room Check In.
+
+    Split group reservations have one invoice per room, so only the checked-in
+    room row's invoice and row-specific adjustment invoices should move into
+    that check-in folio. Central/non-split reservations use the reservation
+    invoice ledger.
+    """
+    if not reservation_name or not check_in_name:
+        return []
+    if not frappe.db.exists("Hotel Reservation", reservation_name):
+        return []
+    if not frappe.db.exists("Hotel Room Check In", check_in_name):
+        return []
+    if not frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in"):
+        return []
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+    invoice_names = []
+    if _is_group_split_billing(doc) and room_row_name:
+        room_row = next((row for row in doc.rooms or [] if row.name == room_row_name), None)
+        if room_row:
+            if getattr(room_row, "split_invoice", None):
+                invoice_names.append(room_row.split_invoice)
+            invoice_names.extend(_get_split_room_adjustment_invoice_names(doc, room_row))
+    else:
+        invoice_names.extend(_get_reservation_invoice_names(doc))
+
+    linked = []
+    for invoice_name in dict.fromkeys([name for name in invoice_names if name]):
+        existing_check_in = frappe.db.get_value("Sales Invoice", invoice_name, "custom_hotel_room_check_in")
+        if existing_check_in and existing_check_in != check_in_name:
+            continue
+        frappe.db.set_value(
+            "Sales Invoice",
+            invoice_name,
+            "custom_hotel_room_check_in",
+            check_in_name,
+            update_modified=False,
+        )
+        linked.append(invoice_name)
+
+    if linked:
+        try:
+            from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+            sync_checkin_folio_totals(check_in_name)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after reservation invoice link")
+
+    return linked
+
+
 # ---------------------------------------------------------------------------
 # Doctype class
 # ---------------------------------------------------------------------------
@@ -795,7 +848,9 @@ def check_in_reservation_room(reservation_name, room_row_name):
                 "check_in_reference": row.check_in_reference}
 
     try:
-        ci_dt = now_datetime()
+        from rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings import get_default_check_in_datetime
+
+        ci_dt = get_default_check_in_datetime()
         nights = cint(row.number_of_nights or doc.number_of_nights or 1)
         expected_out = add_days(get_datetime(ci_dt), nights)
 
@@ -864,6 +919,7 @@ def check_in_reservation_room(reservation_name, room_row_name):
         ci_doc.submit()
 
         _mark_reservation_room_checked_in(row.name, ci_doc.name, ci_dt)
+        link_reservation_invoices_to_check_in(reservation_name, ci_doc.name, row.name)
         # Update reservation-level status atomically without loading the full doc
         current_res_status = frappe.db.get_value("Hotel Reservation", reservation_name, "reservation_status")
         if current_res_status not in (STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
@@ -909,7 +965,9 @@ def bulk_check_in_reservation(reservation_name):
     checked_in_count = 0
     already_checked_in = 0
     errors = []
-    ci_dt = now_datetime()
+    from rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings import get_default_check_in_datetime
+
+    ci_dt = get_default_check_in_datetime()
 
     for row in doc.rooms:
         room_label = getattr(row, 'room_number', '?')
@@ -1020,6 +1078,7 @@ def bulk_check_in_reservation(reservation_name):
             row.status = STATUS_CHECKED_IN
             row.check_in_time = ci_dt
             _mark_reservation_room_checked_in(row.name, ci_doc.name, ci_dt)
+            link_reservation_invoices_to_check_in(reservation_name, ci_doc.name, row.name)
             checked_in_count += 1
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), f"bulk_check_in: room {room_label}")

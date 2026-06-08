@@ -218,6 +218,8 @@ def get_guest(name):
 		desc = f"Stay • Room {room} • {rtype} • {status}"
 		timeline.append({"date": label, "desc": desc, "color": "#3b82f6"})
 
+	id_document_scan = _get_guest_id_document_url(doc)
+
 	return {
 		"name": doc.name,
 		"hotel_guest_name": doc.hotel_guest_name,
@@ -237,7 +239,7 @@ def get_guest(name):
 		"loyalty_tier": doc.loyalty_tier or "Base",
 		"notes": doc.notes,
 		"passport_photo": doc.passport_photo or "",
-		"id_document_scan": doc.id_document_scan or "",
+		"id_document_scan": id_document_scan,
 		# computed
 		"total_stays": total_stays,
 		"lifetime_spend": lifetime_spend,
@@ -245,6 +247,25 @@ def get_guest(name):
 		"timeline": timeline,
 		"current_status": "In-House" if active_ci else "Checked Out",
 	}
+
+
+def _get_guest_id_document_url(doc):
+	"""Resolve the guest ID document from the field or its attached File record."""
+	if doc.id_document_scan:
+		return doc.id_document_scan
+
+	files = frappe.get_all(
+		"File",
+		filters={
+			"attached_to_doctype": "Hotel Guest",
+			"attached_to_name": doc.name,
+			"attached_to_field": "id_document_scan",
+		},
+		fields=["file_url"],
+		order_by="creation desc",
+		limit_page_length=1,
+	)
+	return files[0].file_url if files else ""
 
 
 # ---------------------------------------------------------------------------

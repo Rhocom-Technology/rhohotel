@@ -1399,6 +1399,13 @@ def apply_late_checkout_charge(check_in, item, charge_type, amount):
     """
 
 	check_in_doc = frappe.get_doc("Hotel Room Check In", check_in)
+	if check_in_doc.late_checkout:
+		return {
+			"status": "skipped",
+			"sales_invoice": None,
+			"amount": 0,
+			"message": _("Late check-out was approved at check-in, so no late check-out charge is applied."),
+		}
 
 	# --------------------------------
 	# Safety: prevent duplicate charge
