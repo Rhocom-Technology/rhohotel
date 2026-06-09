@@ -139,12 +139,17 @@
                 </div>
               </div>
               <div class="px-6 pb-6 space-y-2">
+                <p v-if="actionMessage" class="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{{ actionMessage }}</p>
+                <p v-if="actionError" class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{{ actionError }}</p>
                 <div class="flex gap-2">
-                  <button class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">Transfer</button>
-                  <button class="btn-hover flex-1 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 bg-white">Print Bill</button>
+                  <button @click="transferTable" :disabled="transferring"
+                    class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ transferring ? 'Transferring…' : 'Transfer' }}
+                  </button>
+                  <button @click="printTableBill" class="btn-hover flex-1 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 bg-white">Print Bill</button>
                 </div>
                 <div class="flex gap-2">
-                  <button class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">Settle Table</button>
+                  <button @click="settleTable" class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">Settle Table</button>
                   <button @click="$emit('resume', selectedTable); $emit('update:modelValue', false)" class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Resume Order</button>
                 </div>
               </div>
@@ -159,6 +164,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
+import { printPOSInvoice } from '@/lib/posPrint'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue', 'resume'])
@@ -169,11 +175,31 @@ const tableFilterWaiter = ref('')
 const tablePage = ref(1)
 const perPage = 10
 const selectedTable = ref(null)
+const transferring = ref(false)
+const actionError = ref('')
+const actionMessage = ref('')
 
 // ── API: Open Tables ───────────────────────────────────────────────────────
 const tablesResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_open_pos_tables',
   auto: false,
+})
+
+const transferResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
+  onSuccess(data) {
+    transferring.value = false
+    actionError.value = ''
+    actionMessage.value = `Table transferred. Draft ${data.pos_invoice} updated.`
+    selectedTable.value = null
+    tablesResource.reload()
+    setTimeout(() => { actionMessage.value = '' }, 3500)
+  },
+  onError(err) {
+    transferring.value = false
+    actionError.value = err?.message || 'Failed to transfer table'
+    setTimeout(() => { actionError.value = '' }, 4500)
+  },
 })
 
 watch(() => props.modelValue, (open) => {
@@ -220,6 +246,37 @@ const tablePageEnd = computed(() => Math.min(tablePageStart.value + perPage, fil
 const pagedTables = computed(() => filteredTables.value.slice(tablePageStart.value, tablePageEnd.value))
 
 watch(filteredTables, () => { tablePage.value = 1 })
+
+function printTableBill() {
+  if (!selectedTable.value?.invoice) return
+  printPOSInvoice(selectedTable.value.invoice)
+}
+
+function settleTable() {
+  if (!selectedTable.value) return
+  emit('resume', { ...selectedTable.value, settle: true })
+  emit('update:modelValue', false)
+}
+
+function transferTable() {
+  if (!selectedTable.value || transferring.value) return
+  const nextTable = window.prompt('Transfer this order to which table?', selectedTable.value.name || '')
+  const customer = (nextTable || '').trim()
+  if (!customer || customer === selectedTable.value.name) return
+
+  transferring.value = true
+  actionError.value = ''
+  transferResource.submit({
+    items: JSON.stringify((selectedTable.value.items || []).map(i => ({
+      item_code: i.item_code || i.name,
+      qty: i.qty,
+      price: i.price || (i.qty > 0 ? i.amount / i.qty : 0),
+    }))),
+    customer,
+    kitchen_note: selectedTable.value.notes || null,
+    existing_draft: selectedTable.value.invoice || null,
+  })
+}
 </script>
 
 <style>

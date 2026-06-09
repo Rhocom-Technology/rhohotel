@@ -95,6 +95,11 @@ utils_stub.now_datetime = getattr(utils_stub, "now_datetime", lambda: datetime(2
 utils_stub.nowdate = getattr(utils_stub, "nowdate", lambda: "2026-06-08")
 utils_stub.add_days = getattr(utils_stub, "add_days", lambda value, days: _getdate(value) + timedelta(days=days))
 utils_stub.getdate = getattr(utils_stub, "getdate", _getdate)
+utils_stub.time_diff_in_seconds = getattr(
+	utils_stub,
+	"time_diff_in_seconds",
+	lambda end, start: (end - start).total_seconds(),
+)
 
 nestedset_stub = types.ModuleType("frappe.utils.nestedset")
 nestedset_stub.get_descendants_of = lambda doctype, name: []
@@ -133,6 +138,7 @@ class FakeDoc:
 		self.payments = []
 		self.deleted = False
 		self.inserted = False
+		self.saved = False
 		self.submitted = False
 		self.grand_total = values.pop("grand_total", 0)
 		for key, value in values.items():
@@ -144,11 +150,18 @@ class FakeDoc:
 	def get(self, key, default=None):
 		return getattr(self, key, default)
 
+	def set(self, key, value):
+		setattr(self, key, value)
+
 	def set_missing_values(self):
 		self.grand_total = sum(float(row.get("rate", 0)) * float(row.get("qty", 1)) for row in self.items)
 
 	def insert(self):
 		self.inserted = True
+		return self
+
+	def save(self):
+		self.saved = True
 		return self
 
 	def submit(self):
@@ -370,9 +383,9 @@ class TestPOSReadAPIs(unittest.TestCase):
 			pos_profile="Restaurant POS",
 			amount=1750,
 			posting_date="2026-06-08",
+			creation=datetime(2026, 6, 8, 7, 55, 0),
 			cashier="cashier@example.com",
 			note="No pepper",
-			age_minutes=95,
 			item_count=2,
 		)
 
@@ -383,30 +396,37 @@ class TestPOSReadAPIs(unittest.TestCase):
 				return [DotDict(name="Rice", qty=1), DotDict(name="Water", qty=2)]
 			return []
 
-		with patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql) as sql_mock:
-			result = pos_api.get_draft_pos_invoices(search="Table", cashier="cashier@example.com")
+		with (
+			patch.object(pos_api.frappe, "session", types.SimpleNamespace(user="cashier@example.com")),
+			patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql) as sql_mock,
+		):
+			result = pos_api.get_draft_pos_invoices(search="Table")
 
 		self.assertEqual(result[0]["invoice"], "POS-DRAFT-1")
 		self.assertEqual(result[0]["items"][0].name, "Rice")
 		self.assertEqual(result[0]["age"], "1h 35m")
+		self.assertEqual(result[0]["age_minutes"], 95)
 		self.assertEqual(result[0]["service_point"], "Restaurant POS")
 		self.assertIn("pi.owner = %s", sql_mock.call_args_list[0].args[0])
+		self.assertEqual(sql_mock.call_args_list[0].args[1][-1], "cashier@example.com")
 
 	def test_get_draft_pos_stats_aggregates_count_value_and_age(self):
 		def fake_sql(query, params=None, as_dict=False):
 			if "SUM(grand_total)" in query:
 				return [(4500,)]
-			if "TIMESTAMPDIFF" in query:
-				return [(42,)]
+			if "MIN(creation)" in query:
+				return [(datetime(2026, 6, 8, 8, 48, 0),)]
 			return [(0,)]
 
 		with (
+			patch.object(pos_api.frappe, "session", types.SimpleNamespace(user="cashier@example.com")),
 			patch.object(pos_api.frappe.db, "count", return_value=5),
-			patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql),
+			patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql) as sql_mock,
 		):
-			result = pos_api.get_draft_pos_stats()
+			result = pos_api.get_draft_pos_stats("__current_user")
 
 		self.assertEqual(result, {"total_drafts": 5, "total_value": 4500.0, "oldest_minutes": 42})
+		self.assertEqual(sql_mock.call_args_list[0].args[1], ("cashier@example.com",))
 
 	def test_get_pos_invoices_applies_status_search_and_pagination(self):
 		invoice = DotDict(invoice_no="POS-0001", customer="Walk In", grand_total=2000, status="Paid")
@@ -447,13 +467,15 @@ class TestPOSReadAPIs(unittest.TestCase):
 
 	def test_get_open_pos_tables_formats_area_age_and_items(self):
 		rows = [
-			DotDict(invoice="POS-TABLE-1", customer="Table 01", bill=1200, cashier="Ann", notes="Starter", age_minutes=15, open_time="09:15 AM"),
-			DotDict(invoice="POS-BAR-1", customer="Bar 02", bill=800, cashier="Ben", notes="", age_minutes=125, open_time="08:00 AM"),
+			DotDict(invoice="POS-TABLE-1", customer="Table 01", bill=1200, cashier="Ann", notes="Starter", creation=datetime(2026, 6, 8, 9, 15, 0), open_time="09:15 AM"),
+			DotDict(invoice="POS-BAR-1", customer="Bar 02", bill=800, cashier="Ben", notes="", creation=datetime(2026, 6, 8, 7, 25, 0), open_time="08:00 AM"),
 		]
 
 		def fake_sql(query, params=None, as_dict=False):
 			if "LEFT JOIN `tabPOS Invoice Item`" in query:
 				return rows
+			if "Kitchen Order Ticket" in query:
+				return [DotDict(item_code="ITEM-1", total_qty=1)]
 			return [DotDict(item_code="ITEM-1", name="Rice", qty=1, price=1200, amount=1200)]
 
 		with patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql):
@@ -464,6 +486,7 @@ class TestPOSReadAPIs(unittest.TestCase):
 		self.assertEqual(result[1]["area"], "Bar Lounge")
 		self.assertEqual(result[1]["age"], "2h 5m")
 		self.assertEqual(result[0]["items"][0]["item_code"], "ITEM-1")
+		self.assertEqual(result[0]["sent_to_kitchen"], {"ITEM-1": 1.0})
 
 	def test_get_open_pos_terminals_normalizes_numeric_fields(self):
 		terminal = DotDict(opening_entry="OPEN-1", terminal_name="Restaurant POS", gross_sales="15000", bill_count="5", open_drafts="2")
@@ -495,6 +518,7 @@ class TestPOSDraftActions(unittest.TestCase):
 			patch.object(pos_api.frappe.db, "exists", return_value=True),
 			patch.object(pos_api.frappe, "get_doc", return_value=invoice),
 			patch.object(pos_api.frappe.db, "get_value", side_effect=fake_get_value),
+			patch.object(pos_api.frappe.db, "sql", return_value=[DotDict(item_code="ITEM-1", total_qty=2)]),
 		):
 			result = pos_api.get_pos_draft_invoice_detail("POS-DRAFT-1")
 
@@ -502,6 +526,41 @@ class TestPOSDraftActions(unittest.TestCase):
 		self.assertEqual(result["discount_amount"], 250)
 		self.assertEqual(result["items"][0]["category"], "Food")
 		self.assertEqual(result["items"][0]["price"], 1500)
+		self.assertEqual(result["sent_to_kitchen"], {"ITEM-1": 2.0})
+
+	def test_save_pos_draft_invoice_updates_existing_draft_in_place(self):
+		existing = FakeDoc(name="POS-DRAFT-1", docstatus=0, customer="Walk In", pos_profile="Restaurant POS")
+		existing.items = [DotDict(item_code="OLD-ITEM", item_name="Old", qty=1, rate=500)]
+		existing.payments = [DotDict(mode_of_payment="Cash", amount=500)]
+		profile = DotDict(customer="Walk In")
+
+		with (
+			patch.object(pos_api.frappe.db, "exists", return_value=True),
+			patch.object(pos_api.frappe, "get_doc", return_value=existing),
+			patch.object(pos_api.frappe.db, "get_single_value", return_value="Rho Hotel"),
+			patch.object(pos_api.frappe, "get_cached_doc", return_value=profile),
+			patch.object(pos_api, "_resolve_pos_customer", return_value="Walk In"),
+			patch.object(pos_api.frappe.db, "commit") as commit_mock,
+		):
+			result = pos_api.save_pos_draft_invoice(
+				[{"item_code": "ITEM-1", "qty": 3, "price": 1200}],
+				customer="Walk In",
+				kitchen_note="Serve hot",
+				pos_profile="Restaurant POS",
+				discount_amount=200,
+				existing_draft="POS-DRAFT-1",
+			)
+
+		self.assertEqual(result["pos_invoice"], "POS-DRAFT-1")
+		self.assertFalse(existing.deleted)
+		self.assertFalse(existing.inserted)
+		self.assertTrue(existing.saved)
+		self.assertEqual(existing.items[0].item_code, "ITEM-1")
+		self.assertEqual(existing.items[0].qty, 3)
+		self.assertEqual(existing.payments[0].amount, 3400)
+		self.assertEqual(existing.remarks, "Serve hot")
+		self.assertEqual(existing.discount_amount, 200)
+		commit_mock.assert_called_once()
 
 	def test_get_pos_draft_invoice_detail_rejects_submitted_invoice(self):
 		invoice = FakeDoc(name="POS-0001", docstatus=1)

@@ -66,12 +66,12 @@
               </div>
               <div class="min-w-36">
                 <p class="text-xs text-gray-500 mb-1.5">Cashier</p>
-                <select v-model="draftFilterCashier" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700">
-                  <option value="">All Cashiers</option>
+                <select v-model="draftFilterCashier" disabled class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none bg-white text-gray-700 disabled:opacity-100 disabled:cursor-not-allowed">
+                  <option :value="CURRENT_CASHIER_FILTER">{{ currentCashierLabel }}</option>
                   <option v-for="c in availableCashiers" :key="c">{{ c }}</option>
                 </select>
               </div>
-              <button @click="draftSearch='';draftFilterCustomer='';draftFilterPoint='';draftFilterCashier='';draftPage=1"
+              <button @click="resetFilters"
                 class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 bg-white">Reset</button>
               <button @click="$emit('update:modelValue', false)" class="btn-hover px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Create New Draft</button>
             </div>
@@ -179,10 +179,12 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'resume'])
 
+const CURRENT_CASHIER_FILTER = '__current_user'
+
 const draftSearch = ref('')
 const draftFilterCustomer = ref('')
 const draftFilterPoint = ref('')
-const draftFilterCashier = ref('')
+const draftFilterCashier = ref(CURRENT_CASHIER_FILTER)
 const draftPage = ref(1)
 const perPage = 10
 const selectedDraft = ref(null)
@@ -195,11 +197,13 @@ const actionError = ref('')
 // ── API: Draft Orders ──────────────────────────────────────────────────────
 const draftsResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_draft_pos_invoices',
+  params: { cashier: CURRENT_CASHIER_FILTER },
   auto: true,
 })
 
 const statsResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_draft_pos_stats',
+  params: { cashier: CURRENT_CASHIER_FILTER },
   auto: true,
 })
 
@@ -210,6 +214,11 @@ watch(() => props.modelValue, (open) => {
 
 function refreshAll() {
   refreshing.value = true
+  draftsResource.params = {
+    search: draftSearch.value || null,
+    cashier: CURRENT_CASHIER_FILTER,
+  }
+  statsResource.params = { cashier: CURRENT_CASHIER_FILTER }
   Promise.all([draftsResource.reload(), statsResource.reload()])
     .finally(() => { refreshing.value = false })
 }
@@ -220,11 +229,19 @@ watch([draftSearch, draftFilterCustomer, draftFilterPoint, draftFilterCashier], 
   searchTimer = setTimeout(() => {
     draftsResource.params = {
       search: draftSearch.value || null,
-      cashier: draftFilterCashier.value || null,
+      cashier: CURRENT_CASHIER_FILTER,
     }
     draftsResource.reload()
   }, 300)
 })
+
+function resetFilters() {
+  draftSearch.value = ''
+  draftFilterCustomer.value = ''
+  draftFilterPoint.value = ''
+  draftFilterCashier.value = CURRENT_CASHIER_FILTER
+  draftPage.value = 1
+}
 
 // ── Computed ───────────────────────────────────────────────────────────────
 const allDrafts = computed(() => {
@@ -258,7 +275,9 @@ const filteredDrafts = computed(() => {
   }
   if (draftFilterCustomer.value) data = data.filter(d => d.customer === draftFilterCustomer.value)
   if (draftFilterPoint.value) data = data.filter(d => d.point === draftFilterPoint.value)
-  if (draftFilterCashier.value) data = data.filter(d => d.cashier === draftFilterCashier.value)
+  if (draftFilterCashier.value && draftFilterCashier.value !== CURRENT_CASHIER_FILTER) {
+    data = data.filter(d => d.cashier === draftFilterCashier.value)
+  }
   return data
 })
 
@@ -266,6 +285,7 @@ const filteredDrafts = computed(() => {
 const availableCustomers = computed(() => [...new Set(allDrafts.value.map(d => d.customer).filter(p => p && p !== '—'))])
 const availableServicePoints = computed(() => [...new Set(allDrafts.value.map(d => d.point).filter(p => p && p !== '—'))])
 const availableCashiers = computed(() => [...new Set(allDrafts.value.map(d => d.cashier).filter(Boolean))])
+const currentCashierLabel = computed(() => availableCashiers.value[0] || 'My Drafts')
 
 const draftStats = computed(() => {
   const s = statsResource.data || {}

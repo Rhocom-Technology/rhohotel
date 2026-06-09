@@ -96,7 +96,7 @@
       </div>
 
       <!-- Right: Current Sale -->
-      <div class="bg-white rounded-xl border border-gray-200 p-5 sticky top-4">
+      <div class="bg-white rounded-xl border border-gray-200 p-5 sticky top-4 overflow-y-auto" style="max-height:calc(100vh - 32px);">
         <h3 class="text-sm font-bold text-gray-900 mb-4">Current Sale</h3>
 
         <!-- Bill To -->
@@ -346,7 +346,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex gap-2">
+        <div class="flex gap-2 sticky bottom-0 bg-white pt-3 pb-1 border-t border-gray-100">
           <button @click="clearKitchenSelection" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Clear Selection</button>
           <button @click="printBill" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
           <button @click="onHoldSale"
@@ -1113,12 +1113,11 @@ function getKitchenItemsFrom(orderItems, context) {
   const groups = kitchenItemGroups.value
   if (!groups.size) return []
 
-  // Subtract quantities already sent via the "Send to Kitchen" button
   let filtered = orderItems
     .filter(i => groups.has(i.category))
     .map(i => {
       const code = i.item_code || i.id
-      const alreadySent = kitchenSentMap.value[code] || 0
+      const alreadySent = context?.dedupeOnServer ? 0 : (kitchenSentMap.value[code] || 0)
       return {
         item_code: code,
         item_name: i.name,
@@ -1172,8 +1171,7 @@ function sendToKitchenNow() {
   const toSend = eligibleItems
     .map(i => {
       const code = i.item_code || i.id
-      const alreadySent = kitchenSentMap.value[code] || 0
-      return { item_code: code, item_name: i.name, qty: Math.max(0, i.qty - alreadySent) }
+      return { item_code: code, item_name: i.name, qty: i.qty }
     })
     .filter(i => i.qty > 0)
 
@@ -1218,6 +1216,7 @@ function captureSubmissionSnapshot() {
     selectedItemCodes: cart.value
       .filter(i => selectedKitchenItemMap.value[i.id])
       .map(i => i.item_code || i.id),
+    dedupeOnServer: !!resumedDraftInvoice.value,
   }
 }
 
@@ -1225,9 +1224,11 @@ function isKitchenEligible(item) {
   return kitchenItemGroups.value.has(item.category)
 }
 
-  function clearKitchenSelection() {
-    selectedKitchenItemMap.value = {}
-  }
+function clearKitchenSelection() {
+  selectedKitchenItemMap.value = {}
+  chargeSuccess.value = 'Kitchen item selection cleared'
+  setTimeout(() => { chargeSuccess.value = '' }, 2000)
+}
 
   function printBill() {
     if (!lastInvoiceName.value) {
@@ -1251,7 +1252,7 @@ function isKitchenEligible(item) {
       qty: Number(i.qty) || 1,
     }))
     selectedKitchenItemMap.value = {}
-    kitchenSentMap.value = {}
+    kitchenSentMap.value = normalizeKitchenSentMap(data.sent_to_kitchen)
     kitchenNote.value = data.remarks || ''
     // Restore discount
     const dAmt = Number(data.discount_amount || 0)
@@ -1543,7 +1544,7 @@ function onResumeTable(table) {
     qty: i.qty,
   }))
   selectedKitchenItemMap.value = {}
-  kitchenSentMap.value = {}
+  kitchenSentMap.value = normalizeKitchenSentMap(table.sent_to_kitchen)
   kitchenNote.value = table.notes || ''
   // Reset discount (table orders carry no discount info)
   discountInput.value = ''
@@ -1554,8 +1555,19 @@ function onResumeTable(table) {
   resumedDraftInvoice.value = table.invoice || null
   lastInvoiceName.value = table.invoice || ''
   showOpenTables.value = false
+  if (table.settle) settlementMethod.value = 'Cash'
   chargeSuccess.value = `Table ${table.name} loaded — ₦${table.bill.toLocaleString()}`
   setTimeout(() => { chargeSuccess.value = '' }, 3000)
+}
+
+function normalizeKitchenSentMap(sent) {
+  if (!sent) return {}
+  if (!Array.isArray(sent)) return { ...sent }
+  return sent.reduce((acc, row) => {
+    const code = row.item_code || row.id
+    if (code) acc[code] = Number(row.total_qty || row.qty || 0)
+    return acc
+  }, {})
 }
 
 watch(settlementMethod, (val) => {

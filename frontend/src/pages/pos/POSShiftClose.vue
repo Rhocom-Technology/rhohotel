@@ -186,6 +186,14 @@
 
     <DraftOrdersModal v-model="showDraftOrders" />
 
+    <Teleport to="body">
+      <div v-if="closeSuccess"
+        class="fixed bottom-6 right-6 z-50 px-5 py-3 bg-green-600 text-white text-xs font-semibold rounded-xl shadow-xl flex items-center gap-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        {{ closeSuccess }}
+      </div>
+    </Teleport>
+
     <!-- Confirm close modal -->
     <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
       <div class="bg-white rounded-2xl p-6 w-full max-w-sm">
@@ -217,6 +225,7 @@ const closingNote = ref('')
 const showConfirm = ref(false)
 const closing = ref(false)
 const closeError = ref('')
+const closeSuccess = ref('')
 const now = ref(new Date())
 
 let timer
@@ -271,10 +280,15 @@ function getDiff(row) {
 // ── API: Close Shift ───────────────────────────────────────────────
 const closeResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.close_pos_shift',
-  onSuccess() {
+  onSuccess(data) {
     closing.value = false
     showConfirm.value = false
-    router.push('/pos')
+    closeSuccess.value = `Shift closed successfully${data?.closing_entry ? ` (${data.closing_entry})` : ''}`
+    shiftResource.reload()
+    setTimeout(() => {
+      closeSuccess.value = ''
+      router.push('/pos')
+    }, 1800)
   },
   onError(err) {
     closing.value = false

@@ -1,7 +1,7 @@
 import re
 import frappe
 from frappe import _
-from frappe.utils import flt, cstr, now_datetime, nowdate, add_days, getdate
+from frappe.utils import flt, cstr, now_datetime, nowdate, add_days, getdate, time_diff_in_seconds
 from frappe.utils.nestedset import get_descendants_of
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import get_stock_availability
 
@@ -240,6 +240,39 @@ def _redeem_complimentary(complimentary_name, pos_invoice_name, bill_total, manu
         manual_discount=manual_discount,
         department="Restaurant",
     )
+
+
+def _get_sent_to_kitchen_map(pos_invoice):
+    """Return total kitchen-sent quantities by item code for a POS Invoice."""
+    if not pos_invoice:
+        return {}
+
+    rows = frappe.db.sql(
+        """
+        SELECT
+            kti.item_code,
+            SUM(kti.quantity) AS total_qty
+        FROM `tabKitchen Order Ticket` kt
+        INNER JOIN `tabKitchen Order Ticket Item` kti ON kti.parent = kt.name
+        WHERE kt.pos_invoice = %s
+          AND kt.docstatus = 0
+        GROUP BY kti.item_code
+        """,
+        (pos_invoice,),
+        as_dict=1,
+    )
+    return {
+        cstr(row.get("item_code")): flt(row.get("total_qty"))
+        for row in rows
+        if row.get("item_code")
+    }
+
+
+def _age_minutes_from(creation):
+    """Return elapsed minutes using Frappe datetime parsing across versions."""
+    if not creation:
+        return 0
+    return max(0, int((time_diff_in_seconds(now_datetime(), creation) or 0) / 60))
 
 
 @frappe.whitelist()
@@ -994,19 +1027,9 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
                         kitchen_note = old_pi.remarks
                     if not flt(discount_amount) and flt(old_pi.discount_amount):
                         discount_amount = flt(old_pi.discount_amount)
-                    existing_draft = found_draft  # will be deleted below
+                    existing_draft = found_draft  # update in place below
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "Failed to auto-detect table draft for merge")
-
-    # Delete previous draft (explicitly resumed OR auto-detected table draft)
-    if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
-        try:
-            old_pi = frappe.get_doc("POS Invoice", existing_draft)
-            if old_pi.docstatus == 0:
-                old_pi.flags.ignore_permissions = True
-                old_pi.delete()
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "Failed to delete old draft on re-hold")
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
@@ -1024,13 +1047,22 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
     if not customer:
         frappe.throw(_("Set a valid default customer on POS Profile {0}. Optionally configure POS Settings.customer if available in your ERPNext version.").format(pos_profile))
 
-    pi = frappe.new_doc("POS Invoice")
+    updating_existing = False
+    if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+        pi = frappe.get_doc("POS Invoice", existing_draft)
+        if pi.docstatus != 0:
+            frappe.throw(_("Only draft POS Invoices can be updated."))
+        updating_existing = True
+        pi.set("items", [])
+        pi.set("payments", [])
+    else:
+        pi = frappe.new_doc("POS Invoice")
+
     pi.customer = customer
     pi.company = company
     pi.posting_date = nowdate()
     pi.pos_profile = pos_profile
-    if kitchen_note:
-        pi.remarks = kitchen_note
+    pi.remarks = kitchen_note or ""
 
     for it in items_to_save:
         pi.append("items", {
@@ -1050,7 +1082,10 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
     try:
         pi.flags.ignore_permissions = True
         pi.set_missing_values()
-        pi.insert()
+        if updating_existing:
+            pi.save()
+        else:
+            pi.insert()
         # Override customer_name AFTER insert: ERPNext's validate() inside insert
         # calls set_missing_values() again which resets customer_name to the linked
         # Customer's name (e.g. "Walk In"). frappe.db.set_value bypasses validation.
@@ -1081,8 +1116,11 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
 
     if search:
         q = f"%{cstr(search).strip()}%"
-        conditions.append("(pi.name LIKE %s OR pi.customer LIKE %s)")
-        args.extend([q, q])
+        conditions.append("(pi.name LIKE %s OR pi.customer LIKE %s OR pi.customer_name LIKE %s)")
+        args.extend([q, q, q])
+
+    if not cashier or cashier == "__current_user":
+        cashier = frappe.session.user
 
     if cashier:
         conditions.append("pi.owner = %s")
@@ -1097,9 +1135,9 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
             pi.pos_profile,
             pi.grand_total AS amount,
             pi.posting_date,
+            pi.creation,
             pi.owner AS cashier,
             pi.remarks AS note,
-            TIMESTAMPDIFF(MINUTE, pi.creation, UTC_TIMESTAMP()) AS age_minutes,
             COUNT(pit.name) AS item_count
         FROM `tabPOS Invoice` pi
         LEFT JOIN `tabPOS Invoice Item` pit ON pit.parent = pi.name
@@ -1116,7 +1154,8 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
             FROM `tabPOS Invoice Item`
             WHERE parent = %s
         """, d["invoice"], as_dict=1)
-        age = max(0, int(d.get("age_minutes") or 0))
+        age = _age_minutes_from(d.get("creation"))
+        d["age_minutes"] = age
         h, m = divmod(age, 60)
         d["age"] = f"{h}h {m}m" if h else f"{m}m"
         d["service_point"] = d.get("pos_profile") or "—"
@@ -1125,16 +1164,31 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
 
 
 @frappe.whitelist()
-def get_draft_pos_stats():
+def get_draft_pos_stats(cashier=None):
     """Return stat card values for the Draft Orders modal."""
-    total = frappe.db.count("POS Invoice", {"docstatus": 0})
-    total_value = frappe.db.sql("""
-        SELECT COALESCE(SUM(grand_total), 0) FROM `tabPOS Invoice` WHERE docstatus = 0
-    """)[0][0] or 0
-    oldest = frappe.db.sql("""
-        SELECT TIMESTAMPDIFF(MINUTE, MIN(creation), UTC_TIMESTAMP())
-        FROM `tabPOS Invoice` WHERE docstatus = 0
-    """)[0][0] or 0
+    filters = {"docstatus": 0}
+    if not cashier or cashier == "__current_user":
+        cashier = frappe.session.user
+    if cashier:
+        filters["owner"] = cashier
+
+    total = frappe.db.count("POS Invoice", filters)
+
+    conditions = ["docstatus = 0"]
+    args = []
+    if cashier:
+        conditions.append("owner = %s")
+        args.append(cashier)
+    where = " AND ".join(conditions)
+
+    total_value = frappe.db.sql(f"""
+        SELECT COALESCE(SUM(grand_total), 0) FROM `tabPOS Invoice` WHERE {where}
+    """, tuple(args))[0][0] or 0
+    oldest_creation = frappe.db.sql(f"""
+        SELECT MIN(creation)
+        FROM `tabPOS Invoice` WHERE {where}
+    """, tuple(args))[0][0]
+    oldest = _age_minutes_from(oldest_creation)
 
     return {
         "total_drafts": total,
@@ -1627,6 +1681,7 @@ def get_pos_draft_invoice_detail(invoice_name):
         "items": items,
         "remarks": pi.remarks or "",
         "discount_amount": flt(pi.discount_amount or 0),
+        "sent_to_kitchen": _get_sent_to_kitchen_map(pi.name),
     }
 
 
@@ -1665,7 +1720,7 @@ def get_open_pos_tables():
             pi.grand_total AS bill,
             pi.owner AS cashier,
             pi.remarks AS notes,
-            TIMESTAMPDIFF(MINUTE, pi.creation, UTC_TIMESTAMP()) AS age_minutes,
+            pi.creation,
             DATE_FORMAT(pi.creation, '%%h:%%i %%p') AS open_time,
             COUNT(pit.name) AS item_count
         FROM `tabPOS Invoice` pi
@@ -1689,7 +1744,7 @@ def get_open_pos_tables():
             FROM `tabPOS Invoice Item`
             WHERE parent = %s
         """, d["invoice"], as_dict=1)
-        age = max(0, int(d.get("age_minutes") or 0))
+        age = _age_minutes_from(d.get("creation"))
         h, m = divmod(age, 60)
         customer = d["customer"] or ""
         area = (
@@ -1706,6 +1761,7 @@ def get_open_pos_tables():
             "age": f"{h}h {m}m" if h else f"{m}m",
             "age_minutes": age,
             "items": [dict(i) for i in items],
+            "sent_to_kitchen": _get_sent_to_kitchen_map(d["invoice"]),
             "status": "Ordering",
             "area": area,
             "waiter": d["cashier"],
