@@ -85,7 +85,6 @@ def get_bookings(from_date, to_date, hall=None, status=None):
 
     return rows
 
-
 def build_stats(bookings, halls, from_date, to_date):
     today = getdate(nowdate())
 
@@ -94,9 +93,17 @@ def build_stats(bookings, halls, from_date, to_date):
     today_bookings = [
         b for b in bookings
         if b.docstatus == 1
+        and b.payment_status == "Paid"
         and getdate(b.start_datetime) <= today
         and getdate(b.end_datetime) >= today
     ]
+
+    if today_bookings:
+        today_start_date = str(min(getdate(b.start_datetime) for b in today_bookings))
+        today_end_date = str(max(getdate(b.end_datetime) for b in today_bookings))
+    else:
+        today_start_date = str(today)
+        today_end_date = str(today)
 
     pending_payment = sum(
         flt(b.net_total)
@@ -105,7 +112,12 @@ def build_stats(bookings, halls, from_date, to_date):
     )
 
     submitted = [b for b in bookings if b.docstatus == 1]
-    total_possible_days = max(1, len(halls) * get_period_days(from_date, to_date))
+
+    total_possible_days = max(
+        1,
+        len(halls) * get_period_days(from_date, to_date)
+    )
+
     booked_days = 0
 
     for b in submitted:
@@ -121,10 +133,11 @@ def build_stats(bookings, halls, from_date, to_date):
     return {
         "total_bookings": total_bookings,
         "today": len(today_bookings),
+        "today_start_date": today_start_date,
+        "today_end_date": today_end_date,
         "pending_payment": pending_payment,
         "utilization": utilization,
     }
-
 
 def build_payment_summary(bookings):
     paid = 0

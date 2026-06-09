@@ -37,11 +37,15 @@
         <p class="text-xs text-gray-400 mt-1">All bookings in selected period</p>
       </div>
 
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div
+        @click="goToTodayBookings"
+        class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all"
+      >
         <p class="text-xs text-gray-400">Today</p>
         <p class="text-2xl font-bold text-gray-900 mt-2">{{ stats.today }}</p>
         <p class="text-xs text-gray-400 mt-1">Events active today</p>
       </div>
+
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400">Pending Payment</p>
@@ -248,6 +252,8 @@ const stats = ref({
   today: 0,
   pending_payment: 0,
   utilization: 0,
+  today_start_date: '',
+  today_end_date: '',
 })
 
 const payment = ref({
@@ -332,6 +338,23 @@ function statusClass(status) {
   if (status === 'Draft') return 'bg-yellow-100 text-yellow-700'
   if (status === 'Cancelled') return 'bg-red-100 text-red-600'
   return 'bg-blue-100 text-blue-600'
+}
+
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+function goToTodayBookings() {
+  const today = new Date().toISOString().slice(0, 10)
+
+  router.push({
+    path: '/hall/booking',
+    query: {
+      start_date: stats.value.today_start_date || today,
+      end_date: stats.value.today_end_date || today,
+      active_today: '1'
+    }
+  })
 }
 
 onMounted(load)

@@ -3,15 +3,14 @@ from frappe.utils import flt, nowdate
 import math
 import json
 
-
 @frappe.whitelist()
 def get_booking(name):
     doc = frappe.get_doc("Hall Booking", name)
     data = doc.as_dict()
 
     data["payment_status"] = _payment_status(doc)
-    data["outstanding_amount"] = 0.0
     data["invoice_grand_total"] = 0.0
+    data["outstanding_amount"] = 0.0
     data["invoices"] = []
 
     if doc.sales_invoice:
@@ -58,6 +57,13 @@ def get_booking(name):
             "invoice_outstanding_amount": invoice_outstanding_amount,
         })
 
+    has_any_invoice = bool(doc.sales_invoice) or any(
+        r.adjustment_invoice for r in doc.get("adjustment_history", [])
+    )
+
+    if not has_any_invoice:
+        data["outstanding_amount"] = flt(doc.net_total or 0)
+
     data["additional_billings"] = [
         {
             "service": r.service,
@@ -70,15 +76,17 @@ def get_booking(name):
         }
         for r in doc.get("additional_billings", [])
     ]
-    
+
     data["paid_amount"] = max(
         0,
         flt(data["invoice_grand_total"]) - flt(data["outstanding_amount"])
     )
+
     data["event_status"] = doc.event_status or "Scheduled"
+    data["completed_by"] = doc.completed_by
+    data["completed_on"] = str(doc.completed_on) if doc.completed_on else None
 
     return data
-
 
 @frappe.whitelist()
 def get_booking_list():
@@ -110,6 +118,7 @@ def create_booking(data):
     doc.customer_name = data.get("customer_name")
     doc.mobile_number = data.get("mobile_number", "")
     doc.hall = data.get("hall")
+    _validate_hall_available_for_booking(doc.hall)
     doc.event_type = data.get("event_type")
     doc.start_datetime = data.get("start_datetime")
     doc.end_datetime = data.get("end_datetime")
@@ -154,6 +163,7 @@ def update_booking(name, data):
     doc.customer_name = data.get("customer_name")
     doc.mobile_number = data.get("mobile_number", "")
     doc.hall = data.get("hall")
+    _validate_hall_available_for_booking(doc.hall)
     doc.event_type = data.get("event_type")
     doc.start_datetime = data.get("start_datetime")
     doc.end_datetime = data.get("end_datetime")
@@ -239,6 +249,9 @@ def get_payment_modes():
 def get_halls():
     return frappe.db.get_all(
         "Hall",
+        filters={
+            "availability_status": ["!=", "Unavailable"]
+        },
         fields=["name", "hall_name", "hall_type", "capacity", "rate"],
         order_by="hall_name asc",
     )
@@ -552,6 +565,9 @@ def mark_event_status(booking_name, event_status):
         if _payment_status(booking) != "Paid":
             frappe.throw("This booking cannot be marked as Completed until all invoices are fully paid.")
 
+        booking.completed_by = frappe.session.user
+        booking.completed_on = frappe.utils.now_datetime()
+
     booking.event_status = event_status
     booking.flags.ignore_validate_update_after_submit = True
     booking.save(ignore_permissions=True)
@@ -559,8 +575,9 @@ def mark_event_status(booking_name, event_status):
     return {
         "name": booking.name,
         "event_status": booking.event_status,
+        "completed_by": booking.completed_by,
+        "completed_on": booking.completed_on,
     }
-
 
 @frappe.whitelist()
 def cancel_hall_booking(booking_name):
@@ -619,3 +636,102 @@ def cancel_hall_booking(booking_name):
         "event_status": "Cancelled",
         "cancelled_invoices": invoice_names,
     }
+   
+   
+@frappe.whitelist()
+def download_hall_booking(booking_name):
+    from frappe.utils.pdf import get_pdf
+
+    if not booking_name:
+        frappe.throw("Booking name is required.")
+
+    booking = frappe.get_doc("Hall Booking", booking_name)
+
+    invoice_grand_total = 0.0
+    outstanding_amount = 0.0
+
+    invoice_names = []
+
+    if booking.sales_invoice:
+        invoice_names.append(booking.sales_invoice)
+
+    for row in booking.get("adjustment_history", []):
+        if row.adjustment_invoice:
+            invoice_names.append(row.adjustment_invoice)
+
+    for inv_name in invoice_names:
+        inv = frappe.get_doc("Sales Invoice", inv_name)
+
+        if inv.docstatus == 1:
+            invoice_grand_total += flt(inv.grand_total)
+            outstanding_amount += flt(inv.outstanding_amount)
+
+    if not invoice_names:
+        outstanding_amount = flt(booking.net_total or 0)
+
+    paid_amount = max(0, invoice_grand_total - outstanding_amount)
+
+    if not invoice_names:
+        payment_status = "No Invoice"
+    elif outstanding_amount <= 0:
+        payment_status = "Paid"
+    elif outstanding_amount < invoice_grand_total:
+        payment_status = "Partial"
+    else:
+        payment_status = "Unpaid"
+
+    booking.invoice_grand_total = invoice_grand_total
+    booking.outstanding_amount = outstanding_amount
+    booking.paid_amount = paid_amount
+    booking.payment_status = payment_status
+
+    settings = frappe.get_single("Hotel Settings")
+    print_format = settings.hall_booking_print_format
+
+    if not print_format:
+        frappe.throw("Please set Hall Booking Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Hall Booking Print Format has no HTML content.")
+
+    context = {
+        "booking": booking,
+        "additional_billings": booking.get("additional_billings", []),
+        "adjustment_history": booking.get("adjustment_history", []),
+        "company": (
+            frappe.defaults.get_user_default("Company")
+            or frappe.defaults.get_global_default("company")
+            or "Hotel"
+        ),
+    }
+
+    html = frappe.render_template(html_template, context)
+    pdf = get_pdf(html)
+
+    frappe.local.response.filename = "{0}.pdf".format(booking.name)
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type = "download"
+    
+
+def _validate_hall_available_for_booking(hall_name):
+    if not hall_name:
+        frappe.throw("Hall is required.")
+
+    hall = frappe.get_doc("Hall", hall_name)
+
+    if hall.availability_status == "Unavailable":
+        frappe.throw(
+            "Hall '{0}' is currently unavailable for booking. Reason: {1}".format(
+                hall.hall_name or hall.name,
+                hall.unavailable_reason or "No reason provided"
+            )
+        )
+        
+
+def _get_effective_booking_end(row):
+    if row.get("event_status") == "Completed" and row.get("completed_on"):
+        return row.get("completed_on")
+
+    return row.get("end_datetime")

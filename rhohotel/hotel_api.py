@@ -805,7 +805,7 @@ def submit_online_reservation(
         reservation.source_channel      = "Online"
 
         if notes_text:
-            reservation.comp_reason = notes_text
+            reservation.booking_notes = notes_text
 
         for room in selected_rooms:
             reservation.append("rooms", {

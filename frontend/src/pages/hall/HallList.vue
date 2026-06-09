@@ -15,7 +15,7 @@
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-2">Total Halls</p>
         <p class="text-3xl font-bold text-gray-900">{{ halls.length }}</p>
@@ -31,6 +31,15 @@
         <p class="text-3xl font-bold text-blue-600">{{ halls.filter(h => h.current_status === 'Booked').length }}</p>
         <p class="text-xs text-gray-400 mt-1">Occupied by events</p>
       </div>
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <p class="text-xs text-gray-400 mb-2">Unavailable</p>
+      <p class="text-3xl font-bold text-red-600">
+        {{ halls.filter(h => h.current_status === 'Unavailable').length }}
+      </p>
+      <p class="text-xs text-gray-400 mt-1">
+        Maintenance / blocked halls
+      </p>
+    </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-2">Bookings Today</p>
         <p class="text-3xl font-bold text-gray-900">{{ totalBookingsToday }}</p>
@@ -52,6 +61,7 @@
           <select v-model="filterStatus" class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">All Status</option>
             <option value="Available">Available</option>
+            <option value="Unavailable">Unavailable</option>
             <option value="Booked">Booked</option>
           </select>
         </div>
@@ -182,9 +192,13 @@ const pageEnd    = computed(() => Math.min(pageStart.value + perPage, filtered.v
 const paged      = computed(() => filtered.value.slice(pageStart.value, pageEnd.value))
 
 function statusClass(s) {
-  return s === 'Booked'
-    ? 'bg-blue-100 text-blue-600'
-    : 'bg-green-100 text-green-700'
+  if (s === 'Booked')
+    return 'bg-blue-100 text-blue-600'
+
+  if (s === 'Unavailable')
+    return 'bg-red-100 text-red-600'
+
+  return 'bg-green-100 text-green-700'
 }
 
 async function load() {

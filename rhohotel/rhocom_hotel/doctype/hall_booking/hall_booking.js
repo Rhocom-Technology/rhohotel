@@ -17,6 +17,30 @@ frappe.ui.form.on("Hall Booking", {
 				() => open_date_adjustment_dialog(frm)
 			);
 
+			if (!frm.doc.sales_invoice) {
+				frm.add_custom_button(__("Create Invoice"), () => {
+					frappe.call({
+						method: "rhohotel.rhocom_hotel.doctype.hall_booking.hall_booking.create_invoice_for_booking",
+						args: {
+							booking_name: frm.doc.name
+						},
+						freeze: true,
+						freeze_message: __("Creating invoice..."),
+						callback(r) {
+							if (!r.exc) {
+								frappe.msgprint({
+									title: __("Invoice Created"),
+									message: __("Sales Invoice created successfully."),
+									indicator: "green"
+								});
+
+								frm.reload_doc();
+							}
+						}
+					});
+				}, __("Actions"));
+			}
+
 			if (frm.doc.sales_invoice) {
 				frm.add_custom_button(__("Receive Payment"), () => {
 					const d = new frappe.ui.Dialog({

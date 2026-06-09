@@ -47,6 +47,25 @@
           <option value="1">Confirmed</option>
         </select>
       </div>
+
+   <div>
+    <label class="text-xs text-gray-500 mb-1 block">Start Date</label>
+    <input
+      v-model="filterStartDate"
+      type="date"
+      class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  </div>
+
+  <div>
+    <label class="text-xs text-gray-500 mb-1 block">End Date</label>
+    <input
+      v-model="filterEndDate"
+      type="date"
+      class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  </div>
+
       <div>
         <label class="text-xs text-gray-500 mb-1 block">Payment</label>
         <select v-model="filterPayment" class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -56,12 +75,16 @@
           <option value="Partial">Partial</option>
         </select>
       </div>
-      <button @click="search='';filterStatus='';filterPayment=''"
-        class="px-4 py-2 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Reset</button>
+     <button
+  @click="search='';filterStatus='';filterPayment='';filterStartDate='';filterEndDate='';activeTodayOnly=false"
+  class="px-4 py-2 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+>
+  Reset
+</button>
     </div>
 
     <!-- Table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
       <div v-if="loading" class="px-6 py-8 text-center text-xs text-gray-400">Loading bookings…</div>
       <table v-else class="w-full">
         <thead>
@@ -70,8 +93,8 @@
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Customer</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Hall</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Event</th>
-            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Start</th>
-            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">End</th>
+            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 min-w-[180px]">Start</th>
+            <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500 min-w-[180px]">End</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Days</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Net Total</th>
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Status</th>
@@ -81,16 +104,16 @@
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-if="filtered.length === 0">
-            <td colspan="10" class="px-6 py-8 text-center text-xs text-gray-400">No bookings found.</td>
+            <td colspan="11" class="px-6 py-8 text-center text-xs text-gray-400">No bookings found.</td>
           </tr>
           <tr v-for="b in paged" :key="b.name" class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-3 text-xs font-semibold text-blue-600">{{ b.name }}</td>
-            <td class="px-6 py-3 text-xs text-gray-700">{{ b.customer_name }}</td>
+            <td class="px-6 py-3 text-xs font-semibold text-blue-600 min-w-[180px]">{{ b.name }}</td>
+            <td class="px-6 py-3 text-xs text-gray-700 min-w-[150px]">{{ b.customer_name }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ b.hall }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ b.event_type }}</td>
-            <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(b.start_datetime) }}</td>
+            <td class="px-6 py-3 text-xs text-gray-600 ">{{ fmtDatetime(b.start_datetime) }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(b.end_datetime) }}</td>
-            <td class="px-6 py-3 text-xs text-gray-600">{{ b.total_days }} day(s)</td>
+            <td class="px-6 py-3 text-xs text-gray-600 min-w-[120px]">{{ b.total_days }} day(s)</td>
             <td class="px-6 py-3 text-xs text-gray-700 font-medium">₦{{ Number(b.net_total || 0).toLocaleString() }}</td>
             <td class="px-6 py-3">
               <span class="px-2 py-0.5 text-xs font-semibold rounded-full" :class="statusClass(b.docstatus)">
@@ -131,8 +154,14 @@
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router'
 import { ref, computed, onMounted } from 'vue'
 import { callMethod } from '@/lib/api'
+
+const route = useRoute()
+const filterStartDate = ref('')
+const filterEndDate = ref('')
+const activeTodayOnly = ref(false)
 
 const loading       = ref(false)
 const bookings      = ref([])
@@ -144,12 +173,35 @@ const filterPayment = ref('')
 
 const filtered = computed(() => bookings.value.filter(b => {
   const q = search.value.toLowerCase()
-  if (q && !b.customer_name?.toLowerCase().includes(q) &&
-           !b.hall?.toLowerCase().includes(q) &&
-           !b.event_type?.toLowerCase().includes(q) &&
-           !b.name?.toLowerCase().includes(q)) return false
+
+  if (
+    q &&
+    !b.customer_name?.toLowerCase().includes(q) &&
+    !b.hall?.toLowerCase().includes(q) &&
+    !b.event_type?.toLowerCase().includes(q) &&
+    !b.name?.toLowerCase().includes(q)
+  ) return false
+
   if (filterStatus.value !== '' && String(b.docstatus) !== filterStatus.value) return false
+
   if (filterPayment.value && b.payment_status !== filterPayment.value) return false
+
+const bookingStartDate = String(b.start_datetime || '').slice(0, 10)
+const bookingEndDate = String(b.end_datetime || '').slice(0, 10)
+
+if (activeTodayOnly.value) {
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (b.docstatus !== 1) return false
+  if (b.payment_status !== 'Paid') return false
+  if (bookingStartDate > today) return false
+  if (bookingEndDate < today) return false
+} else {
+  if (filterStartDate.value && bookingStartDate < filterStartDate.value) return false
+  if (filterEndDate.value && bookingStartDate > filterEndDate.value) return false
+}
+
+
   return true
 }))
 
@@ -187,5 +239,23 @@ async function load() {
   finally { loading.value = false }
 }
 
-onMounted(load)
+onMounted(() => {
+  if (route.query.start_date) {
+    filterStartDate.value = route.query.start_date
+  }
+
+  if (route.query.end_date) {
+    filterEndDate.value = route.query.end_date
+  }
+
+  if (route.query.active_today === '1') {
+    activeTodayOnly.value = true
+    filterStatus.value = '1'
+    filterPayment.value = 'Paid'
+  }
+
+  load()
+})
+
+
 </script>

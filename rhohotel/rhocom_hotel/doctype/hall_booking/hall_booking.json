@@ -182,6 +182,21 @@
             "options": "Scheduled\nCompleted\nNo Show\nCancelled"
         },
         {
+            "fieldname": "completed_by",
+            "fieldtype": "Link",
+            "label": "Completed By",
+            "options": "User",
+            "read_only": 1,
+            "allow_on_submit": 1
+            },
+            {
+            "fieldname": "completed_on",
+            "fieldtype": "Datetime",
+            "label": "Completed On",
+            "read_only": 1,
+            "allow_on_submit": 1
+            },
+        {
             "fieldname": "section_break_invoice",
             "fieldtype": "Section Break"
         },

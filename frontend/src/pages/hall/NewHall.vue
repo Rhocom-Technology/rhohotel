@@ -73,6 +73,29 @@
                 class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Availability Status</label>
+
+              <select
+                v-model="form.availability_status"
+                class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="Available">Available</option>
+                <option value="Unavailable">Unavailable</option>
+              </select>
+            </div>
+
+            <div v-if="form.availability_status === 'Unavailable'">
+              <label class="text-xs text-gray-500 mb-1 block">Reason</label>
+
+              <textarea
+                v-model="form.unavailable_reason"
+                rows="2"
+                placeholder="Maintenance, renovation, cleaning..."
+                class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
+              />
+            </div>
+
            
           </div>
         </div>
@@ -357,6 +380,8 @@ const form = ref({
   hall_type: '',
   capacity: '',
   rate: '',
+  availability_status: 'Available',
+  unavailable_reason: '',
   
   amenities: [],
 
@@ -462,6 +487,11 @@ async function createHall() {
       hall_type: form.value.hall_type,
       capacity: form.value.capacity,
       rate: form.value.rate,
+     rate: form.value.rate,
+
+      availability_status: form.value.availability_status,
+      unavailable_reason: form.value.unavailable_reason,
+
       amenities: form.value.amenities.filter(a => a.item),
 
       has_projector_av: form.value.has_projector_av,
@@ -510,6 +540,11 @@ onMounted(async () => {
       form.value.hall_type = existing.hall_type || ''
       form.value.capacity = existing.capacity || ''
       form.value.rate = existing.rate || ''
+      form.value.availability_status =
+        existing.availability_status || 'Available'
+
+      form.value.unavailable_reason =
+      existing.unavailable_reason || ''
       form.value.amenities = (existing.amenities || []).map(a => ({
         item: a.item || '',
         amenity_name: a.amenity_name || '',

@@ -54,23 +54,37 @@ def create_hall_amenity_item(item_name):
 
 @frappe.whitelist()
 def update_hall(name, data):
-    """Update an existing Hall document from the Vue edit form."""
     if isinstance(data, str):
         import json
         data = json.loads(data)
 
     doc = frappe.get_doc("Hall", name)
-    doc.hall_name     = data.get("hall_name")
+
+    doc.hall_name = data.get("hall_name")
     doc.hall_type = data.get("hall_type")
-    doc.capacity      = int(data.get("capacity") or 0)
+    doc.capacity = int(data.get("capacity") or 0)
     doc.rate = flt(data.get("rate") or 0)
 
-    # Replace child table rows
+    doc.has_projector_av = 1 if data.get("has_projector_av") else 0
+    doc.has_sound_system = 1 if data.get("has_sound_system") else 0
+    doc.has_air_conditioning = 1 if data.get("has_air_conditioning") else 0
+    doc.has_stage = 1 if data.get("has_stage") else 0
+    doc.has_restroom_access = 1 if data.get("has_restroom_access") else 0
+    doc.has_parking_access = 1 if data.get("has_parking_access") else 0
+    doc.has_kitchen_support = 1 if data.get("has_kitchen_support") else 0
+    doc.has_private_entrance = 1 if data.get("has_private_entrance") else 0
+
+    doc.availability_status = data.get("availability_status") or "Available"
+    doc.unavailable_reason = data.get("unavailable_reason") or ""
+
+    if doc.availability_status == "Available":
+        doc.unavailable_reason = ""
+
     doc.set("table_tdts", [])
     for row in data.get("amenities", []):
         if row.get("item") or row.get("amenity_name"):
             doc.append("table_tdts", {
-                "item":         row.get("item", ""),
+                "item": row.get("item", ""),
                 "amenity_name": row.get("amenity_name", ""),
             })
 
@@ -80,13 +94,12 @@ def update_hall(name, data):
 
 @frappe.whitelist()
 def get_hall_list():
-    """
-    Returns all halls with live availability derived from Hall Booking
-    start_datetime / end_datetime — no status field needed on the doctype.
-    """
     halls = frappe.db.get_all(
         "Hall",
-        fields=["name", "hall_name", "hall_type", "capacity", "rate", "item_name"],
+        fields=[
+            "name", "hall_name", "hall_type", "capacity", "rate", "item_name",
+            "availability_status", "unavailable_reason"
+        ],
         order_by="hall_name asc",
     )
 
@@ -95,29 +108,34 @@ def get_hall_list():
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
     for hall in halls:
-        # Active booking right now
         active = frappe.db.get_value(
             "Hall Booking",
             {
                 "hall": hall.name,
                 "docstatus": 1,
                 "start_datetime": ["<=", now],
-                "end_datetime":   [">=", now],
+                "end_datetime": [">=", now],
             },
             ["name", "customer_name", "event_type", "start_datetime", "end_datetime"],
             as_dict=True,
         )
-        hall["active_booking"]  = active
-        hall["current_status"]  = "Booked" if active else "Available"
 
-        # Count bookings today
+        hall["active_booking"] = active
+
+        if hall.get("availability_status") == "Unavailable":
+            hall["current_status"] = "Unavailable"
+        elif active:
+            hall["current_status"] = "Booked"
+        else:
+            hall["current_status"] = "Available"
+
         hall["bookings_today"] = frappe.db.count(
             "Hall Booking",
             {
                 "hall": hall.name,
                 "docstatus": 1,
                 "start_datetime": ["<=", today_end],
-                "end_datetime":   [">=", today_start],
+                "end_datetime": [">=", today_start],
             },
         )
 
@@ -126,38 +144,42 @@ def get_hall_list():
 
 @frappe.whitelist()
 def get_hall(name):
-    """
-    Returns full hall record with amenities, active booking,
-    upcoming bookings, and this-month booking count.
-    """
     hall = frappe.get_doc("Hall", name)
     data = hall.as_dict()
 
-    now        = now_datetime()
+    now = now_datetime()
     month_start = get_first_day(nowdate())
-    month_end   = get_last_day(nowdate())
+    month_end = get_last_day(nowdate())
 
-    # Amenities from child table
+    data["availability_status"] = hall.availability_status or "Available"
+    data["unavailable_reason"] = hall.unavailable_reason or ""
+
     data["amenities"] = [
         {"item": row.item, "amenity_name": row.amenity_name}
         for row in hall.get("table_tdts", [])
     ]
 
-    # Active booking right now
     active = frappe.db.get_value(
         "Hall Booking",
         {
             "hall": name,
             "docstatus": 1,
             "start_datetime": ["<=", now],
-            "end_datetime":   [">=", now],
+            "end_datetime": [">=", now],
         },
         ["name", "customer_name", "event_type", "start_datetime", "end_datetime"],
         as_dict=True,
     )
+
     data["active_booking"] = active
 
-    # Upcoming bookings (future, submitted)
+    if data["availability_status"] == "Unavailable":
+        data["current_status"] = "Unavailable"
+    elif active:
+        data["current_status"] = "Booked"
+    else:
+        data["current_status"] = "Available"
+
     upcoming = frappe.db.get_all(
         "Hall Booking",
         filters={
@@ -165,15 +187,14 @@ def get_hall(name):
             "docstatus": 1,
             "start_datetime": [">", now],
         },
-        fields=["name", "customer_name", "event_type",
-                "start_datetime", "end_datetime", "net_total"],
+        fields=["name", "customer_name", "event_type", "start_datetime", "end_datetime", "net_total"],
         order_by="start_datetime asc",
         limit=10,
     )
-    data["upcoming_bookings"] = upcoming
-    data["upcoming_count"]    = len(upcoming)
 
-    # Bookings this month
+    data["upcoming_bookings"] = upcoming
+    data["upcoming_count"] = len(upcoming)
+
     data["bookings_this_month"] = frappe.db.count(
         "Hall Booking",
         {
@@ -185,19 +206,25 @@ def get_hall(name):
 
     return data
 
-
 @frappe.whitelist()
 def create_hall(data):
-    """Create a new Hall document from the Vue form payload."""
     if isinstance(data, str):
         import json
         data = json.loads(data)
 
     doc = frappe.new_doc("Hall")
-    doc.hall_name    = data.get("hall_name")
+
+    doc.hall_name = data.get("hall_name")
     doc.hall_type = data.get("hall_type")
-    doc.capacity     = int(data.get("capacity") or 0)
+    doc.capacity = int(data.get("capacity") or 0)
     doc.rate = flt(data.get("rate") or 0)
+
+    doc.availability_status = data.get("availability_status") or "Available"
+    doc.unavailable_reason = data.get("unavailable_reason") or ""
+
+    if doc.availability_status == "Available":
+        doc.unavailable_reason = ""
+
     doc.has_projector_av = 1 if data.get("has_projector_av") else 0
     doc.has_sound_system = 1 if data.get("has_sound_system") else 0
     doc.has_air_conditioning = 1 if data.get("has_air_conditioning") else 0
@@ -210,13 +237,39 @@ def create_hall(data):
     for row in data.get("amenities", []):
         if row.get("item") or row.get("amenity_name"):
             doc.append("table_tdts", {
-                "item":         row.get("item", ""),
+                "item": row.get("item", ""),
                 "amenity_name": row.get("amenity_name", ""),
             })
 
     doc.insert(ignore_permissions=True)
     return {"name": doc.name}
 
+@frappe.whitelist()
+def update_hall_availability(hall_name, availability_status, unavailable_reason=None):
+    if not hall_name:
+        frappe.throw("Hall is required.")
+
+    if availability_status not in ["Available", "Unavailable"]:
+        frappe.throw("Invalid availability status.")
+
+    hall = frappe.get_doc("Hall", hall_name)
+
+    hall.availability_status = availability_status
+
+    if availability_status == "Unavailable":
+        hall.unavailable_reason = unavailable_reason or ""
+    else:
+        hall.unavailable_reason = ""
+
+    hall.save(ignore_permissions=True)
+
+    return {
+        "name": hall.name,
+        "availability_status": hall.availability_status,
+        "unavailable_reason": hall.unavailable_reason,
+    }
+    
+    
 @frappe.whitelist()
 def get_hall_types():
     """Return all Hall Type records for the Hall Type dropdown."""

@@ -24,6 +24,7 @@
     "primary_guest_phone",
     "corporate_guest",
     "customer",
+    "booking_notes",
     "group_section",
     "group_name",
     "group_billing_mode",
@@ -182,6 +183,13 @@
       "label": "Customer (ERPNext)",
       "read_only": 1,
       "description": "ERPNext Customer document linked to this reservation. Auto-populated from corporate_guest.customer on corporate bookings, or auto-created for individual guests on confirmation."
+    },
+    {
+      "fieldname": "booking_notes",
+      "fieldtype": "Small Text",
+      "label": "Booking Notes / Special Requests",
+      "allow_on_submit": 1,
+      "description": "Guest notes or special requests for the booking, e.g. wheelchair access, ramp required, late arrival, extra pillow, accessibility support."
     },
     {
       "fieldname": "group_section",

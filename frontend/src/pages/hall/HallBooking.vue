@@ -106,6 +106,14 @@
               Cancel Booking
             </button>
 
+            <button
+              v-if="booking.name"
+              @click="printBooking"
+              class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Print
+            </button>
+
 
         </div>
       </div>
@@ -130,6 +138,7 @@
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Outstanding</p>
           <p class="text-2xl font-bold" :class="booking.outstanding_amount > 0 ? 'text-red-500' : 'text-green-600'">
+            <!-- ₦{{ Number(booking.outstanding_amount || 0).toLocaleString() }} -->
             ₦{{ Number(booking.outstanding_amount || 0).toLocaleString() }}
           </p>
         </div>
@@ -365,6 +374,15 @@
               <div><p class="text-gray-400">Created</p><p class="text-gray-700">{{ fmtDatetime(booking.creation) }}</p></div>
               <div><p class="text-gray-400">Modified</p><p class="text-gray-700">{{ fmtDatetime(booking.modified) }}</p></div>
               <div v-if="booking.amended_from"><p class="text-gray-400">Amended From</p><p class="text-blue-600">{{ booking.amended_from }}</p></div>
+              <div v-if="booking.completed_by">
+                <p class="text-gray-400">Completed By</p>
+                <p class="text-gray-700">{{ booking.completed_by }}</p>
+              </div>
+
+              <div v-if="booking.completed_on">
+                <p class="text-gray-400">Completed On</p>
+                <p class="text-gray-700">{{ fmtDatetime(booking.completed_on) }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -849,6 +867,13 @@ async function cancelBooking() {
   } finally {
     actionSaving.value = false
   }
+}
+
+function printBooking() {
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.hall_booking.download_hall_booking?booking_name=${booking.value.name}`,
+    '_blank'
+  )
 }
 
 

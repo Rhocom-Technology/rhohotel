@@ -7,9 +7,21 @@
   "field_order": [
     "hall_name",
     "capacity",
+    "availability_status",
+    "unavailable_reason",
     "column_break_qfkp",
     "hall_type",
     "rate",
+    "item_name",
+    "facilities_section",
+    "has_projector_av",
+    "has_sound_system",
+    "has_air_conditioning",
+    "has_stage",
+    "has_restroom_access",
+    "has_parking_access",
+    "has_kitchen_support",
+    "has_private_entrance",
     "section_break_wmth",
     "table_tdts"
   ],
@@ -25,6 +37,20 @@
       "label": "Capacity",
       "non_negative": 1,
       "in_list_view": 1
+    },
+    {
+      "fieldname": "availability_status",
+      "fieldtype": "Select",
+      "label": "Availability Status",
+      "options": "Available\nUnavailable",
+      "default": "Available",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "unavailable_reason",
+      "fieldtype": "Small Text",
+      "label": "Unavailable Reason",
+      "depends_on": "eval:doc.availability_status=='Unavailable'"
     },
     {
       "fieldname": "column_break_qfkp",

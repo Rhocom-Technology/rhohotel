@@ -36,7 +36,8 @@
 "housekeeping_productivity_print_format",
 "corporate_billing_print_format",
 "corporate_account_statement_print_format",
-"asset_maintenance_print_format"
+"asset_maintenance_print_format",
+"hall_booking_print_format"
  ],
  "fields": [
   {
@@ -208,6 +209,12 @@
   "fieldname": "asset_maintenance_print_format",
   "fieldtype": "Link",
   "label": "Asset Maintenance Report Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "hall_booking_print_format",
+  "fieldtype": "Link",
+  "label": "Hall Booking Print Format",
   "options": "Print Format"
 }
  ],

@@ -12,12 +12,13 @@
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Edit Hall</button>
         </router-link>
         <!-- <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Create Booking</button> -->
-         <router-link
-            :to="{
-              name: 'NewHallBooking',
-              query: { hall: hall.name }
-            }"
-          >
+        <router-link
+          v-if="currentStatus !== 'Unavailable'"
+          :to="{
+            name: 'NewHallBooking',
+            query: { hall: hall.name }
+          }"
+        >
             <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
               Create Booking
             </button>
@@ -28,14 +29,38 @@
     <!-- Status strip -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
       <div class="bg-white rounded-xl px-5 py-4 border-2"
-        :class="currentStatus === 'Booked' ? 'border-blue-200' : 'border-green-200'">
+      :class="{
+        'border-blue-200': currentStatus === 'Booked',
+        'border-green-200': currentStatus === 'Available',
+        'border-red-200': currentStatus === 'Unavailable'
+      }"
+       >
         <p class="text-xs text-gray-400 mb-2">Status</p>
         <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full inline-block mb-2"
-          :class="currentStatus === 'Booked' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-700'">
-          {{ currentStatus === 'Booked' ? 'Active' : 'Active' }}
+        :class="{
+          'bg-blue-100 text-blue-600': currentStatus === 'Booked',
+          'bg-green-100 text-green-700': currentStatus === 'Available',
+          'bg-red-100 text-red-600': currentStatus === 'Unavailable'
+        }"
+         
+        >
+          {{ currentStatus === 'Unavailable' ? 'Blocked' : 'Active' }}
         </span>
         <p class="text-2xl font-bold text-gray-900">{{ currentStatus }}</p>
-        <p class="text-xs text-gray-400 mt-1">{{ currentStatus === 'Booked' ? 'Currently occupied' : 'Open for booking' }}</p>
+        <p
+            v-if="currentStatus === 'Unavailable' && hall.unavailable_reason"
+            class="text-xs text-red-500 mt-1"
+          >
+            {{ hall.unavailable_reason }}
+          </p>
+        <p class="text-xs text-gray-400 mt-1">
+          {{ currentStatus === 'Booked'
+            ? 'Currently occupied'
+            : currentStatus === 'Unavailable'
+              ? 'Blocked from booking'
+              : 'Open for booking'
+          }}
+        </p>
       </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-2">Capacity</p>
@@ -249,7 +274,9 @@ import { callMethod } from '@/lib/api'
 const route = useRoute()
 const hall  = ref({})
 
-const currentStatus = computed(() => hall.value.active_booking ? 'Booked' : 'Available')
+const currentStatus = computed(() =>
+  hall.value.current_status || 'Available'
+)
 
 function fmtDatetime(dt) {
   if (!dt) return '–'

@@ -82,6 +82,12 @@ class HallBooking(Document):
 		if not self.hall or not self.start_datetime or not self.end_datetime:
 			return
 
+		start_dt = get_datetime(self.start_datetime)
+		end_dt = get_datetime(self.end_datetime)
+
+		if end_dt <= start_dt:
+			frappe.throw("End Date must be after Start Date.")
+
 		overlapping_bookings = frappe.db.sql(
 			"""
 			SELECT
@@ -89,27 +95,49 @@ class HallBooking(Document):
 				customer_name,
 				hall,
 				start_datetime,
-				end_datetime
+				end_datetime,
+				event_status,
+				completed_on
 			FROM `tabHall Booking`
 			WHERE hall = %(hall)s
 			AND docstatus = 1
 			AND name != %(name)s
-			AND (
-					%(start)s < end_datetime
-				AND %(end)s > start_datetime
-			)
+			AND IFNULL(event_status, 'Scheduled') != 'Cancelled'
 			""",
 			{
 				"hall": self.hall,
 				"name": self.name or "",
-				"start": self.start_datetime,
-				"end": self.end_datetime,
 			},
 			as_dict=True,
 		)
 
-		if overlapping_bookings:
-			conflict = overlapping_bookings[0]
+		for conflict in overlapping_bookings:
+			conflict_start = get_datetime(conflict.start_datetime)
+
+			if conflict.event_status == "Completed" and conflict.completed_on:
+				conflict_end = get_datetime(conflict.completed_on)
+				completed_message = (
+					"<br><b>Completed At:</b> {completed}<br>"
+					"This booking has already been completed, so the hall is available only after the completed time. "
+					"Please choose a start time after {completed}."
+				).format(
+					completed=frappe.format(
+						conflict_end,
+						{"fieldtype": "Datetime"}
+					)
+				)
+			else:
+				conflict_end = get_datetime(conflict.end_datetime)
+				completed_message = (
+					"<br>This booking has not been completed yet. "
+					"Please choose a time outside the booked period."
+				)
+
+			if conflict_end <= start_dt:
+				continue
+
+			if conflict_start >= end_dt:
+				continue
 
 			frappe.throw(
 				(
@@ -118,6 +146,7 @@ class HallBooking(Document):
 					"<b>Customer:</b> {customer}<br>"
 					"<b>Booked From:</b> {start}<br>"
 					"<b>Booked To:</b> {end}"
+					"{completed_message}"
 				).format(
 					hall=self.hall,
 					booking=conflict.name,
@@ -127,12 +156,13 @@ class HallBooking(Document):
 						{"fieldtype": "Datetime"}
 					),
 					end=frappe.format(
-						conflict.end_datetime,
+						conflict_end,
 						{"fieldtype": "Datetime"}
 					),
+					completed_message=completed_message,
 				)
-        )
-   
+			)
+  
 	def create_invoice(self):
 		hall = frappe.get_doc("Hall", self.hall)
 
@@ -247,31 +277,57 @@ def adjust_booking_datetime(
 	new_total_days = max(1, date_diff(getdate(end_dt), getdate(start_dt)) + 1)
 	previous_total_days = flt(booking.total_days or 0)
 
+	# Check overlap using effective end time.
+	# If a previous booking was marked Completed, its completed_on becomes its real end time.
 	overlapping_bookings = frappe.db.sql(
 		"""
-		SELECT name
+		SELECT
+			name,
+			customer_name,
+			start_datetime,
+			end_datetime,
+			event_status,
+			completed_on
 		FROM `tabHall Booking`
 		WHERE hall = %(hall)s
 		  AND docstatus = 1
 		  AND name != %(name)s
-		  AND (
-			  %(start)s < end_datetime
-			  AND %(end)s > start_datetime
-		  )
+		  AND IFNULL(event_status, 'Scheduled') != 'Cancelled'
 		""",
 		{
 			"hall": booking.hall,
 			"name": booking.name or "",
-			"start": start_dt,
-			"end": end_dt,
 		},
 		as_dict=True,
 	)
 
-	if overlapping_bookings:
+	for conflict in overlapping_bookings:
+		conflict_start = get_datetime(conflict.start_datetime)
+
+		if conflict.event_status == "Completed" and conflict.completed_on:
+			conflict_end = get_datetime(conflict.completed_on)
+		else:
+			conflict_end = get_datetime(conflict.end_datetime)
+
+		if conflict_end <= start_dt:
+			continue
+
+		if conflict_start >= end_dt:
+			continue
+
 		frappe.throw(
-			"Hall '{0}' is already booked between {1} and {2}.".format(
-				booking.hall, start_dt, end_dt
+			(
+				"Hall '{hall}' is already booked for the selected time.<br><br>"
+				"<b>Conflicting Booking:</b> {booking}<br>"
+				"<b>Customer:</b> {customer}<br>"
+				"<b>Booked From:</b> {start}<br>"
+				"<b>Booked To:</b> {end}"
+			).format(
+				hall=booking.hall,
+				booking=conflict.name,
+				customer=conflict.customer_name or "N/A",
+				start=frappe.format(conflict.start_datetime, {"fieldtype": "Datetime"}),
+				end=frappe.format(conflict_end, {"fieldtype": "Datetime"}),
 			)
 		)
 
@@ -379,7 +435,6 @@ def adjust_booking_datetime(
 		"discount_value": adjustment_discount,
 		"net_adjustment": net_adjustment,
 	}
- 
  
 @frappe.whitelist()
 def get_payment_status(booking_name):
