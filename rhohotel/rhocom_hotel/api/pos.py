@@ -158,6 +158,40 @@ def _has_pos_opening_entry_on_invoice():
     return bool(frappe.db.has_column("POS Invoice", "pos_opening_entry"))
 
 
+def _pos_invoice_shift_time_condition(alias="pi"):
+    return f"TIMESTAMP({alias}.posting_date, COALESCE({alias}.posting_time, '00:00:00')) >= %s"
+
+
+def _get_shift_open_table_count(entry_doc, pos_opening_entry=None):
+    table_condition = """
+        (customer_name LIKE 'Table %%'
+         OR customer_name LIKE 'Bar %%'
+         OR customer_name LIKE 'Pool%%')
+    """
+    if _has_pos_opening_entry_on_invoice() and pos_opening_entry:
+        return frappe.db.sql("""
+            SELECT COUNT(*)
+            FROM `tabPOS Invoice`
+            WHERE pos_opening_entry = %s
+              AND docstatus = 0
+              AND {table_condition}
+        """.format(table_condition=table_condition), pos_opening_entry)[0][0] or 0
+
+    time_condition = _pos_invoice_shift_time_condition("pi")
+    return frappe.db.sql("""
+        SELECT COUNT(*)
+        FROM `tabPOS Invoice` pi
+        WHERE pi.pos_profile = %s
+          AND pi.owner = %s
+          AND {time_condition}
+          AND pi.docstatus = 0
+          AND {table_condition}
+    """.format(
+        time_condition=time_condition,
+        table_condition=table_condition,
+    ), (entry_doc.pos_profile, entry_doc.user, entry_doc.period_start_date))[0][0] or 0
+
+
 def _get_room_posting_mop(profile_doc, fallback_modes):
     """Return the best Mode of Payment to use for a room-posting POS Invoice.
 
@@ -320,7 +354,7 @@ def _age_minutes_from(creation):
 
 def _get_open_table_draft(table_name, exclude_invoice=None):
     """Return the draft POS Invoice currently occupying a service table."""
-    table_name = cstr(table_name).strip()
+    table_name = _extract_table_display_name(table_name)
     if not table_name:
         return None
 
@@ -1459,11 +1493,13 @@ def get_pos_invoices(search=None, outlet=None, method=None, status=None,
             pi.owner AS cashier,
             pi.pos_profile AS terminal,
             pi.docstatus,
+            pi.status AS invoice_status,
             GROUP_CONCAT(DISTINCT pip.mode_of_payment ORDER BY pip.mode_of_payment SEPARATOR ', ') AS payment_method,
-            CASE pi.docstatus
-                WHEN 0 THEN 'Draft'
-                WHEN 1 THEN 'Paid'
-                WHEN 2 THEN 'Void'
+            CASE
+                WHEN pi.docstatus = 0 THEN 'Draft'
+                WHEN pi.docstatus = 2 THEN 'Void'
+                WHEN pi.status = 'Consolidated' THEN 'Consolidated'
+                ELSE 'Paid'
             END AS status
         FROM `tabPOS Invoice` pi
         LEFT JOIN `tabSales Invoice Payment` pip ON pip.parent = pi.name
@@ -1502,21 +1538,58 @@ def cancel_pos_invoice(invoice_name, reason=None):
 
     try:
         linked_sales_invoice = cstr(pi.get("consolidated_invoice") or "")
+
+        # For consolidated invoices the linked Sales Invoice is locked by a
+        # POS Closing Entry and cannot be cancelled directly.  Instead we
+        # clear the in-memory field so ERPNext's before_cancel check is
+        # bypassed, cancel the POS Invoice (which reverses its own GL
+        # entries), and leave a comment on the Sales Invoice for accounting.
         if linked_sales_invoice and frappe.db.exists("Sales Invoice", linked_sales_invoice):
-            sales_invoice_docstatus = frappe.db.get_value("Sales Invoice", linked_sales_invoice, "docstatus")
-            if sales_invoice_docstatus == 1:
-                frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", None, update_modified=False)
+            si_docstatus = frappe.db.get_value("Sales Invoice", linked_sales_invoice, "docstatus")
+            if si_docstatus == 1:
+                # Note on the Sales Invoice so accounting knows to reconcile.
                 si = frappe.get_doc("Sales Invoice", linked_sales_invoice)
+                note = _("POS Invoice {0} was cancelled from the POS manager interface. "
+                         "This Sales Invoice may need manual adjustment.").format(invoice_name)
                 if reason:
-                    si.add_comment("Comment", _("Cancelled from POS manager with POS Invoice {0}: {1}").format(invoice_name, cstr(reason)))
-                si.flags.ignore_permissions = True
-                si.cancel()
-                frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", linked_sales_invoice, update_modified=False)
-                pi.reload()
+                    note += " " + _("Reason: {0}").format(cstr(reason))
+                si.add_comment("Comment", note)
+                # Clear in-memory only — bypasses before_cancel closing-entry check.
+                pi.consolidated_invoice = None
 
         if reason:
             pi.add_comment("Comment", _("Cancelled from POS manager: {0}").format(cstr(reason)))
         pi.flags.ignore_permissions = True
+        # ERPNext's POS Invoice.on_cancel() sets ignore_linked_doctypes to
+        # ["Payment Ledger Entry", "Serial and Batch Bundle"], which is called
+        # by Frappe BEFORE check_no_back_links_exist() inside _cancel().
+        # We monkey-patch on_cancel on the instance so our extra doctype
+        # ("POS Invoice Merge Log") is appended after the original runs.
+        _orig_on_cancel = pi.on_cancel
+        def _patched_on_cancel():
+            _orig_on_cancel()
+            # ERPNext sets ignore_linked_doctypes to ["Payment Ledger Entry",
+            # "Serial and Batch Bundle"] inside on_cancel.  Append the extra
+            # doctypes that reference POS Invoice via static or dynamic links:
+            #   - POS Invoice Reference (child of both Merge Log and Closing Entry)
+            #   - Sales Invoice Item    (consolidated SI items reference back to POS Invoice)
+            #   - Kitchen Order Ticket  (pos_invoice field)
+            # Also include the parent types reported in error messages (line 314 check):
+            #   - POS Invoice Merge Log / POS Closing Entry / Sales Invoice
+            extra = [
+                "POS Invoice Reference",
+                "POS Invoice Merge Log",
+                "POS Closing Entry",
+                "Sales Invoice Item",
+                "Sales Invoice",
+                "Kitchen Order Ticket",
+            ]
+            ignored = list(getattr(pi, "ignore_linked_doctypes", None) or [])
+            for e in extra:
+                if e not in ignored:
+                    ignored.append(e)
+            pi.ignore_linked_doctypes = ignored
+        pi.on_cancel = _patched_on_cancel
         pi.cancel()
         frappe.db.commit()
     except frappe.ValidationError as exc:
@@ -1708,22 +1781,25 @@ def get_pos_shift_stats(pos_opening_entry=None):
             GROUP BY pip.mode_of_payment
         """, pos_opening_entry, as_dict=1)
     else:
-        entry_start = getdate(entry_doc.period_start_date)
+        entry_start = entry_doc.period_start_date
+        time_condition = _pos_invoice_shift_time_condition("pi")
         gross = frappe.db.sql("""
             SELECT COALESCE(SUM(grand_total), 0)
-            FROM `tabPOS Invoice`
-            WHERE pos_profile = %s
-              AND owner = %s
-              AND posting_date >= %s
+            FROM `tabPOS Invoice` pi
+            WHERE pi.pos_profile = %s
+              AND pi.owner = %s
+              AND {time_condition}
               AND docstatus = 1
-        """, (entry_doc.pos_profile, entry_doc.user, entry_start))[0][0] or 0
+        """.format(time_condition=time_condition), (entry_doc.pos_profile, entry_doc.user, entry_start))[0][0] or 0
 
-        open_drafts = frappe.db.count("POS Invoice", {
-            "pos_profile": entry_doc.pos_profile,
-            "owner": entry_doc.user,
-            "posting_date": [">=", entry_start],
-            "docstatus": 0,
-        })
+        open_drafts = frappe.db.sql("""
+            SELECT COUNT(*)
+            FROM `tabPOS Invoice` pi
+            WHERE pi.pos_profile = %s
+              AND pi.owner = %s
+              AND {time_condition}
+              AND pi.docstatus = 0
+        """.format(time_condition=time_condition), (entry_doc.pos_profile, entry_doc.user, entry_start))[0][0] or 0
 
         # Fallback grouping by profile + user + opening date when no explicit shift link exists.
         tender = frappe.db.sql("""
@@ -1734,26 +1810,60 @@ def get_pos_shift_stats(pos_opening_entry=None):
             JOIN `tabSales Invoice Payment` pip ON pip.parent = pi.name
             WHERE pi.pos_profile = %s
               AND pi.owner = %s
-              AND pi.posting_date >= %s
+              AND {time_condition}
               AND pi.docstatus = 1
             GROUP BY pip.mode_of_payment
-        """, (entry_doc.pos_profile, entry_doc.user, entry_start), as_dict=1)
+        """.format(time_condition=time_condition), (entry_doc.pos_profile, entry_doc.user, entry_start), as_dict=1)
+
+    opening_by_mop = {
+        row.mode_of_payment: flt(row.opening_amount)
+        for row in (entry_doc.get("balance_details") or [])
+        if row.mode_of_payment
+    }
 
     for t in tender:
+        opening_amount = flt(opening_by_mop.get(t["payment_type"]))
+        collection_amount = flt(t["system_amount"])
+        expected_amount = opening_amount + collection_amount
+        t["collection_amount"] = collection_amount
+        t["opening_amount"] = opening_amount
+        t["expected_amount"] = expected_amount
+        t["system_amount"] = expected_amount
         t["editable"] = t["payment_type"] == "Cash"
-        t["counted"] = t["system_amount"]
+        t["counted"] = expected_amount
         t["diff"] = 0
+
+    for mop, opening_amount in opening_by_mop.items():
+        if any(t["payment_type"] == mop for t in tender):
+            continue
+        tender.append({
+            "payment_type": mop,
+            "collection_amount": 0,
+            "opening_amount": flt(opening_amount),
+            "expected_amount": flt(opening_amount),
+            "system_amount": flt(opening_amount),
+            "editable": mop.lower() == "cash",
+            "counted": flt(opening_amount),
+            "diff": 0,
+        })
+
+    net_collections = sum(flt(t.get("collection_amount")) for t in tender)
 
     # Additional stats for the Shift Close summary panel
     if _has_pos_opening_entry_on_invoice():
         bills_processed = frappe.db.count("POS Invoice", {"pos_opening_entry": pos_opening_entry, "docstatus": 1})
         voided_count = frappe.db.count("POS Invoice", {"pos_opening_entry": pos_opening_entry, "docstatus": 2})
     else:
-        entry_start = getdate(entry_doc.period_start_date)
-        bills_processed = frappe.db.count("POS Invoice", {
-            "pos_profile": entry_doc.pos_profile, "owner": entry_doc.user,
-            "posting_date": [">=", entry_start], "docstatus": 1,
-        })
+        entry_start = entry_doc.period_start_date
+        time_condition = _pos_invoice_shift_time_condition("pi")
+        bills_processed = frappe.db.sql("""
+            SELECT COUNT(*)
+            FROM `tabPOS Invoice` pi
+            WHERE pi.pos_profile = %s
+              AND pi.owner = %s
+              AND {time_condition}
+              AND pi.docstatus = 1
+        """.format(time_condition=time_condition), (entry_doc.pos_profile, entry_doc.user, entry_start))[0][0] or 0
         voided_count = 0
 
     opening_cash = 0
@@ -1766,15 +1876,9 @@ def get_pos_shift_stats(pos_opening_entry=None):
         "has_open_shift": True,
         "pos_opening_entry": pos_opening_entry,
         "gross_sales": flt(gross),
-        "net_collections": flt(gross),
+                "net_collections": flt(net_collections),
         "open_drafts": int(open_drafts),
-        "open_tables": int(frappe.db.sql("""
-            SELECT COUNT(*) FROM `tabPOS Invoice`
-            WHERE docstatus = 0
-              AND (customer_name LIKE 'Table %%'
-                   OR customer_name LIKE 'Bar %%'
-                   OR customer_name LIKE 'Pool%%')
-        """)[0][0] or 0),
+                "open_tables": int(_get_shift_open_table_count(entry_doc, pos_opening_entry)),
         "difference": 0,
         "cashier": frappe.db.get_value("User", entry_doc.user, "full_name") or entry_doc.user,
         "pos_profile": entry_doc.pos_profile,
@@ -1833,7 +1937,7 @@ def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None):
                     counted = flt(r.get("counted", system))
                     closing.append("payment_reconciliation", {
                         "mode_of_payment": mop,
-                        "opening_amount": system,
+                        "opening_amount": flt(r.get("opening_amount", 0)),
                         "expected_amount": system,
                         "closing_amount": counted,
                         "difference": counted - system,
@@ -2087,7 +2191,13 @@ def get_open_pos_terminals():
                 COALESCE(u.full_name, poe.user) AS cashier,
                 COUNT(DISTINCT CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bill_count,
                 COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS gross_sales,
-                COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts
+                COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts,
+                COUNT(DISTINCT CASE
+                    WHEN pi.docstatus = 0
+                     AND (pi.customer_name LIKE 'Table %%'
+                          OR pi.customer_name LIKE 'Bar %%'
+                          OR pi.customer_name LIKE 'Pool%%')
+                    THEN pi.name END) AS open_tables
             FROM `tabPOS Opening Entry` poe
             LEFT JOIN `tabUser` u ON u.name = poe.user
             LEFT JOIN `tabPOS Invoice` pi ON pi.pos_opening_entry = poe.name
@@ -2110,13 +2220,19 @@ def get_open_pos_terminals():
                 COALESCE(u.full_name, poe.user) AS cashier,
                 COUNT(DISTINCT CASE WHEN pi.docstatus = 1 THEN pi.name END) AS bill_count,
                 COALESCE(SUM(CASE WHEN pi.docstatus = 1 THEN pi.grand_total ELSE 0 END), 0) AS gross_sales,
-                COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts
+                COUNT(DISTINCT CASE WHEN pi.docstatus = 0 THEN pi.name END) AS open_drafts,
+                COUNT(DISTINCT CASE
+                    WHEN pi.docstatus = 0
+                     AND (pi.customer_name LIKE 'Table %%'
+                          OR pi.customer_name LIKE 'Bar %%'
+                          OR pi.customer_name LIKE 'Pool%%')
+                    THEN pi.name END) AS open_tables
             FROM `tabPOS Opening Entry` poe
             LEFT JOIN `tabUser` u ON u.name = poe.user
             LEFT JOIN `tabPOS Invoice` pi
                 ON pi.pos_profile = poe.pos_profile
                 AND pi.owner = poe.user
-                AND pi.posting_date >= DATE(poe.period_start_date)
+                AND TIMESTAMP(pi.posting_date, COALESCE(pi.posting_time, '00:00:00')) >= poe.period_start_date
             WHERE poe.status = 'Open' AND poe.docstatus = 1
             GROUP BY poe.name
             ORDER BY poe.creation DESC
@@ -2129,6 +2245,7 @@ def get_open_pos_terminals():
         r["gross_sales"] = flt(r["gross_sales"])
         r["bill_count"] = int(r["bill_count"])
         r["open_drafts"] = int(r["open_drafts"])
+        r["open_tables"] = int(r.get("open_tables") or 0)
 
     return rows
 

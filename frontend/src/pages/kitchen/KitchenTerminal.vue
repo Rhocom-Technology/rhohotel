@@ -147,7 +147,7 @@
             <div class="flex items-center gap-2 mt-2.5">
               <span class="px-2.5 py-1 text-xs font-semibold rounded-full"
                 :class="preparingBadgeClass(t)">
-                {{ countdownLabel(t, kitchenSettings.criticalMinutes) }}
+                {{ countdownLabel(t, kitchenSettings.preparationMinutes) }}
               </span>
               <button class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 :disabled="updating === t.id"
@@ -201,7 +201,7 @@
             <div v-for="line in itemLines(t)" :key="`${t.id}-${line}`" class="text-xs font-bold text-gray-900 leading-tight">{{ line }}</div>
             <div v-for="line in noteLines(t)" :key="`${t.id}-note-${line}`" class="text-xs text-gray-500">{{ line }}</div>
             <div class="flex items-center gap-2 mt-2.5">
-              <span class="px-2.5 py-1 text-xs font-semibold bg-red-100 text-red-500 rounded-full">{{ t.mins }} mins</span>
+              <span class="px-2.5 py-1 text-xs font-semibold bg-red-100 text-red-500 rounded-full">{{ timerMins(t) }} mins</span>
               <button class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 :disabled="updating === t.id"
                 @click="setStatus(t.id, 'In Progress')">Escalate Chef</button>
@@ -239,14 +239,17 @@ const filterStation = ref('')
 const filterSource = ref('')
 const showDelayedOnly = ref(false)
 const updating = ref(null)  // ticket name being updated
+const clockNow = ref(Date.now())
 let lastTicketCount = 0
 let refreshInterval = null
+let countdownInterval = null
 
 const defaultKitchenSettings = {
   station: 'Hot Kitchen',
   ticketView: 'All Tickets',
   kitchenNote: '',
   newTicketMinutes: 5,
+  preparationMinutes: 25,
   warningMinutes: 15,
   criticalMinutes: 25,
   readyPickupMinutes: 10,
@@ -256,7 +259,11 @@ const defaultKitchenSettings = {
 function loadKitchenSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem('rhohotel_kitchen_settings') || '{}')
-    return { ...defaultKitchenSettings, ...saved }
+    const settings = { ...defaultKitchenSettings, ...saved }
+    if (!saved.preparationMinutes && saved.criticalMinutes) {
+      settings.preparationMinutes = Number(saved.criticalMinutes) || defaultKitchenSettings.preparationMinutes
+    }
+    return settings
   } catch (_) {
     return { ...defaultKitchenSettings }
   }
@@ -267,7 +274,7 @@ const kitchenSettings = ref(loadKitchenSettings())
 function kitchenTicketParams() {
   return {
     pending_delay_minutes: kitchenSettings.value.criticalMinutes,
-    preparing_delay_minutes: kitchenSettings.value.criticalMinutes,
+    preparing_delay_minutes: kitchenSettings.value.preparationMinutes,
   }
 }
 
@@ -352,8 +359,14 @@ const statusResource = createResource({
 
 onMounted(() => {
   setRefreshTimer()
+  countdownInterval = setInterval(() => {
+    clockNow.value = Date.now()
+  }, 1000)
 })
-onUnmounted(() => clearInterval(refreshInterval))
+onUnmounted(() => {
+  clearInterval(refreshInterval)
+  clearInterval(countdownInterval)
+})
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 const stats = computed(() => statsResource.data || { new: 0, preparing: 0, ready: 0, delayed: 0 })
@@ -375,8 +388,24 @@ function noteLines(t) {
   return parts
 }
 
+function parseKitchenTime(value) {
+  if (!value) return null
+  const normalized = String(value).replace(' ', 'T')
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime()
+}
+
+function stageStartTime(t) {
+  if (t.status === 'In Progress' || t.status === 'Ready') {
+    return parseKitchenTime(t.modified) || parseKitchenTime(t.sent_at)
+  }
+  return parseKitchenTime(t.sent_at)
+}
+
 function timerMins(t) {
-  return Number(t.stage_mins ?? t.mins ?? 0)
+  const startedAt = stageStartTime(t)
+  if (!startedAt) return Number(t.stage_mins ?? t.mins ?? 0)
+  return Math.max(0, Math.floor((clockNow.value - startedAt) / 60000))
 }
 
 function remainingMinutes(t, limit) {
@@ -392,14 +421,14 @@ function countdownLabel(t, limit) {
 
 function preparingCardClass(t) {
   const elapsed = timerMins(t)
-  if (elapsed >= kitchenSettings.value.criticalMinutes) return 'bg-red-50 border-red-200'
+  if (elapsed >= kitchenSettings.value.preparationMinutes) return 'bg-red-50 border-red-200'
   if (elapsed >= kitchenSettings.value.warningMinutes) return 'bg-orange-50 border-orange-200'
   return 'bg-white border-gray-200 hover:border-yellow-200'
 }
 
 function preparingBadgeClass(t) {
   const elapsed = timerMins(t)
-  if (elapsed >= kitchenSettings.value.criticalMinutes) return 'bg-red-100 text-red-600'
+  if (elapsed >= kitchenSettings.value.preparationMinutes) return 'bg-red-100 text-red-600'
   if (elapsed >= kitchenSettings.value.warningMinutes) return 'bg-orange-100 text-orange-600'
   return 'bg-yellow-100 text-yellow-600'
 }

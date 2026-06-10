@@ -354,7 +354,7 @@
 
         <!-- Actions -->
         <div class="flex gap-2 flex-shrink-0 bg-white pt-3 pb-1 border-t border-gray-100">
-          <button @click="clearKitchenSelection" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Clear Selection</button>
+          <button @click="clearCart" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Clear Cart</button>
           <button @click="printBill" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
           <button @click="onHoldSale"
             :disabled="holding || cart.length === 0"

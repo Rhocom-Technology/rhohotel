@@ -38,7 +38,7 @@
             </div>
             <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
               <p class="text-xs text-gray-400 mb-1">Open tables</p>
-              <p class="text-2xl font-bold text-gray-900">14</p>
+              <p class="text-2xl font-bold text-gray-900">{{ terminalsResource.loading ? '…' : terminals.reduce((s,t)=>s+t.tables,0) }}</p>
             </div>
             <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
               <p class="text-xs text-gray-400 mb-1">Flagged differences</p>
@@ -228,7 +228,7 @@ const terminals = computed(() =>
     cashier: t.cashier || t.user || '—',
     outlet: t.terminal_name || '—',
     drafts: t.open_drafts || 0,
-    tables: 0,
+    tables: t.open_tables || 0,
     diff: '₦0.00',
     sales: `₦${Number(t.gross_sales || 0).toLocaleString()}`,
     shiftLabel: 'Active shift •',

@@ -51,7 +51,7 @@
           <p class="text-xs text-gray-400">Difference</p>
           <span class="px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded-full">Review</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">₦{{ shiftResource.loading ? '…' : Number(shiftStats.difference).toLocaleString() }}</p>
+        <p class="text-3xl font-bold text-gray-900">₦{{ shiftResource.loading ? '…' : Number(liveDifference).toLocaleString() }}</p>
       </div>
     </div>
 
@@ -167,14 +167,14 @@
             </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Expected cash in drawer</span>
-              <span class="font-semibold text-gray-900">₦{{ Number((shiftStats.opening_cash || 0) + (shiftStats.gross_sales || 0)).toLocaleString() }}</span>
+              <span class="font-semibold text-gray-900">₦{{ Number(expectedCashInDrawer).toLocaleString() }}</span>
             </div>
           </div>
 
           <!-- Closing Status -->
           <div class="bg-gray-50 rounded-lg border border-gray-100 p-4">
             <h4 class="text-xs font-bold text-gray-900 mb-1.5">Closing Status</h4>
-            <p class="text-xs text-gray-500">All counted amounts match the system values.</p>
+            <p class="text-xs text-gray-500">{{ closingStatusText }}</p>
           </div>
 
           <button @click="printShiftReport" class="w-full py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
@@ -257,6 +257,7 @@ const shiftStats = computed(() => {
     bills_processed: d.bills_processed || 0,
     voided_count: d.voided_count || 0,
     opening_cash: Number(d.opening_cash || 0),
+    open_tables: Number(d.open_tables || 0),
   }
 })
 
@@ -268,6 +269,9 @@ watch(() => shiftResource.data?.tender_breakdown, (breakdown) => {
   tenderRows.value = breakdown.map(t => ({
     type: t.payment_type,
     system: Number(t.system_amount || 0),
+    opening: Number(t.opening_amount || 0),
+    collection: Number(t.collection_amount || 0),
+    expected: Number(t.expected_amount || t.system_amount || 0),
     counted: Number(t.system_amount || 0).toFixed(2),
     editable: t.editable !== false,
   }))
@@ -276,6 +280,22 @@ watch(() => shiftResource.data?.tender_breakdown, (breakdown) => {
 function getDiff(row) {
   return (parseFloat(row.counted) || 0) - row.system
 }
+
+const liveDifference = computed(() =>
+  tenderRows.value.reduce((sum, row) => sum + getDiff(row), 0)
+)
+
+const expectedCashInDrawer = computed(() => {
+  const cashRow = tenderRows.value.find(row => String(row.type || '').toLowerCase() === 'cash')
+  if (cashRow) return cashRow.system
+  return Number(shiftStats.value.opening_cash || 0)
+})
+
+const closingStatusText = computed(() => {
+  if (liveDifference.value === 0) return 'All counted amounts match the system values.'
+  const direction = liveDifference.value > 0 ? 'over' : 'short'
+  return `Counted tenders are ${direction} by ₦${Math.abs(liveDifference.value).toLocaleString()}.`
+})
 
 // ── API: Close Shift ───────────────────────────────────────────────
 const closeResource = createResource({
@@ -343,6 +363,9 @@ function doCloseShift() {
     tender_rows: JSON.stringify(tenderRows.value.map(r => ({
       payment_type: r.type,
       system_amount: r.system,
+      opening_amount: r.opening,
+      collection_amount: r.collection,
+      expected_amount: r.expected,
       counted: parseFloat(r.counted) || 0,
     }))),
     closing_note: closingNote.value || null,

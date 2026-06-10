@@ -260,6 +260,7 @@ const allInvoices = computed(() =>
     method: inv.payment_method || '—',
     amount: Number(inv.grand_total) || 0,
     docstatus: Number(inv.docstatus),
+    invoiceStatus: inv.invoice_status || '',
     status: inv.status || '—',
   }))
 )
@@ -298,9 +299,11 @@ watch(filtered, () => { currentPage.value = 1 })
 // ── Helpers ────────────────────────────────────────────────────────
 function statusClass(status) {
   return {
-    'Draft':   'bg-gray-100 text-gray-500',
-    'Paid':    'bg-green-50 text-green-600',
-    'Void':    'bg-red-50 text-red-500',
+    'Draft':        'bg-gray-100 text-gray-500',
+    'Paid':         'bg-green-50 text-green-600',
+    'Void':         'bg-red-50 text-red-500',
+    'Consolidated': 'bg-purple-50 text-purple-600',
+    'Return':       'bg-orange-50 text-orange-600',
   }[status] || 'bg-blue-50 text-blue-600'
 }
 

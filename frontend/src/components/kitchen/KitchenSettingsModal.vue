@@ -23,7 +23,7 @@
         </div>
 
         <div class="overflow-y-auto flex-1 px-8 py-6">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:32px;">
 
             <!-- Left: Kitchen Configuration -->
             <div class="space-y-6">
@@ -61,10 +61,14 @@
               <!-- Preparation SLA Timers -->
               <div>
                 <p class="text-xs font-semibold text-gray-700 mb-2">Preparation SLA Timers</p>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
                   <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
                     <span class="block text-gray-500 mb-1">New Ticket</span>
                     <input v-model.number="newTicketMinutes" type="number" min="1" class="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                  </label>
+                  <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
+                    <span class="block text-gray-500 mb-1">Preparation</span>
+                    <input v-model.number="preparationMinutes" type="number" min="1" class="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
                   </label>
                   <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
                     <span class="block text-gray-500 mb-1">Warning</span>
@@ -180,6 +184,7 @@ const station = ref(props.settings.station || 'Hot Kitchen')
 const ticketView = ref(props.settings.ticketView || 'All Tickets')
 const kitchenNote = ref(props.settings.kitchenNote || '')
 const newTicketMinutes = ref(Number(props.settings.newTicketMinutes || 5))
+const preparationMinutes = ref(Number(props.settings.preparationMinutes || props.settings.criticalMinutes || 25))
 const warningMinutes = ref(Number(props.settings.warningMinutes || 15))
 const criticalMinutes = ref(Number(props.settings.criticalMinutes || 25))
 const readyPickupMinutes = ref(Number(props.settings.readyPickupMinutes || 10))
@@ -204,6 +209,7 @@ function saveSettings() {
     ticketView: ticketView.value,
     kitchenNote: kitchenNote.value,
     newTicketMinutes: Math.max(1, Number(newTicketMinutes.value || 5)),
+    preparationMinutes: Math.max(1, Number(preparationMinutes.value || 25)),
     warningMinutes: Math.max(1, Number(warningMinutes.value || 15)),
     criticalMinutes: Math.max(1, Number(criticalMinutes.value || 25)),
     readyPickupMinutes: Math.max(1, Number(readyPickupMinutes.value || 10)),
