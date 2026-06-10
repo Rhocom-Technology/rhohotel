@@ -16,9 +16,10 @@
               <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 @click="$emit('close')">Close</button>
               <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                @click="$emit('close')">Save</button>
+                @click="saveSettings">Save</button>
             </div>
           </div>
+          <p v-if="savedMessage" class="mt-4 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{{ savedMessage }}</p>
         </div>
 
         <div class="overflow-y-auto flex-1 px-8 py-6">
@@ -60,11 +61,25 @@
               <!-- Preparation SLA Timers -->
               <div>
                 <p class="text-xs font-semibold text-gray-700 mb-2">Preparation SLA Timers</p>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-                  <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium text-center">New Ticket: 5 mins</div>
-                  <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium text-center">Warning: 15 mins</div>
-                  <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium text-center">Critical: 25 mins</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+                  <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
+                    <span class="block text-gray-500 mb-1">New Ticket</span>
+                    <input v-model.number="newTicketMinutes" type="number" min="1" class="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                  </label>
+                  <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
+                    <span class="block text-gray-500 mb-1">Warning</span>
+                    <input v-model.number="warningMinutes" type="number" min="1" class="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                  </label>
+                  <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
+                    <span class="block text-gray-500 mb-1">Critical</span>
+                    <input v-model.number="criticalMinutes" type="number" min="1" class="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                  </label>
+                  <label class="bg-white rounded-xl border border-gray-200 px-4 py-3 text-xs text-gray-700 font-medium">
+                    <span class="block text-gray-500 mb-1">Ready Pickup</span>
+                    <input v-model.number="readyPickupMinutes" type="number" min="1" class="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
+                  </label>
                 </div>
+                <p class="text-[11px] text-gray-400 mt-2">New, prep, and pickup countdowns use these timers. Tickets are marked delayed after the critical timer.</p>
               </div>
 
               <!-- Ticket Actions -->
@@ -95,9 +110,8 @@
               <!-- Auto Refresh -->
               <div>
                 <p class="text-xs font-semibold text-gray-700 mb-1.5">Auto Refresh</p>
-                <div class="px-4 py-2.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg">
-                  Enabled • every 15 seconds
-                </div>
+                <input v-model.number="autoRefreshSeconds" type="number" min="5"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600" />
               </div>
 
               <!-- Default Ticket View -->
@@ -157,11 +171,20 @@
 <script setup>
 import { ref } from 'vue'
 
-defineEmits(['close'])
+const props = defineProps({
+  settings: { type: Object, default: () => ({}) },
+})
+const emit = defineEmits(['close', 'save'])
 
-const station = ref('Hot Kitchen')
-const ticketView = ref('All Tickets')
-const kitchenNote = ref('')
+const station = ref(props.settings.station || 'Hot Kitchen')
+const ticketView = ref(props.settings.ticketView || 'All Tickets')
+const kitchenNote = ref(props.settings.kitchenNote || '')
+const newTicketMinutes = ref(Number(props.settings.newTicketMinutes || 5))
+const warningMinutes = ref(Number(props.settings.warningMinutes || 15))
+const criticalMinutes = ref(Number(props.settings.criticalMinutes || 25))
+const readyPickupMinutes = ref(Number(props.settings.readyPickupMinutes || 10))
+const autoRefreshSeconds = ref(Number(props.settings.autoRefreshSeconds || 15))
+const savedMessage = ref('')
 
 const routing = ['Restaurant dining orders', 'Room service orders', 'Takeaway / pickup orders']
 const ticketActions = ['Allow mark ready from kitchen board', 'Allow dispatch confirmation', 'Require delay reason before escalation']
@@ -174,4 +197,23 @@ const stationAssignment = [
   { name: 'Hot kitchen queue', pct: '82%' },
   { name: 'Cold kitchen queue', pct: '18%' },
 ]
+
+function saveSettings() {
+  const nextSettings = {
+    station: station.value,
+    ticketView: ticketView.value,
+    kitchenNote: kitchenNote.value,
+    newTicketMinutes: Math.max(1, Number(newTicketMinutes.value || 5)),
+    warningMinutes: Math.max(1, Number(warningMinutes.value || 15)),
+    criticalMinutes: Math.max(1, Number(criticalMinutes.value || 25)),
+    readyPickupMinutes: Math.max(1, Number(readyPickupMinutes.value || 10)),
+    autoRefreshSeconds: Math.max(5, Number(autoRefreshSeconds.value || 15)),
+  }
+  emit('save', nextSettings)
+  savedMessage.value = 'Kitchen settings saved.'
+  setTimeout(() => {
+    savedMessage.value = ''
+    emit('close')
+  }, 700)
+}
 </script>

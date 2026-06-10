@@ -138,18 +138,39 @@
                   <span class="font-semibold text-gray-900">₦{{ item.amount.toLocaleString() }}</span>
                 </div>
               </div>
+              <div v-if="mergeTargetOptions.length" class="mx-6 mb-5 bg-white rounded-xl border border-orange-100 p-4">
+                <p class="text-xs font-bold text-gray-900 mb-3">Merge Into</p>
+                <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  <label v-for="table in mergeTargetOptions" :key="table.invoice"
+                    class="flex items-center gap-3 text-xs rounded-lg border px-3 py-2 cursor-pointer transition-colors"
+                    :class="mergeTargetInvoice === table.invoice ? 'border-orange-300 bg-orange-50' : 'border-gray-100 hover:bg-gray-50'">
+                    <input type="checkbox"
+                      class="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                      :checked="mergeTargetInvoice === table.invoice"
+                      @change="toggleMergeTarget(table.invoice, $event.target.checked)" />
+                    <span class="flex-1 font-semibold text-gray-700 truncate">{{ table.name }}</span>
+                    <span class="font-bold text-gray-900 whitespace-nowrap">₦{{ table.bill.toLocaleString() }}</span>
+                  </label>
+                </div>
+              </div>
               <div class="px-6 pb-6 space-y-2">
                 <p v-if="actionMessage" class="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{{ actionMessage }}</p>
                 <p v-if="actionError" class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{{ actionError }}</p>
                 <div class="flex gap-2">
-                  <button @click="transferTable" :disabled="transferring"
+                  <button @click="transferTable" :disabled="transferring || merging"
                     class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
                     {{ transferring ? 'Transferring…' : 'Transfer' }}
                   </button>
-                  <button @click="printTableBill" class="btn-hover flex-1 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 bg-white">Print Bill</button>
+                  <button @click="mergeTable" :disabled="transferring || merging || !mergeTargetInvoice"
+                    class="btn-hover flex-1 py-2.5 text-xs font-medium text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-50 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ merging ? 'Merging…' : 'Merge' }}
+                  </button>
                 </div>
                 <div class="flex gap-2">
+                  <button @click="printTableBill" class="btn-hover flex-1 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 bg-white">Print Bill</button>
                   <button @click="settleTable" class="btn-hover flex-1 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">Settle Table</button>
+                </div>
+                <div class="flex gap-2">
                   <button @click="$emit('resume', selectedTable); $emit('update:modelValue', false)" class="btn-hover flex-1 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Resume Order</button>
                 </div>
               </div>
@@ -175,7 +196,9 @@ const tableFilterWaiter = ref('')
 const tablePage = ref(1)
 const perPage = 10
 const selectedTable = ref(null)
+const mergeTargetInvoice = ref('')
 const transferring = ref(false)
+const merging = ref(false)
 const actionError = ref('')
 const actionMessage = ref('')
 
@@ -186,11 +209,11 @@ const tablesResource = createResource({
 })
 
 const transferResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
+  url: 'rhohotel.rhocom_hotel.api.pos.transfer_pos_table_draft',
   onSuccess(data) {
     transferring.value = false
     actionError.value = ''
-    actionMessage.value = `Table transferred. Draft ${data.pos_invoice} updated.`
+    actionMessage.value = `Table transferred to ${data.target_table}. Draft ${data.pos_invoice} updated.`
     selectedTable.value = null
     tablesResource.reload()
     setTimeout(() => { actionMessage.value = '' }, 3500)
@@ -198,6 +221,23 @@ const transferResource = createResource({
   onError(err) {
     transferring.value = false
     actionError.value = err?.message || 'Failed to transfer table'
+    setTimeout(() => { actionError.value = '' }, 4500)
+  },
+})
+
+const mergeResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.merge_pos_table_drafts',
+  onSuccess(data) {
+    merging.value = false
+    actionError.value = ''
+    actionMessage.value = `Bills merged into ${data.target_table || data.merged_into}.`
+    selectedTable.value = null
+    tablesResource.reload()
+    setTimeout(() => { actionMessage.value = '' }, 3500)
+  },
+  onError(err) {
+    merging.value = false
+    actionError.value = err?.message || 'Failed to merge table bills'
     setTimeout(() => { actionError.value = '' }, 4500)
   },
 })
@@ -244,8 +284,18 @@ const tableTotalPages = computed(() => Math.max(1, Math.ceil(filteredTables.valu
 const tablePageStart = computed(() => (tablePage.value - 1) * perPage)
 const tablePageEnd = computed(() => Math.min(tablePageStart.value + perPage, filteredTables.value.length))
 const pagedTables = computed(() => filteredTables.value.slice(tablePageStart.value, tablePageEnd.value))
+const mergeTargetOptions = computed(() =>
+  openTables.value.filter(t => t.invoice && t.invoice !== selectedTable.value?.invoice)
+)
 
 watch(filteredTables, () => { tablePage.value = 1 })
+watch(selectedTable, () => {
+  mergeTargetInvoice.value = ''
+})
+
+function toggleMergeTarget(invoice, checked) {
+  mergeTargetInvoice.value = checked ? invoice : ''
+}
 
 function printTableBill() {
   if (!selectedTable.value?.invoice) return
@@ -264,17 +314,37 @@ function transferTable() {
   const customer = (nextTable || '').trim()
   if (!customer || customer === selectedTable.value.name) return
 
+  const occupied = openTables.value.find(t => t.name.toLowerCase() === customer.toLowerCase() && t.invoice !== selectedTable.value.invoice)
+  if (occupied) {
+    actionError.value = `${customer} already has an active bill. Use Merge instead.`
+    setTimeout(() => { actionError.value = '' }, 4500)
+    return
+  }
+
   transferring.value = true
   actionError.value = ''
   transferResource.submit({
-    items: JSON.stringify((selectedTable.value.items || []).map(i => ({
-      item_code: i.item_code || i.name,
-      qty: i.qty,
-      price: i.price || (i.qty > 0 ? i.amount / i.qty : 0),
-    }))),
-    customer,
-    kitchen_note: selectedTable.value.notes || null,
-    existing_draft: selectedTable.value.invoice || null,
+    invoice_name: selectedTable.value.invoice,
+    target_table: customer,
+  })
+}
+
+function mergeTable() {
+  if (!selectedTable.value || merging.value) return
+  const targetTable = mergeTargetOptions.value.find(t => t.invoice === mergeTargetInvoice.value)
+  if (!targetTable) {
+    actionError.value = 'Tick the active table bill to merge into.'
+    setTimeout(() => { actionError.value = '' }, 4500)
+    return
+  }
+
+  if (!confirm(`Merge ${selectedTable.value.name} into ${targetTable.name}? The source bill will be removed.`)) return
+
+  merging.value = true
+  actionError.value = ''
+  mergeResource.submit({
+    source_invoice: selectedTable.value.invoice,
+    target_invoice: targetTable.invoice,
   })
 }
 </script>

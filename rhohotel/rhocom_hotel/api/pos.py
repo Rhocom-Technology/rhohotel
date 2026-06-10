@@ -188,6 +188,49 @@ def _get_room_posting_mop(profile_doc, fallback_modes):
     return fallback_modes[0] if fallback_modes else "Cash"
 
 
+def _resolve_pos_payment_mode(method, profile_doc, allowed_modes, allow_fallback=False):
+    method = cstr(method or "").strip()
+    allowed_modes = [mode for mode in (allowed_modes or []) if mode]
+
+    if not allowed_modes:
+        frappe.throw(_("POS Profile {0} has no payment modes configured.").format(profile_doc.name))
+
+    if method in allowed_modes:
+        return method
+
+    method_lower = method.lower()
+    for mode in allowed_modes:
+        if cstr(mode).strip().lower() == method_lower:
+            return mode
+
+    if method_lower == "pos":
+        pos_keywords = ("pos", "card", "debit", "terminal")
+        excluded_keywords = ("room", "folio")
+        for mode in allowed_modes:
+            mode_lower = cstr(mode).lower()
+            if any(keyword in mode_lower for keyword in excluded_keywords):
+                continue
+            if any(keyword in mode_lower for keyword in pos_keywords) or "credit card" in mode_lower:
+                return mode
+
+    if method_lower == "cash":
+        for mode in allowed_modes:
+            if "cash" in cstr(mode).lower():
+                return mode
+
+    if method_lower == "post to room":
+        return _get_room_posting_mop(profile_doc, allowed_modes)
+
+    if allow_fallback:
+        return allowed_modes[0]
+
+    frappe.throw(
+        _("Mode of Payment {0} is not configured for POS Profile {1}.").format(
+            method or _("Unknown"), profile_doc.name
+        )
+    )
+
+
 def _resolve_pos_customer(explicit_customer=None, profile_doc=None, allow_guest_fallback=False):
     """Resolve POS customer safely across ERPNext schema variants."""
     customer = explicit_customer
@@ -273,6 +316,64 @@ def _age_minutes_from(creation):
     if not creation:
         return 0
     return max(0, int((time_diff_in_seconds(now_datetime(), creation) or 0) / 60))
+
+
+def _get_open_table_draft(table_name, exclude_invoice=None):
+    """Return the draft POS Invoice currently occupying a service table."""
+    table_name = cstr(table_name).strip()
+    if not table_name:
+        return None
+
+    rows = frappe.db.sql(
+        """
+        SELECT name
+        FROM `tabPOS Invoice`
+        WHERE docstatus = 0
+          AND LOWER(TRIM(customer_name)) = LOWER(%s)
+        ORDER BY creation DESC
+        LIMIT 5
+        """,
+        (table_name,),
+        as_dict=1,
+    )
+    for row in rows:
+        if row.name != exclude_invoice:
+            return row.name
+    return None
+
+
+def _ensure_table_not_occupied(table_display_name, existing_draft=None):
+    """Prevent a second draft sale from being created for an occupied table."""
+    if not table_display_name:
+        return
+    occupied = _get_open_table_draft(table_display_name, exclude_invoice=existing_draft)
+    if occupied:
+        frappe.throw(_("{0} already has a held sale. Resume it from Open Tables instead of creating a new sale.").format(table_display_name))
+
+
+def _sync_draft_payment_row(pi):
+    """Keep a single draft payment row in step with draft items/discount."""
+    draft_total = flt(sum(flt(row.rate) * flt(row.qty) for row in (pi.get("items") or [])))
+    payment_mode = None
+    if pi.get("payments"):
+        payment_mode = pi.payments[0].mode_of_payment
+    payment_mode = payment_mode or "Cash"
+    pi.set("payments", [])
+    pi.append("payments", {
+        "mode_of_payment": payment_mode,
+        "amount": max(0, draft_total - flt(pi.discount_amount)),
+    })
+
+
+def _get_kitchen_ticket_statuses(pos_invoice):
+    if not pos_invoice:
+        return []
+    rows = frappe.get_all(
+        "Kitchen Order Ticket",
+        filters={"pos_invoice": pos_invoice, "docstatus": 0},
+        fields=["name", "status"],
+    )
+    return [r.status for r in rows]
 
 
 @frappe.whitelist()
@@ -575,6 +676,7 @@ def search_pos_bill_to(query=""):
 
     seen_customers = set()
     seen_checkins = set()
+    seen_active_tables = set()
 
     for ci in checkins:
         if ci.check_in in seen_checkins:
@@ -601,6 +703,12 @@ def search_pos_bill_to(query=""):
         if c.customer in seen_customers:
             continue
 
+        active_table_invoice = _get_open_table_draft(c.name)
+        active_table_bill = 0
+        if active_table_invoice:
+            seen_active_tables.add(active_table_invoice)
+            active_table_bill = frappe.db.get_value("POS Invoice", active_table_invoice, "grand_total") or 0
+
         results.append({
             "id": c.customer,
             "customer": c.customer,
@@ -608,8 +716,43 @@ def search_pos_bill_to(query=""):
             "room": None,
             "email": c.email_id,
             "phone": c.mobile_no,
-            "type": "Customer",
+            "type": "Active Table" if active_table_invoice else "Customer",
+            "active_table_invoice": active_table_invoice,
+            "active_table_bill": flt(active_table_bill),
         })
+
+    if query and _extract_table_display_name(query):
+        open_tables = frappe.db.sql("""
+            SELECT
+                pi.name AS invoice,
+                pi.customer_name AS table_name,
+                pi.grand_total AS bill
+            FROM `tabPOS Invoice` pi
+            WHERE pi.docstatus = 0
+              AND (
+                pi.customer_name LIKE 'Table %%'
+                OR pi.customer_name LIKE 'Bar %%'
+                OR pi.customer_name LIKE 'Pool%%'
+              )
+              AND pi.customer_name LIKE %s
+            ORDER BY pi.modified DESC
+            LIMIT 5
+        """, (like_query,), as_dict=1)
+
+        for table in open_tables:
+            if table.invoice in seen_active_tables:
+                continue
+            results.append({
+                "id": table.invoice,
+                "customer": table.table_name,
+                "name": table.table_name,
+                "room": None,
+                "email": None,
+                "phone": None,
+                "type": "Active Table",
+                "active_table_invoice": table.invoice,
+                "active_table_bill": flt(table.bill),
+            })
 
     return results[:10]
 
@@ -665,15 +808,8 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         if not items:
             frappe.throw(_("No items in cart"))
 
-        # Delete the resumed draft now that a proper invoice is being created
-        if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
-            try:
-                _draft = frappe.get_doc("POS Invoice", existing_draft)
-                if _draft.docstatus == 0:
-                    _draft.flags.ignore_permissions = True
-                    _draft.delete()
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Failed to delete POS draft on invoice creation")
+        table_display_name = _extract_table_display_name(customer)
+        _ensure_table_not_occupied(table_display_name, existing_draft=existing_draft)
 
         company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
@@ -695,11 +831,8 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         allowed_modes = [row.mode_of_payment for row in (profile_doc.get("payments") or []) if row.mode_of_payment]
         if not allowed_modes:
             frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
-        if mode_of_payment not in allowed_modes:
-            mode_of_payment = allowed_modes[0]
+        mode_of_payment = _resolve_pos_payment_mode(mode_of_payment, profile_doc, allowed_modes)
 
-        # Preserve table/bar/pool name as customer_name display field
-        table_display_name = _extract_table_display_name(customer)
         if table_display_name:
             customer = None  # force walk-in resolution
 
@@ -708,17 +841,25 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         if not customer:
             frappe.throw(_("Set a valid default customer on POS Profile {0}. Optionally configure POS Settings.customer if available in your ERPNext version.").format(pos_profile))
 
-        pi = frappe.new_doc("POS Invoice")
+        updating_existing_draft = False
+        if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+            pi = frappe.get_doc("POS Invoice", existing_draft)
+            if pi.docstatus != 0:
+                frappe.throw(_("Only draft POS Invoices can be completed from a held sale."))
+            updating_existing_draft = True
+            pi.set("items", [])
+            pi.set("payments", [])
+        else:
+            pi = frappe.new_doc("POS Invoice")
+
         pi.customer = customer
         pi.company = company
         pi.posting_date = nowdate()
         pi.pos_profile = pos_profile
+        pi.remarks = kitchen_note or ""
 
         if _has_pos_opening_entry_on_invoice():
             pi.pos_opening_entry = pos_opening_entry.get("name")
-
-        if kitchen_note:
-            pi.remarks = kitchen_note
 
         for it in items:
             pi.append("items", {
@@ -741,7 +882,10 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 
         pi.flags.ignore_permissions = True
         pi.set_missing_values()
-        pi.insert()
+        if updating_existing_draft:
+            pi.save()
+        else:
+            pi.insert()
         pi.submit()
         # Override customer_name AFTER submit: ERPNext's validate() inside insert/submit
         # calls set_missing_values() again which resets customer_name to the linked
@@ -797,15 +941,11 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
     if not items:
         frappe.throw(_("No items in cart"))
 
-    # Delete the resumed draft now that the bill is being posted to room
+    existing_draft_doc = None
     if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
-        try:
-            _draft = frappe.get_doc("POS Invoice", existing_draft)
-            if _draft.docstatus == 0:
-                _draft.flags.ignore_permissions = True
-                _draft.delete()
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "Failed to delete POS draft on room posting")
+        existing_draft_doc = frappe.get_doc("POS Invoice", existing_draft)
+        if existing_draft_doc.docstatus != 0:
+            frappe.throw(_("Only draft POS Invoices can be completed from a held sale."))
 
     if not frappe.db.exists("Hotel Room Check In", check_in):
         frappe.throw(_("Check-in {0} not found").format(check_in))
@@ -913,7 +1053,15 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
                 # as cash collected — the charge lives on the room folio.
                 mode_of_payment = _get_room_posting_mop(profile_doc, allowed_modes)
 
-                pi = frappe.new_doc("POS Invoice")
+                updating_existing_draft = False
+                if existing_draft_doc:
+                    pi = existing_draft_doc
+                    updating_existing_draft = True
+                    pi.set("items", [])
+                    pi.set("payments", [])
+                else:
+                    pi = frappe.new_doc("POS Invoice")
+
                 pi.customer = _resolve_pos_customer(
                     customer, profile_doc=profile_doc, allow_guest_fallback=True
                 )
@@ -948,7 +1096,10 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
 
                 pi.flags.ignore_permissions = True
                 pi.set_missing_values()
-                pi.insert()
+                if updating_existing_draft:
+                    pi.save()
+                else:
+                    pi.insert()
                 pi.submit()
 
                 # Mark as immediately consolidated — the room folio Sales Invoice
@@ -991,45 +1142,8 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
     # Preserve table/bar/pool name as customer_name display field (needed early for merge logic)
     table_display_name = _extract_table_display_name(customer)
 
-    # Auto-detect and merge an existing draft for the same table when the user holds a
-    # new cart without explicitly resuming the old one — prevents duplicate table drafts.
     items_to_save = list(items)
-    if table_display_name and not existing_draft:
-        found_draft = frappe.db.get_value("POS Invoice", {
-            "customer_name": table_display_name,
-            "docstatus": 0,
-        }, "name")
-        if found_draft:
-            try:
-                old_pi = frappe.get_doc("POS Invoice", found_draft)
-                if old_pi.docstatus == 0:
-                    # Merge: sum qty for same item_code, keep existing price
-                    merged = {}
-                    for row in old_pi.items:
-                        merged[row.item_code] = {
-                            "item_code": row.item_code,
-                            "qty": flt(row.qty),
-                            "price": flt(row.rate),
-                        }
-                    for it in items:
-                        code = it.get("item_code") or it.get("id")
-                        if code in merged:
-                            merged[code]["qty"] += flt(it.get("qty", 1))
-                        else:
-                            merged[code] = {
-                                "item_code": code,
-                                "qty": flt(it.get("qty", 1)),
-                                "price": flt(it.get("price", 0)),
-                            }
-                    items_to_save = list(merged.values())
-                    # Carry over kitchen note / discount from old draft if new order omits them
-                    if not kitchen_note and old_pi.remarks:
-                        kitchen_note = old_pi.remarks
-                    if not flt(discount_amount) and flt(old_pi.discount_amount):
-                        discount_amount = flt(old_pi.discount_amount)
-                    existing_draft = found_draft  # update in place below
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Failed to auto-detect table draft for merge")
+    _ensure_table_not_occupied(table_display_name, existing_draft=existing_draft)
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
@@ -1104,6 +1218,108 @@ def save_pos_draft_invoice(items, customer=None, service_charge=0, kitchen_note=
     }
 
 
+@frappe.whitelist()
+def transfer_pos_table_draft(invoice_name, target_table):
+    """Move a draft table order to an empty table/service point."""
+    target_table = cstr(target_table).strip()
+    if not target_table or not _extract_table_display_name(target_table):
+        frappe.throw(_("Enter a valid table, bar, or pool service point."))
+
+    if not frappe.db.exists("POS Invoice", invoice_name):
+        frappe.throw(_("Invoice {0} not found").format(invoice_name))
+
+    occupied = _get_open_table_draft(target_table, exclude_invoice=invoice_name)
+    if occupied:
+        frappe.throw(_("{0} already has an active bill. Use Merge instead of Transfer.").format(target_table))
+
+    pi = frappe.get_doc("POS Invoice", invoice_name)
+    if pi.docstatus != 0:
+        frappe.throw(_("Only draft table bills can be transferred."))
+
+    try:
+        pi.flags.ignore_permissions = True
+        pi.save()
+        frappe.db.set_value("POS Invoice", pi.name, "customer_name", target_table, update_modified=False)
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POS table transfer failed")
+        frappe.throw(_("Failed to transfer table bill."))
+
+    return {"pos_invoice": pi.name, "target_table": target_table}
+
+
+@frappe.whitelist()
+def merge_pos_table_drafts(source_invoice, target_invoice):
+    """Merge one open table draft into another and delete the source draft."""
+    if source_invoice == target_invoice:
+        frappe.throw(_("Select two different table bills to merge."))
+
+    if not frappe.db.exists("POS Invoice", source_invoice):
+        frappe.throw(_("Source invoice {0} not found").format(source_invoice))
+    if not frappe.db.exists("POS Invoice", target_invoice):
+        frappe.throw(_("Target invoice {0} not found").format(target_invoice))
+
+    source = frappe.get_doc("POS Invoice", source_invoice)
+    target = frappe.get_doc("POS Invoice", target_invoice)
+    if source.docstatus != 0 or target.docstatus != 0:
+        frappe.throw(_("Only draft table bills can be merged."))
+
+    target_table = _extract_table_display_name(target.customer_name or "")
+    if not target_table:
+        frappe.throw(_("Target invoice is not an open table bill."))
+
+    merged = {}
+    for row in target.items:
+        merged[row.item_code] = {
+            "item_code": row.item_code,
+            "qty": flt(row.qty),
+            "rate": flt(row.rate),
+        }
+
+    for row in source.items:
+        if row.item_code in merged:
+            merged[row.item_code]["qty"] += flt(row.qty)
+        else:
+            merged[row.item_code] = {
+                "item_code": row.item_code,
+                "qty": flt(row.qty),
+                "rate": flt(row.rate),
+            }
+
+    target.set("items", [])
+    for row in merged.values():
+        target.append("items", row)
+
+    notes = [cstr(target.remarks or "").strip(), cstr(source.remarks or "").strip()]
+    target.remarks = " | ".join([n for n in notes if n])
+    target.discount_amount = flt(target.discount_amount) + flt(source.discount_amount)
+    _sync_draft_payment_row(target)
+
+    try:
+        target.flags.ignore_permissions = True
+        source.flags.ignore_permissions = True
+        target.save()
+        frappe.db.set_value("POS Invoice", target.name, "customer_name", target_table, update_modified=False)
+        frappe.db.set_value(
+            "Kitchen Order Ticket",
+            {"pos_invoice": source.name, "docstatus": 0},
+            {"pos_invoice": target.name, "table_or_room": target_table},
+            update_modified=False,
+        )
+        source.delete()
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POS table merge failed")
+        frappe.throw(_("Failed to merge table bills."))
+
+    return {
+        "merged_into": target.name,
+        "deleted_invoice": source.name,
+        "target_table": target_table,
+        "grand_total": flt(target.grand_total),
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Draft POS Invoices
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1154,6 +1370,13 @@ def get_draft_pos_invoices(search=None, service_point=None, cashier=None):
             FROM `tabPOS Invoice Item`
             WHERE parent = %s
         """, d["invoice"], as_dict=1)
+        kitchen_statuses = _get_kitchen_ticket_statuses(d["invoice"])
+        blocking_statuses = [s for s in kitchen_statuses if s and s != "Pending"]
+        d["kitchen_statuses"] = kitchen_statuses
+        d["can_delete"] = not blocking_statuses
+        d["delete_block_reason"] = (
+            _("Kitchen has already started preparing this order.") if blocking_statuses else ""
+        )
         age = _age_minutes_from(d.get("creation"))
         d["age_minutes"] = age
         h, m = divmod(age, 60)
@@ -1214,36 +1437,98 @@ def get_pos_invoices(search=None, outlet=None, method=None, status=None,
         args.extend([q, q])
 
     if status:
-        if status == "Posted":
+        if status in ("Draft", "Posted"):
             conditions.append("pi.docstatus = 0")
         elif status == "Paid":
             conditions.append("pi.docstatus = 1")
         elif status == "Void":
             conditions.append("pi.docstatus = 2")
 
+    if outlet:
+        conditions.append("pi.pos_profile = %s")
+        args.append(cstr(outlet).strip())
+
     where = " AND ".join(conditions)
 
     invoices = frappe.db.sql(f"""
         SELECT
             pi.name AS invoice_no,
-            pi.customer,
+            COALESCE(NULLIF(pi.customer_name, ''), pi.customer) AS customer,
             pi.grand_total,
             pi.posting_date,
             pi.owner AS cashier,
             pi.pos_profile AS terminal,
             pi.docstatus,
+            GROUP_CONCAT(DISTINCT pip.mode_of_payment ORDER BY pip.mode_of_payment SEPARATOR ', ') AS payment_method,
             CASE pi.docstatus
                 WHEN 0 THEN 'Draft'
                 WHEN 1 THEN 'Paid'
                 WHEN 2 THEN 'Void'
             END AS status
         FROM `tabPOS Invoice` pi
+        LEFT JOIN `tabSales Invoice Payment` pip ON pip.parent = pi.name
         WHERE {where}
+        GROUP BY pi.name
+        {"HAVING payment_method LIKE %s" if method else ""}
         ORDER BY pi.creation DESC
         LIMIT %s OFFSET %s
-    """, tuple(args) + (int(page_length), int(start)), as_dict=1)
+    """, tuple(args) + ((f"%{cstr(method).strip()}%",) if method else tuple()) + (int(page_length), int(start)), as_dict=1)
 
     return invoices
+
+
+@frappe.whitelist()
+def cancel_pos_invoice(invoice_name, reason=None):
+    """Cancel a submitted POS Invoice from the manager invoice list."""
+    if not frappe.db.exists("POS Invoice", invoice_name):
+        frappe.throw(_("Invoice {0} not found").format(invoice_name))
+
+    allowed_roles = {
+        "System Manager",
+        "Accounts Manager",
+        "POS Manager",
+        "Restaurant Manager",
+        "Hotel Manager",
+        "Front Desk Manager",
+    }
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    has_cancel_permission = frappe.has_permission("POS Invoice", "cancel", invoice_name)
+    if not (allowed_roles & user_roles or has_cancel_permission):
+        frappe.throw(_("You do not have permission to cancel POS invoices."))
+
+    pi = frappe.get_doc("POS Invoice", invoice_name)
+    if pi.docstatus != 1:
+        frappe.throw(_("Only submitted POS invoices can be cancelled."))
+
+    try:
+        linked_sales_invoice = cstr(pi.get("consolidated_invoice") or "")
+        if linked_sales_invoice and frappe.db.exists("Sales Invoice", linked_sales_invoice):
+            sales_invoice_docstatus = frappe.db.get_value("Sales Invoice", linked_sales_invoice, "docstatus")
+            if sales_invoice_docstatus == 1:
+                frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", None, update_modified=False)
+                si = frappe.get_doc("Sales Invoice", linked_sales_invoice)
+                if reason:
+                    si.add_comment("Comment", _("Cancelled from POS manager with POS Invoice {0}: {1}").format(invoice_name, cstr(reason)))
+                si.flags.ignore_permissions = True
+                si.cancel()
+                frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", linked_sales_invoice, update_modified=False)
+                pi.reload()
+
+        if reason:
+            pi.add_comment("Comment", _("Cancelled from POS manager: {0}").format(cstr(reason)))
+        pi.flags.ignore_permissions = True
+        pi.cancel()
+        frappe.db.commit()
+    except frappe.ValidationError as exc:
+        frappe.db.rollback()
+        message = cstr(exc) or _("POS invoice could not be cancelled because Frappe validation blocked it.")
+        frappe.throw(_("Failed to cancel POS invoice {0}: {1}").format(invoice_name, message))
+    except Exception as exc:
+        frappe.db.rollback()
+        frappe.log_error(frappe.get_traceback(), "POS invoice cancellation failed")
+        frappe.throw(_("Failed to cancel POS invoice: {0}").format(cstr(exc)))
+
+    return {"invoice": invoice_name, "cancelled": invoice_name}
 
 
 @frappe.whitelist()
@@ -1695,7 +1980,21 @@ def delete_pos_draft_invoice(invoice_name):
     if pi.docstatus != 0:
         frappe.throw(_("Only draft invoices can be deleted."))
 
+    kitchen_tickets = frappe.get_all(
+        "Kitchen Order Ticket",
+        filters={"pos_invoice": invoice_name, "docstatus": 0},
+        fields=["name", "status"],
+    )
+    started = [t for t in kitchen_tickets if t.status != "Pending"]
+    if started:
+        frappe.throw(_("Cannot delete this draft because kitchen preparation has already started."))
+
     try:
+        for ticket in kitchen_tickets:
+            if ticket.status == "Pending":
+                kt = frappe.get_doc("Kitchen Order Ticket", ticket.name)
+                kt.flags.ignore_permissions = True
+                kt.delete()
         pi.flags.ignore_permissions = True
         pi.delete()
         frappe.db.commit()
@@ -1847,17 +2146,11 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
     if not items:
         frappe.throw(_("No items in cart"))
 
-    if not portions:
-        frappe.throw(_("No split portions found"))
-
+    draft_table_display_name = None
     if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
-        try:
-            old_pi = frappe.get_doc("POS Invoice", existing_draft)
-            if old_pi.docstatus == 0:
-                old_pi.flags.ignore_permissions = True
-                old_pi.delete()
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "Failed to delete POS draft on split invoice creation")
+        draft_table_display_name = _extract_table_display_name(
+            frappe.db.get_value("POS Invoice", existing_draft, "customer_name")
+        )
 
     if not pos_profile:
         pos_profile = _get_user_pos_profile()
@@ -1881,27 +2174,6 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
     if not allowed_modes:
         frappe.throw(_("POS Profile {0} has no payment modes configured.").format(pos_profile))
 
-    def resolve_payment_mode(method):
-        method = cstr(method or "").strip()
-
-        if method in allowed_modes:
-            return method
-
-        if method.lower() == "pos":
-            for mode in allowed_modes:
-                if "pos" in mode.lower() or "card" in mode.lower():
-                    return mode
-
-        if method.lower() == "cash":
-            for mode in allowed_modes:
-                if mode.lower() == "cash":
-                    return mode
-
-        if method.lower() == "post to room":
-            return _get_room_posting_mop(profile_doc, allowed_modes)
-
-        return allowed_modes[0]
-
     company = profile_doc.company or frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
     customer = _resolve_pos_customer(customer, profile_doc=profile_doc, allow_guest_fallback=True)
@@ -1919,22 +2191,87 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
     total_discount = min(items_total, manual_discount + complimentary_discount)
     net_total = max(0, items_total - total_discount)
 
+    if not portions:
+        if net_total > 0:
+            frappe.throw(_("No split portions found"))
+        portions = [{"amount": 0, "paymentType": "Cash"}]
+
     portions_total = flt(sum(flt(p.get("amount", 0)) for p in portions), 2)
 
     if flt(portions_total, 2) != flt(net_total, 2):
         frappe.throw(_("Split total must equal invoice total."))
 
-    pi = frappe.new_doc("POS Invoice")
+    room_sales_invoices = []
+
+    def create_room_split_invoice(portion):
+        check_in = portion.get("checkIn")
+        amount = flt(portion.get("amount", 0))
+        if not check_in or amount <= 0:
+            return None
+
+        if not frappe.db.exists("Hotel Room Check In", check_in):
+            frappe.throw(_("Check-in {0} not found").format(check_in))
+
+        ci = frappe.get_doc("Hotel Room Check In", check_in)
+        if ci.status != "Checked In":
+            frappe.throw(_("Check-in {0} is not active").format(check_in))
+
+        room_customer = None
+        if ci.guest:
+            try:
+                guest_doc = frappe.get_doc("Hotel Guest", ci.guest)
+                room_customer = guest_doc.customer
+            except Exception:
+                room_customer = None
+        room_customer = room_customer or ci.guest or customer
+
+        ratio = amount / net_total if net_total else 0
+        si = frappe.new_doc("Sales Invoice")
+        si.customer = room_customer
+        si.company = company
+        si.posting_date = nowdate()
+        si.custom_hotel_room_check_in = check_in
+        si.custom_invoice_source = "Restaurant"
+        if kitchen_note:
+            si.remarks = kitchen_note
+
+        for it in items:
+            si.append("items", {
+                "item_code": it.get("item_code") or it.get("id"),
+                "qty": flt(it.get("qty", 1)),
+                "rate": flt(it.get("price", 0)) * ratio,
+            })
+
+        si.flags.ignore_permissions = True
+        si.set_missing_values()
+        si.insert()
+        si.submit()
+        return {
+            "sales_invoice": si.name,
+            "check_in": check_in,
+            "room": ci.room_number,
+            "amount": amount,
+        }
+
+    updating_existing_draft = False
+    if existing_draft and frappe.db.exists("POS Invoice", existing_draft):
+        pi = frappe.get_doc("POS Invoice", existing_draft)
+        if pi.docstatus != 0:
+            frappe.throw(_("Only draft POS Invoices can be completed from a held sale."))
+        updating_existing_draft = True
+        pi.set("items", [])
+        pi.set("payments", [])
+    else:
+        pi = frappe.new_doc("POS Invoice")
+
     pi.customer = customer
     pi.company = company
     pi.posting_date = nowdate()
     pi.pos_profile = pos_profile
+    pi.remarks = kitchen_note or ""
 
     if _has_pos_opening_entry_on_invoice():
         pi.pos_opening_entry = pos_opening_entry.get("name")
-
-    if kitchen_note:
-        pi.remarks = kitchen_note
 
     room_check_in = None
 
@@ -1963,15 +2300,32 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
             continue
 
         pi.append("payments", {
-            "mode_of_payment": resolve_payment_mode(p.get("paymentType")),
+            "mode_of_payment": _resolve_pos_payment_mode(p.get("paymentType"), profile_doc, allowed_modes),
             "amount": amount,
+        })
+
+    if not pi.get("payments"):
+        pi.append("payments", {
+            "mode_of_payment": _resolve_pos_payment_mode("Cash", profile_doc, allowed_modes),
+            "amount": 0,
         })
 
     pi.flags.ignore_permissions = True
     pi.set_missing_values()
-    pi.insert()
+    if updating_existing_draft:
+        pi.save()
+    else:
+        pi.insert()
     pi.submit()
+    if draft_table_display_name:
+        frappe.db.set_value("POS Invoice", pi.name, "customer_name",
+                            draft_table_display_name, update_modified=False)
     complimentary = _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount)
+    for p in portions:
+        if cstr(p.get("paymentType")) == "Post to Room":
+            room_invoice = create_room_split_invoice(p)
+            if room_invoice:
+                room_sales_invoices.append(room_invoice)
     frappe.db.commit()
 
     return {
@@ -1979,4 +2333,5 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
         "grand_total": flt(pi.grand_total),
         "split": True,
         "complimentary": complimentary,
+        "room_sales_invoices": room_sales_invoices,
     }

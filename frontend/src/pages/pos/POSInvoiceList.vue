@@ -13,7 +13,7 @@
         <p class="text-xs text-gray-400 mt-0.5">1,284 invoices this month • 3 outlets • invoices from restaurant, bar, mini-mart, and room-posting transactions</p>
       </div>
       <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
+        <button @click="refreshInvoices" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
         <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export Invoices</button>
         <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Create POS Invoice</button>
       </div>
@@ -88,14 +88,13 @@
           <p class="text-xs text-gray-500 mb-1.5">Invoice Status</p>
           <select v-model="filterStatus" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Statuses</option>
-            <option>Posted</option>
+            <option>Draft</option>
             <option>Paid</option>
-            <option>Pending</option>
             <option>Void</option>
           </select>
         </div>
         <button @click="resetFilters" class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
-        <button class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Apply Filter</button>
+        <button @click="applyFilters" class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Apply Filter</button>
       </div>
     </div>
 
@@ -105,6 +104,8 @@
         <h3 class="text-sm font-bold text-gray-900">Invoice Records</h3>
         <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} invoices</p>
       </div>
+      <p v-if="actionSuccess" class="mx-6 mt-4 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{{ actionSuccess }}</p>
+      <p v-if="actionError" class="mx-6 mt-4 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{{ actionError }}</p>
 
       <table class="w-full">
         <thead>
@@ -117,11 +118,12 @@
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Method</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Amount</th>
             <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Status</th>
+            <th class="text-left text-xs font-medium text-gray-500 px-4 py-3.5">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="paged.length === 0">
-            <td colspan="8" class="text-center py-12 text-xs text-gray-400">No invoices match your filters</td>
+            <td colspan="9" class="text-center py-12 text-xs text-gray-400">No invoices match your filters</td>
           </tr>
           <tr v-for="inv in paged" :key="inv.id"
             class="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors cursor-pointer">
@@ -137,6 +139,13 @@
                 :class="statusClass(inv.status)">
                 {{ inv.status }}
               </span>
+            </td>
+            <td class="px-4 py-4">
+              <button v-if="inv.docstatus === 1" @click.stop="cancelInvoice(inv)" :disabled="cancelling === inv.no"
+                class="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                {{ cancelling === inv.no ? 'Cancelling…' : 'Cancel' }}
+              </button>
+              <span v-else class="text-xs text-gray-300">—</span>
             </td>
           </tr>
         </tbody>
@@ -177,6 +186,9 @@ const filterOutlet = ref('')
 const filterMethod = ref('')
 const filterStatus = ref('')
 const currentPage = ref(1)
+const cancelling = ref('')
+const actionError = ref('')
+const actionSuccess = ref('')
 const perPage = 10
 
 function resetFilters() {
@@ -200,6 +212,23 @@ const statsResource = createResource({
   auto: true,
 })
 
+const cancelResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.cancel_pos_invoice',
+  onSuccess(data) {
+    cancelling.value = ''
+    actionError.value = ''
+    actionSuccess.value = `Invoice ${data?.invoice || ''} cancelled successfully.`
+    refreshInvoices()
+    statsResource.reload()
+    setTimeout(() => { actionSuccess.value = '' }, 4000)
+  },
+  onError(err) {
+    cancelling.value = ''
+    actionError.value = extractApiErrorMessage(err, 'Failed to cancel invoice')
+    setTimeout(() => { actionError.value = '' }, 6000)
+  },
+})
+
 const invoiceStats = computed(() => {
   const s = statsResource.data || {}
   return {
@@ -214,11 +243,7 @@ let filterTimer = null
 function applyFilters() {
   clearTimeout(filterTimer)
   filterTimer = setTimeout(() => {
-    invoicesResource.params = {
-      search: search.value || null,
-      status: filterStatus.value || null,
-    }
-    invoicesResource.reload()
+    refreshInvoices()
     currentPage.value = 1
   }, 300)
 }
@@ -232,8 +257,9 @@ const allInvoices = computed(() =>
     outlet: inv.terminal || '—',
     cashier: inv.cashier || '—',
     customer: inv.customer || 'Walk In',
-    method: '—',
+    method: inv.payment_method || '—',
     amount: Number(inv.grand_total) || 0,
+    docstatus: Number(inv.docstatus),
     status: inv.status || '—',
   }))
 )
@@ -249,6 +275,7 @@ const filtered = computed(() => {
     )
   }
   if (filterStatus.value) data = data.filter(i => i.status === filterStatus.value)
+  if (filterMethod.value) data = data.filter(i => i.method === filterMethod.value)
   return data
 })
 
@@ -275,6 +302,38 @@ function statusClass(status) {
     'Paid':    'bg-green-50 text-green-600',
     'Void':    'bg-red-50 text-red-500',
   }[status] || 'bg-blue-50 text-blue-600'
+}
+
+function refreshInvoices() {
+  invoicesResource.params = {
+    search: search.value || null,
+    status: filterStatus.value || null,
+    method: filterMethod.value || null,
+  }
+  invoicesResource.reload()
+}
+
+function cancelInvoice(inv) {
+  if (!inv || cancelling.value) return
+  const reason = window.prompt(`Cancel POS invoice ${inv.no}?\nReason (optional):`, '')
+  if (reason === null) return
+  cancelling.value = inv.no
+  actionError.value = ''
+  cancelResource.submit({ invoice_name: inv.no, reason: reason || null })
+}
+
+function extractApiErrorMessage(err, fallback = 'Request failed') {
+  const serverMessage = err?._server_messages
+  if (serverMessage) {
+    try {
+      const parsed = JSON.parse(serverMessage)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const first = JSON.parse(parsed[0])
+        if (first?.message) return String(first.message)
+      }
+    } catch (_) {}
+  }
+  return err?.message || fallback
 }
 </script>
 

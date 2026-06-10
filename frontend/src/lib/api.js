@@ -115,9 +115,11 @@ export async function requestApi(url, options = {}) {
 export async function callMethod(method, args = {}, options = {}) {
   const httpMethod = String(options.method || 'POST').toUpperCase()
   const { method: _method, headers, ...requestOptions } = options
+  const endpoint = '/api/method/' + method
+  const query = httpMethod === 'GET' ? serializeArgs(args).toString() : ''
 
   const payload = await requestApi(
-    '/api/method/' + method,
+    query ? `${endpoint}?${query}` : endpoint,
     httpMethod === 'GET'
       ? { ...requestOptions, headers, method: 'GET' }
       : {

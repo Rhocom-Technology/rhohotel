@@ -149,6 +149,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
+import { clearReservedPOSInvoicePrintPreview, reservePOSInvoicePrintPreview } from '@/lib/posPrint'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -432,26 +433,30 @@ async function applySplit() {
   }
 
   try {
+    reservePOSInvoicePrintPreview()
+
     const fullItems = JSON.stringify(props.cartItems.map(i => ({
       item_code: i.item_code || i.id,
       qty: i.qty,
       price: i.price,
     })))
 
+    const portionsToSubmit = props.grandTotal === 0
+      ? portions.value.slice(0, 1)
+      : portions.value.filter(p => Number(p.amount) > 0)
+
     const splitPortions = JSON.stringify(
-      portions.value
-        .filter(p => Number(p.amount) > 0)
-        .map(p => ({
-          amount: Number(p.amount),
-          paymentType: p.paymentType,
-          target: p.target || null,
-          checkIn: p.checkIn || null,
-          room: p.selectedRoom?.room || null,
-          guest: p.selectedRoom?.guest || null,
-        }))
+      portionsToSubmit.map(p => ({
+        amount: Number(p.amount),
+        paymentType: p.paymentType,
+        target: p.target || null,
+        checkIn: p.checkIn || null,
+        room: p.selectedRoom?.room || null,
+        guest: p.selectedRoom?.guest || null,
+      }))
     )
 
-    await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_split_pos_invoice', {
+    const result = await callFrappeApi('rhohotel.rhocom_hotel.api.pos.create_split_pos_invoice', {
       items: fullItems,
       portions: splitPortions,
       customer: null,
@@ -464,9 +469,10 @@ async function applySplit() {
     })
 
     applying.value = false
-    emit('confirmed', { split: true })
+    emit('confirmed', { split: true, ...result })
     emit('update:modelValue', false)
   } catch (err) {
+    clearReservedPOSInvoicePrintPreview()
     splitError.value = err.message || 'Failed to process split bill'
     applying.value = false
   }

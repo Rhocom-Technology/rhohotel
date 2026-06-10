@@ -106,14 +106,18 @@
         </div>
         <div class="p-3 space-y-3">
           <div v-for="t in newTickets" :key="t.id"
-            class="bg-white rounded-xl border border-gray-200 px-4 py-3 hover:border-blue-200 transition-colors cursor-pointer">
+            class="rounded-xl border px-4 py-3 transition-colors cursor-pointer"
+            :class="newTicketCardClass(t)">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-blue-600">{{ t.id }} • {{ t.table_or_room || '—' }}</span>
               <span class="text-xs text-gray-400">{{ formatTime(t.sent_at) }}</span>
             </div>
             <div v-for="line in itemLines(t)" :key="`${t.id}-${line}`" class="text-xs font-bold text-gray-900 leading-tight">{{ line }}</div>
             <div v-for="line in noteLines(t)" :key="`${t.id}-note-${line}`" class="text-xs text-gray-500">{{ line }}</div>
-            <div class="text-xs text-gray-400 mt-1">Source: {{ t.source }}</div>
+            <div class="flex items-center justify-between text-xs mt-1">
+              <span class="text-gray-400">Source: {{ t.source }}</span>
+              <span class="font-semibold" :class="newTicketAgeClass(t)">{{ countdownLabel(t, kitchenSettings.newTicketMinutes) }}</span>
+            </div>
             <button class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'In Progress')">
@@ -132,7 +136,7 @@
         <div class="p-3 space-y-3">
           <div v-for="t in preparingTickets" :key="t.id"
             class="rounded-xl border px-4 py-3 transition-colors cursor-pointer"
-            :class="t.mins >= 20 ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-200 hover:border-yellow-200'">
+            :class="preparingCardClass(t)">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-yellow-600">{{ t.id }} • {{ t.table_or_room || '—' }}</span>
               <span class="text-xs text-gray-400">{{ formatTime(t.sent_at) }}</span>
@@ -142,8 +146,8 @@
             <div class="text-xs text-gray-400 mt-1">Chef Station: {{ t.chef_station || 'General' }}</div>
             <div class="flex items-center gap-2 mt-2.5">
               <span class="px-2.5 py-1 text-xs font-semibold rounded-full"
-                :class="t.mins >= 20 ? 'bg-orange-100 text-orange-600' : 'bg-yellow-100 text-yellow-600'">
-                {{ t.mins }} mins
+                :class="preparingBadgeClass(t)">
+                {{ countdownLabel(t, kitchenSettings.criticalMinutes) }}
               </span>
               <button class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 :disabled="updating === t.id"
@@ -161,13 +165,19 @@
         </div>
         <div class="p-3 space-y-3">
           <div v-for="t in readyTickets" :key="t.id"
-            class="bg-green-50 rounded-xl border border-green-200 px-4 py-3 cursor-pointer hover:border-green-300 transition-colors">
+            class="rounded-xl border px-4 py-3 cursor-pointer transition-colors"
+            :class="readyCardClass(t)">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-green-700">{{ t.id }} • {{ t.table_or_room || '—' }}</span>
               <span class="text-xs text-gray-400">{{ formatTime(t.sent_at) }}</span>
             </div>
             <div v-for="line in itemLines(t)" :key="`${t.id}-${line}`" class="text-xs font-bold text-gray-900 leading-tight">{{ line }}</div>
             <div v-for="line in noteLines(t)" :key="`${t.id}-note-${line}`" class="text-xs text-gray-500">{{ line }}</div>
+            <div class="mt-2">
+              <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="readyBadgeClass(t)">
+                {{ countdownLabel(t, kitchenSettings.readyPickupMinutes) }}
+              </span>
+            </div>
             <button class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'Served')">Dispatch</button>
@@ -213,7 +223,7 @@
     </div>
 
     <!-- Kitchen Settings Modal -->
-    <KitchenSettingsModal v-if="showSettings" @close="showSettings = false" />
+    <KitchenSettingsModal v-if="showSettings" :settings="kitchenSettings" @save="saveKitchenSettings" @close="showSettings = false" />
   </div>
 </template>
 
@@ -230,6 +240,64 @@ const filterSource = ref('')
 const showDelayedOnly = ref(false)
 const updating = ref(null)  // ticket name being updated
 let lastTicketCount = 0
+let refreshInterval = null
+
+const defaultKitchenSettings = {
+  station: 'Hot Kitchen',
+  ticketView: 'All Tickets',
+  kitchenNote: '',
+  newTicketMinutes: 5,
+  warningMinutes: 15,
+  criticalMinutes: 25,
+  readyPickupMinutes: 10,
+  autoRefreshSeconds: 15,
+}
+
+function loadKitchenSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('rhohotel_kitchen_settings') || '{}')
+    return { ...defaultKitchenSettings, ...saved }
+  } catch (_) {
+    return { ...defaultKitchenSettings }
+  }
+}
+
+const kitchenSettings = ref(loadKitchenSettings())
+
+function kitchenTicketParams() {
+  return {
+    pending_delay_minutes: kitchenSettings.value.criticalMinutes,
+    preparing_delay_minutes: kitchenSettings.value.criticalMinutes,
+  }
+}
+
+function reloadTickets() {
+  ticketsResource.params = kitchenTicketParams()
+  ticketsResource.reload()
+}
+
+function reloadStats() {
+  statsResource.params = kitchenTicketParams()
+  statsResource.reload()
+}
+
+function setRefreshTimer() {
+  if (refreshInterval) clearInterval(refreshInterval)
+  refreshInterval = setInterval(() => {
+    if (autoRefresh.value) {
+      reloadTickets()
+      reloadStats()
+    }
+  }, kitchenSettings.value.autoRefreshSeconds * 1000)
+}
+
+function saveKitchenSettings(nextSettings) {
+  kitchenSettings.value = { ...kitchenSettings.value, ...nextSettings }
+  localStorage.setItem('rhohotel_kitchen_settings', JSON.stringify(kitchenSettings.value))
+  setRefreshTimer()
+  reloadTickets()
+  reloadStats()
+}
 
 function playNewTicketSound() {
   try {
@@ -255,6 +323,7 @@ function playNewTicketSound() {
 // ── API ────────────────────────────────────────────────────────────────────
 const ticketsResource = createResource({
   url: 'rhohotel.restaurant.api.kitchen.get_kitchen_tickets',
+  params: kitchenTicketParams(),
   auto: true,
   onSuccess(data) {
     const count = (data || []).filter(t => t.status === 'Pending').length
@@ -265,6 +334,7 @@ const ticketsResource = createResource({
 
 const statsResource = createResource({
   url: 'rhohotel.restaurant.api.kitchen.get_kitchen_stats',
+  params: kitchenTicketParams(),
   auto: true,
 })
 
@@ -272,23 +342,16 @@ const statusResource = createResource({
   url: 'rhohotel.restaurant.api.kitchen.update_ticket_status',
   onSuccess() {
     updating.value = null
-    ticketsResource.reload()
-    statsResource.reload()
+    reloadTickets()
+    reloadStats()
   },
   onError() {
     updating.value = null
   },
 })
 
-// ── Auto-refresh ──────────────────────────────────────────────────────────
-let refreshInterval = null
 onMounted(() => {
-  refreshInterval = setInterval(() => {
-    if (autoRefresh.value) {
-      ticketsResource.reload()
-      statsResource.reload()
-    }
-  }, 15000)
+  setRefreshTimer()
 })
 onUnmounted(() => clearInterval(refreshInterval))
 
@@ -310,6 +373,61 @@ function noteLines(t) {
   const parts = []
   if (t.notes) parts.push(t.notes)
   return parts
+}
+
+function timerMins(t) {
+  return Number(t.stage_mins ?? t.mins ?? 0)
+}
+
+function remainingMinutes(t, limit) {
+  return Math.max(0, Number(limit || 0) - timerMins(t))
+}
+
+function countdownLabel(t, limit) {
+  const elapsed = timerMins(t)
+  const remaining = remainingMinutes(t, limit)
+  if (remaining > 0) return `${remaining} min left`
+  return `Over ${Math.max(0, elapsed - Number(limit || 0))} min`
+}
+
+function preparingCardClass(t) {
+  const elapsed = timerMins(t)
+  if (elapsed >= kitchenSettings.value.criticalMinutes) return 'bg-red-50 border-red-200'
+  if (elapsed >= kitchenSettings.value.warningMinutes) return 'bg-orange-50 border-orange-200'
+  return 'bg-white border-gray-200 hover:border-yellow-200'
+}
+
+function preparingBadgeClass(t) {
+  const elapsed = timerMins(t)
+  if (elapsed >= kitchenSettings.value.criticalMinutes) return 'bg-red-100 text-red-600'
+  if (elapsed >= kitchenSettings.value.warningMinutes) return 'bg-orange-100 text-orange-600'
+  return 'bg-yellow-100 text-yellow-600'
+}
+
+function newTicketCardClass(t) {
+  const elapsed = timerMins(t)
+  if (elapsed >= kitchenSettings.value.criticalMinutes) return 'bg-red-50 border-red-200 hover:border-red-300'
+  if (elapsed >= kitchenSettings.value.warningMinutes) return 'bg-orange-50 border-orange-200 hover:border-orange-300'
+  if (elapsed < kitchenSettings.value.newTicketMinutes) return 'bg-blue-50 border-blue-200 hover:border-blue-300'
+  return 'bg-white border-gray-200 hover:border-blue-200'
+}
+
+function newTicketAgeClass(t) {
+  const elapsed = timerMins(t)
+  if (elapsed >= kitchenSettings.value.criticalMinutes) return 'text-red-600'
+  if (elapsed >= kitchenSettings.value.warningMinutes) return 'text-orange-600'
+  if (elapsed < kitchenSettings.value.newTicketMinutes) return 'text-blue-600'
+  return 'text-gray-400'
+}
+
+function readyCardClass(t) {
+  if (remainingMinutes(t, kitchenSettings.value.readyPickupMinutes) <= 0) return 'bg-orange-50 border-orange-200 hover:border-orange-300'
+  return 'bg-green-50 border-green-200 hover:border-green-300'
+}
+
+function readyBadgeClass(t) {
+  if (remainingMinutes(t, kitchenSettings.value.readyPickupMinutes) <= 0) return 'bg-orange-100 text-orange-600'
+  return 'bg-green-100 text-green-700'
 }
 
 // ── Ticket buckets (filtered) ─────────────────────────────────────────────
@@ -341,7 +459,7 @@ function setStatus(ticket, status) {
 }
 
 function manualRefresh() {
-  ticketsResource.reload()
-  statsResource.reload()
+  reloadTickets()
+  reloadStats()
 }
 </script>

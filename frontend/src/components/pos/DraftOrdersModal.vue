@@ -18,7 +18,8 @@
           </div>
           <div class="flex items-center gap-2 mt-5">
               <p v-if="actionError" class="text-xs text-red-500 flex-1">{{ actionError }}</p>
-            <button @click="deleteDraft" :disabled="!selectedDraft || deleting"
+              <p v-else-if="actionMessage" class="text-xs text-green-600 flex-1">{{ actionMessage }}</p>
+            <button @click="deleteDraft" :disabled="!selectedDraft || deleting || !selectedDraft.canDelete"
               class="btn-hover px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">
               {{ deleting ? 'Deleting…' : 'Delete Draft' }}
             </button>
@@ -147,6 +148,7 @@
                   <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Service Point</span><span class="font-semibold text-gray-900">{{ selectedDraft.detailPoint }}</span></div>
                   <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Cashier</span><span class="font-semibold text-gray-900">{{ selectedDraft.cashier }}</span></div>
                   <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Saved At</span><span class="font-semibold text-gray-900">{{ selectedDraft.savedAt }}</span></div>
+                  <div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-400">Kitchen</span><span class="font-semibold" :class="selectedDraft.canDelete ? 'text-green-600' : 'text-orange-600'">{{ selectedDraft.kitchenStatusLabel }}</span></div>
                   <div class="flex justify-between py-1"><span class="text-gray-400">Total Value</span><span class="font-bold text-blue-600">₦{{ selectedDraft.amount.toLocaleString() }}</span></div>
                 </div>
                 <div>
@@ -172,6 +174,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
+import { callMethod } from '@/lib/api'
 import { printPOSInvoice } from '@/lib/posPrint'
 
 const props = defineProps({
@@ -193,6 +196,7 @@ const resuming = ref(false)
 const deleting = ref(false)
 const refreshing = ref(false)
 const actionError = ref('')
+const actionMessage = ref('')
 
 // ── API: Draft Orders ──────────────────────────────────────────────────────
 const draftsResource = createResource({
@@ -259,6 +263,10 @@ const allDrafts = computed(() => {
     detailPoint: d.service_point || d.pos_profile || '—',
     draftItems: d.items || [],
     note: d.note || '',
+    canDelete: d.can_delete !== false,
+    deleteBlockReason: d.delete_block_reason || '',
+    kitchenStatuses: d.kitchen_statuses || [],
+    kitchenStatusLabel: (d.kitchen_statuses || []).length ? (d.kitchen_statuses || []).join(', ') : 'Not sent',
   }))
 })
 
@@ -309,27 +317,15 @@ const pagedDrafts = computed(() => filteredDrafts.value.slice(draftPageStart.val
 watch(filteredDrafts, () => { draftPage.value = 1 })
 
 // ── Actions ────────────────────────────────────────────────────────────────
-const resumeResource = createResource({
-  url: 'rhohotel.rhocom_hotel.api.pos.get_pos_draft_invoice_detail',
-  onSuccess(data) {
-    resuming.value = false
-    emit('resume', data)
-    emit('update:modelValue', false)
-  },
-  onError(err) {
-    resuming.value = false
-    actionError.value = err?.message || 'Failed to load draft'
-    setTimeout(() => { actionError.value = '' }, 4000)
-  },
-})
-
 const deleteResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.delete_pos_draft_invoice',
   onSuccess() {
     deleting.value = false
+    actionMessage.value = `Draft ${selectedDraft.value?.invoice || ''} deleted.`
     selectedDraft.value = null
     draftsResource.reload()
     statsResource.reload()
+    setTimeout(() => { actionMessage.value = '' }, 3000)
   },
   onError(err) {
     deleting.value = false
@@ -341,11 +337,28 @@ const deleteResource = createResource({
 function resumeDraft() {
   if (!selectedDraft.value || resuming.value) return
   resuming.value = true
-  resumeResource.submit({ invoice_name: selectedDraft.value.invoice })
+  actionError.value = ''
+  callMethod('rhohotel.rhocom_hotel.api.pos.get_pos_draft_invoice_detail', {
+    invoice_name: selectedDraft.value.invoice,
+  }, { method: 'GET' })
+    .then((data) => {
+      emit('resume', data)
+      emit('update:modelValue', false)
+    })
+    .catch((err) => {
+      actionError.value = err?.message || 'Failed to load draft'
+      setTimeout(() => { actionError.value = '' }, 4000)
+    })
+    .finally(() => { resuming.value = false })
 }
 
 function deleteDraft() {
   if (!selectedDraft.value || deleting.value) return
+  if (!selectedDraft.value.canDelete) {
+    actionError.value = selectedDraft.value.deleteBlockReason || 'This draft cannot be deleted.'
+    setTimeout(() => { actionError.value = '' }, 4000)
+    return
+  }
   if (!confirm(`Delete draft ${selectedDraft.value.invoice}? This cannot be undone.`)) return
   deleting.value = true
   deleteResource.submit({ invoice_name: selectedDraft.value.invoice })

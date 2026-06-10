@@ -136,6 +136,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { createResource } from 'frappe-ui'
+import { clearReservedPOSInvoicePrintPreview, reservePOSInvoicePrintPreview } from '@/lib/posPrint'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -214,6 +215,7 @@ const postResource = createResource({
     roomSearch.value = ''
   },
   onError(err) {
+    clearReservedPOSInvoicePrintPreview()
     posting.value = false
     postError.value = err.message || 'Failed to post bill to room'
   },
@@ -223,6 +225,7 @@ function confirm() {
   if (!selectedPostRoom.value) return
   postError.value = ''
   posting.value = true
+  reservePOSInvoicePrintPreview()
   postResource.submit({
     items: JSON.stringify(props.cartItems.map(i => ({
       item_code: i.item_code || i.id,

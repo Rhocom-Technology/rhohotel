@@ -154,19 +154,37 @@ def get_sent_to_kitchen_items(pos_invoice):
 # Kitchen Board
 # ─────────────────────────────────────────────────────────────────────────────
 
-@frappe.whitelist()
-def get_kitchen_tickets(search=None, station=None, source=None, status=None):
-    """Return active Kitchen Order Tickets for the live board."""
-    # Auto-transition stale tickets to Delayed (Pending > 25 min, In Progress > 35 min)
+def _coerce_delay_minutes(value, fallback):
+    return max(1, int(flt(value) or fallback))
+
+
+def _mark_stale_tickets_delayed(pending_delay_minutes=25, preparing_delay_minutes=35):
+    pending_delay_minutes = max(1, int(flt(pending_delay_minutes) or 25))
+    preparing_delay_minutes = max(1, int(flt(preparing_delay_minutes) or 35))
+
+    # Auto-transition stale tickets based on configured preparation thresholds.
     frappe.db.sql("""
         UPDATE `tabKitchen Order Ticket`
         SET status = 'Delayed'
         WHERE docstatus = 0
           AND status IN ('Pending', 'In Progress')
-          AND TIMESTAMPDIFF(MINUTE, sent_at, NOW()) >
-              CASE WHEN status = 'Pending' THEN 25 ELSE 35 END
-    """)
+                    AND TIMESTAMPDIFF(
+                                MINUTE,
+                                CASE WHEN status = 'Pending' THEN sent_at ELSE modified END,
+                                NOW()
+                            ) >=
+              CASE WHEN status = 'Pending' THEN %s ELSE %s END
+    """, (pending_delay_minutes, preparing_delay_minutes))
     frappe.db.commit()
+
+
+@frappe.whitelist()
+def get_kitchen_tickets(search=None, station=None, source=None, status=None,
+                        pending_delay_minutes=25, preparing_delay_minutes=35):
+    """Return active Kitchen Order Tickets for the live board."""
+    pending_delay_minutes = _coerce_delay_minutes(pending_delay_minutes, 25)
+    preparing_delay_minutes = _coerce_delay_minutes(preparing_delay_minutes, 35)
+    _mark_stale_tickets_delayed(pending_delay_minutes, preparing_delay_minutes)
 
     conditions = ["kt.docstatus = 0", "kt.status != 'Served'"]
     args = []
@@ -200,7 +218,19 @@ def get_kitchen_tickets(search=None, station=None, source=None, status=None):
             kt.status,
             kt.notes,
             kt.sent_at,
-            TIMESTAMPDIFF(MINUTE, kt.sent_at, NOW()) AS age_minutes
+            kt.modified,
+            GREATEST(0, TIMESTAMPDIFF(MINUTE, kt.sent_at, NOW())) AS age_minutes,
+            GREATEST(
+                0,
+                TIMESTAMPDIFF(
+                    MINUTE,
+                    CASE
+                        WHEN kt.status IN ('In Progress', 'Ready') THEN kt.modified
+                        ELSE kt.sent_at
+                    END,
+                    NOW()
+                )
+            ) AS stage_age_minutes
         FROM `tabKitchen Order Ticket` kt
         WHERE {where}
         ORDER BY kt.sent_at ASC
@@ -221,16 +251,25 @@ def get_kitchen_tickets(search=None, station=None, source=None, status=None):
             as_dict=1,
         )
         age = int(t.get("age_minutes") or 0)
+        raw_stage_age = t.get("stage_age_minutes")
+        stage_age = int(raw_stage_age if raw_stage_age is not None else age)
         h, m = divmod(age, 60)
+        stage_h, stage_m = divmod(stage_age, 60)
         t["age"] = f"{h}h {m}m" if h else f"{m}m"
         t["mins"] = age
+        t["stage_age"] = f"{stage_h}h {stage_m}m" if stage_h else f"{stage_m}m"
+        t["stage_mins"] = stage_age
 
     return tickets
 
 
 @frappe.whitelist()
-def get_kitchen_stats():
+def get_kitchen_stats(pending_delay_minutes=25, preparing_delay_minutes=35):
     """Return ticket counts per status for the stats bar."""
+    pending_delay_minutes = _coerce_delay_minutes(pending_delay_minutes, 25)
+    preparing_delay_minutes = _coerce_delay_minutes(preparing_delay_minutes, 35)
+    _mark_stale_tickets_delayed(pending_delay_minutes, preparing_delay_minutes)
+
     rows = frappe.db.sql(
         """
         SELECT status, COUNT(*) AS count

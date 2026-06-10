@@ -96,8 +96,10 @@
       </div>
 
       <!-- Right: Current Sale -->
-      <div class="bg-white rounded-xl border border-gray-200 p-5 sticky top-4 overflow-y-auto" style="max-height:calc(100vh - 32px);">
+      <div class="bg-white rounded-xl border border-gray-200 p-5 sticky top-4 overflow-hidden flex flex-col" style="max-height:calc(100vh - 32px);">
         <h3 class="text-sm font-bold text-gray-900 mb-4">Current Sale</h3>
+
+        <div class="flex-1 min-h-0 overflow-y-auto pr-1">
 
         <!-- Bill To -->
         <div class="mb-4">
@@ -115,13 +117,16 @@
                   class="dropdown-panel absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
                   <div v-if="billToResults.length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">No results</div>
                   <div v-for="r in billToResults" :key="r.id"
-                    @mousedown="selectBillTo(r)"
-                    class="px-4 py-3 text-xs hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-3 transition-colors">
+                    @mousedown="handleBillToResult(r)"
+                    class="px-4 py-3 text-xs cursor-pointer border-b border-gray-50 last:border-0 flex items-center gap-3 transition-colors"
+                    :class="r.active_table_invoice && r.active_table_invoice !== resumedDraftInvoice ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-blue-50'">
                     <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                       style="background:#dbeafe;color:#1d4ed8">{{ r.name[0] }}</div>
                     <div>
                       <p class="font-semibold text-gray-900">{{ r.name }}</p>
-                      <p class="text-gray-400 mt-0.5">{{ r.room ? `Room ${r.room}` : r.type }}</p>
+                      <p class="text-gray-400 mt-0.5">
+                        {{ r.active_table_invoice && r.active_table_invoice !== resumedDraftInvoice ? `Active table - resume ${r.active_table_invoice}` : (r.room ? `Room ${r.room}` : r.type) }}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -195,6 +200,7 @@
               <tr v-for="item in cart" :key="item.id" class="cart-item border-b border-gray-50 last:border-0">
                 <td class="py-2 pr-1">
                   <input
+                    :key="`${item.id}-${kitchenSelectionResetKey}`"
                     type="checkbox"
                     class="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
                     :checked="isKitchenSelected(item)"
@@ -333,20 +339,21 @@
             :class="Object.keys(kitchenSentMap).length > 0
               ? 'text-orange-700 bg-orange-50 border border-orange-300 hover:bg-orange-100'
               : 'text-white bg-orange-500 hover:bg-orange-600'">
-            {{ sendingKitchenNow ? 'Sending to Kitchen…' : (Object.keys(kitchenSentMap).length > 0 ? '🔥 Send More to Kitchen' : `🔥 Send to Kitchen${Object.values(selectedKitchenItemMap).some(Boolean) ? ' (' + cart.filter(i => selectedKitchenItemMap[i.id]).length + ' selected)' : ' (All)'}`) }}
+            {{ kitchenSendButtonLabel }}
           </button>
         </div>
 
         <!-- Note -->
-        <div class="mb-4">
+        <!-- <div class="mb-4">
           <p class="text-xs text-gray-500 mb-1.5">Note / Kitchen Instruction</p>
           <textarea v-model="kitchenNote" rows="2"
             placeholder="No pepper on meal. Deliver to room within 20 mins..."
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div> -->
         </div>
 
         <!-- Actions -->
-        <div class="flex gap-2 sticky bottom-0 bg-white pt-3 pb-1 border-t border-gray-100">
+        <div class="flex gap-2 flex-shrink-0 bg-white pt-3 pb-1 border-t border-gray-100">
           <button @click="clearKitchenSelection" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Clear Selection</button>
           <button @click="printBill" class="btn-hover px-3 py-2.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Print Bill</button>
           <button @click="onHoldSale"
@@ -516,7 +523,7 @@ import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
 import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import PostToRoomModal from '@/components/pos/PostToRoomModal.vue'
 import SplitBillModal from '@/components/pos/SplitBillModal.vue'
-import { printPOSInvoice } from '@/lib/posPrint'
+import { clearReservedPOSInvoicePrintPreview, openReservedPrintPreview, printPOSInvoice, reservePOSInvoicePrintPreview } from '@/lib/posPrint'
 
 const router = useRouter()
 const route = useRoute()
@@ -555,6 +562,7 @@ const holding = ref(false)
 const sendingKitchen = ref(false)
 const kitchenSendScope = ref('all')
 const selectedKitchenItemMap = ref({})
+const kitchenSelectionResetKey = ref(0)
 const lastSubmittedItems = ref([])
 const lastSubmittedContext = ref({ tableOrRoom: '', source: 'Restaurant Dining', kitchenNote: '', sendScope: 'all', selectedItemCodes: [] })
 
@@ -692,6 +700,11 @@ const billToResource = createResource({
   auto: false,
 })
 
+const openTablesGuardResource = createResource({
+  url: 'rhohotel.rhocom_hotel.api.pos.get_open_pos_tables',
+  auto: true,
+})
+
 // let billToTimer = null
 // watch(billToSearch, (q) => {
 //   clearTimeout(billToTimer)
@@ -763,24 +776,41 @@ const filteredMenuItems = computed(() => {
 })
 
 const kitchenItemGroups = computed(() => new Set(kitchenGroupsResource.data || []))
-const selectedKitchenCount = computed(() =>
-  cart.value.filter(i => isKitchenEligible(i) && selectedKitchenItemMap.value[i.id]).length
+const selectedCartItems = computed(() =>
+  cart.value.filter(i => isKitchenSelected(i))
 )
+const selectedKitchenCount = computed(() =>
+  selectedCartItems.value.filter(i => isKitchenEligible(i)).length
+)
+const hasSelectedCartItems = computed(() => selectedCartItems.value.length > 0)
 
 // ── Computed: bill-to results ──────────────────────────────────────
 const billToResults = computed(() =>
-  (billToResource.data || []).map(r => ({
-    id: r.check_in || r.id,
-    check_in: r.check_in || null,
-    customer: r.customer || r.id,
-    guest: r.guest || null,
-    name: r.name,
-    room: r.room || null,
-    room_type: r.room_type || null,
-    type: r.type,
-    payment_type: r.payment_type || null,
-  }))
+  (billToResource.data || []).map(r => {
+    const activeTable = getActiveTableForName(r.name || r.customer)
+    return {
+      id: r.check_in || r.id,
+      check_in: r.check_in || null,
+      customer: r.customer || r.id,
+      guest: r.guest || null,
+      name: r.name,
+      room: r.room || null,
+      room_type: r.room_type || null,
+      type: r.type,
+      payment_type: r.payment_type || null,
+      active_table_invoice: r.active_table_invoice || activeTable?.invoice || null,
+      active_table_bill: Number(r.active_table_bill || activeTable?.bill || 0),
+    }
+  })
 )
+
+const activeTableByName = computed(() => {
+  const map = new Map()
+  for (const table of (openTablesGuardResource.data || [])) {
+    if (table.name) map.set(normalizeTableName(table.name), table)
+  }
+  return map
+})
 
 // ── Computed: room suggestions ─────────────────────────────────────
 const occupiedRooms = computed(() => occupiedRoomsResource.data || [])
@@ -904,12 +934,60 @@ const hasKitchenItems = computed(() =>
   cart.value.some(i => kitchenItemGroups.value.has(i.category))
 )
 
+const kitchenSendButtonLabel = computed(() => {
+  if (sendingKitchenNow.value) return 'Sending to Kitchen…'
+  if (Object.keys(kitchenSentMap.value).length > 0) return '🔥 Send More to Kitchen'
+  return `🔥 Send to Kitchen${hasSelectedCartItems.value ? ` (${selectedCartItems.value.length} selected)` : ' (All)'}`
+})
+
 // ── Bill-To interaction ────────────────────────────────────────────
 function delayBlur(field) {
   setTimeout(() => {
     if (field === 'billToFocused') billToFocused.value = false
     if (field === 'roomFocused') roomFocused.value = false
   }, 200)
+}
+
+function normalizeTableName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function extractTableDisplayName(value) {
+  const name = String(value || '').trim()
+  return /^(Table|Bar|Pool)\s*\S/i.test(name) ? name : ''
+}
+
+function getActiveTableForName(value) {
+  const tableName = extractTableDisplayName(value)
+  if (!tableName) return null
+  return activeTableByName.value.get(normalizeTableName(tableName)) || null
+}
+
+function showOccupiedTableResumeMessage(table) {
+  chargeError.value = `${table.name} already has a held sale. Resume it from Open Tables.`
+  showOpenTables.value = true
+  try { openTablesGuardResource.reload() } catch (_) {}
+  setTimeout(() => { chargeError.value = '' }, 5000)
+}
+
+function guardOccupiedTableSelection(value) {
+  const table = getActiveTableForName(value)
+  if (!table || table.invoice === resumedDraftInvoice.value) return false
+  showOccupiedTableResumeMessage(table)
+  return true
+}
+
+function handleBillToResult(guest) {
+  const activeTable = guest.active_table_invoice
+    ? { invoice: guest.active_table_invoice, name: guest.name }
+    : getActiveTableForName(guest.name || guest.customer)
+  if (activeTable && activeTable.invoice !== resumedDraftInvoice.value) {
+    billToSearch.value = ''
+    billToFocused.value = false
+    showOccupiedTableResumeMessage(activeTable)
+    return
+  }
+  selectBillTo(guest)
 }
 
 function selectBillTo(guest) {
@@ -958,6 +1036,23 @@ function extractApiErrorMessage(err, fallback = 'Request failed') {
   return err?.message || fallback
 }
 
+function printReceiptFromResponse(data) {
+  const posInvoice = data?.pos_invoice || data?.pos_invoice_name || ''
+  if (posInvoice) {
+    printPOSInvoice(posInvoice)
+    return posInvoice
+  }
+
+  const salesInvoice = data?.sales_invoice || data?.room_sales_invoices?.[0]?.sales_invoice || ''
+  if (salesInvoice) {
+    openReservedPrintPreview('Sales Invoice', salesInvoice)
+    return salesInvoice
+  }
+
+  clearReservedPOSInvoicePrintPreview()
+  return ''
+}
+
 // ── API: Create POS Invoice (Cash / POS terminal) ──────────────────
 const chargeResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.create_pos_invoice',
@@ -971,12 +1066,14 @@ const chargeResource = createResource({
     clearCart()
     charging.value = false
     menuResource.reload()
+    openTablesGuardResource.reload()
     // Auto-print receipt
-    printPOSInvoice(data.pos_invoice)
+    printReceiptFromResponse(data)
     triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
+    clearReservedPOSInvoicePrintPreview()
     chargeError.value = extractApiErrorMessage(err, 'Failed to create invoice')
     charging.value = false
     setTimeout(() => { chargeError.value = '' }, 6000)
@@ -986,17 +1083,14 @@ const chargeResource = createResource({
 const holdSaleResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.save_pos_draft_invoice',
   onSuccess(data) {
-    const submitted = [...lastSubmittedItems.value]
-    const context = { ...lastSubmittedContext.value }
-
     chargeSuccess.value = `Sale held as draft ${data.pos_invoice}`
     lastInvoiceName.value = data.pos_invoice
     playSuccessSound()
     holding.value = false
     clearCart()
     menuResource.reload()
+    openTablesGuardResource.reload()
     draftOrdersKey.value++
-    triggerKitchenSend(data.pos_invoice, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
@@ -1030,17 +1124,16 @@ const postToRoomDirectResource = createResource({
     lastInvoiceName.value = data?.pos_invoice || data?.sales_invoice || ''
     chargeSuccess.value = 'Bill posted to room folio successfully'
     playSuccessSound()
-    const invoiceName = data?.pos_invoice || ''
     clearCart()
     charging.value = false
     menuResource.reload()
-    if (invoiceName) {
-      printPOSInvoice(invoiceName)
-    }
+    openTablesGuardResource.reload()
+    printReceiptFromResponse(data)
     triggerKitchenSend(data?.pos_invoice || null, submitted, context)
     setTimeout(() => { chargeSuccess.value = '' }, 4000)
   },
   onError(err) {
+    clearReservedPOSInvoicePrintPreview()
     chargeError.value = extractApiErrorMessage(err, 'Failed to post bill to room')
     charging.value = false
     setTimeout(() => { chargeError.value = '' }, 6000)
@@ -1053,6 +1146,7 @@ const kitchenDraftResource = createResource({
   onSuccess(data) {
     lastInvoiceName.value = data.pos_invoice
     resumedDraftInvoice.value = data.pos_invoice  // track so re-hold replaces it
+    openTablesGuardResource.reload()
     // Now fire the kitchen ticket linked to this draft
     const toSend = kitchenDraftResource._pendingKitchenItems
     if (toSend && toSend.length > 0) {
@@ -1158,10 +1252,10 @@ function sendToKitchenNow() {
     setTimeout(() => { chargeError.value = '' }, 4000)
     return
   }
+  if (guardOccupiedTableSelection(customer)) return
 
   // 2. Resolve items to send (checked first, then all)
-  const checkedItems = cart.value.filter(i => selectedKitchenItemMap.value[i.id])
-  const sourceItems = checkedItems.length > 0 ? checkedItems : cart.value
+  const sourceItems = hasSelectedCartItems.value ? selectedCartItems.value : cart.value
 
   const groups = kitchenItemGroups.value
   const eligibleItems = groups.size
@@ -1213,8 +1307,7 @@ function captureSubmissionSnapshot() {
     source: getKitchenSource(),
     kitchenNote: kitchenNote.value || '',
     sendScope: kitchenSendScope.value,
-    selectedItemCodes: cart.value
-      .filter(i => selectedKitchenItemMap.value[i.id])
+    selectedItemCodes: selectedCartItems.value
       .map(i => i.item_code || i.id),
     dedupeOnServer: !!resumedDraftInvoice.value,
   }
@@ -1226,6 +1319,8 @@ function isKitchenEligible(item) {
 
 function clearKitchenSelection() {
   selectedKitchenItemMap.value = {}
+  kitchenSelectionResetKey.value++
+  kitchenSendScope.value = 'all'
   chargeSuccess.value = 'Kitchen item selection cleared'
   setTimeout(() => { chargeSuccess.value = '' }, 2000)
 }
@@ -1297,10 +1392,10 @@ function isKitchenSelected(item) {
 }
 
 function onKitchenSelectionChange(item, checked) {
-  selectedKitchenItemMap.value = {
-    ...selectedKitchenItemMap.value,
-    [item.id]: !!checked,
-  }
+  const nextMap = { ...selectedKitchenItemMap.value }
+  if (checked) nextMap[item.id] = true
+  else delete nextMap[item.id]
+  selectedKitchenItemMap.value = nextMap
 }
 
 // ── POS state persistence ──────────────────────────────────────────
@@ -1346,6 +1441,14 @@ function restorePosState() {
 }
 
 onMounted(() => {
+  try {
+    const shiftCloseMessage = sessionStorage.getItem('rhohotel_pos_shift_close_success')
+    if (shiftCloseMessage) {
+      sessionStorage.removeItem('rhohotel_pos_shift_close_success')
+      chargeSuccess.value = shiftCloseMessage
+      setTimeout(() => { chargeSuccess.value = '' }, 5000)
+    }
+  } catch (_) {}
   restorePosState()
   if (selectedBillTo.value?.id || selectedBillTo.value?.room) {
     loadComplimentaries()
@@ -1395,6 +1498,8 @@ function onHoldSale() {
     return
   }
   chargeError.value = ''
+  const customer = selectedBillTo.value?.customer || selectedBillTo.value?.name || billToSearch.value || null
+  if (guardOccupiedTableSelection(customer)) return
   holding.value = true
   captureSubmissionSnapshot()
 
@@ -1405,7 +1510,7 @@ function onHoldSale() {
       price: i.price,
     }))),
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
-    customer: selectedBillTo.value?.customer || selectedBillTo.value?.name || billToSearch.value || null,
+    customer,
     service_charge: serviceCharge.value,
     discount_amount: discountAmount.value,
     kitchen_note: kitchenNote.value || null,
@@ -1436,12 +1541,15 @@ function onChargeNow() {
     return
   }
   chargeError.value = ''
+  const customer = selectedBillTo.value?.customer || selectedBillTo.value?.name || billToSearch.value || null
+  if (guardOccupiedTableSelection(customer)) return
 
   if (settlementMethod.value === 'Post to Room') {
     // If a room is already selected, post directly without showing the modal
     if (selectedBillTo.value?.room && (selectedBillTo.value?.check_in || selectedBillTo.value?.id)) {
       captureSubmissionSnapshot()
       charging.value = true
+      reservePOSInvoicePrintPreview()
       postToRoomDirectResource.submit({
         items: JSON.stringify(cart.value.map(i => ({
           item_code: i.item_code || i.id,
@@ -1470,6 +1578,7 @@ function onChargeNow() {
   const mopMap = { Cash: 'Cash', POS: 'POS' }
   charging.value = true
   captureSubmissionSnapshot()
+  reservePOSInvoicePrintPreview()
   chargeResource.submit({
     items: JSON.stringify(cart.value.map(i => ({
       item_code: i.item_code || i.id,
@@ -1478,7 +1587,7 @@ function onChargeNow() {
     }))),
     mode_of_payment: mopMap[settlementMethod.value] || 'Cash',
     // Pass Bill-To name so backend can resolve an ERPNext Customer if it exists.
-    customer: selectedBillTo.value?.customer || selectedBillTo.value?.name || billToSearch.value || null,
+    customer,
     service_charge: serviceCharge.value,
     discount_amount: manualDiscountAmount.value,
     complimentary_name: selectedComplimentaryName.value || null,
@@ -1499,10 +1608,9 @@ function onChargeNow() {
 function onSplitConfirmed(data) {
   clearCart()
   menuResource.reload()
+  openTablesGuardResource.reload()
   chargeSuccess.value = 'Split bill processed successfully'
-  if (data?.pos_invoice) {
-    printPOSInvoice(data.pos_invoice)
-  }
+  printReceiptFromResponse(data)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
 
@@ -1519,13 +1627,10 @@ function onPostConfirmed(data) {
   lastInvoiceName.value = data?.pos_invoice || data?.sales_invoice || ''
   chargeSuccess.value = 'Bill posted to room folio successfully'
   playSuccessSound()
-  const invoiceName = data?.pos_invoice || ''
   clearCart()
   menuResource.reload()
-  // Auto-print the POS invoice if available
-  if (invoiceName) {
-    printPOSInvoice(invoiceName)
-  }
+  openTablesGuardResource.reload()
+  printReceiptFromResponse(data)
   triggerKitchenSend(data?.pos_invoice || null, submitted, context)
   setTimeout(() => { chargeSuccess.value = '' }, 4000)
 }
@@ -1555,6 +1660,7 @@ function onResumeTable(table) {
   resumedDraftInvoice.value = table.invoice || null
   lastInvoiceName.value = table.invoice || ''
   showOpenTables.value = false
+  openTablesGuardResource.reload()
   if (table.settle) settlementMethod.value = 'Cash'
   chargeSuccess.value = `Table ${table.name} loaded — ₦${table.bill.toLocaleString()}`
   setTimeout(() => { chargeSuccess.value = '' }, 3000)

@@ -283,19 +283,35 @@ const closeResource = createResource({
   onSuccess(data) {
     closing.value = false
     showConfirm.value = false
+    closeError.value = ''
     closeSuccess.value = `Shift closed successfully${data?.closing_entry ? ` (${data.closing_entry})` : ''}`
     shiftResource.reload()
+    try { sessionStorage.setItem('rhohotel_pos_shift_close_success', closeSuccess.value) } catch (_) {}
     setTimeout(() => {
       closeSuccess.value = ''
       router.push('/pos')
-    }, 1800)
+    }, 3500)
   },
   onError(err) {
     closing.value = false
-    closeError.value = err.message || 'Failed to close shift'
+    closeError.value = extractApiErrorMessage(err, 'Failed to close shift')
     setTimeout(() => { closeError.value = '' }, 6000)
   },
 })
+
+function extractApiErrorMessage(err, fallback = 'Request failed') {
+  const serverMessage = err?._server_messages
+  if (serverMessage) {
+    try {
+      const parsed = JSON.parse(serverMessage)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const first = JSON.parse(parsed[0])
+        if (first?.message) return String(first.message)
+      }
+    } catch (_) {}
+  }
+  return err?.message || fallback
+}
 
 function confirmClose() {
   showConfirm.value = true
@@ -316,8 +332,9 @@ function printShiftReport() {
 
 function doCloseShift() {
   if (!shiftStats.value.pos_opening_entry) {
-    // No open shift found — just redirect
-    router.push('/pos')
+    closeSuccess.value = 'No open POS shift found.'
+    showConfirm.value = false
+    setTimeout(() => { router.push('/pos') }, 1800)
     return
   }
   closing.value = true
