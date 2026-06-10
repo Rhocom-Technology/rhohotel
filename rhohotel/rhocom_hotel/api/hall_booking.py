@@ -258,14 +258,65 @@ def get_halls():
 
 
 @frappe.whitelist()
-def get_customers():
-    return frappe.db.get_all(
-        "Customer",
-        fields=["name", "customer_name", "mobile_no"],
-        order_by="customer_name asc",
-        limit_page_length=0,
+def get_halls():
+    halls = frappe.get_all(
+        "Hall",
+        fields=[
+            "name",
+            "hall_name",
+            "hall_type",
+            "capacity",
+            "rate",
+        ],
+        order_by="hall_name asc",
     )
 
+    for hall in halls:
+        doc = frappe.get_doc("Hall", hall["name"])
+
+        hall["facilities"] = []
+
+        if doc.get("projector_av"):
+            hall["facilities"].append("Projector / AV")
+
+        if doc.get("sound_system"):
+            hall["facilities"].append("Sound System")
+
+        if doc.get("air_conditioning"):
+            hall["facilities"].append("Air Conditioning")
+
+        if doc.get("stage"):
+            hall["facilities"].append("Stage")
+
+        if doc.get("restroom_access"):
+            hall["facilities"].append("Restroom Access")
+
+        if doc.get("parking_access"):
+            hall["facilities"].append("Parking Access")
+
+        if doc.get("kitchen_support"):
+            hall["facilities"].append("Kitchen Support")
+
+        if doc.get("private_entrance"):
+            hall["facilities"].append("Private Entrance")
+
+        hall["amenities"] = []
+
+        for row in doc.get("table_tdts", []):
+            hall["amenities"].append({
+                "item": row.item,
+                "amenity_name": row.amenity_name
+            })
+
+    return halls
+
+
+@frappe.whitelist()
+def get_event_types():
+    meta = frappe.get_meta("Hall Booking")
+    field = meta.get_field("event_type")
+
+    return field.options.split("\n") if field and field.options else []
 
 @frappe.whitelist()
 def search_customers(query=""):

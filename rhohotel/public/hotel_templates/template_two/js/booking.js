@@ -56,41 +56,6 @@ function calculateNights() {
 	return diff;
 }
 
-// function resetRoomBookingForNow() {
-// 	const checkAvailabilityBtn = document.getElementById("checkAvailabilityBtn");
-// 	const continueRoomBookingBtn = document.getElementById("continueRoomBookingBtn");
-// 	const roomBookingForm = document.getElementById("roomBookingForm");
-
-// 	if (checkAvailabilityBtn) {
-// 		checkAvailabilityBtn.addEventListener("click", function () {
-// 			showBookingAlert(
-// 				"Online room availability is currently being configured. Please contact the hotel to confirm available rooms.",
-// 				"info",
-// 			);
-// 		});
-// 	}
-
-// 	if (continueRoomBookingBtn) {
-// 		continueRoomBookingBtn.addEventListener("click", function () {
-// 			showBookingAlert(
-// 				"Room booking is currently being configured. Please contact the hotel to complete your room reservation.",
-// 				"info",
-// 			);
-// 		});
-// 	}
-
-// 	if (roomBookingForm) {
-// 		roomBookingForm.addEventListener("submit", function (event) {
-// 			event.preventDefault();
-
-// 			showBookingAlert(
-// 				"Room booking is currently being configured. Please contact the hotel to complete your room reservation.",
-// 				"info",
-// 			);
-// 		});
-// 	}
-// }
-
 function showEventAlert(message, type = "success", bookingRef = "") {
 	let alertBox = document.getElementById("eventBookingAlert");
 	const form = document.getElementById("eventBookingForm");
@@ -211,79 +176,7 @@ function callFrappeMethod(method, args = {}) {
 	});
 }
 
-function resetEventBookingForNow() {
-	const eventForm = document.getElementById("eventBookingForm");
 
-	if (!eventForm) return;
-
-	eventForm.addEventListener("submit", async function (event) {
-		event.preventDefault();
-
-		const submitButton = eventForm.querySelector('button[type="submit"]');
-		const formData = new FormData(eventForm);
-
-		const args = {
-			hall: formData.get("hall"),
-			guest_name: formData.get("guest_name"),
-			guest_email: formData.get("guest_email"),
-			guest_phone: formData.get("guest_phone"),
-			event_type: formData.get("event_type"),
-			event_date: formData.get("event_date"),
-			start_time: formData.get("start_time"),
-			end_time: formData.get("end_time"),
-			estimated_guest: formData.get("estimated_guest"),
-			noted: formData.get("noted"),
-		};
-
-		if (submitButton) {
-			submitButton.disabled = true;
-			submitButton.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-2"></i>Sending...`;
-		}
-
-		try {
-			const response = await callFrappeMethod(
-				"rhohotel.rhocom_hotel.api.website.submit_event_booking",
-				args,
-			);
-
-			if (response && response.success) {
-				showEventAlert(
-					"Thank you. Your event enquiry has been received. The hotel team will contact you shortly to confirm hall availability, pricing, and setup details.",
-					"success",
-					response.booking,
-				);
-
-				eventForm.reset();
-			} else {
-				showEventAlert(
-					response?.message || "Unable to submit event enquiry. Please try again.",
-					"danger",
-				);
-			}
-		} catch (error) {
-			console.error(error);
-
-			let message = "Unable to submit event enquiry. Please try again.";
-
-			if (error?._server_messages) {
-				try {
-					const serverMessages = JSON.parse(error._server_messages);
-					const firstMessage = JSON.parse(serverMessages[0]);
-					message = firstMessage.message || message;
-				} catch (e) {
-					message = "Unable to submit event enquiry. Please try again.";
-				}
-			}
-
-			showEventAlert(message, "danger");
-		} finally {
-			if (submitButton) {
-				submitButton.disabled = false;
-				submitButton.innerHTML = "Send Event Enquiry";
-			}
-		}
-	});
-}
 
 function initBookingTabs() {
 	const tabButtons = document.querySelectorAll("[data-booking-tab]");
@@ -337,7 +230,7 @@ function initBookingPage() {
 	checkOut?.addEventListener("change", calculateNights);
 
 	// resetRoomBookingForNow();
-	resetEventBookingForNow();
+	// resetEventBookingForNow();
 }
 
 document.addEventListener("DOMContentLoaded", initBookingPage);

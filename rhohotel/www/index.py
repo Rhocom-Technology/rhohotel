@@ -1,8 +1,8 @@
 import frappe
 from frappe import _
+from rhohotel.rhocom_hotel.api.hall_booking import get_halls
 
 no_cache = 1
-
 
 def get_context(context):
 	path = frappe.local.request.path.strip("/")
@@ -17,18 +17,12 @@ def get_context(context):
 	else:
 		page = path
 
-	# -----------------------------
-	# Hotel profile (global)
-	# -----------------------------
 	hotel = get_hotel_profile()
 	if not hotel:
 		frappe.throw(_("Hotel Profile not found"))
 
 	template_code = get_template_code(hotel.active_template)
 
-	# -----------------------------
-	# Optional pages gating
-	# -----------------------------
 	optional_pages = {
 		"dining": "enable_dining",
 		"spa": "enable_spa",
@@ -39,9 +33,6 @@ def get_context(context):
 	if page in optional_pages and not hotel.get(optional_pages[page]):
 		frappe.throw(_("Page not found"), frappe.DoesNotExistError)
 
-	# -----------------------------
-	# Page mapping
-	# -----------------------------
 	page_map = {
 		"home": "home",
 		"rooms": "rooms",
@@ -59,24 +50,34 @@ def get_context(context):
 		frappe.throw(_("Page not found"), frappe.DoesNotExistError)
 
 	# -----------------------------
-	# BASE CONTEXT (all pages)
+	# BASE CONTEXT
 	# -----------------------------
 	context.hotel = hotel
 	context.current_page = page
 	context.rooms = get_rooms()
 	context.home_rooms = get_home_rooms()
 	context.page_media = get_page_media()
-	context.event_halls = get_event_halls()
+	context.halls = get_halls()
 
+	# IMPORTANT: THIS FIXES YOUR ERROR
 	context.body_template = (
 		f"rhocom_hotel/templates/hotel_templates/{template_code}/pages/{page_map[page]}.html"
 	)
 
-	# =====================================================
-	# 🔥 SPECIAL CASE: BOOKING SUCCESS (RECEIPT PAGE)
-	# =====================================================
-	if page == "booking-success":
+	# -----------------------------
+	# EVENT TYPES (your new addition)
+	# -----------------------------
+	meta = frappe.get_meta("Hall Booking")
+	field = meta.get_field("event_type")
 
+	context.event_types = (
+		field.options.split("\n") if field and field.options else []
+	)
+
+	# -----------------------------
+	# BOOKING SUCCESS PAGE
+	# -----------------------------
+	if page == "booking-success":
 		args = frappe.request.args.to_dict()
 
 		reference = (
@@ -85,7 +86,6 @@ def get_context(context):
 			or args.get("trxref")
 		)
 
-		# handle accidental duplicate query params
 		if isinstance(reference, list):
 			reference = reference[0]
 

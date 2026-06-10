@@ -3,6 +3,7 @@
 
 <head>
   {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/head.html" %}
+
 </head>
 
 <body style="
@@ -98,7 +99,7 @@
         {% endif %}
       </div>
 
-      <div class="web-booking-panel active" data-booking-panel="rooms">
+      <div class="web-booking-panel active shadow rounded-4 p-3" data-booking-panel="rooms">
         <div class="web-booking-progress mb-5">
 
           <div class="web-step active" data-step="1">
@@ -368,25 +369,7 @@
         <form id="eventBookingForm">
           <div id="eventStepOne" class="web-booking-step active">
             <div class="row g-5">
-              <div class="col-lg-5">
-                <div class="web-kicker">Halls & Events</div>
-
-                <h2 class="web-section-title">
-                  Plan Your Gathering
-                </h2>
-
-                <p class="web-section-text">
-                  Use this form for weddings, conferences, board meetings, birthdays, dinners,
-                  trainings, and private hotel events.
-                </p>
-
-                <div class="web-success-note mt-4">
-                  <i class="fa-solid fa-circle-info me-2"></i>
-                  Event pricing depends on hall, date, guest size, catering, and setup.
-                </div>
-              </div>
-
-              <div class="col-lg-7">
+              <div class="col-lg-12">
                 <div class="web-form">
                   <div class="row g-3">
                     <div class="col-md-6">
@@ -401,78 +384,118 @@
                         placeholder="Enter email" required>
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                       <label for="eventPhone">Phone Number</label>
                       <input type="tel" id="eventPhone" name="guest_phone" class="form-control"
                         placeholder="{{ hotel.phone or '+234 800 000 0000' }}">
                     </div>
 
-                    <div class="col-md-6">
-                      <label for="eventType">Event Type</label>
-                      <select id="eventType" name="event_type" class="form-select" required>
-                        <option value="">Select event type</option>
-                        <option>Wedding</option>
-                        <option>Conference</option>
-                        <option>Business Meeting</option>
-                        <option>Birthday / Private Party</option>
-                        <option>Dinner / Reception</option>
-                        <option>Training / Seminar</option>
-                        <option>Other</option>
+                    <div class="col-md-4">
+                      <label for="eventTypeSelect">Event Type</label>
+
+                      <select id="eventTypeSelect" class="form-select" required>
+                        <option value="">Select Event Type</option>
+
+                        {% for type in event_types %}
+                        <option value="{{ type }}">{{ type }}</option>
+                        {% endfor %}
                       </select>
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                       <label for="eventHall">Preferred Hall</label>
                       <select id="eventHall" name="hall" class="form-select" required>
-                        {% if event_halls %}
-                        <option value="">Select hall</option>
-                        {% for hall in event_halls %}
-                        <option value="{{ hall.name }}">
+                        {% if halls %}
+                        <option value="">Select Hall</option>
+
+                        {% for hall in halls %}
+                        <option value="{{ hall.name }}" data-rate="{{ hall.rate }}" data-capacity="{{ hall.capacity }}"
+                          data-type="{{ hall.hall_type }}">
                           {{ hall.hall_name }}
+
                           {% if hall.capacity %}
                           - up to {{ hall.capacity }} guests
                           {% endif %}
-                          {% if hall.price %}
-                          - {{ hotel.currency or "NGN" }} {{ "{:,.0f}".format(hall.price|float) }}
+
+                          {% if hall.rate %}
+                          - {{ hotel.currency or "NGN" }}
+                          {{ "{:,.0f}".format(hall.rate|float) }}
                           {% endif %}
                         </option>
                         {% endfor %}
+
                         {% else %}
-                        <option value="">No event halls currently available</option>
+                        <option value="">
+                          No halls currently available
+                        </option>
                         {% endif %}
                       </select>
                     </div>
 
-                    <div class="col-md-6">
-                      <label for="eventGuests">Estimated Guests</label>
-                      <input type="number" id="eventGuests" name="estimated_guest" min="1" class="form-control"
-                        placeholder="Number of guests" required>
-                    </div>
-
-                    <div class="col-md-4">
-                      <label for="eventDate">Event Date</label>
-                      <input type="date" id="eventDate" name="event_date" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-4">
-                      <label for="eventStartTime">Start Time</label>
-                      <input type="time" id="eventStartTime" name="start_time" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-4">
-                      <label for="eventEndTime">End Time</label>
-                      <input type="time" id="eventEndTime" name="end_time" class="form-control" required>
-                    </div>
+                    
 
                     <div class="col-12">
-                      <label for="eventNotes">Event Notes</label>
-                      <textarea id="eventNotes" name="noted" class="form-control" rows="5"
-                        placeholder="Tell us about the event, setup, catering, or special requirements."></textarea>
+                      <div id="hallSummary" class="info-card p-3 rounded-4 shadow border mt-3" style="display:none;">
+                        <span class="fw-bold" id="hallName"></span> <br> <br>
+
+                        <div class="row">
+                          <div class="col-md-4">
+                            <strong>Type:</strong>
+                            <span id="hallType"></span>
+                          </div>
+
+                          <div class="col-md-4">
+                            <strong>Capacity:</strong>
+                            <span id="hallCapacity"></span>
+                          </div>
+
+                          <div class="col-md-4">
+                            <strong>Rate:</strong>
+                            <span id="hallRate"></span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+
+
+                    <div class="col-md-6">
+                      <label for="eventStartTime">Start Date/Time</label>
+                      <input type="datetime-local" id="eventStartDateTime" name="start_time" class="form-control"
+                        required>
+                    </div>
+
+                    <div class="col-md-6">
+                      <label for="eventEndTime">End Date/Time</label>
+                      <input type="datetime-local" id="eventEndDateTime" name="end_time" class="form-control" required>
+                    </div>
+
+                    <div class="web-info-card mt-3">
+
+                      <div class="row">
+
+                        <div class="col-md-4">
+                          <strong>Rate Per Day</strong>
+                          <div id="ratePerDay">-</div>
+                        </div>
+
+                        <div class="col-md-4">
+                          <strong>Total Days</strong>
+                          <div id="totalDays">0</div>
+                        </div>
+
+                        <div class="col-md-4">
+                          <strong>Total Amount</strong>
+                          <div id="totalAmount">0</div>
+                        </div>
+
+                      </div>
+
+                    </div>
+
 
                     <div class="col-12 d-flex flex-column flex-md-row gap-3">
                       <button type="submit" class="web-btn-solid">
-                        Send Event Enquiry
+                        Book Event
                       </button>
 
                       <a href="/contact" class="web-btn-ghost">
@@ -491,6 +514,52 @@
             </div>
           </div>
         </form>
+
+        <div id="bookingSuccessCard" class="web-success-card d-none">
+
+          <div class="success-icon">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+
+          <h3>Booking Request Submitted</h3>
+
+          <p>Your event booking has been received successfully.</p>
+
+          <div id="printArea">
+            <div class="card shadow">
+              <div class="card-body">
+
+                <h4 class="text-success">Booking Confirmed ✔</h4>
+                <div class="success-details">
+                  <div><strong>Reference:</strong> <span id="successReference"></span></div>
+                  <div><strong>Name:</strong> <span id="successName"></span></div>
+                  <div><strong>Email:</strong> <span id="successEmail"></span></div>
+                  <div><strong>Phone:</strong> <span id="successPhone"></span></div>
+                  <div><strong>Hall:</strong> <span id="successHall"></span></div>
+                  <div><strong>Event Type:</strong> <span id="successEventType"></span></div>
+                  <div><strong>No. of Days:</strong> <span id="successTotalDays"></span></div>
+                  <div><strong>Total Amount:</strong> <span id="successTotalAmount"></span></div>
+                </div>
+
+                <div class="alert alert-success mt-3">
+                  <p class="mb-0">
+                    Please take a screenshot of your booking details. You may be required to present this reference
+                    during confirmation
+                    at the venue.
+                  </p>
+                </div>
+
+                <!-- <button onclick="window.print()" class="web-btn-solid">
+            Print Confirmation
+          </button> -->
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+
       </div>
       {% endif %}
     </div>
@@ -560,6 +629,7 @@
 
     {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
     <script src="/assets/rhohotel/hotel_templates/template_two/js/booking.js"></script>
+    <script src="/assets/rhohotel/hotel_templates/template_two/js/events.js"></script>
 </body>
 
 </html>

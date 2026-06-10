@@ -310,6 +310,7 @@ frappe_csrf_exempt_methods = [
     "rhohotel.hotel_api.create_reservation_payment_link",
     "rhohotel.hotel_api.verify_reservation_payment",
     "rhohotel.hotel_api.paystack_webhook",
+    "rhohotel.rhocom_hotel.api.hall_booking.create_booking",
 ]
 
 frappe.csrf_exempt_methods = frappe_csrf_exempt_methods
@@ -325,6 +326,7 @@ ignore_csrf = [
     "rhohotel.hotel_api.create_reservation_payment_link",
     "rhohotel.hotel_api.verify_reservation_payment",
     "rhohotel.hotel_api.paystack_webhook",
+    "rhohotel.rhocom_hotel.api.hall_booking.create_booking"
 ]
 
 
