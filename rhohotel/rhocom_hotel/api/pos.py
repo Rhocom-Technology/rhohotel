@@ -2388,10 +2388,12 @@ def get_open_pos_tables():
     result = []
     for idx, d in enumerate(drafts):
         items = frappe.db.sql("""
-            SELECT item_code, item_name AS name, qty,
-                   rate AS price, (qty * rate) AS amount
-            FROM `tabPOS Invoice Item`
-            WHERE parent = %s
+            SELECT pit.item_code, pit.item_name AS name, pit.qty,
+                   pit.rate AS price, (pit.qty * pit.rate) AS amount,
+                   i.item_group AS category
+            FROM `tabPOS Invoice Item` pit
+            LEFT JOIN `tabItem` i ON i.name = pit.item_code
+            WHERE pit.parent = %s
         """, d["invoice"], as_dict=1)
         age = _age_minutes_from(d.get("creation"))
         h, m = divmod(age, 60)

@@ -1657,17 +1657,23 @@ function onPostConfirmed(data) {
 
 function onResumeTable(table) {
   if (!table || !table.items || table.items.length === 0) return
-  cart.value = table.items.map(i => ({
-    id: i.item_code || i.name,
-    item_code: i.item_code || i.name,
-    name: i.name,
-    category: '',
-    price: i.price || (i.qty > 0 ? Math.round(i.amount / i.qty) : 0),
-    stock: 999,
-    isStockItem: false,
-    image: null,
-    qty: i.qty,
-  }))
+  // Ensure kitchen groups are loaded so hasKitchenItems works correctly
+  if (!kitchenGroupsResource.data) kitchenGroupsResource.reload()
+  const menuMap = new Map(allMenuItems.value.map(m => [m.item_code, m]))
+  cart.value = table.items.map(i => {
+    const menuItem = menuMap.get(i.item_code || i.name) || {}
+    return {
+      id: i.item_code || i.name,
+      item_code: i.item_code || i.name,
+      name: i.name,
+      category: i.category || menuItem.category || '',
+      price: i.price || (i.qty > 0 ? Math.round(i.amount / i.qty) : 0),
+      stock: 999,
+      isStockItem: false,
+      image: i.image || menuItem.image || null,
+      qty: i.qty,
+    }
+  })
   selectedKitchenItemMap.value = {}
   kitchenSentMap.value = normalizeKitchenSentMap(table.sent_to_kitchen)
   kitchenNote.value = table.notes || ''
