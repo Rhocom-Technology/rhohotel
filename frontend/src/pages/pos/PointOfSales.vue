@@ -936,9 +936,12 @@ const kitchenSentIds = computed(() => {
   return sent
 })
 
-const hasKitchenItems = computed(() =>
-  cart.value.some(i => kitchenItemGroups.value.has(i.category))
-)
+const hasKitchenItems = computed(() => {
+  // If kitchen groups haven't loaded yet but cart has items, allow sending
+  // (backend will filter by actual kitchen groups)
+  if (!kitchenGroupsResource.data && cart.value.length > 0) return true
+  return cart.value.some(i => kitchenItemGroups.value.has(i.category))
+})
 
 const kitchenSendButtonLabel = computed(() => {
   if (sendingKitchenNow.value) return 'Sending to Kitchen…'
@@ -1345,16 +1348,22 @@ function clearKitchenSelection() {
 
   function onResumeDraft(data) {
     if (!data || !data.items || data.items.length === 0) return
-    cart.value = data.items.map(i => ({
-      id: i.item_code,
-      item_code: i.item_code,
-      name: i.name,
-      category: i.category || '',
-      price: Number(i.price) || 0,
-      stock: Number(i.stock) || 999,
-      image: i.image || null,
-      qty: Number(i.qty) || 1,
-    }))
+    // Ensure kitchen groups are loaded so hasKitchenItems works correctly
+    if (!kitchenGroupsResource.data) kitchenGroupsResource.reload()
+    const menuMap = new Map(allMenuItems.value.map(m => [m.item_code, m]))
+    cart.value = data.items.map(i => {
+      const menuItem = menuMap.get(i.item_code) || {}
+      return {
+        id: i.item_code,
+        item_code: i.item_code,
+        name: i.name,
+        category: i.category || menuItem.category || '',
+        price: Number(i.price) || 0,
+        stock: Number(i.stock) || menuItem.stock || 999,
+        image: i.image || menuItem.image || null,
+        qty: Number(i.qty) || 1,
+      }
+    })
     selectedKitchenItemMap.value = {}
     kitchenSentMap.value = normalizeKitchenSentMap(data.sent_to_kitchen)
     kitchenNote.value = data.remarks || ''
