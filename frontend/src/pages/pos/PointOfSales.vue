@@ -1,13 +1,13 @@
 <template>
-  <div class="space-y-4 px-4 py-4 max-w-[1600px] mx-auto">
+  <div class="flex flex-col px-4 py-4 max-w-[1600px] mx-auto" style="height:calc(100vh - 56px);min-height:600px;">
 
     <!-- Top bar info -->
-    <div>
+    <div class="flex-shrink-0 mb-1">
       <p class="text-xs text-gray-400">Quick billing workspace for restaurant, bar, mini-mart and in-house guest charges with direct room posting support.</p>
     </div>
 
     <!-- Terminal header -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="flex-shrink-0 bg-white rounded-xl border border-gray-200 px-6 py-3 flex items-center justify-between mb-3">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Current Terminal</h3>
         <p class="text-xs text-gray-400 mt-0.5">
@@ -41,10 +41,10 @@
     </div>
 
     <!-- Main body -->
-    <div style="display:grid;grid-template-columns:1fr 460px;gap:20px;align-items:start;">
+    <div class="flex-1 min-h-0" style="display:grid;grid-template-columns:1fr 460px;gap:20px;">
 
       <!-- Left: Menu & Order Builder -->
-      <div>
+      <div class="overflow-y-auto pr-1" style="min-height:0;">
         <h2 class="text-base font-bold text-gray-900 mb-3">Menu & Order Builder</h2>
 
         <!-- Search -->
@@ -96,7 +96,7 @@
       </div>
 
       <!-- Right: Current Sale -->
-      <div class="bg-white rounded-xl border border-gray-200 p-5 sticky top-4 overflow-hidden flex flex-col" style="max-height:calc(100vh - 32px);">
+      <div class="bg-white rounded-xl border border-gray-200 p-5 overflow-hidden flex flex-col" style="min-height:0;height:100%;">
         <h3 class="text-sm font-bold text-gray-900 mb-4">Current Sale</h3>
 
         <div class="flex-1 min-h-0 overflow-y-auto pr-1">
