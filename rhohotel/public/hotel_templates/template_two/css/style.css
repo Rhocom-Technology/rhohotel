@@ -215,8 +215,8 @@ img {
 }
 
 .web-navbar .navbar-brand img {
-  max-height: 48px;
-  width: auto;
+  max-height: 68px;
+  width: 90px;
   object-fit: contain;
 }
 

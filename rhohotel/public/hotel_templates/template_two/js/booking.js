@@ -1073,76 +1073,55 @@ function buildPaymentStep() {
 
 	container.innerHTML = `
 
-        <div class="row justify-content-center">
+    <div class="row justify-content-center">
 
-            <div class="col-lg-8">
+        <div class="col-lg-8">
 
-                <div class="card shadow-sm">
+            <div class="card shadow-sm">
 
-                    <div class="card-body">
+                <div class="card-body">
 
-                        <h2>
-                            Payment
-                        </h2>
+                    <h2>
+                        Complete Your Payment
+                    </h2>
 
-                        <p>
-                            Reservation created successfully.
-                        </p>
+                    <p class="text-muted">
+                        Great — your booking details are ready. To confirm and secure your reservation, please complete payment below.
+                    </p>
 
-                        <hr>
+                    <hr>
 
-                        <div class="mb-2">
+                    <!-- Reservation reference (hidden for now)
+                    <div class="mb-2">
+                        <strong>Reservation:</strong>
+                        ${summary.reservation_number}
+                    </div>
+                    -->
 
-                            <strong>
-                                Reservation:
-                            </strong>
+                    <div class="mb-2">
+                        <strong>Guest:</strong>
+                        ${summary.guest_name}
+                    </div>
 
-                            ${summary.reservation_number}
+                    <div class="mb-2">
+                        <strong>Rooms:</strong>
+                        ${summary.rooms_booked}
+                    </div>
 
-                        </div>
+                    <div class="mb-2">
+                        <strong>Total Amount:</strong>
+                        ₦${Number(summary.total_amount).toLocaleString()}
+                    </div>
 
-                        <div class="mb-2">
+                    <div class="mt-4">
 
-                            <strong>
-                                Guest:
-                            </strong>
-
-                            ${summary.guest_name}
-
-                        </div>
-
-                        <div class="mb-2">
-
-                            <strong>
-                                Rooms:
-                            </strong>
-
-                            ${summary.rooms_booked}
-
-                        </div>
-
-                        <div class="mb-2">
-
-                            <strong>
-                                Total:
-                            </strong>
-
-                            ₦${Number(summary.total_amount).toLocaleString()}
-
-                        </div>
-
-                        <div class="mt-4">
-
-
-                            <button
-                                type="button"
-                                id="payNowBtn"
-                                class="web-btn-solid"
-                            >
-                                Proceed To Payment
-                            </button>
-
-                        </div>
+                        <button
+                            type="button"
+                            id="payNowBtn"
+                            class="web-btn-solid"
+                        >
+                            Pay Now & Confirm Booking
+                        </button>
 
                     </div>
 
@@ -1152,7 +1131,9 @@ function buildPaymentStep() {
 
         </div>
 
-    `;
+    </div>
+
+`;
 
 	attachPaymentHandler();
 }
