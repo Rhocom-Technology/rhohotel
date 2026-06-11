@@ -599,15 +599,30 @@ def delete_task(task_name):
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
 
+# @frappe.whitelist()
+# def get_items():
+#     """
+#     Get list of stock items for inventory select dropdown
+#     """
+#     return frappe.get_all(
+#         "Item",
+#         filters={"disabled": 0, "is_stock_item": 1},
+#         fields=["name", "item_name"],
+#         order_by="item_name asc",
+#         limit_page_length=500
+#     )
+
+
 @frappe.whitelist()
 def get_items():
-    """
-    Get list of stock items for inventory select dropdown
-    """
     return frappe.get_all(
         "Item",
-        filters={"disabled": 0, "is_stock_item": 1},
-        fields=["name", "item_name"],
+        filters={
+            "disabled": 0,
+            "is_stock_item": 1,
+            "item_group": "Housekeeping Items"
+        },
+        fields=["name", "item_name", "stock_uom"],
         order_by="item_name asc",
         limit_page_length=500
     )

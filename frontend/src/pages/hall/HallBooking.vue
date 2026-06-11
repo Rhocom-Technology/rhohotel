@@ -42,80 +42,81 @@
 </div>
           <p class="text-xs text-gray-400 mt-0.5">{{ booking.customer_name }} • {{ booking.hall }} • {{ booking.event_type }}</p>
         </div>
-        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2">
+
+            <button
+              v-if="booking.docstatus === 0"
+              @click="router.push(`/hall/booking/${booking.name}/edit`)"
+              class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              Edit Booking
+            </button>
+
+            <!-- Submit button for drafts -->
+            <button v-if="booking.docstatus === 0" @click="submitBooking" :disabled="submitting"
+              class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
+              {{ submitting ? 'Submitting…' : 'Submit Booking' }}
+            </button>
 
           <button
-            v-if="booking.docstatus === 0"
-            @click="router.push(`/hall/booking/${booking.name}/edit`)"
-            class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-          >
-            Edit Booking
-          </button>
-
-          <!-- Submit button for drafts -->
-          <button v-if="booking.docstatus === 0" @click="submitBooking" :disabled="submitting"
-            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
-            {{ submitting ? 'Submitting…' : 'Submit Booking' }}
-          </button>
-
-         <button
-            v-if="booking.docstatus === 1 && !booking.sales_invoice"
-            @click="createInvoice"
-            :disabled="creatingInvoice"
-            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-          >
-            {{ creatingInvoice ? 'Creating…' : 'Create Invoice' }}
-          </button>
-
-          <!-- Receive Payment -->
-          <button v-if="booking.docstatus === 1 && booking.sales_invoice && booking.payment_status !== 'Paid'"
-            @click="showPaymentModal = true"
-            class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-            Receive Payment
-          </button>
-          
-          <!-- Adjust Booking -->
-          <button v-if="booking.docstatus === 1 && booking.sales_invoice"
-            @click="showAdjustModal = true"
-            class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-            Adjust Booking
-          </button>
-
-
-          <button
-              v-if="booking.docstatus === 1 && booking.event_status !== 'Completed'"
-              @click="markEventStatus('Completed')" :disabled="actionSaving"
-              class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+              v-if="booking.docstatus === 1 && !booking.sales_invoice && !isCompleted"
+              @click="createInvoice"
+              :disabled="creatingInvoice"
+              class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
-              Mark Complete
+              {{ creatingInvoice ? 'Creating…' : 'Create Invoice' }}
             </button>
 
-            <button
-              v-if="booking.docstatus === 1 && booking.event_status !== 'No Show'"
-              @click="markEventStatus('No Show')" :disabled="actionSaving"
-              class="px-4 py-2 text-xs font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors"
-            >
-              Mark No Show
+            <!-- Receive Payment -->
+            <button v-if="booking.docstatus === 1 && booking.sales_invoice && booking.payment_status !== 'Paid' && !isCompleted"
+              @click="showPaymentModal = true"
+              class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+              Receive Payment
             </button>
-
+            
+            <!-- Adjust Booking -->
             <button
-              v-if="booking.docstatus === 1"
-              @click="cancelBooking" :disabled="actionSaving"
-              class="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Cancel Booking
-            </button>
-
-            <button
-              v-if="booking.name"
-              @click="printBooking"
+              v-if="booking.docstatus === 1 && !isCompleted"
+              @click="showAdjustModal = true"
               class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Print
+              Adjust Booking
             </button>
 
+            <button
+                v-if="booking.docstatus === 1 && !isCompleted"
+                @click="markEventStatus('Completed')" :disabled="actionSaving"
+                class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Mark Complete
+              </button>
 
-        </div>
+              <button
+                v-if="booking.docstatus === 1 && booking.event_status !== 'No Show' && !isCompleted"
+                @click="markEventStatus('No Show')" :disabled="actionSaving"
+                class="px-4 py-2 text-xs font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors"
+              >
+                Mark No Show
+              </button>
+
+              <button
+              v-if="booking.docstatus === 1 && !isCompleted"
+                @click="cancelBooking" :disabled="actionSaving"
+                class="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Cancel Booking
+              </button>
+
+              <button
+                v-if="booking.name"
+                @click="printBooking"
+                class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Print
+              </button>
+
+
+          </div>
       </div>
 
       <!-- Status strip -->
@@ -876,6 +877,11 @@ function printBooking() {
   )
 }
 
+const isCompleted = computed(
+  () => booking.value.event_status === 'Completed'
+)
+
 
 onMounted(load)
 </script>
+

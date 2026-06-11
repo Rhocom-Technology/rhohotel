@@ -597,6 +597,40 @@ def update_customer_contact(customer, mobile_no=None, email_id=None):
     }
     
     
+# @frappe.whitelist()
+# def mark_event_status(booking_name, event_status):
+#     allowed = ["Scheduled", "Completed", "No Show"]
+
+#     if event_status not in allowed:
+#         frappe.throw("Invalid event status.")
+
+#     booking = frappe.get_doc("Hall Booking", booking_name)
+
+#     if booking.docstatus != 1:
+#         frappe.throw("Only submitted bookings can be updated.")
+
+#     if event_status == "Completed":
+#         if not booking.sales_invoice:
+#             frappe.throw("This booking cannot be marked as Completed because no invoice has been created.")
+
+#         if _payment_status(booking) != "Paid":
+#             frappe.throw("This booking cannot be marked as Completed until all invoices are fully paid.")
+
+#         booking.completed_by = frappe.session.user
+#         booking.completed_on = frappe.utils.now_datetime()
+
+#     booking.event_status = event_status
+#     booking.flags.ignore_validate_update_after_submit = True
+#     booking.save(ignore_permissions=True)
+
+#     return {
+#         "name": booking.name,
+#         "event_status": booking.event_status,
+#         "completed_by": booking.completed_by,
+#         "completed_on": booking.completed_on,
+#     }
+
+
 @frappe.whitelist()
 def mark_event_status(booking_name, event_status):
     allowed = ["Scheduled", "Completed", "No Show"]
@@ -610,11 +644,22 @@ def mark_event_status(booking_name, event_status):
         frappe.throw("Only submitted bookings can be updated.")
 
     if event_status == "Completed":
-        if not booking.sales_invoice:
-            frappe.throw("This booking cannot be marked as Completed because no invoice has been created.")
+        exempt_roles = ["Front Desk Manager", "Hotel Manager"]
+        user_roles = frappe.get_roles(frappe.session.user)
 
-        if _payment_status(booking) != "Paid":
-            frappe.throw("This booking cannot be marked as Completed until all invoices are fully paid.")
+        is_exempt_user = any(role in user_roles for role in exempt_roles)
+
+        # Only non-exempt users must have invoice fully paid
+        if not is_exempt_user:
+            if not booking.sales_invoice:
+                frappe.throw(
+                    "This booking cannot be marked as Completed because no invoice has been created."
+                )
+
+            if _payment_status(booking) != "Paid":
+                frappe.throw(
+                    "This booking cannot be marked as Completed until all invoices are fully paid."
+                )
 
         booking.completed_by = frappe.session.user
         booking.completed_on = frappe.utils.now_datetime()
@@ -629,7 +674,8 @@ def mark_event_status(booking_name, event_status):
         "completed_by": booking.completed_by,
         "completed_on": booking.completed_on,
     }
-
+    
+    
 @frappe.whitelist()
 def cancel_hall_booking(booking_name):
     booking = frappe.get_doc("Hall Booking", booking_name)
