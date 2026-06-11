@@ -27,19 +27,22 @@ def _normalize_sales_invoice_types(rows, key="invoice"):
         return rows
 
     try:
+        has_source_col = frappe.db.has_column("Sales Invoice", "custom_invoice_source")
+        source_select = ", COALESCE(NULLIF(si.custom_invoice_source, ''), 'Restaurant') AS invoice_source" if has_source_col else ", 'Restaurant' AS invoice_source"
         pos_links = frappe.db.sql(
-            """
-            SELECT name AS pos_invoice, consolidated_invoice
-            FROM `tabPOS Invoice`
-            WHERE consolidated_invoice IN %s
-              AND docstatus = 1
+            f"""
+            SELECT pi.name AS pos_invoice, pi.consolidated_invoice, si.name AS si_name{source_select}
+            FROM `tabPOS Invoice` pi
+            LEFT JOIN `tabSales Invoice` si ON si.name = pi.consolidated_invoice
+            WHERE pi.consolidated_invoice IN %s
+              AND pi.docstatus = 1
             """,
             (tuple(names),),
             as_dict=1,
         ) or []
         for row in pos_links:
             if row.get("consolidated_invoice"):
-                _set_invoice_type(rows, key, row.get("consolidated_invoice"), "Restaurant")
+                _set_invoice_type(rows, key, row.get("consolidated_invoice"), row.get("invoice_source") or "Restaurant")
     except Exception:
         pass
 
@@ -306,18 +309,23 @@ def get_checkin_detail(name):
 
     if si_names:
         try:
-            room_pi_rows = frappe.db.sql("""
-                SELECT name AS invoice, consolidated_invoice
-                FROM `tabPOS Invoice`
-                WHERE consolidated_invoice IN %s AND docstatus = 1
-            """, (tuple(si_names),), as_dict=1) or []
+            has_source_col = frappe.db.has_column("Sales Invoice", "custom_invoice_source")
+            source_select = ", COALESCE(NULLIF(si.custom_invoice_source, ''), 'Restaurant') AS invoice_source" if has_source_col else ", 'Restaurant' AS invoice_source"
+            room_pi_rows = frappe.db.sql(
+                f"""
+                SELECT pi.name AS invoice, pi.consolidated_invoice{source_select}
+                FROM `tabPOS Invoice` pi
+                LEFT JOIN `tabSales Invoice` si ON si.name = pi.consolidated_invoice
+                WHERE pi.consolidated_invoice IN %s AND pi.docstatus = 1
+                """,
+                (tuple(si_names),), as_dict=1) or []
 
             for row in room_pi_rows:
                 room_posting_pos_names.add(row["invoice"])
-                # Mark matching Sales Invoice as a restaurant/F&B charge
+                # Mark matching Sales Invoice with its real source (Laundry, Bar, etc.)
                 for inv in invoices:
                     if inv["invoice"] == row["consolidated_invoice"]:
-                        inv["invoice_type"] = "Restaurant"
+                        inv["invoice_type"] = row.get("invoice_source") or "Restaurant"
         except Exception:
             pass
 

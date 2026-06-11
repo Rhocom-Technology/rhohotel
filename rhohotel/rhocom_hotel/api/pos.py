@@ -518,7 +518,11 @@ def get_pos_menu_items(search=None, category=None):
     conditions = ["i.disabled = 0", "i.is_sales_item = 1"]
     args = []
 
-    pos_profile = _get_user_pos_profile()
+    # Prefer the profile from the user's currently open shift so that a user
+    # mapped to multiple terminals (e.g. Restaurant AND Laundry) gets the items
+    # for the terminal they actually opened, not whichever profile was last modified.
+    open_entry = _get_open_pos_entry(frappe.session.user)
+    pos_profile = (open_entry or {}).get("pos_profile") or _get_user_pos_profile()
     if not pos_profile:
         return []
 
@@ -590,7 +594,9 @@ def get_pos_menu_items(search=None, category=None):
 @frappe.whitelist()
 def get_pos_item_categories():
     """Return distinct item groups that have active sales items."""
-    pos_profile = _get_user_pos_profile()
+    # Same profile resolution as get_pos_menu_items: prefer the open shift profile.
+    open_entry = _get_open_pos_entry(frappe.session.user)
+    pos_profile = (open_entry or {}).get("pos_profile") or _get_user_pos_profile()
     if not pos_profile:
         return []
 
@@ -964,6 +970,22 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 # Post to Room
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _derive_invoice_source(pos_profile_name):
+    """Map a POS Profile name to a human-readable invoice source label."""
+    name = (pos_profile_name or "").lower()
+    if "laundry" in name:
+        return "Laundry"
+    if "bar" in name:
+        return "Bar"
+    if "mini" in name or "mart" in name:
+        return "Mini-Mart"
+    if "room service" in name or "room_service" in name:
+        return "Room Service"
+    if "spa" in name:
+        return "Spa"
+    return "Restaurant"
+
+
 @frappe.whitelist()
 def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None, existing_draft=None, complimentary_name=None):
     """Create a Sales Invoice linked to a Hotel Room Check In folio, then immediately
@@ -1057,7 +1079,9 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
         si.discount_amount = disc
         si.apply_discount_on = "Grand Total"
 
-    si.custom_invoice_source = "Restaurant"
+    _source = _derive_invoice_source(pos_profile)
+    if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+        si.custom_invoice_source = _source
 
     try:
         si.flags.ignore_permissions = True
@@ -1644,6 +1668,216 @@ def get_pos_invoice_stats():
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
+def get_closed_shifts(page_length=20, start=0, date_from=None, date_to=None,
+                      terminal=None, cashier=None, has_attachment=None):
+    """Return recent POS Closing Entries with optional filters and attachment info."""
+    conditions = ["ce.docstatus = 1"]
+    args = []
+
+    if date_from:
+        conditions.append("ce.posting_date >= %s")
+        args.append(cstr(date_from).strip())
+    if date_to:
+        conditions.append("ce.posting_date <= %s")
+        args.append(cstr(date_to).strip())
+    if terminal:
+        conditions.append("ce.pos_profile = %s")
+        args.append(cstr(terminal).strip())
+    if cashier:
+        conditions.append("ce.user = %s")
+        args.append(cstr(cashier).strip())
+    if has_attachment:
+        conditions.append("f.name IS NOT NULL")
+
+    where = " AND ".join(conditions)
+
+    rows = frappe.db.sql(f"""
+        SELECT
+            ce.name,
+            ce.posting_date,
+            ce.pos_profile,
+            ce.user,
+            ce.period_start_date,
+            ce.period_end_date,
+            ce.grand_total,
+            ce.net_total,
+            f.file_name,
+            f.file_url
+        FROM `tabPOS Closing Entry` ce
+        LEFT JOIN `tabFile` f
+            ON f.attached_to_doctype = 'POS Closing Entry'
+            AND f.attached_to_name = ce.name
+        WHERE {where}
+        ORDER BY ce.creation DESC
+        LIMIT %s OFFSET %s
+    """, tuple(args) + (int(page_length), int(start)), as_dict=1)
+
+    # Also return filter options (distinct terminals + cashiers) for dropdowns
+    terminals = frappe.db.sql("""
+        SELECT DISTINCT pos_profile FROM `tabPOS Closing Entry`
+        WHERE docstatus = 1 AND pos_profile IS NOT NULL
+        ORDER BY pos_profile
+    """, as_list=1)
+
+    cashiers = frappe.db.sql("""
+        SELECT DISTINCT user FROM `tabPOS Closing Entry`
+        WHERE docstatus = 1 AND user IS NOT NULL
+        ORDER BY user
+    """, as_list=1)
+
+    return {
+        "rows": rows,
+        "terminals": [r[0] for r in terminals],
+        "cashiers": [r[0] for r in cashiers],
+    }
+
+
+@frappe.whitelist()
+def get_closed_shift_detail(closing_entry):
+    """Return full detail for one POS Closing Entry (header + payments + attachment)."""
+    if not frappe.db.exists("POS Closing Entry", closing_entry):
+        frappe.throw(_("Closing Entry {0} not found").format(closing_entry))
+
+    ce = frappe.db.get_value(
+        "POS Closing Entry", closing_entry,
+        ["name", "posting_date", "pos_profile", "user",
+         "period_start_date", "period_end_date",
+         "grand_total", "net_total"],
+        as_dict=1,
+    )
+
+    payments = frappe.db.sql("""
+        SELECT mode_of_payment, opening_amount, expected_amount, closing_amount, difference
+        FROM `tabPOS Closing Entry Detail`
+        WHERE parent = %s
+        ORDER BY idx
+    """, closing_entry, as_dict=1)
+
+    bills = frappe.db.sql("""
+        SELECT COUNT(*) FROM `tabPOS Invoice`
+        WHERE pos_profile = %s AND owner = %s AND docstatus = 1
+          AND posting_date = %s
+    """, (ce.pos_profile, ce.user, ce.posting_date))[0][0] or 0
+
+    voids = frappe.db.sql("""
+        SELECT COUNT(*) FROM `tabPOS Invoice`
+        WHERE pos_profile = %s AND owner = %s AND docstatus = 2
+          AND posting_date = %s
+    """, (ce.pos_profile, ce.user, ce.posting_date))[0][0] or 0
+
+    attachment = frappe.db.get_value(
+        "File",
+        {"attached_to_doctype": "POS Closing Entry", "attached_to_name": closing_entry},
+        ["file_name", "file_url"],
+        as_dict=1,
+    )
+
+    return {
+        **ce,
+        "bills_processed": bills,
+        "voided_count": voids,
+        "payments": payments,
+        "attachment": attachment or None,
+    }
+
+
+@frappe.whitelist()
+def get_shift_difference_log(page_length=50, start=0, date_from=None, date_to=None,
+                              terminal=None, status=None):
+    """Return POS Closing Entries that have at least one payment difference != 0."""
+    conditions = ["ce.docstatus = 1"]
+    args = []
+
+    if date_from:
+        conditions.append("ce.posting_date >= %s")
+        args.append(cstr(date_from).strip())
+    if date_to:
+        conditions.append("ce.posting_date <= %s")
+        args.append(cstr(date_to).strip())
+    if terminal:
+        conditions.append("ce.pos_profile = %s")
+        args.append(cstr(terminal).strip())
+    if status:
+        conditions.append("COALESCE(ce.custom_difference_status, 'Pending Review') = %s")
+        args.append(cstr(status).strip())
+
+    where = " AND ".join(conditions)
+
+    rows = frappe.db.sql(f"""
+        SELECT
+            ce.name,
+            ce.posting_date,
+            ce.pos_profile,
+            ce.user,
+            ce.period_start_date,
+            ce.period_end_date,
+            COALESCE(ce.custom_difference_status, 'Pending Review') AS status,
+            ce.custom_difference_note AS note,
+            SUM(ABS(d.difference)) AS total_difference,
+            GROUP_CONCAT(
+                CONCAT(d.mode_of_payment, ': ', d.difference)
+                ORDER BY d.idx SEPARATOR ' | '
+            ) AS difference_breakdown
+        FROM `tabPOS Closing Entry` ce
+        INNER JOIN `tabPOS Closing Entry Detail` d ON d.parent = ce.name
+        WHERE {where}
+        GROUP BY ce.name
+        HAVING SUM(ABS(d.difference)) > 0
+        ORDER BY ce.creation DESC
+        LIMIT %s OFFSET %s
+    """, tuple(args) + (int(page_length), int(start)), as_dict=1)
+
+    terminals = frappe.db.sql("""
+        SELECT DISTINCT pos_profile FROM `tabPOS Closing Entry`
+        WHERE docstatus = 1 AND pos_profile IS NOT NULL
+        ORDER BY pos_profile
+    """, as_list=1)
+
+    # Summary counts
+    summary = frappe.db.sql("""
+        SELECT
+            COUNT(DISTINCT ce.name) AS total_cases,
+            SUM(ABS(d.difference)) AS total_amount,
+            COUNT(DISTINCT CASE WHEN COALESCE(ce.custom_difference_status,'Pending Review') IN ('Pending Review','Under Review') THEN ce.name END) AS pending_count,
+            COUNT(DISTINCT CASE WHEN COALESCE(ce.custom_difference_status,'') = 'Resolved' THEN ce.name END) AS resolved_count,
+            COUNT(DISTINCT CASE WHEN COALESCE(ce.custom_difference_status,'') = 'Escalated' THEN ce.name END) AS escalated_count
+        FROM `tabPOS Closing Entry` ce
+        INNER JOIN `tabPOS Closing Entry Detail` d ON d.parent = ce.name
+        WHERE ce.docstatus = 1
+        HAVING SUM(ABS(d.difference)) > 0
+    """, as_dict=1)
+
+    return {
+        "rows": rows,
+        "terminals": [r[0] for r in terminals],
+        "summary": summary[0] if summary else {},
+    }
+
+
+@frappe.whitelist()
+def update_shift_difference_status(closing_entry, status, note=None):
+    """Update the difference review status and optional note on a POS Closing Entry."""
+    allowed_roles = {"POS Manager", "Accounts Manager", "System Manager"}
+    if not (set(frappe.get_roles()) & allowed_roles):
+        frappe.throw(_("You do not have permission to update difference status."), frappe.PermissionError)
+
+    if not frappe.db.exists("POS Closing Entry", closing_entry):
+        frappe.throw(_("Closing Entry {0} not found").format(closing_entry))
+
+    valid_statuses = {"Pending Review", "Under Review", "Resolved", "Escalated"}
+    if cstr(status) not in valid_statuses:
+        frappe.throw(_("Invalid status: {0}").format(status))
+
+    updates = {"custom_difference_status": cstr(status)}
+    if note is not None:
+        updates["custom_difference_note"] = cstr(note)
+
+    frappe.db.set_value("POS Closing Entry", closing_entry, updates)
+    frappe.db.commit()
+    return {"success": True}
+
+
+@frappe.whitelist()
 def get_pos_dashboard_stats():
     """Return live stats for the POS Manager Dashboard."""
     today = nowdate()
@@ -1892,7 +2126,7 @@ def get_pos_shift_stats(pos_opening_entry=None):
 
 
 @frappe.whitelist()
-def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None):
+def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None, attachment_url=None):
     """Create a POS Closing Entry to close the active shift."""
     import json
     from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import (
@@ -1953,6 +2187,18 @@ def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None):
 
         closing.insert()
         closing.submit()
+
+        # Attach uploaded file to the closing entry if provided
+        if attachment_url:
+            frappe.db.set_value(
+                "File",
+                {"file_url": cstr(attachment_url)},
+                {
+                    "attached_to_doctype": "POS Closing Entry",
+                    "attached_to_name": closing.name,
+                    "attached_to_field": None,
+                },
+            )
 
         frappe.db.commit()
 
@@ -2348,7 +2594,8 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
         si.company = company
         si.posting_date = nowdate()
         si.custom_hotel_room_check_in = check_in
-        si.custom_invoice_source = "Restaurant"
+        if frappe.db.has_column("Sales Invoice", "custom_invoice_source"):
+            si.custom_invoice_source = _derive_invoice_source(pos_profile)
         if kitchen_note:
             si.remarks = kitchen_note
 

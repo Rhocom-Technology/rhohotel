@@ -118,9 +118,22 @@
         </div>
 
         <!-- Attachment -->
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
-          Add Attachment
-        </button>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button @click="$refs.fileInput.click()"
+            class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+            Add Attachment
+          </button>
+          <input ref="fileInput" type="file" class="hidden" @change="onFileSelected" />
+          <div v-if="attachedFile" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+            <svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span class="max-w-xs truncate">{{ attachedFile.name }}</span>
+            <button @click="removeAttachment" class="ml-1 text-blue-400 hover:text-red-500 transition-colors" title="Remove">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <p v-if="attachUploadError" class="text-xs text-red-500">{{ attachUploadError }}</p>
+        </div>
       </div>
 
       <!-- Right: Closing Summary -->
@@ -227,6 +240,38 @@ const closing = ref(false)
 const closeError = ref('')
 const closeSuccess = ref('')
 const now = ref(new Date())
+const attachedFile = ref(null)
+const attachUploadError = ref('')
+
+function onFileSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  attachedFile.value = file
+  attachUploadError.value = ''
+  // reset so the same file can be re-selected after removal
+  event.target.value = ''
+}
+
+function removeAttachment() {
+  attachedFile.value = null
+  attachUploadError.value = ''
+}
+
+async function uploadAttachment() {
+  if (!attachedFile.value) return null
+  const formData = new FormData()
+  formData.append('file', attachedFile.value, attachedFile.value.name)
+  formData.append('is_private', '0')
+  formData.append('folder', 'Home/Attachments')
+  const resp = await fetch('/api/method/upload_file', {
+    method: 'POST',
+    body: formData,
+    credentials: 'same-origin',
+  })
+  if (!resp.ok) throw new Error(`Upload failed (${resp.status})`)
+  const json = await resp.json()
+  return json?.message?.file_url || null
+}
 
 let timer
 onMounted(() => { timer = setInterval(() => { now.value = new Date() }, 1000) })
@@ -350,7 +395,7 @@ function printShiftReport() {
   )
 }
 
-function doCloseShift() {
+async function doCloseShift() {
   if (!shiftStats.value.pos_opening_entry) {
     closeSuccess.value = 'No open POS shift found.'
     showConfirm.value = false
@@ -358,6 +403,20 @@ function doCloseShift() {
     return
   }
   closing.value = true
+  attachUploadError.value = ''
+
+  let attachmentUrl = null
+  if (attachedFile.value) {
+    try {
+      attachmentUrl = await uploadAttachment()
+    } catch (err) {
+      attachUploadError.value = `Attachment upload failed: ${err.message}`
+      closing.value = false
+      showConfirm.value = false
+      return
+    }
+  }
+
   closeResource.submit({
     pos_opening_entry: shiftStats.value.pos_opening_entry,
     tender_rows: JSON.stringify(tenderRows.value.map(r => ({
@@ -369,6 +428,7 @@ function doCloseShift() {
       counted: parseFloat(r.counted) || 0,
     }))),
     closing_note: closingNote.value || null,
+    attachment_url: attachmentUrl || null,
   })
 }
 </script>

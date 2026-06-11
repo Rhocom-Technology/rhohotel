@@ -34,7 +34,7 @@
           class="btn-hover px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
           Open Tables
         </button>
-        <button @click="clearCart" class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <button @click="newSale" class="btn-hover px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
           New Sale
         </button>
       </div>
@@ -635,8 +635,11 @@ watch(() => terminalInfo.value.has_open_shift, (isOpen) => {
   if (isOpen) {
     localShiftOpened.value = true
     showOpenShiftModal.value = false
+    menuResource.reload()
+    categoriesResource.reload()
+    kitchenGroupsResource.reload()
   }
-})
+}, { immediate: true })
 
 const openShiftResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.create_pos_opening_entry',
@@ -647,6 +650,9 @@ const openShiftResource = createResource({
     showOpenShiftModal.value = false
     shiftInfoResource.reload()
     openingProfilesResource.reload()
+    menuResource.reload()
+    categoriesResource.reload()
+    kitchenGroupsResource.reload()
     chargeSuccess.value = 'POS shift opened successfully'
     setTimeout(() => { chargeSuccess.value = '' }, 3000)
   },
@@ -674,17 +680,17 @@ function goToShiftClose() {
 const menuResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_menu_items',
   initialData: null,
-  auto: true,
+  auto: false,
 })
 
 const categoriesResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.pos.get_pos_item_categories',
-  auto: true,
+  auto: false,
 })
 
 const kitchenGroupsResource = createResource({
   url: 'rhohotel.restaurant.api.kitchen.get_kitchen_item_groups',
-  auto: true,
+  auto: false,
 })
 
 // ── API: Occupied Rooms (for room-number dropdown) ─────────────────
@@ -1064,6 +1070,7 @@ const chargeResource = createResource({
     lastInvoiceName.value = data.pos_invoice
     playSuccessSound()
     clearCart()
+    clearBillTo()
     charging.value = false
     menuResource.reload()
     openTablesGuardResource.reload()
@@ -1088,6 +1095,7 @@ const holdSaleResource = createResource({
     playSuccessSound()
     holding.value = false
     clearCart()
+    clearBillTo()
     menuResource.reload()
     openTablesGuardResource.reload()
     draftOrdersKey.value++
@@ -1125,6 +1133,7 @@ const postToRoomDirectResource = createResource({
     chargeSuccess.value = 'Bill posted to room folio successfully'
     playSuccessSound()
     clearCart()
+    clearBillTo()
     charging.value = false
     menuResource.reload()
     openTablesGuardResource.reload()
@@ -1475,17 +1484,17 @@ function clearCart() {
   cart.value = []
   selectedKitchenItemMap.value = {}
   kitchenSentMap.value = {}
-  selectedBillTo.value = null
-  roomNumber.value = ''
   kitchenNote.value = ''
-  billToSearch.value = ''
   discountInput.value = ''
   selectedComplimentaryName.value = ''
-  redeemableComplimentaries.value = []
-  unusedComplimentaries.value = []
   showDiscountPanel.value = false
   resumedDraftInvoice.value = null
   try { localStorage.removeItem(POS_STATE_KEY) } catch (_) {}
+}
+
+function newSale() {
+  clearCart()
+  clearBillTo()
 }
 
 function onHoldSale() {
@@ -1607,6 +1616,7 @@ function onChargeNow() {
 
 function onSplitConfirmed(data) {
   clearCart()
+  clearBillTo()
   menuResource.reload()
   openTablesGuardResource.reload()
   chargeSuccess.value = 'Split bill processed successfully'
@@ -1628,6 +1638,7 @@ function onPostConfirmed(data) {
   chargeSuccess.value = 'Bill posted to room folio successfully'
   playSuccessSound()
   clearCart()
+  clearBillTo()
   menuResource.reload()
   openTablesGuardResource.reload()
   printReceiptFromResponse(data)
