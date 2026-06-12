@@ -258,9 +258,9 @@ scheduler_events = {
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"rhohotel.auth.validate"
-# ]
+on_session_creation = [
+	"rhohotel.auth.validate_shift_login"
+]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

@@ -28,6 +28,10 @@
   "consumable_warehouse_section",
   "consumable_warehouse",
 
+  "sb_shift_login_restriction",
+  "enable_shift_login_restriction",
+  "shift_login_grace_minutes",
+
   "reports_print_formats_section",
 "daily_occupancy_print_format",
 "guest_stay_history_print_format",
@@ -159,6 +163,26 @@
 
   
   {
+   "fieldname": "sb_shift_login_restriction",
+   "fieldtype": "Section Break",
+   "label": "Staff Login Restrictions"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, employees on the roster (with an active Shift Assignment) can only log in during their assigned shift hours. Employees not on the roster are unaffected.",
+   "fieldname": "enable_shift_login_restriction",
+   "fieldtype": "Check",
+   "label": "Enable Shift Login Restriction"
+  },
+  {
+   "default": "30",
+   "depends_on": "enable_shift_login_restriction",
+   "description": "Number of minutes before shift start time that an employee is allowed to log in.",
+   "fieldname": "shift_login_grace_minutes",
+   "fieldtype": "Int",
+   "label": "Login Grace Period (Minutes)"
+  },
+  {
   "fieldname": "reports_print_formats_section",
   "fieldtype": "Section Break",
   "label": "Reports / Print Formats"
@@ -220,7 +244,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2025-12-17 15:15:58.227245",
+ "modified": "2026-06-12 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rhocom Hotel",
  "name": "Hotel Settings",
