@@ -118,32 +118,43 @@ def get_customer_overpayment_detail(customer):
         ORDER BY due_date ASC, posting_date ASC
     """, (customer,), as_dict=True)
 
-    # Journal Entries from bill transfers — these appear in PLE as debits
-    # for the receiving (corporate) customer but have no Sales Invoice.
+    # Journal Entries from bill transfers — net outstanding = JE debit minus any
+    # PE credits already applied (which land under the PE's voucher_no with
+    # against_voucher_no pointing back to the JE).
     je_rows = frappe.db.sql("""
         SELECT
-            ple.voucher_no          AS name,
+            jd.voucher_no          AS name,
             je.posting_date,
-            je.title                AS description,
-            SUM(ple.amount)         AS outstanding_amount,
-            -- Receivable account: take from the JE line that debits this customer
-            jea.account             AS debit_to
-        FROM `tabPayment Ledger Entry` ple
-        JOIN `tabJournal Entry` je ON je.name = ple.voucher_no
+            je.title               AS description,
+            (jd.debit - COALESCE(pc.credits, 0)) AS outstanding_amount,
+            jea.account            AS debit_to
+        FROM (
+            SELECT voucher_no, SUM(amount) AS debit
+            FROM `tabPayment Ledger Entry`
+            WHERE party_type = 'Customer' AND party = %(customer)s
+              AND voucher_type = 'Journal Entry'
+              AND delinked = 0 AND docstatus = 1
+            GROUP BY voucher_no
+            HAVING SUM(amount) > 0
+        ) jd
+        LEFT JOIN (
+            SELECT against_voucher_no, ABS(SUM(amount)) AS credits
+            FROM `tabPayment Ledger Entry`
+            WHERE party_type = 'Customer' AND party = %(customer)s
+              AND voucher_type = 'Payment Entry'
+              AND against_voucher_type = 'Journal Entry'
+              AND delinked = 0 AND docstatus = 1
+            GROUP BY against_voucher_no
+        ) pc ON pc.against_voucher_no = jd.voucher_no
+        JOIN `tabJournal Entry` je ON je.name = jd.voucher_no
         JOIN `tabJournal Entry Account` jea
-            ON jea.parent = ple.voucher_no
+            ON jea.parent = jd.voucher_no
            AND jea.party_type = 'Customer'
-           AND jea.party = %s
+           AND jea.party = %(customer)s
            AND jea.debit_in_account_currency > 0
-        WHERE ple.docstatus = 1
-          AND ple.party_type = 'Customer'
-          AND ple.party = %s
-          AND ple.voucher_type = 'Journal Entry'
-          AND ple.delinked = 0
-        GROUP BY ple.voucher_no
-        HAVING SUM(ple.amount) > 0.5
+        WHERE (jd.debit - COALESCE(pc.credits, 0)) > 0.5
         ORDER BY je.posting_date ASC
-    """, (customer, customer), as_dict=True)
+    """, {"customer": customer}, as_dict=True)
 
     invoices = []
     for inv in si_rows:
@@ -253,30 +264,36 @@ def apply_overpayment_to_invoice(payment_entry, invoice_name, amount):
         against_voucher_type = "Sales Invoice"
 
     else:  # Journal Entry (bill transfer)
-        # Verify customer matches via PLE
-        ple_customer = frappe.db.sql("""
-            SELECT party FROM `tabPayment Ledger Entry`
-            WHERE voucher_no = %s AND party_type = 'Customer'
-              AND delinked = 0 AND docstatus = 1
-            LIMIT 1
-        """, (invoice_name,), as_dict=True)
-        if not ple_customer:
-            frappe.throw(_("No receivable ledger entry found for Journal Entry {0}.").format(invoice_name))
-        je_customer = ple_customer[0].party
-        if je_customer != pe.party:
-            frappe.throw(
-                _("Payment ({0}) and bill transfer ({1}) belong to different customers.").format(
-                    pe.party, je_customer
-                )
-            )
-        # Net outstanding from PLE
-        net_outstanding = frappe.db.sql("""
-            SELECT SUM(amount) AS net
-            FROM `tabPayment Ledger Entry`
-            WHERE voucher_no = %s AND party_type = 'Customer'
-              AND party = %s AND delinked = 0 AND docstatus = 1
-        """, (invoice_name, pe.party), as_dict=True)
-        voucher_outstanding = flt((net_outstanding[0].net) if net_outstanding else 0)
+        # Get net outstanding for pe.party against this JE directly —
+        # avoids LIMIT 1 / wrong-party issue that causes false customer mismatch.
+        # Net = JE debit entries for this party MINUS PE credits already applied.
+        net_result = frappe.db.sql("""
+            SELECT
+                COALESCE(jd.debit, 0) - COALESCE(pc.credits, 0) AS net
+            FROM (
+                SELECT SUM(amount) AS debit
+                FROM `tabPayment Ledger Entry`
+                WHERE voucher_no = %(je)s
+                  AND party_type = 'Customer' AND party = %(party)s
+                  AND voucher_type = 'Journal Entry'
+                  AND delinked = 0 AND docstatus = 1
+            ) jd
+            CROSS JOIN (
+                SELECT COALESCE(ABS(SUM(amount)), 0) AS credits
+                FROM `tabPayment Ledger Entry`
+                WHERE against_voucher_no = %(je)s
+                  AND party_type = 'Customer' AND party = %(party)s
+                  AND voucher_type = 'Payment Entry'
+                  AND against_voucher_type = 'Journal Entry'
+                  AND delinked = 0 AND docstatus = 1
+            ) pc
+        """, {"je": invoice_name, "party": pe.party}, as_dict=True)
+        voucher_outstanding = flt(net_result[0].net if net_result and net_result[0].net else 0)
+        if voucher_outstanding <= 0:
+            frappe.throw(_(
+                "{0} has no outstanding balance on bill transfer {1}. "
+                "It may already be fully settled."
+            ).format(pe.party, invoice_name))
         if voucher_outstanding < amount - 0.001:
             frappe.throw(
                 _("Bill transfer {0} only has {1} outstanding — cannot apply {2}.").format(
@@ -333,17 +350,28 @@ def apply_overpayment_to_invoice(payment_entry, invoice_name, amount):
     # Reload PE to get updated unallocated_amount
     pe.reload()
 
-    # For SI we can reload the doc; for JE recalculate from PLE
+    # For SI we can reload the doc; for JE recalculate net from PLE
+    # (JE debit - PE credits applied via against_voucher_no).
     if is_sales_invoice:
         inv.reload()
         remaining_outstanding = round(flt(inv.outstanding_amount), 2)
     else:
         net = frappe.db.sql("""
-            SELECT SUM(amount) AS net FROM `tabPayment Ledger Entry`
-            WHERE voucher_no = %s AND party_type = 'Customer'
-              AND party = %s AND delinked = 0 AND docstatus = 1
-        """, (invoice_name, pe.party), as_dict=True)
-        remaining_outstanding = round(flt((net[0].net) if net else 0), 2)
+            SELECT
+                COALESCE(jd.debit, 0) - COALESCE(pc.credits, 0) AS net
+            FROM (
+                SELECT SUM(amount) AS debit FROM `tabPayment Ledger Entry`
+                WHERE voucher_no = %(je)s AND party_type='Customer' AND party=%(party)s
+                  AND voucher_type='Journal Entry' AND delinked=0 AND docstatus=1
+            ) jd
+            CROSS JOIN (
+                SELECT COALESCE(ABS(SUM(amount)), 0) AS credits FROM `tabPayment Ledger Entry`
+                WHERE against_voucher_no=%(je)s AND party_type='Customer' AND party=%(party)s
+                  AND voucher_type='Payment Entry' AND against_voucher_type='Journal Entry'
+                  AND delinked=0 AND docstatus=1
+            ) pc
+        """, {"je": invoice_name, "party": pe.party}, as_dict=True)
+        remaining_outstanding = round(flt(net[0].net if net and net[0].net else 0), 2)
 
     return {
         "success":             True,

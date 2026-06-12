@@ -119,34 +119,14 @@ def _build_stats(from_dt, to_dt, today, corp):
         ind_collected   = total_collected
         ind_outstanding = total_outstanding
 
-    # ── Overdue vs current — use SI.outstanding_amount directly.
-    # PLE per-voucher cannot be used here: payment credits land under the PE's
-    # own voucher_no, so SI rows in PLE always show the full original debit even
-    # after payments.  SI.outstanding_amount is kept accurate by ERPNext.
-    # Outstanding credit notes reduce overdue for the same customer only; one
-    # customer's credit should not offset another customer's overdue balance.
+    # ── Overdue — use the stored status field so the value matches the
+    # Sales Invoice list "Overdue" filter / report view total exactly.
     overdue_row = frappe.db.sql("""
-        SELECT
-            COALESCE(SUM(GREATEST(open_rows.overdue_amount + COALESCE(credit_rows.credit_amount, 0), 0)), 0) AS overdue
-        FROM (
-            SELECT customer, SUM(outstanding_amount) AS overdue_amount
-            FROM `tabSales Invoice`
-            WHERE docstatus = 1
-              AND is_return = 0
-              AND outstanding_amount > 0
-              AND due_date < %(today)s
-            GROUP BY customer
-        ) open_rows
-        LEFT JOIN (
-            SELECT customer, SUM(outstanding_amount) AS credit_amount
-            FROM `tabSales Invoice`
-            WHERE docstatus = 1
-              AND is_return = 1
-              AND outstanding_amount < 0
-              AND due_date < %(today)s
-            GROUP BY customer
-        ) credit_rows ON credit_rows.customer = open_rows.customer
-    """, {"today": str(today)}, as_dict=True)[0]
+        SELECT COALESCE(SUM(outstanding_amount), 0) AS overdue
+        FROM `tabSales Invoice`
+        WHERE docstatus = 1
+          AND status = 'Overdue'
+    """, as_dict=True)[0]
 
     total_overdue = flt(overdue_row.overdue)
     total_current = max(0, total_outstanding - total_overdue)
@@ -169,7 +149,7 @@ def _build_stats(from_dt, to_dt, today, corp):
         FROM `tabSales Invoice`
         WHERE docstatus = 1
           AND is_return = 0
-                    AND grand_total > 0
+          AND grand_total > 0
           AND posting_date BETWEEN %(from_dt)s AND %(to_dt)s
     """, {"from_dt": str(from_dt), "to_dt": str(to_dt)}, as_dict=True)[0]
 

@@ -36,7 +36,7 @@ class FakeDB:
             return [types.SimpleNamespace(invoiced=0, collected=0, outstanding=0)]
         if "FROM `tabPayment Ledger Entry`" in query:
             return [types.SimpleNamespace(total_invoiced=1000, total_collected=250, total_outstanding=750)]
-        if "open_rows.overdue_amount" in query:
+        if "status = 'Overdue'" in query:
             return [types.SimpleNamespace(overdue=500)]
         if "ABS(SUM(outstanding_amount)) AS amount" in query:
             return [types.SimpleNamespace(cnt=0, amount=0)]
@@ -52,7 +52,7 @@ class FakeDB:
 
 
 class TestBillingDashboardStats(unittest.TestCase):
-    def test_overdue_is_netted_per_customer_with_credit_notes(self):
+    def test_overdue_matches_sales_invoice_overdue_filter(self):
         fake_db = FakeDB()
 
         with patch.object(bd.frappe, "db", fake_db):
@@ -63,10 +63,10 @@ class TestBillingDashboardStats(unittest.TestCase):
                 [],
             )
 
-        overdue_query = next(query for query, _values, _as_dict in fake_db.queries if "open_rows.overdue_amount" in query)
+        overdue_query = next(query for query, _values, _as_dict in fake_db.queries if "status = 'Overdue'" in query)
 
-        self.assertIn("GREATEST(open_rows.overdue_amount + COALESCE(credit_rows.credit_amount, 0), 0)", overdue_query)
-        self.assertIn("is_return = 1", overdue_query)
+        self.assertIn("SUM(outstanding_amount)", overdue_query)
+        self.assertIn("status = 'Overdue'", overdue_query)
         self.assertEqual(stats["total_overdue"], 500)
         self.assertEqual(stats["total_current"], 250)
 
