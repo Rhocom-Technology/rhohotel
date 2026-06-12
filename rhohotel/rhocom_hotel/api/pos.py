@@ -67,18 +67,14 @@ def _get_allowed_item_groups_for_profile(pos_profile):
 def _get_user_pos_profiles(user=None):
     """Return active POS Profiles accessible to the given user.
 
-    Priority:
-    1. Profiles that explicitly list this user in their Users table.
-    2. Profiles whose Users table is empty (available to everyone).
-
-    This mirrors ERPNext behaviour where an unmapped profile is global.
+    Only profiles that explicitly list the user are returned. A cashier must be
+    intentionally mapped to one or more POS Profiles before opening a shift.
     """
     user = user or frappe.session.user
     if not user or user == "Guest":
         return []
 
-    # Explicitly mapped profiles (case-insensitive user match)
-    explicit = frappe.db.sql(
+    rows = frappe.db.sql(
         """
         SELECT DISTINCT p.name
         FROM `tabPOS Profile` p
@@ -93,26 +89,7 @@ def _get_user_pos_profiles(user=None):
         (user, user),
         as_dict=1,
     )
-    explicit_names = [r.get("name") for r in explicit if r.get("name")]
-
-    if explicit_names:
-        return explicit_names
-
-    # Fallback: profiles with no user restrictions
-    global_profiles = frappe.db.sql(
-        """
-        SELECT p.name
-        FROM `tabPOS Profile` p
-        WHERE p.disabled = 0
-          AND NOT EXISTS (
-              SELECT 1 FROM `tabPOS Profile User` pu2
-              WHERE pu2.parent = p.name
-          )
-        ORDER BY p.modified DESC
-        """,
-        as_dict=1,
-    )
-    return [r.get("name") for r in global_profiles if r.get("name")]
+    return [r.get("name") for r in rows if r.get("name")]
 
 
 def _get_open_pos_entry(user, pos_profile=None):
@@ -443,7 +420,7 @@ def get_pos_opening_profiles():
         "open_pos_opening_entry": open_entry.get("name") if open_entry else None,
         "open_pos_profile": open_entry.get("pos_profile") if open_entry else None,
         "profiles": profile_rows,
-        "default_profile": profiles[0] if profiles else None,
+        "default_profile": None,
     }
 
 
@@ -467,7 +444,7 @@ def create_pos_opening_entry(pos_profile=None, opening_cash=0):
         frappe.throw(_("No POS Profile is mapped to your user."))
 
     if not pos_profile:
-        pos_profile = mapped_profiles[0]
+        frappe.throw(_("Select a POS Profile before opening a shift."))
 
     if pos_profile not in mapped_profiles:
         frappe.throw(_("POS Profile {0} is not mapped to your user.").format(pos_profile))

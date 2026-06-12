@@ -28,7 +28,7 @@
 
         <div v-if="group.children && openGroups.includes(group.label)" class="mt-1 space-y-0.5">
           <router-link
-            v-for="child in group.children"
+            v-for="child in visibleChildren(group.children)"
             :key="child.to"
             :to="child.to"
             class="flex items-center px-3 py-2 ml-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
@@ -53,12 +53,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import {
   ChevronDown, LayoutGrid, Sparkles, Wrench,
   CreditCard, BarChart2, ShoppingCart, UtensilsCrossed,
   Gift, Settings
 } from 'lucide-vue-next'
+import { useSessionStore } from '@/stores/session'
+import { ROLE_GROUPS } from '@/lib/permissions'
+
+const session = useSessionStore()
 
 const openGroups = ref(['Front Desk'])
 
@@ -71,10 +75,11 @@ function toggleGroup(label) {
   }
 }
 
-const navGroups = [
+const allNavGroups = [
   {
     label: 'Front Desk',
     icon: LayoutGrid,
+    allowedRoles: ROLE_GROUPS.frontDesk,
     children: [
       { label: 'Room View', to: '/room-view' },
       { label: 'Available Rooms', to: '/available-rooms' },
@@ -94,6 +99,7 @@ const navGroups = [
   {
     label: 'Rooms',
     icon: LayoutGrid,
+    allowedRoles: ROLE_GROUPS.rooms,
     children: [
       { label: 'Room List', to: '/rooms' },
     ],
@@ -101,6 +107,7 @@ const navGroups = [
   {
     label: 'Housekeeping',
     icon: Sparkles,
+    allowedRoles: ROLE_GROUPS.housekeeping,
     children: [
       { label: 'Dashboard', to: '/housekeeping/dashboard' },
       { label: 'Task List', to: '/housekeeping' },
@@ -110,6 +117,7 @@ const navGroups = [
   {
     label: 'Maintenance',
     icon: Wrench,
+    allowedRoles: ROLE_GROUPS.maintenance,
     children: [
       { label: 'Maintenance List', to: '/maintenance/list' },
       { label: 'Dashboard', to: '/maintenance/dashboard' },
@@ -120,6 +128,7 @@ const navGroups = [
   {
     label: 'Billing',
     icon: CreditCard,
+    allowedRoles: ROLE_GROUPS.billing,
     children: [
       { label: 'Billing Dashboard', to: '/billing' },
       { label: 'Corporate Billing', to: '/billing/corporate' },
@@ -129,6 +138,7 @@ const navGroups = [
   {
     label: 'Reports',
     icon: BarChart2,
+    allowedRoles: ROLE_GROUPS.reports,
     children: [
       { label: 'Report List',                    to: '/reports' },
       { label: 'Daily Occupancy Report',         to: '/reports/daily-occupancy-report' },
@@ -144,9 +154,10 @@ const navGroups = [
   {
     label: 'Point of Sales',
     icon: ShoppingCart,
+    allowedRoles: ROLE_GROUPS.pos,
     children: [
       { label: 'POS Dashboard', to: '/pos' },
-      { label: 'Manager Dashboard', to: '/pos/manager-dashboard' },   
+      { label: 'Manager Dashboard', to: '/pos/manager-dashboard', allowedRoles: ['Front Desk Manager', 'Hotel Manager'] },   
       { label: 'POS Invoice List', to: '/pos/invoices' },
       { label: 'Shift Difference Log', to: '/pos/shift-difference-log' }, 
     ],
@@ -154,11 +165,13 @@ const navGroups = [
   {
     label: 'Staff Roaster',
     icon: ShoppingCart,
+    allowedRoles: ROLE_GROUPS.staffRoaster,
     to: '/pos/staff-roaster',
   },
   {
     label: 'Kitchen Terminal',
     icon: UtensilsCrossed,
+    allowedRoles: ROLE_GROUPS.kitchen,
     children: [
       { label: 'Kitchen Dashboard', to: '/kitchen' },
     ],
@@ -166,6 +179,7 @@ const navGroups = [
   {
     label: 'Complimentary Mgmt',
     icon: Gift,
+    allowedRoles: ROLE_GROUPS.complimentary,
     children: [
        { label: 'Dashboard',             to: '/complimentary' },
         { label: 'Complimentary List',    to: '/complimentary/list' },
@@ -176,6 +190,7 @@ const navGroups = [
   {
     label: 'Asset Management',
     icon: Settings,
+    allowedRoles: ROLE_GROUPS.assetManagement,
     children: [
      { label: 'Dashboard',  to: '/assets-mgmt' },
   { label: 'Asset List', to: '/assets-mgmt/list' },
@@ -183,4 +198,12 @@ const navGroups = [
     ],
   },
 ]
+
+const navGroups = computed(() =>
+  allNavGroups.filter((group) => session.hasAnyRole(group.allowedRoles))
+)
+
+function visibleChildren(children) {
+  return children.filter((child) => !child.allowedRoles || session.hasAnyRole(child.allowedRoles))
+}
 </script>

@@ -1,6 +1,7 @@
 import { createWebHistory } from 'vue-router'
 import { createRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
+import { getRequiredRoles, getFirstAllowedRoute } from '@/lib/permissions'
 
 const router = createRouter({
   history: createWebHistory('/frontdesk/'),
@@ -123,7 +124,18 @@ router.beforeEach(async (to) => {
   }
 
   if (to.name === 'Login' && session.isLoggedIn) {
-    return { name: 'RoomView' }
+    const landing = getFirstAllowedRoute(session.roles)
+    return { path: landing }
+  }
+
+  // Role-based authorization check
+  if (session.isLoggedIn && to.name !== 'Login') {
+    const requiredRoles = getRequiredRoles(to.path)
+    if (requiredRoles && !session.hasAnyRole(requiredRoles)) {
+      const fallback = getFirstAllowedRoute(session.roles)
+      if (fallback === to.path) return true
+      return fallback === '/login' ? { name: 'Login' } : { path: fallback }
+    }
   }
 
   return true

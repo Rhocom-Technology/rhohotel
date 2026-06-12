@@ -69,6 +69,8 @@ if not hasattr(frappe_stub, "new_doc"):
 	frappe_stub.new_doc = lambda *args, **kwargs: None
 if not hasattr(frappe_stub, "get_meta"):
 	frappe_stub.get_meta = lambda *args, **kwargs: types.SimpleNamespace(fields=[])
+if not hasattr(frappe_stub, "get_all"):
+	frappe_stub.get_all = lambda *args, **kwargs: []
 
 utils_stub = sys.modules.get("frappe.utils")
 if utils_stub is None:
@@ -234,14 +236,12 @@ class TestPOSProfileAndShiftAPI(unittest.TestCase):
 		with patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql):
 			self.assertEqual(pos_api._get_user_pos_profiles("cashier@example.com"), ["Restaurant POS", "Bar POS"])
 
-	def test_user_pos_profiles_uses_global_profiles_when_user_has_no_mapping(self):
+	def test_user_pos_profiles_returns_empty_when_user_has_no_mapping(self):
 		def fake_sql(query, params=None, as_dict=False):
-			if "INNER JOIN `tabPOS Profile User`" in query:
-				return []
-			return [DotDict(name="Global POS")]
+			return []
 
 		with patch.object(pos_api.frappe.db, "sql", side_effect=fake_sql):
-			self.assertEqual(pos_api._get_user_pos_profiles("cashier@example.com"), ["Global POS"])
+			self.assertEqual(pos_api._get_user_pos_profiles("cashier@example.com"), [])
 
 	def test_open_pos_entry_prefers_requested_profile_then_falls_back_to_any_open_shift(self):
 		calls = []
@@ -272,8 +272,18 @@ class TestPOSProfileAndShiftAPI(unittest.TestCase):
 
 		self.assertTrue(result["has_open_shift"])
 		self.assertEqual(result["open_pos_opening_entry"], "OPEN-1")
-		self.assertEqual(result["default_profile"], "Restaurant POS")
+		self.assertIsNone(result["default_profile"])
 		self.assertEqual(result["profiles"][0]["payments"], ["Cash", "Card"])
+
+	def test_create_pos_opening_entry_requires_explicit_profile_selection(self):
+		with (
+			patch.object(pos_api.frappe, "session", types.SimpleNamespace(user="cashier@example.com")),
+			patch.object(pos_api, "_get_open_pos_entry", return_value=None),
+			patch.object(pos_api, "_get_user_pos_profiles", return_value=["Restaurant POS"]),
+			patch.object(pos_api.frappe, "throw", side_effect=RuntimeError),
+		):
+			with self.assertRaises(RuntimeError):
+				pos_api.create_pos_opening_entry(pos_profile=None, opening_cash=1000)
 
 	def test_get_pos_shift_stats_returns_empty_state_when_no_open_shift(self):
 		with (
@@ -804,17 +814,28 @@ class TestPOSSplitInvoice(unittest.TestCase):
 			{"paymentType": "Post to Room", "amount": 800, "checkIn": "CHK-1"},
 		]
 
+		def fake_exists(doctype, name=None):
+			return doctype == "Hotel Room Check In" and name == "CHK-1"
+
+		def fake_get_doc(doctype, name=None):
+			if doctype == "Hotel Room Check In" and name == "CHK-1":
+				return DotDict(status="Checked In", guest="HG-1", room_number="101")
+			if doctype == "Hotel Guest" and name == "HG-1":
+				return DotDict(customer="Guest Customer")
+			return None
+
 		with (
 			patch.object(pos_api.frappe, "session", types.SimpleNamespace(user="cashier@example.com")),
 			patch.object(pos_api, "_get_user_pos_profile", return_value="Restaurant POS"),
 			patch.object(pos_api, "_get_open_pos_entry", return_value=DotDict(name="OPEN-1", pos_profile="Restaurant POS")),
+			patch.object(pos_api.frappe, "get_doc", side_effect=fake_get_doc),
 			patch.object(pos_api.frappe, "get_cached_doc", return_value=profile),
 			patch.object(pos_api, "_resolve_pos_customer", return_value="Walk-in Customer"),
 			patch.object(pos_api, "_has_pos_opening_entry_on_invoice", return_value=True),
 			patch.object(pos_api, "_get_complimentary_discount", return_value=0),
 			patch.object(pos_api, "_redeem_complimentary", return_value=None),
 			patch.object(pos_api.frappe.db, "has_column", return_value=True),
-			patch.object(pos_api.frappe.db, "exists", return_value=False),
+			patch.object(pos_api.frappe.db, "exists", side_effect=fake_exists),
 			patch.object(pos_api.frappe.db, "commit") as commit_mock,
 			patch.object(pos_api.frappe, "new_doc", return_value=created_invoice),
 		):

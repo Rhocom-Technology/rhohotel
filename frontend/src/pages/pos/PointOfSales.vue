@@ -496,6 +496,10 @@
           <!-- Footer -->
           <div class="px-6 pb-6 flex gap-2">
             <button
+              @click="closeOpenShiftModal"
+              class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >Close</button>
+            <button
               @click="goToShiftClose"
               class="btn-hover px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
             >Shift Manager</button>
@@ -616,12 +620,10 @@ const hasOpenShift = computed(() => {
 watch(() => openingProfilesResource.data, (data) => {
   if (!data) return
 
-  if (!selectedOpeningProfile.value) {
-    selectedOpeningProfile.value = data.default_profile || data.open_pos_profile || ''
-  }
-
   if (data.has_open_shift) {
     localShiftOpened.value = true
+  } else if (selectedOpeningProfile.value && !openingProfiles.value.some(p => p.name === selectedOpeningProfile.value)) {
+    selectedOpeningProfile.value = ''
   }
 
   // Always enforce: modal stays open until a shift is confirmed open
@@ -663,7 +665,11 @@ const openShiftResource = createResource({
 })
 
 function openShiftNow() {
-  if (!selectedOpeningProfile.value || openingShift.value) return
+  if (openingShift.value) return
+  if (!selectedOpeningProfile.value) {
+    openShiftError.value = 'Select a POS Profile before opening a shift.'
+    return
+  }
   openingShift.value = true
   openShiftError.value = ''
   openShiftResource.submit({
@@ -672,7 +678,13 @@ function openShiftNow() {
   })
 }
 
+function closeOpenShiftModal() {
+  showOpenShiftModal.value = false
+  openShiftError.value = ''
+}
+
 function goToShiftClose() {
+  showOpenShiftModal.value = false
   router.push('/pos/shift-close')
 }
 

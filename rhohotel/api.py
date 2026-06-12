@@ -14,6 +14,19 @@ from datetime import datetime, timedelta
 _ = frappe._
 
 
+@frappe.whitelist()
+def get_current_user_info():
+	"""Return the current user's full name and roles.
+	This avoids permission issues with frappe.client.get on the User doctype."""
+	user = frappe.session.user
+	full_name = frappe.db.get_value("User", user, "full_name") or user
+	roles = frappe.get_roles(user)
+	return {
+		"full_name": full_name,
+		"roles": roles,
+	}
+
+
 def get_occupancy_rate():
 	"""Return current occupancy percentage."""
 	return {"value": 82.5, "suffix": "%"}

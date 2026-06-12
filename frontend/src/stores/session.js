@@ -22,12 +22,9 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     try {
-      const data = await callMethod('frappe.client.get', {
-        doctype: 'User',
-        name: user.value,
-      })
+      const data = await callMethod('rhohotel.api.get_current_user_info')
       fullName.value = data?.full_name || user.value
-      roles.value = Array.isArray(data?.roles) ? data.roles.map((r) => r.role) : []
+      roles.value = Array.isArray(data?.roles) ? data.roles : []
     } catch {
       clearProfile()
     }
@@ -87,6 +84,16 @@ export const useSessionStore = defineStore('session', () => {
     return user.value || ''
   })
 
+  /**
+   * Returns true if the user has any of the provided roles,
+   * or if the user is a System Manager (universal access).
+   */
+  function hasAnyRole(requiredRoles) {
+    if (!requiredRoles || requiredRoles.length === 0) return true
+    if (roles.value.includes('System Manager')) return true
+    return requiredRoles.some((role) => roles.value.includes(role))
+  }
+
   return {
     user,
     fullName,
@@ -98,6 +105,7 @@ export const useSessionStore = defineStore('session', () => {
     isHotelManager,
     isFrontDeskManager,
     isReceptionist,
+    hasAnyRole,
     initialize,
     logout,
   }
