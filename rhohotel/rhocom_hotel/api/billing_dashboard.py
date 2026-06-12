@@ -15,7 +15,7 @@ to_date   : str  (YYYY-MM-DD, optional) — end of date range filter
 """
 
 import frappe
-from frappe.utils import flt, getdate, nowdate, add_days
+from frappe.utils import flt, getdate, nowdate, add_days, today as frappe_today
 
 
 # ---------------------------------------------------------------------------
@@ -91,12 +91,11 @@ def _build_stats(from_dt, to_dt, today, corp):
               AND delinked = 0
               AND party IN %(c)s
         """, {"c": tuple(corp)}, as_dict=True)[0]
+        corp_invoiced    = flt(corp_row.invoiced)
+        corp_collected   = flt(corp_row.collected)
+        corp_outstanding = flt(corp_row.outstanding)
     else:
-        corp_row = {"invoiced": 0, "collected": 0, "outstanding": 0}
-
-    corp_invoiced    = flt(corp_row.invoiced)
-    corp_collected   = flt(corp_row.collected)
-    corp_outstanding = flt(corp_row.outstanding)
+        corp_invoiced = corp_collected = corp_outstanding = 0
 
     # ── Individual split ─────────────────────────────────────────────────────
     if corp:
@@ -112,35 +111,45 @@ def _build_stats(from_dt, to_dt, today, corp):
               AND delinked = 0
               AND party NOT IN %(c)s
         """, {"c": tuple(corp)}, as_dict=True)[0]
+        ind_invoiced    = flt(ind_row.invoiced)
+        ind_collected   = flt(ind_row.collected)
+        ind_outstanding = flt(ind_row.outstanding)
     else:
-        ind_row = total_row
+        ind_invoiced    = total_invoiced
+        ind_collected   = total_collected
+        ind_outstanding = total_outstanding
 
-    ind_invoiced    = flt(ind_row.invoiced)
-    ind_collected   = flt(ind_row.collected)
-    ind_outstanding = flt(ind_row.outstanding)
-
-    # ── Overdue vs current (join SI for due_date, only net positive entries) ─
+    # ── Overdue vs current — use SI.outstanding_amount directly.
+    # PLE per-voucher cannot be used here: payment credits land under the PE's
+    # own voucher_no, so SI rows in PLE always show the full original debit even
+    # after payments.  SI.outstanding_amount is kept accurate by ERPNext.
+    # Outstanding credit notes reduce overdue for the same customer only; one
+    # customer's credit should not offset another customer's overdue balance.
     overdue_row = frappe.db.sql("""
         SELECT
-            SUM(CASE WHEN si.due_date < %(today)s
-                     THEN net.outstanding ELSE 0 END) AS overdue,
-            SUM(CASE WHEN si.due_date >= %(today)s OR si.due_date IS NULL
-                     THEN net.outstanding ELSE 0 END) AS current_amt
+            COALESCE(SUM(GREATEST(open_rows.overdue_amount + COALESCE(credit_rows.credit_amount, 0), 0)), 0) AS overdue
         FROM (
-            SELECT voucher_no, SUM(amount) AS outstanding
-            FROM `tabPayment Ledger Entry`
+            SELECT customer, SUM(outstanding_amount) AS overdue_amount
+            FROM `tabSales Invoice`
             WHERE docstatus = 1
-              AND account_type = 'Receivable'
-              AND party_type = 'Customer'
-              AND delinked = 0
-            GROUP BY voucher_no
-            HAVING SUM(amount) > 0.5
-        ) net
-        LEFT JOIN `tabSales Invoice` si ON si.name = net.voucher_no
+              AND is_return = 0
+              AND outstanding_amount > 0
+              AND due_date < %(today)s
+            GROUP BY customer
+        ) open_rows
+        LEFT JOIN (
+            SELECT customer, SUM(outstanding_amount) AS credit_amount
+            FROM `tabSales Invoice`
+            WHERE docstatus = 1
+              AND is_return = 1
+              AND outstanding_amount < 0
+              AND due_date < %(today)s
+            GROUP BY customer
+        ) credit_rows ON credit_rows.customer = open_rows.customer
     """, {"today": str(today)}, as_dict=True)[0]
 
     total_overdue = flt(overdue_row.overdue)
-    total_current = flt(overdue_row.current_amt)
+    total_current = max(0, total_outstanding - total_overdue)
 
     # ── Unreconciled credit notes ─────────────────────────────────────────────
     credit_row = frappe.db.sql("""
@@ -151,18 +160,34 @@ def _build_stats(from_dt, to_dt, today, corp):
           AND outstanding_amount != 0
     """, as_dict=True)[0]
 
-    # ── Period-scoped counts ──────────────────────────────────────────────────
-    invoices_in_range = frappe.db.count("Sales Invoice", filters={
-        "docstatus": 1,
-        "posting_date": ["between", [from_dt, to_dt]],
-        "is_return": 0,
-    })
+    # ── Period-scoped counts — explicit SQL to avoid ORM filter quirks ───────
+    period_row = frappe.db.sql("""
+        SELECT
+            COUNT(*) AS invoices_in_range,
+            SUM(grand_total) AS invoiced_in_range,
+            SUM(outstanding_amount) AS outstanding_in_range
+        FROM `tabSales Invoice`
+        WHERE docstatus = 1
+          AND is_return = 0
+                    AND grand_total > 0
+          AND posting_date BETWEEN %(from_dt)s AND %(to_dt)s
+    """, {"from_dt": str(from_dt), "to_dt": str(to_dt)}, as_dict=True)[0]
 
-    unallocated_payments = frappe.db.count("Payment Entry", filters={
-        "docstatus": 1,
-        "unallocated_amount": [">", 0],
-        "posting_date": ["between", [from_dt, to_dt]],
-    })
+    invoices_in_range     = int(period_row.invoices_in_range or 0)
+    invoiced_in_range     = round(flt(period_row.invoiced_in_range), 2)
+    outstanding_in_range  = round(flt(period_row.outstanding_in_range), 2)
+
+    # Unallocated payments are ALL-TIME (not period-filtered) — a payment
+    # received months ago may still be unallocated and needs attention.
+    unallocated_payments = frappe.db.sql("""
+        SELECT COUNT(*) AS cnt
+        FROM `tabPayment Entry`
+        WHERE docstatus = 1
+          AND payment_type = 'Receive'
+          AND party_type = 'Customer'
+          AND IFNULL(party, '') != ''
+          AND unallocated_amount > 0
+    """, as_dict=True)[0].cnt or 0
 
     return {
         # Totals
@@ -190,8 +215,10 @@ def _build_stats(from_dt, to_dt, today, corp):
         "unreconciled_credits_amount": round(flt(credit_row.amount), 2),
 
         # Period-scoped
-        "invoices_in_range":    invoices_in_range,
-        "unallocated_payments": unallocated_payments,
+        "invoices_in_range":      invoices_in_range,
+        "invoiced_in_range":      invoiced_in_range,
+        "outstanding_in_range":   outstanding_in_range,
+        "unallocated_payments":   unallocated_payments,
     }
 
 
@@ -278,7 +305,13 @@ def _feed_open_guest_folios(from_dt, to_dt):
 def _feed_unapplied_payments(from_dt, to_dt):
     payments = frappe.db.get_all(
         "Payment Entry",
-        filters={"docstatus": 1, "unallocated_amount": [">", 0], "posting_date": ["between", [from_dt, to_dt]]},
+        filters={
+            "docstatus": 1,
+            "payment_type": "Receive",
+            "party_type": "Customer",
+            "unallocated_amount": [">", 0],
+            "posting_date": ["between", [from_dt, to_dt]],
+        },
         fields=["name", "party", "mode_of_payment", "unallocated_amount", "posting_date", "reference_no"],
         order_by="posting_date desc",
         limit=8,
@@ -354,29 +387,352 @@ def _aging(today, corp, corporate=True):
 
 
 def _unreconciled_credits():
-    """List of unreconciled credit notes grouped by customer."""
-    rows = frappe.db.sql("""
+    """List of unreconciled credit notes AND unallocated payment entries, grouped by customer."""
+    # Credit notes (Sales Invoice returns with outstanding balance)
+    cn_rows = frappe.db.sql("""
         SELECT customer, COUNT(*) AS cnt,
-               ABS(SUM(outstanding_amount)) AS amount,
-               ABS(SUM(grand_total)) AS grand_total
+               ABS(SUM(outstanding_amount)) AS amount
         FROM `tabSales Invoice`
         WHERE docstatus = 1
           AND is_return = 1
-          AND outstanding_amount != 0
+          AND outstanding_amount < 0
         GROUP BY customer
         ORDER BY ABS(SUM(outstanding_amount)) DESC
-        LIMIT 10
     """, as_dict=True)
 
-    total = sum(flt(r.amount) for r in rows)
+    # Unallocated Payment Entries (overpayments available to settle invoices)
+    pe_rows = frappe.db.sql("""
+        SELECT party AS customer, COUNT(*) AS cnt,
+               SUM(unallocated_amount) AS amount
+        FROM `tabPayment Entry`
+        WHERE docstatus = 1
+          AND payment_type = 'Receive'
+          AND party_type = 'Customer'
+          AND unallocated_amount > 0
+        GROUP BY party
+        ORDER BY SUM(unallocated_amount) DESC
+    """, as_dict=True)
+
+    # Merge both into a per-customer map
+    merged = {}
+    for r in cn_rows:
+        merged[r.customer] = merged.get(r.customer, {"customer": r.customer, "credit_note_count": 0, "credit_note_amount": 0.0, "overpayment_count": 0, "overpayment_amount": 0.0})
+        merged[r.customer]["credit_note_count"] += int(r.cnt)
+        merged[r.customer]["credit_note_amount"] += flt(r.amount)
+    for r in pe_rows:
+        merged[r.customer] = merged.get(r.customer, {"customer": r.customer, "credit_note_count": 0, "credit_note_amount": 0.0, "overpayment_count": 0, "overpayment_amount": 0.0})
+        merged[r.customer]["overpayment_count"] += int(r.cnt)
+        merged[r.customer]["overpayment_amount"] += flt(r.amount)
+
+    by_customer = []
+    for cust, d in sorted(merged.items(), key=lambda x: -(x[1]["credit_note_amount"] + x[1]["overpayment_amount"])):
+        by_customer.append({
+            "customer": cust,
+            "amount": round(d["credit_note_amount"] + d["overpayment_amount"], 2),
+            "credit_note_count": d["credit_note_count"],
+            "credit_note_amount": round(d["credit_note_amount"], 2),
+            "overpayment_count": d["overpayment_count"],
+            "overpayment_amount": round(d["overpayment_amount"], 2),
+        })
+
+    total_count = sum(d["credit_note_count"] + d["overpayment_count"] for d in by_customer)
+    total_amount = round(sum(d["amount"] for d in by_customer), 2)
+
     return {
-        "total_count":  sum(int(r.cnt) for r in rows),
-        "total_amount": round(total, 2),
-        "by_customer":  [
-            {"customer": r.customer, "count": int(r.cnt), "amount": round(flt(r.amount), 2)}
-            for r in rows
-        ],
+        "total_count":  total_count,
+        "total_amount": total_amount,
+        "by_customer":  by_customer[:10],
+        # Separate totals for UI differentiation
+        "credit_note_total": round(sum(flt(r.amount) for r in cn_rows), 2),
+        "overpayment_total": round(sum(flt(r.amount) for r in pe_rows), 2),
     }
+
+
+# ---------------------------------------------------------------------------
+# Register/list endpoints used by the billing pages
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_payment_register(from_date=None, to_date=None):
+    """Return live customer receipt rows for the billing Payment List."""
+    filters = [
+        "pe.docstatus = 1",
+        "pe.payment_type = 'Receive'",
+        "pe.party_type = 'Customer'",
+        "IFNULL(pe.party, '') != ''",
+    ]
+    values = {}
+    if from_date:
+        filters.append("pe.posting_date >= %(from_date)s")
+        values["from_date"] = str(getdate(from_date))
+    if to_date:
+        filters.append("pe.posting_date <= %(to_date)s")
+        values["to_date"] = str(getdate(to_date))
+
+    rows = frappe.db.sql(f"""
+        SELECT
+            pe.name,
+            pe.party,
+            pe.party_name,
+            pe.mode_of_payment,
+            pe.reference_no,
+            pe.posting_date,
+            pe.paid_amount,
+            pe.unallocated_amount
+        FROM `tabPayment Entry` pe
+        WHERE {" AND ".join(filters)}
+        ORDER BY pe.posting_date DESC, pe.creation DESC
+        LIMIT 1000
+    """, values, as_dict=True)
+
+    today = getdate(nowdate())
+    month_start = today.replace(day=1)
+    stats = frappe.db.sql("""
+        SELECT
+            SUM(CASE WHEN posting_date = %(today)s THEN paid_amount ELSE 0 END) AS received_today,
+            SUM(CASE WHEN posting_date >= %(month_start)s AND posting_date <= %(today)s THEN paid_amount ELSE 0 END) AS received_month
+        FROM `tabPayment Entry`
+        WHERE docstatus = 1
+          AND payment_type = 'Receive'
+          AND party_type = 'Customer'
+          AND IFNULL(party, '') != ''
+    """, {"today": str(today), "month_start": str(month_start)}, as_dict=True)[0]
+
+    return {
+        "stats": {
+            "received_today": round(flt(stats.received_today), 2),
+            "received_month": round(flt(stats.received_month), 2),
+        },
+        "payments": [_payment_register_row(row) for row in rows],
+    }
+
+
+@frappe.whitelist()
+def get_payment_entry_detail(payment_entry):
+    """Return Payment Entry details for the billing Payment List view action."""
+    if not payment_entry:
+        frappe.throw("Payment Entry is required")
+
+    pe = frappe.get_doc("Payment Entry", payment_entry)
+    if pe.docstatus != 1:
+        frappe.throw("Payment Entry must be submitted")
+
+    references = []
+    for row in pe.references or []:
+        references.append({
+            "reference_doctype": row.reference_doctype,
+            "reference_name": row.reference_name,
+            "total_amount": round(flt(row.total_amount), 2),
+            "outstanding_amount": round(flt(row.outstanding_amount), 2),
+            "allocated_amount": round(flt(row.allocated_amount), 2),
+        })
+
+    return {
+        "name": pe.name,
+        "party": pe.party,
+        "party_name": pe.party_name or pe.party,
+        "posting_date": str(pe.posting_date) if pe.posting_date else "",
+        "mode_of_payment": pe.mode_of_payment or "",
+        "reference_no": pe.reference_no or "",
+        "reference_date": str(pe.reference_date) if pe.reference_date else "",
+        "paid_amount": round(flt(pe.paid_amount), 2),
+        "received_amount": round(flt(pe.received_amount), 2),
+        "unallocated_amount": round(flt(pe.unallocated_amount), 2),
+        "remarks": pe.remarks or "",
+        "references": references,
+    }
+
+
+@frappe.whitelist()
+def record_customer_payment(
+    customer,
+    mode_of_payment,
+    paid_amount,
+    payment_date=None,
+    reference_no=None,
+    reference_date=None,
+    remarks=None,
+):
+    """Create and submit an unallocated customer receipt from the billing Payment List."""
+    if not customer:
+        frappe.throw("Customer is required")
+    if not mode_of_payment:
+        frappe.throw("Mode of payment is required")
+
+    paid_amount = flt(paid_amount)
+    if paid_amount <= 0:
+        frappe.throw("Payment amount must be greater than zero")
+
+    if not frappe.db.exists("Customer", customer):
+        frappe.throw("Customer {0} does not exist".format(customer))
+
+    company = frappe.db.get_single_value("Global Defaults", "default_company")
+    if not company:
+        frappe.throw("Default company is not set")
+
+    mop = frappe.get_doc("Mode of Payment", mode_of_payment)
+    if not mop.accounts:
+        frappe.throw("Mode of Payment has no accounts configured")
+
+    mop_account = next((a.default_account for a in mop.accounts if a.company == company), None)
+    if not mop_account:
+        frappe.throw("No account found for Mode of Payment in company {}".format(company))
+
+    receivable_account = frappe.db.get_value("Company", company, "default_receivable_account")
+    if not receivable_account:
+        frappe.throw("Default Receivable Account is not set for the company")
+
+    if reference_no:
+        existing = frappe.db.get_value("Payment Entry", {"reference_no": reference_no})
+        if existing:
+            frappe.throw("A Payment Entry with this reference number already exists")
+
+    pe = frappe.new_doc("Payment Entry")
+    pe.payment_type = "Receive"
+    pe.party_type = "Customer"
+    pe.party = customer
+    pe.paid_from = receivable_account
+    pe.paid_from_account_type = "Receivable"
+    pe.paid_to = mop_account
+    pe.posting_date = payment_date or frappe_today()
+    pe.paid_amount = paid_amount
+    pe.received_amount = paid_amount
+    pe.source_exchange_rate = 1
+    pe.target_exchange_rate = 1
+    pe.company = company
+    pe.mode_of_payment = mode_of_payment
+    if reference_no:
+        pe.reference_no = reference_no
+    if reference_date:
+        pe.reference_date = reference_date
+    if remarks:
+        pe.remarks = remarks
+
+    pe.insert(ignore_permissions=True)
+    try:
+        pe.submit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Customer payment submit failed from payment list")
+
+    frappe.db.commit()
+    return {"payment_entry": pe.name}
+
+
+@frappe.whitelist()
+def get_invoice_register(from_date=None, to_date=None):
+    """Return live Sales Invoice and credit note rows for the billing Invoice List."""
+    source_field = "custom_invoice_source" if frappe.db.has_column("Sales Invoice", "custom_invoice_source") else None
+    checkin_field = "custom_hotel_room_check_in" if frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in") else None
+    checkin_table_exists = frappe.db.table_exists("Hotel Room Check In")
+
+    source_select = f"si.`{source_field}` AS invoice_source," if source_field else "'' AS invoice_source,"
+    checkin_select = f"si.`{checkin_field}` AS check_in," if checkin_field else "'' AS check_in,"
+    room_select = "ci.room_number AS room_number," if checkin_field and checkin_table_exists else "'' AS room_number,"
+    room_join = (
+        f"LEFT JOIN `tabHotel Room Check In` ci ON ci.name = si.`{checkin_field}`"
+        if checkin_field and checkin_table_exists
+        else ""
+    )
+
+    filters = ["si.docstatus = 1", "si.grand_total != 0"]
+    values = {}
+    if from_date:
+        filters.append("si.posting_date >= %(from_date)s")
+        values["from_date"] = str(getdate(from_date))
+    if to_date:
+        filters.append("si.posting_date <= %(to_date)s")
+        values["to_date"] = str(getdate(to_date))
+
+    rows = frappe.db.sql(f"""
+        SELECT
+            si.name,
+            si.customer,
+            si.customer_name,
+            si.posting_date,
+            si.due_date,
+            si.grand_total,
+            si.outstanding_amount,
+            si.is_return,
+            si.status,
+            {source_select}
+            {checkin_select}
+            {room_select}
+            GROUP_CONCAT(DISTINCT sii.item_group ORDER BY sii.idx SEPARATOR ', ') AS item_groups
+        FROM `tabSales Invoice` si
+        LEFT JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+        {room_join}
+        WHERE {" AND ".join(filters)}
+        GROUP BY si.name
+        ORDER BY si.posting_date DESC, si.creation DESC
+        LIMIT 1000
+    """, values, as_dict=True)
+
+    return {"invoices": [_invoice_register_row(row) for row in rows]}
+
+
+def _payment_register_row(row):
+    paid = flt(row.paid_amount)
+    unallocated = flt(row.unallocated_amount)
+    allocated = max(0, paid - unallocated)
+    if unallocated <= 0.005:
+        status = "Allocated"
+    elif allocated <= 0.005:
+        status = "Unallocated"
+    else:
+        status = "Part Allocated"
+
+    return {
+        "receiptNo": row.name,
+        "payer": row.party_name or row.party,
+        "payerNote": row.party,
+        "method": row.mode_of_payment or "Unknown",
+        "reference": row.reference_no or "",
+        "date": str(row.posting_date),
+        "amount": round(paid, 2),
+        "allocated": round(allocated, 2),
+        "unallocated": round(unallocated, 2),
+        "status": status,
+    }
+
+
+def _invoice_register_row(row):
+    outstanding = flt(row.outstanding_amount)
+    grand_total = flt(row.grand_total)
+    is_return = bool(row.is_return)
+    status = _invoice_status(row.status, outstanding, row.due_date, grand_total, is_return)
+
+    return {
+        "invoiceNo": row.name,
+        "guest": row.customer_name or row.customer,
+        "guestNote": row.customer,
+        "room": row.room_number or "",
+        "type": "Credit Note" if is_return else row.invoice_source or _invoice_type_from_item_groups(row.item_groups),
+        "issueDate": str(row.posting_date),
+        "dueDate": str(row.due_date) if row.due_date else "",
+        "amount": round(grand_total, 2),
+        "balance": round(outstanding, 2),
+        "status": status,
+    }
+
+
+def _invoice_status(status, outstanding, due_date, grand_total, is_return=False):
+    if is_return:
+        return "Credit Note" if outstanding < -0.005 else "Paid"
+    if outstanding <= 0.005:
+        return "Paid"
+    if due_date and getdate(due_date) < getdate(nowdate()):
+        return "Overdue"
+    if status in ("Partly Paid", "Part Paid") or outstanding < grand_total - 0.005:
+        return "Part Paid"
+    return "Unpaid"
+
+
+def _invoice_type_from_item_groups(item_groups):
+    value = (item_groups or "").strip()
+    if not value:
+        return "Sales Invoice"
+    first = value.split(",", 1)[0].strip()
+    return first or "Sales Invoice"
 
 
 def _corporate_followup_count(today, corp):

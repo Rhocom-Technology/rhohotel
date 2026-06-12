@@ -46,27 +46,88 @@ from frappe.utils import date_diff, get_datetime, getdate
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_DEFAULT_HOTEL_TIME = time(12, 0)
+_DEFAULT_CHECK_IN_TIME = time(13, 0)
+_DEFAULT_CHECK_OUT_TIME = time(11, 0)
 
 
-def _normalize_dt(value):
+def _get_hotel_time_strings():
     """
-    Coerce *value* to a datetime object at the hotel's standard 12:00 boundary.
+    Return (check_in_time_str, check_out_time_str) read from Hotel Settings.
 
-    Accepts:
-    - datetime  → returned as-is
-    - date      → combined with 12:00
-    - str       → parsed as datetime; if that fails, parsed as date + 12:00
+    Falls back to ('13:00:00', '11:00:00') if settings are not accessible.
+    The strings are in 'HH:MM:SS' format as expected by MariaDB TIMESTAMP().
+    """
+    try:
+        settings = frappe.get_single("Hotel Settings")
+        ci = str(settings.default_check_in_time or "").split(".")[0].strip()
+        co = str(settings.default_check_out_time or "").split(".")[0].strip()
+        if len(ci) == 5:
+            ci += ":00"
+        if len(co) == 5:
+            co += ":00"
+        if not ci:
+            ci = "13:00:00"
+        if not co:
+            co = "11:00:00"
+        return ci, co
+    except Exception:
+        return "13:00:00", "11:00:00"
+
+
+def _parse_hotel_time_str(time_str, fallback):
+    """Parse a HH:MM:SS or HH:MM string into a :class:`datetime.time` object."""
+    value = str(time_str or "").split(".")[0].strip()
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    return fallback
+
+
+def _normalize_checkin_dt(value):
+    """
+    Coerce *value* to a datetime using the hotel's default check-in time for
+    date-only inputs.  Full datetime values are returned as-is.
     """
     if isinstance(value, datetime):
         return value
+    ci_str, _ = _get_hotel_time_strings()
+    ci_time = _parse_hotel_time_str(ci_str, _DEFAULT_CHECK_IN_TIME)
     if isinstance(value, str):
+        value = value.strip()
+        if len(value) == 10 and "T" not in value and " " not in value:
+            return datetime.combine(getdate(value), ci_time)
         try:
             return get_datetime(value)
         except Exception:
-            return datetime.combine(getdate(value), _DEFAULT_HOTEL_TIME)
-    # Assume date object
-    return datetime.combine(value, _DEFAULT_HOTEL_TIME)
+            return datetime.combine(getdate(value), ci_time)
+    return datetime.combine(value, ci_time)
+
+
+def _normalize_checkout_dt(value):
+    """
+    Coerce *value* to a datetime using the hotel's default check-out time for
+    date-only inputs.  Full datetime values are returned as-is.
+    """
+    if isinstance(value, datetime):
+        return value
+    _, co_str = _get_hotel_time_strings()
+    co_time = _parse_hotel_time_str(co_str, _DEFAULT_CHECK_OUT_TIME)
+    if isinstance(value, str):
+        value = value.strip()
+        if len(value) == 10 and "T" not in value and " " not in value:
+            return datetime.combine(getdate(value), co_time)
+        try:
+            return get_datetime(value)
+        except Exception:
+            return datetime.combine(getdate(value), co_time)
+    return datetime.combine(value, co_time)
+
+
+# Kept for backward compatibility – defaults to check-in time boundary.
+def _normalize_dt(value):
+    return _normalize_checkin_dt(value)
 
 
 # ---------------------------------------------------------------------------
@@ -101,8 +162,8 @@ def check_checkin_conflict(room_number, check_in_dt, check_out_dt, exclude_check
     Returns:
         dict with keys (name, check_in_datetime, expected_check_out_datetime, guest), or None.
     """
-    check_in_dt = _normalize_dt(check_in_dt)
-    check_out_dt = _normalize_dt(check_out_dt)
+    check_in_dt = _normalize_checkin_dt(check_in_dt)
+    check_out_dt = _normalize_checkout_dt(check_out_dt)
 
     base_filters = {
         "room_number": room_number,
@@ -186,18 +247,19 @@ def check_canonical_reservation_conflict(
     Returns:
         dict with keys (name, from_date, to_date, primary_guest_name), or None.
     """
-    check_in_dt = _normalize_dt(check_in_dt)
-    check_out_dt = _normalize_dt(check_out_dt)
+    check_in_dt = _normalize_checkin_dt(check_in_dt)
+    check_out_dt = _normalize_checkout_dt(check_out_dt)
 
     check_in_str = check_in_dt.strftime("%Y-%m-%d %H:%M:%S")
     check_out_str = check_out_dt.strftime("%Y-%m-%d %H:%M:%S")
+    ci_time_str, co_time_str = _get_hotel_time_strings()
 
     # Build optional exclusion clause
     exclude_clause = ""
-    params: tuple = (room_number, check_out_str, check_in_str)
+    params: tuple = (room_number, ci_time_str, check_out_str, co_time_str, check_in_str)
     if exclude_canonical:
         exclude_clause = "AND hr.name != %s"
-        params = (room_number, check_out_str, check_in_str, exclude_canonical)
+        params = (room_number, ci_time_str, check_out_str, co_time_str, check_in_str, exclude_canonical)
 
     results = frappe.db.sql(
         f"""
@@ -211,8 +273,8 @@ def check_canonical_reservation_conflict(
           AND COALESCE(rr.check_in_reference, '') = ''
           AND COALESCE(rr.status, 'Reserved') NOT IN
               ('Checked In', 'Checked Out', 'Cancelled')
-          AND hr.from_date < %s
-          AND hr.to_date   > %s
+          AND TIMESTAMP(hr.from_date, %s) < %s
+          AND TIMESTAMP(hr.to_date,   %s) > %s
           {exclude_clause}
         LIMIT 1
         """,
@@ -263,8 +325,8 @@ def assert_room_available(
                              'Group', the block protection guard is bypassed so the group
                              can pick up its own blocked rooms freely.
     """
-    check_in_dt = _normalize_dt(check_in_dt)
-    check_out_dt = _normalize_dt(check_out_dt)
+    check_in_dt = _normalize_checkin_dt(check_in_dt)
+    check_out_dt = _normalize_checkout_dt(check_out_dt)
 
     # --- Surface 1: Hotel Room Check In ---
     ci_conflict = check_checkin_conflict(
@@ -361,8 +423,8 @@ def get_available_rooms(
     """
     from rhohotel.api import get_room_rate
 
-    check_in_dt = _normalize_dt(check_in_dt)
-    check_out_dt = _normalize_dt(check_out_dt)
+    check_in_dt = _normalize_checkin_dt(check_in_dt)
+    check_out_dt = _normalize_checkout_dt(check_out_dt)
 
     if check_out_dt <= check_in_dt:
         frappe.throw(_("Check-out must be after check-in"))
@@ -395,6 +457,7 @@ def get_available_rooms(
     # ------------------------------------------------------------------
     check_in_str = check_in_dt.strftime("%Y-%m-%d %H:%M:%S")
     check_out_str = check_out_dt.strftime("%Y-%m-%d %H:%M:%S")
+    ci_time_str, co_time_str = _get_hotel_time_strings()
 
     # Overlapping active check-ins (standard time-overlap)
     checkin_rows = frappe.db.sql(
@@ -446,10 +509,10 @@ def get_available_rooms(
           AND COALESCE(rr.check_in_reference, '') = ''
           AND COALESCE(rr.status, 'Reserved') NOT IN
               ('Checked In', 'Checked Out', 'Cancelled')
-          AND hr.from_date < %s
-          AND hr.to_date   > %s
+          AND TIMESTAMP(hr.from_date, %s) < %s
+          AND TIMESTAMP(hr.to_date,   %s) > %s
         """,
-        tuple(room_numbers) + (check_out_str, check_in_str),
+        tuple(room_numbers) + (ci_time_str, check_out_str, co_time_str, check_in_str),
         as_dict=True,
     )
 
@@ -505,17 +568,18 @@ def get_protected_block_count(room_type, check_in_dt, check_out_dt, context_rese
     if not frappe.db.get_single_value("Hotel Settings", "enable_group_room_blocks"):
         return 0
 
-    check_in_dt = _normalize_dt(check_in_dt)
-    check_out_dt = _normalize_dt(check_out_dt)
+    check_in_dt = _normalize_checkin_dt(check_in_dt)
+    check_out_dt = _normalize_checkout_dt(check_out_dt)
 
     check_in_str = check_in_dt.strftime("%Y-%m-%d %H:%M:%S")
     check_out_str = check_out_dt.strftime("%Y-%m-%d %H:%M:%S")
+    ci_time_str, co_time_str = _get_hotel_time_strings()
 
     exclude_clause = ""
-    params: tuple = (room_type, check_out_str, check_in_str)
+    params: tuple = (room_type, ci_time_str, check_out_str, co_time_str, check_in_str)
     if context_reservation:
         exclude_clause = "AND hr.name != %s"
-        params = (room_type, check_out_str, check_in_str, context_reservation)
+        params = (room_type, ci_time_str, check_out_str, co_time_str, check_in_str, context_reservation)
 
     result = frappe.db.sql(
         f"""
@@ -527,8 +591,8 @@ def get_protected_block_count(room_type, check_in_dt, check_out_dt, context_rese
           AND hr.reservation_type = 'Group'
           AND hr.reservation_status NOT IN
               ('Cancelled', 'Checked Out', 'No Show', 'Expired')
-          AND hr.from_date < %s
-          AND hr.to_date   > %s
+          AND TIMESTAMP(hr.from_date, %s) < %s
+          AND TIMESTAMP(hr.to_date,   %s) > %s
           {exclude_clause}
         """,
         params,
@@ -563,8 +627,9 @@ def is_room_type_blocked_for_period(
         return False
 
     # Count already-booked rooms of this type for the period (non-group bookings)
-    check_in_str = _normalize_dt(check_in_dt).strftime("%Y-%m-%d %H:%M:%S")
-    check_out_str = _normalize_dt(check_out_dt).strftime("%Y-%m-%d %H:%M:%S")
+    ci_time_str, co_time_str = _get_hotel_time_strings()
+    check_in_str = _normalize_checkin_dt(check_in_dt).strftime("%Y-%m-%d %H:%M:%S")
+    check_out_str = _normalize_checkout_dt(check_out_dt).strftime("%Y-%m-%d %H:%M:%S")
 
     booked = frappe.db.sql(
         """
@@ -577,10 +642,10 @@ def is_room_type_blocked_for_period(
           AND hr.reservation_status NOT IN ('Cancelled', 'Checked Out', 'No Show', 'Expired')
           AND COALESCE(rr.check_in_reference, '') = ''
           AND COALESCE(rr.status, 'Reserved') NOT IN ('Checked In', 'Checked Out', 'Cancelled')
-          AND hr.from_date < %s
-          AND hr.to_date   > %s
+          AND TIMESTAMP(hr.from_date, %s) < %s
+          AND TIMESTAMP(hr.to_date,   %s) > %s
         """,
-        (room_type, check_out_str, check_in_str),
+        (room_type, ci_time_str, check_out_str, co_time_str, check_in_str),
         as_dict=True,
     )
     already_booked = int((booked[0].booked_count) if booked else 0)

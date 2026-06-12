@@ -649,13 +649,16 @@ async function loadRoomTypes() {
 async function loadAvailableRooms() {
   loadingRooms.value = true
   try {
-    // Build check-out datetime from check-in + number of nights
+    // Build check-out datetime from check-in date + number of nights + hotel checkout time
     const params = { room_type: selectedRoomType.value }
     if (form.check_in_datetime) {
       params.check_in_dt = form.check_in_datetime
       const ciDate = parseLocalDateTime(form.check_in_datetime)
       if (ciDate) {
         ciDate.setDate(ciDate.getDate() + parseInt(form.number_of_nights || 1))
+        // Set checkout time to hotel's default check-out time
+        const [coHH, coMM] = String(defaultCheckOutTime.value || '11:00').split(':').map(Number)
+        ciDate.setHours(coHH || 11, coMM || 0, 0, 0)
         params.check_out_dt = formatServerDateTime(ciDate)
       }
     }
@@ -788,6 +791,19 @@ function getRoomRate(room) {
 const now = new Date()
 const nowLocal = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
+// Default check-in datetime: today at hotel's default check-in time (fetched on mount)
+const defaultCheckInDatetime = ref(nowLocal)
+const defaultCheckOutTime = ref('11:00')
+
+function buildDefaultCheckInDatetime(hotelTimeStr) {
+  // hotelTimeStr e.g. '13:00:00' or '13:00'
+  if (!hotelTimeStr) return nowLocal
+  const timePart = String(hotelTimeStr).slice(0, 5) // 'HH:MM'
+  const today = new Date()
+  const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return `${localDate}T${timePart}`
+}
+
 const form = reactive({
   guest: '',
   room_number: '',
@@ -885,7 +901,10 @@ const expectedCheckoutDisplay = computed(() => {
   const dt = parseLocalDateTime(form.check_in_datetime)
   if (!dt) return '—'
   dt.setDate(dt.getDate() + parseInt(form.number_of_nights))
-  return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  // Apply hotel default checkout time
+  const [coHH, coMM] = String(defaultCheckOutTime.value || '11:00').split(':').map(Number)
+  dt.setHours(coHH || 11, coMM || 0, 0, 0)
+  return dt.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 })
 
 function parseLocalDateTime(value) {
@@ -1008,7 +1027,25 @@ async function submitCheckIn() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Fetch hotel default check-in and check-out times
+  try {
+    const ciTime = await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings.get_default_check_in_time'
+    )
+    if (ciTime && !route.query.check_in_dt) {
+      form.check_in_datetime = buildDefaultCheckInDatetime(ciTime)
+    }
+  } catch { /* keep nowLocal if fetch fails */ }
+  try {
+    const coTime = await callMethodForm(
+      'rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings.get_default_check_out_time'
+    )
+    if (coTime) {
+      defaultCheckOutTime.value = String(coTime).slice(0, 5) // 'HH:MM'
+    }
+  } catch { /* keep default */ }
+
   loadRoomTypes()
   loadAvailableRooms()
   loadRateCards()

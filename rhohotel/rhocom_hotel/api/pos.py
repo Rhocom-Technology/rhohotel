@@ -2218,23 +2218,29 @@ def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None, atta
 # ─────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
-def get_pos_staff_roster(outlet=None, shift=None, role=None, search=None):
-    """Return POS staff shift assignments for the current week."""
-    today = getdate(nowdate())
-    week_start = today - __import__('datetime').timedelta(days=today.weekday())
-    week_end = week_start + __import__('datetime').timedelta(days=6)
+def get_pos_staff_roster(outlet=None, shift=None, role=None, search=None, week_start=None, week_end=None):
+    """Return POS staff shift assignments for the requested week."""
+    week_start_dt, week_end_dt = _pos_roster_week_range(week_start, week_end)
 
     conditions = ["sa.status = 'Active'"]
     args = []
 
+    if outlet:
+        conditions.append("e.department LIKE %s")
+        args.append(f"%{cstr(outlet).strip()}%")
+
     if shift:
         conditions.append("sa.shift_type = %s")
-        args.append(shift)
+        args.append(cstr(shift).strip())
+
+    if role:
+        conditions.append("e.designation LIKE %s")
+        args.append(f"%{cstr(role).strip()}%")
 
     if search:
         q = f"%{cstr(search).strip()}%"
-        conditions.append("(e.employee_name LIKE %s OR e.name LIKE %s)")
-        args.extend([q, q])
+        conditions.append("(e.employee_name LIKE %s OR e.name LIKE %s OR e.department LIKE %s OR e.designation LIKE %s OR sa.shift_type LIKE %s)")
+        args.extend([q, q, q, q, q])
 
     where = " AND ".join(conditions)
 
@@ -2246,40 +2252,244 @@ def get_pos_staff_roster(outlet=None, shift=None, role=None, search=None):
             e.department AS outlet,
             sa.shift_type AS shift,
             sa.start_date,
-            sa.end_date
+            sa.end_date,
+            sa.status
         FROM `tabShift Assignment` sa
         JOIN `tabEmployee` e ON e.name = sa.employee
         WHERE {where}
-          AND sa.start_date <= %s AND (sa.end_date IS NULL OR sa.end_date >= %s)
-        ORDER BY e.employee_name
-        LIMIT 100
-    """, tuple(args) + (cstr(week_end), cstr(week_start)), as_dict=1)
+          AND e.status = 'Active'
+          AND sa.start_date <= %s
+          AND (sa.end_date IS NULL OR sa.end_date >= %s)
+        ORDER BY e.employee_name, sa.start_date, sa.shift_type
+        LIMIT 500
+    """, tuple(args) + (cstr(week_end_dt), cstr(week_start_dt)), as_dict=1)
 
-    if outlet:
-        staff = [s for s in staff if outlet.lower() in (s.get("outlet") or "").lower()]
-
-    return staff
+    return [_pos_roster_row(row, week_start_dt, week_end_dt) for row in staff]
 
 
 @frappe.whitelist()
-def get_pos_staff_roster_stats():
-    """Return stat cards for the Staff Roster page."""
-    today = getdate(nowdate())
-    week_start = today - __import__('datetime').timedelta(days=today.weekday())
-    week_end = week_start + __import__('datetime').timedelta(days=6)
+def get_pos_staff_roster_stats(week_start=None, week_end=None, outlet=None, shift=None, role=None, search=None):
+    """Return real stat cards for the Staff Roster page."""
+    rows = get_pos_staff_roster(
+        outlet=outlet,
+        shift=shift,
+        role=role,
+        search=search,
+        week_start=week_start,
+        week_end=week_end,
+    )
+    week_start_dt, week_end_dt = _pos_roster_week_range(week_start, week_end)
+    staff = {row.get("employee") for row in rows if row.get("employee")}
+    outlets = {row.get("outlet") for row in rows if row.get("outlet")}
+    shifts = {row.get("shift") for row in rows if row.get("shift")}
 
-    total = frappe.db.sql("""
-        SELECT COUNT(DISTINCT employee) FROM `tabShift Assignment`
-        WHERE status = 'Active'
-          AND start_date <= %s AND (end_date IS NULL OR end_date >= %s)
-    """, (cstr(week_end), cstr(week_start)))[0][0] or 0
+    morning_days = _covered_week_days(rows, week_start_dt, week_end_dt, "morning")
+    evening_days = _covered_week_days(rows, week_start_dt, week_end_dt, "evening")
+    leave_count = _pos_roster_leave_count(week_start_dt, week_end_dt, staff)
 
     return {
-        "scheduled_staff": int(total),
-        "morning_coverage": 100,
-        "evening_coverage": 83,
-        "staff_off": 0,
+        "scheduled_staff": len(staff),
+        "scheduled": len(staff),
+        "outlet_count": len(outlets),
+        "shift_count": len(shifts),
+        "morning_coverage": _coverage_percent(morning_days),
+        "evening_coverage": _coverage_percent(evening_days),
+        "staff_off": leave_count,
+        "on_leave": leave_count,
     }
+
+
+@frappe.whitelist()
+def get_pos_staff_roster_options():
+    """Return dynamic filter options for the POS staff roster."""
+    employees = frappe.db.sql("""
+        SELECT
+            name,
+            employee_name,
+            department,
+            designation,
+            company
+        FROM `tabEmployee`
+        WHERE status = 'Active'
+        ORDER BY employee_name, name
+    """, as_dict=1)
+    outlets = frappe.db.sql("""
+        SELECT DISTINCT department AS value
+        FROM `tabEmployee`
+        WHERE status = 'Active'
+          AND IFNULL(department, '') != ''
+        ORDER BY department
+    """, as_dict=1)
+    shifts = frappe.db.sql("""
+        SELECT name AS value
+        FROM `tabShift Type`
+        ORDER BY name
+    """, as_dict=1)
+    roles = frappe.db.sql("""
+        SELECT DISTINCT designation AS value
+        FROM `tabEmployee`
+        WHERE status = 'Active'
+          AND IFNULL(designation, '') != ''
+        ORDER BY designation
+    """, as_dict=1)
+    return {
+        "employees": [{
+            "employee": row.name,
+            "employee_name": row.employee_name or row.name,
+            "department": row.department or "",
+            "designation": row.designation or "",
+            "company": row.company or "",
+        } for row in employees],
+        "outlets": [row.value for row in outlets if row.value],
+        "shifts": [row.value for row in shifts if row.value],
+        "roles": [row.value for row in roles if row.value],
+    }
+
+
+@frappe.whitelist()
+def create_pos_staff_roster(employee, shift_type, start_date, end_date=None, status="Active"):
+    """Create a submitted HRMS Shift Assignment from the frontdesk roster page."""
+    if frappe.session.user == "Guest":
+        frappe.throw(_("Please log in to create a shift plan."))
+
+    employee = cstr(employee).strip()
+    shift_type = cstr(shift_type).strip()
+    status = cstr(status or "Active").strip()
+    start = getdate(start_date) if start_date else None
+    end = getdate(end_date) if end_date else None
+
+    if not employee:
+        frappe.throw(_("Employee is required."))
+    if not frappe.db.exists("Employee", employee):
+        frappe.throw(_("Employee {0} was not found.").format(employee))
+    if not shift_type:
+        frappe.throw(_("Shift Type is required."))
+    if not frappe.db.exists("Shift Type", shift_type):
+        frappe.throw(_("Shift Type {0} was not found.").format(shift_type))
+    if not start:
+        frappe.throw(_("Start Date is required."))
+    if end and end < start:
+        frappe.throw(_("End Date cannot be before Start Date."))
+    if status not in ("Active", "Inactive"):
+        frappe.throw(_("Status must be Active or Inactive."))
+
+    employee_doc = frappe.db.get_value(
+        "Employee",
+        employee,
+        ["employee_name", "company", "department"],
+        as_dict=1,
+    )
+    if not employee_doc:
+        frappe.throw(_("Employee {0} was not found.").format(employee))
+
+    doc = frappe.get_doc({
+        "doctype": "Shift Assignment",
+        "employee": employee,
+        "employee_name": employee_doc.employee_name,
+        "company": employee_doc.company,
+        "department": employee_doc.department,
+        "shift_type": shift_type,
+        "start_date": start,
+        "end_date": end,
+        "status": status,
+    })
+    doc.insert(ignore_permissions=True)
+    doc.flags.ignore_permissions = True
+    doc.submit()
+
+    return {
+        "name": doc.name,
+        "employee": doc.employee,
+        "employee_name": doc.employee_name,
+        "shift": doc.shift_type,
+        "start_date": cstr(doc.start_date),
+        "end_date": cstr(doc.end_date or ""),
+        "status": doc.status,
+    }
+
+
+def _pos_roster_week_range(week_start=None, week_end=None):
+    if week_start:
+        start = getdate(week_start)
+    else:
+        today = getdate(nowdate())
+        start = add_days(today, -today.weekday())
+
+    end = getdate(week_end) if week_end else add_days(start, 6)
+    if end < start:
+        frappe.throw(_("Week end cannot be before week start."))
+    return start, end
+
+
+def _pos_roster_row(row, week_start, week_end):
+    start = max(getdate(row.start_date), week_start) if row.start_date else week_start
+    end = min(getdate(row.end_date), week_end) if row.end_date else week_end
+    return {
+        "employee": row.employee,
+        "employee_name": row.employee_name or row.employee,
+        "role": row.role or "Unassigned",
+        "designation": row.role or "Unassigned",
+        "outlet": row.outlet or "Unassigned",
+        "department": row.outlet or "Unassigned",
+        "shift": row.shift or "Unassigned",
+        "start_date": cstr(start),
+        "end_date": cstr(end),
+        "off_day": "—",
+        "status": row.status or "Scheduled",
+    }
+
+
+def _covered_week_days(rows, week_start, week_end, shift_keyword):
+    covered = set()
+    keyword = cstr(shift_keyword).lower()
+    for row in rows:
+        if keyword not in cstr(row.get("shift")).lower():
+            continue
+        start = getdate(row.get("start_date"))
+        end = getdate(row.get("end_date"))
+        current = max(start, week_start)
+        last = min(end, week_end)
+        while current <= last:
+            covered.add(cstr(current))
+            current = add_days(current, 1)
+    return covered
+
+
+def _coverage_percent(days):
+    return round((len(days) / 7) * 100) if days else 0
+
+
+def _pos_roster_leave_count(week_start, week_end, scheduled_staff):
+    if not frappe.db.table_exists("Leave Application"):
+        return 0
+
+    values = [cstr(week_end), cstr(week_start)]
+    employee_filter = ""
+    if scheduled_staff:
+        employee_filter = "AND employee IN %(employees)s"
+        values = {"week_end": cstr(week_end), "week_start": cstr(week_start), "employees": tuple(scheduled_staff)}
+        params = values
+    else:
+        params = tuple(values)
+
+    query = f"""
+        SELECT COUNT(DISTINCT employee) AS cnt
+        FROM `tabLeave Application`
+        WHERE docstatus < 2
+          AND status IN ('Approved', 'Open')
+          AND from_date <= %(week_end)s
+          AND to_date >= %(week_start)s
+          {employee_filter}
+    """ if scheduled_staff else """
+        SELECT COUNT(DISTINCT employee) AS cnt
+        FROM `tabLeave Application`
+        WHERE docstatus < 2
+          AND status IN ('Approved', 'Open')
+          AND from_date <= %s
+          AND to_date >= %s
+    """
+    result = frappe.db.sql(query, params, as_dict=1)
+    return int(result[0].cnt or 0) if result else 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────

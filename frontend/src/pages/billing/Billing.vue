@@ -27,6 +27,7 @@
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="$router.push('/billing/payments')">Payment List</button>
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="$router.push('/billing/invoices')">Invoice List</button>
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="$router.push('/billing/corporate')">Corporate Billing</button>
+          <button class="px-4 py-2 text-xs font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 transition-colors" @click="$router.push('/billing/reconcile')">Payment Reconciliation</button>
           <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">New Invoice</button>
         </div>
       </div>
@@ -82,7 +83,10 @@
 
         <!-- Overdue -->
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-          <p class="text-xs text-gray-400 mb-2">Overdue</p>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs text-gray-400">Overdue</p>
+            <span class="text-xs text-gray-400">All-time</span>
+          </div>
           <p class="text-3xl font-bold text-red-500">{{ fmt(stats.total_overdue) }}</p>
           <p class="text-xs text-gray-400 mt-2">{{ pct(stats.total_overdue, stats.total_outstanding) }}% of net outstanding</p>
         </div>
@@ -91,7 +95,8 @@
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Invoices in Period</p>
           <p class="text-3xl font-bold text-gray-900">{{ stats.invoices_in_range }}</p>
-          <p class="text-xs text-gray-400 mt-2">{{ fmtDate(fromDate) }} – {{ fmtDate(toDate) }}</p>
+          <p class="text-xs text-gray-400 mt-1">{{ fmt(stats.invoiced_in_range) }} invoiced</p>
+          <p class="text-xs text-gray-400">{{ fmtDate(fromDate) }} – {{ fmtDate(toDate) }}</p>
         </div>
 
         <!-- Unallocated Payments -->
@@ -222,22 +227,36 @@
         <!-- Right panel -->
         <div class="space-y-3">
 
-          <!-- Unreconciled Credit Notes -->
-          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4" v-if="insights.unreconciled_credits?.total_count > 0">
+          <!-- Unreconciled Credits & Overpayments -->
+          <div class="bg-white rounded-xl border border-gray-200 px-5 py-4" v-if="(insights.unreconciled_credits?.total_count > 0) || (insights.unreconciled_credits?.overpayment_total > 0)">
             <div class="flex items-center justify-between mb-2">
-              <p class="text-xs font-bold text-gray-900">Unreconciled Credits</p>
+              <p class="text-xs font-bold text-gray-900">Credits & Overpayments</p>
               <span class="px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-500 rounded-full">Action Required</span>
             </div>
-            <p class="text-lg font-bold text-red-500 mb-2">-{{ fmt(insights.unreconciled_credits?.total_amount) }}</p>
-            <p class="text-xs text-gray-400 mb-3">{{ insights.unreconciled_credits?.total_count }} credit note{{ insights.unreconciled_credits?.total_count === 1 ? '' : 's' }} not yet applied</p>
-            <div class="space-y-1.5">
-              <div v-for="c in (insights.unreconciled_credits?.by_customer || [])" :key="c.customer"
+            <!-- Credit notes row -->
+            <div v-if="insights.unreconciled_credits?.credit_note_total > 0" class="mb-1">
+              <p class="text-xs text-gray-500">Credit Notes</p>
+              <p class="text-base font-bold text-red-500">-{{ fmt(insights.unreconciled_credits?.credit_note_total) }}</p>
+            </div>
+            <!-- Overpayments row -->
+            <div v-if="insights.unreconciled_credits?.overpayment_total > 0" class="mb-2">
+              <p class="text-xs text-gray-500">Guest Overpayments</p>
+              <p class="text-base font-bold text-orange-500">{{ fmt(insights.unreconciled_credits?.overpayment_total) }}</p>
+            </div>
+            <div class="space-y-1 mb-3">
+              <div v-for="c in (insights.unreconciled_credits?.by_customer || []).slice(0,5)" :key="c.customer"
                 class="flex items-center justify-between text-xs">
                 <span class="text-gray-600 truncate mr-2">{{ c.customer }}</span>
-                <span class="text-red-500 font-semibold flex-shrink-0">-{{ fmt(c.amount) }}</span>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                  <span v-if="c.overpayment_amount > 0" class="text-orange-500 font-semibold">+{{ fmt(c.overpayment_amount) }}</span>
+                  <span v-if="c.credit_note_amount > 0" class="text-red-500 font-semibold">-{{ fmt(c.credit_note_amount) }}</span>
+                </div>
               </div>
             </div>
-            <p class="text-xs text-gray-400 mt-3">Reconcile via ERPNext → Accounting → Payment Reconciliation</p>
+            <button @click="$router.push('/billing/reconcile')"
+              class="w-full py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors">
+              Reconcile Now
+            </button>
           </div>
 
           <!-- Corporate Follow-up -->
@@ -321,7 +340,8 @@ const stats = ref({
   corp_invoiced: 0, corp_collected: 0, corp_outstanding: 0,
   ind_invoiced: 0,  ind_collected: 0,  ind_outstanding: 0,
   unreconciled_credits_count: 0, unreconciled_credits_amount: 0,
-  invoices_in_range: 0, unallocated_payments: 0,
+  invoices_in_range: 0, invoiced_in_range: 0, outstanding_in_range: 0,
+  unallocated_payments: 0,
 })
 
 const activityFeed = ref([])

@@ -76,6 +76,9 @@ const router = createRouter({
 
     // Billing
     { path: '/billing', name: 'Billing', component: () => import('@/pages/billing/Billing.vue') },
+    { path: '/billing/payments', name: 'PaymentList', component: () => import('@/pages/billing/PaymentList.vue') },
+    { path: '/billing/invoices', name: 'InvoiceList', component: () => import('@/pages/billing/InvoiceList.vue') },
+    { path: '/billing/reconcile', name: 'BillingReconcile', component: () => import('@/pages/billing/BillingReconcile.vue') },
     { path: '/billing/corporate', name: 'CorporateBillList', component: () => import('@/pages/billing/CorporateBillList.vue') },
     { path: '/billing/corporate/:id', name: 'CorporateBillDetail', component: () => import('@/pages/billing/CorporateBillDetail.vue') },
     { path: '/billing/bill-transfers', name: 'BillTransferList', component: () => import('@/pages/billing/BillTransferList.vue') },

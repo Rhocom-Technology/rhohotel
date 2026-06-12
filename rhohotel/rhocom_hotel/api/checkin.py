@@ -737,18 +737,25 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
     exclude_reservation: Hotel Reservation name whose room allocations should be
     treated as available (used when checking in from an existing reservation).
     """
-    from rhohotel.rhocom_hotel.utils.room_availability import _normalize_dt
+    from rhohotel.rhocom_hotel.utils.room_availability import (
+        _normalize_checkin_dt,
+        _normalize_checkout_dt,
+        _get_hotel_time_strings,
+    )
 
     use_availability = bool(check_in_dt and check_out_dt)
 
     if use_availability:
-        ci_dt = _normalize_dt(check_in_dt)
-        co_dt = _normalize_dt(check_out_dt)
+        ci_dt = _normalize_checkin_dt(check_in_dt)
+        co_dt = _normalize_checkout_dt(check_out_dt)
         ci_str = ci_dt.strftime("%Y-%m-%d %H:%M:%S")
         co_str = co_dt.strftime("%Y-%m-%d %H:%M:%S")
+        ci_time_str, co_time_str = _get_hotel_time_strings()
 
     # --- 1. Candidate rooms (basic filters) ---
-    filters = {"status": "Vacant"}
+    # Include both Vacant and Reserved rooms — Reserved means a future booking
+    # exists, but the room may still be free for the requested period.
+    filters = {"status": ["in", ["Vacant", "Reserved"]], "operational_status": "In Service", "maintenance_flag": 0}
     if room_type:
         filters["room_type"] = room_type
 
@@ -794,11 +801,11 @@ def get_available_rooms(room_type="", check_in_dt=None, check_out_dt=None, exclu
               AND COALESCE(rr.check_in_reference, '') = ''
               AND COALESCE(rr.status, 'Reserved') NOT IN
                   ('Checked In', 'Checked Out', 'Cancelled')
-              AND hr.from_date < %s
-              AND hr.to_date > %s
+              AND TIMESTAMP(hr.from_date, %s) < %s
+              AND TIMESTAMP(hr.to_date,   %s) > %s
               AND hr.name != %s
             """,
-            tuple(room_names) + (co_str, ci_str, exclude_reservation or ''),
+            tuple(room_names) + (ci_time_str, co_str, co_time_str, ci_str, exclude_reservation or ''),
             as_dict=True,
         )
 

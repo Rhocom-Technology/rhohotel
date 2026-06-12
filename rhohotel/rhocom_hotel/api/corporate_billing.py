@@ -379,6 +379,22 @@ def record_corporate_payment(
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Corporate payment submit failed")
 
+	check_in = inv.get("custom_hotel_room_check_in")
+	if check_in:
+		try:
+			from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
+
+			new_outstanding = (sync_checkin_folio_totals(check_in).get("summary") or {}).get("balance_amount", 0)
+			frappe.db.set_value(
+				"Hotel Room Check In",
+				check_in,
+				"total_outstanding_amount",
+				new_outstanding,
+				update_modified=False,
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Check-in folio sync failed after invoice payment")
+
 	frappe.db.commit()
 	return {"payment_entry": pe.name}
 

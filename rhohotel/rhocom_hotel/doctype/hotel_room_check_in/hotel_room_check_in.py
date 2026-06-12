@@ -107,8 +107,11 @@ class HotelRoomCheckIn(Document):
 
 		room = frappe.get_doc("Hotel Room", self.room_number)
 
-		if room.status != "Vacant":
-			frappe.throw(_("Room {0} is not vacant").format(self.room_number))
+		# Only block rooms that are physically occupied right now.
+		# "Reserved" means a future booking exists — the time-based availability
+		# check below handles whether dates actually conflict.
+		if room.status == "Occupied":
+			frappe.throw(_("Room {0} is currently occupied. Please check out the current guest first.").format(self.room_number))
 
 		from rhohotel.rhocom_hotel.utils.room_availability import assert_room_available
 

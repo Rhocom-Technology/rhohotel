@@ -181,14 +181,16 @@ const loading = ref(true)
 const doctype = computed(() =>
   props.invoiceType === 'POS Invoice' ? 'POS Invoice' : 'Sales Invoice'
 )
-const typeLabel = computed(() =>
-  props.invoiceType === 'POS Invoice' ? 'Restaurant' : 'Room Charge'
-)
-const typeBadge = computed(() =>
-  props.invoiceType === 'POS Invoice'
-    ? 'bg-purple-50 text-purple-600 border-purple-200'
-    : 'bg-blue-50 text-blue-600 border-blue-200'
-)
+const typeLabel = computed(() => {
+  if (props.invoiceType === 'POS Invoice') return 'Restaurant'
+  if (props.invoiceType === 'Credit Note') return 'Credit Note'
+  return props.invoiceType || 'Room Charge'
+})
+const typeBadge = computed(() => {
+  if (props.invoiceType === 'POS Invoice') return 'bg-purple-50 text-purple-600 border-purple-200'
+  if (props.invoiceType === 'Credit Note') return 'bg-orange-50 text-orange-500 border-orange-200'
+  return 'bg-blue-50 text-blue-600 border-blue-200'
+})
 const statusBadge = computed(() => {
   const s = invoice.value?.status
   if (s === 'Paid') return 'bg-green-50 text-green-600 border-green-200'
