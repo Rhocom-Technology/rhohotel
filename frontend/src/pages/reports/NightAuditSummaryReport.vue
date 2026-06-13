@@ -2,17 +2,14 @@
   <div class="space-y-5">
     <!-- Header -->
     <div>
-      <!-- <h1 class="text-2xl font-bold text-gray-900">Night Audit Summary Report</h1> -->
-        <div class="flex justify-between items-center gap-3 flex-wrap">
-          
+      <div class="flex justify-between items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">Night Audit Summary Report</h1>
-       <button
+        <button
           @click="downloadReport"
           class="bg-green-600 text-white px-4 py-2 rounded-lg">
           Download
         </button>
-  
-    </div>
+      </div>
       <p class="text-xs text-gray-400 mt-1">
         Daily revenue, payments, room movement, occupancy, exceptions and audit transaction summary.
       </p>
@@ -102,75 +99,114 @@
       </p>
     </div>
 
-    <!-- Summary Cards -->
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-500">
+    <!-- Row 1: Revenue breakdown -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-600">
         <p class="text-xs text-gray-400 mb-1">Total Revenue</p>
         <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.total_revenue) }}</p>
-        <p class="text-[10px] text-blue-600 mt-1">gross revenue</p>
+        <p class="text-[10px] text-blue-600 mt-1">all invoices gross total</p>
       </div>
 
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-green-500">
-        <p class="text-xs text-gray-400 mb-1">Total Paid</p>
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-400">
+        <p class="text-xs text-gray-400 mb-1">Room Revenue</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.room_revenue) }}</p>
+        <p class="text-[10px] text-blue-400 mt-1">room invoices only</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-indigo-500">
+        <p class="text-xs text-gray-400 mb-1">POS Revenue</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.pos_revenue) }}</p>
+        <p class="text-[10px] text-indigo-500 mt-1">restaurant / bar invoices</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-purple-400">
+        <p class="text-xs text-gray-400 mb-1">Other Revenue</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.other_revenue) }}</p>
+        <p class="text-[10px] text-purple-400 mt-1">non-room non-POS invoices</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-amber-500">
+        <p class="text-xs text-gray-400 mb-1">Discounts Given</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.total_discount) }}</p>
+        <p class="text-[10px] text-amber-500 mt-1">invoice-level discounts</p>
+      </div>
+    </div>
+
+    <!-- Row 2: Payment & collection breakdown -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-green-600">
+        <p class="text-xs text-gray-400 mb-1">Amount Paid (Invoices)</p>
         <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.total_paid) }}</p>
-        <p class="text-[10px] text-green-600 mt-1">cash received</p>
+        <p class="text-[10px] text-green-600 mt-1">paid against invoices posted today</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-green-400">
+        <p class="text-xs text-gray-400 mb-1">Payment Entries</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.pe_total) }}</p>
+        <p class="text-[10px] text-green-400 mt-1">{{ summary.pe_count }} standalone receipts today</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-red-500">
         <p class="text-xs text-gray-400 mb-1">Outstanding</p>
         <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.total_outstanding) }}</p>
-        <p class="text-[10px] text-red-600 mt-1">unpaid balance</p>
+        <p class="text-[10px] text-red-500 mt-1">unpaid invoice balances</p>
       </div>
 
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-amber-500">
-        <p class="text-xs text-gray-400 mb-1">Discounts</p>
-        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.total_discount) }}</p>
-        <p class="text-[10px] text-amber-600 mt-1">total discount</p>
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-rose-400">
+        <p class="text-xs text-gray-400 mb-1">Credit Notes</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(summary.credit_notes_amount) }}</p>
+        <p class="text-[10px] text-rose-400 mt-1">{{ summary.credit_notes_count }} refund / reversal invoices</p>
       </div>
 
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-purple-500">
-        <p class="text-xs text-gray-400 mb-1">Transactions</p>
-        <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.transaction_count) }}</p>
-        <p class="text-[10px] text-purple-600 mt-1">audit records</p>
-      </div>
-
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-indigo-500">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-orange-500">
         <p class="text-xs text-gray-400 mb-1">Exceptions</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.exceptions_count) }}</p>
-        <p class="text-[10px] text-indigo-600 mt-1">audit flags</p>
+        <p class="text-[10px] text-orange-500 mt-1">outstanding + discount flags</p>
       </div>
     </div>
 
-    <!-- Room Movement Cards -->
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
+    <!-- Row 3: Room movement -->
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:12px;">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <p class="text-xs text-gray-400 mb-1">Invoice Count</p>
+        <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.transaction_count) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">invoices posted today</p>
+      </div>
+
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Total Rooms</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.total_rooms) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">hotel capacity</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Occupied</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.occupied_rooms) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">active check-ins</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Vacant</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.vacant_rooms) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">available for sale</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
-        <p class="text-xs text-gray-400 mb-1">Occupancy</p>
+        <p class="text-xs text-gray-400 mb-1">Occupancy %</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatPercent(summary.occupancy_percent) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">utilization rate</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Arrivals</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.arrivals) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">checked in today</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-1">Departures</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatNumber(summary.departures) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">expected checkout today</p>
       </div>
     </div>
 
@@ -510,7 +546,11 @@ const summary = ref({
   total_tax: 0,
   total_discount: 0,
   total_paid: 0,
+  pe_total: 0,
+  pe_count: 0,
   total_outstanding: 0,
+  credit_notes_count: 0,
+  credit_notes_amount: 0,
   transaction_count: 0,
   exceptions_count: 0,
   total_rooms: 0,

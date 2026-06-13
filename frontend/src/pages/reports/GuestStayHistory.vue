@@ -358,10 +358,11 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
 
 const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -574,7 +575,8 @@ function formatCompact(n) {
 
 function openCheckIn(row) {
   if (!row?.id) return
-  window.open(`/app/hotel-room-check-in/${row.id}`, '_blank')
+  // Navigate within the Vue SPA – avoids being redirected to raw Frappe desk
+  router.push({ name: 'CheckInDetail', params: { id: row.id } })
 }
 
 function exportReport() {

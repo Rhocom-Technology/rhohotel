@@ -26,17 +26,18 @@
       <p class="text-xs text-red-600 mt-1">{{ errorMessage }}</p>
     </div>
 
+    <!-- Row 1: Occupancy cards -->
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-500">
         <p class="text-xs text-gray-400 mb-1">Occupancy Rate</p>
         <p class="text-3xl font-bold text-gray-900">{{ stats.occupancyRate }}%</p>
-        <p class="text-[10px] text-gray-400 mt-1">current utilization</p>
+        <p class="text-[10px] text-gray-400 mt-1">{{ stats.occupiedRooms }} of {{ stats.totalRooms }} rooms</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-green-500">
         <p class="text-xs text-gray-400 mb-1">Occupied Rooms</p>
         <p class="text-3xl font-bold text-gray-900">{{ stats.occupiedRooms }}</p>
-        <p class="text-[10px] text-gray-400 mt-1">active guests</p>
+        <p class="text-[10px] text-gray-400 mt-1">active guests in period</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-purple-500">
@@ -48,19 +49,46 @@
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-amber-500">
         <p class="text-xs text-gray-400 mb-1">Arrivals / Departures</p>
         <p class="text-2xl font-bold text-gray-900">{{ stats.arrivals }} / {{ stats.departures }}</p>
-        <p class="text-[10px] text-gray-400 mt-1">today's movement</p>
+        <p class="text-[10px] text-gray-400 mt-1">check-ins / expected checkouts</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-red-500">
         <p class="text-xs text-gray-400 mb-1">Outstanding</p>
         <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.outstanding) }}</p>
-        <p class="text-[10px] text-gray-400 mt-1">unpaid balances</p>
+        <p class="text-[10px] text-gray-400 mt-1">unpaid room + POS charges</p>
       </div>
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-orange-500">
         <p class="text-xs text-gray-400 mb-1">Overdue Check-Out</p>
         <p class="text-3xl font-bold text-gray-900">{{ stats.overdueCheckOut }}</p>
-        <p class="text-[10px] text-gray-400 mt-1">needs follow-up</p>
+        <p class="text-[10px] text-gray-400 mt-1">past checkout date</p>
+      </div>
+    </div>
+
+    <!-- Row 2: Revenue cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-600">
+        <p class="text-xs text-gray-400 mb-1">Total Revenue</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.totalRevenue) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">room charges + POS combined</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-teal-500">
+        <p class="text-xs text-gray-400 mb-1">Room Revenue</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.roomRevenue) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">room invoices total</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-indigo-500">
+        <p class="text-xs text-gray-400 mb-1">POS Revenue</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.posRevenue) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">restaurant / bar billed to rooms</p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-green-600">
+        <p class="text-xs text-gray-400 mb-1">Total Collected</p>
+        <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.totalCollected) }}</p>
+        <p class="text-[10px] text-gray-400 mt-1">payments received</p>
       </div>
     </div>
 
@@ -102,14 +130,7 @@
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
           >
             <option value="">All Floors</option>
-            <option value="8">Floor 8</option>
-            <option value="7">Floor 7</option>
-            <option value="6">Floor 6</option>
-            <option value="5">Floor 5</option>
-            <option value="4">Floor 4</option>
-            <option value="3">Floor 3</option>
-            <option value="2">Floor 2</option>
-            <option value="1">Floor 1</option>
+            <option v-for="f in floorOptions" :key="f" :value="f">{{ f }}</option>
           </select>
         </div>
 
@@ -373,11 +394,8 @@ const generatedAt = ref('')
 
 const today = new Date().toISOString().slice(0, 10)
 
-const fromDate = new Date()
-fromDate.setDate(fromDate.getDate() - 7)
-
 const filters = ref({
-  dateFrom: fromDate.toISOString().slice(0, 10),
+  dateFrom: today,
   dateTo: today,
   room: '',
   floor: '',
@@ -390,12 +408,17 @@ const uniqueRooms = ref([])
 
 const stats = ref({
   occupancyRate: 0,
+  totalRooms: 0,
   occupiedRooms: 0,
   vacantRooms: 0,
   arrivals: 0,
   departures: 0,
   outstanding: 0,
   overdueCheckOut: 0,
+  roomRevenue: 0,
+  posRevenue: 0,
+  totalCollected: 0,
+  totalRevenue: 0,
 })
 
 const totals = ref({
@@ -408,7 +431,20 @@ const totals = ref({
 
 let searchTimer = null
 
+// Fetch real floor list from the server on mount
+const floorOptions = ref([])
+
+async function fetchFloors() {
+  try {
+    const result = await callMethodForm('rhohotel.rhocom_hotel.api.room.get_rooms_info', {})
+    floorOptions.value = (result?.floors || []).sort()
+  } catch {
+    floorOptions.value = []
+  }
+}
+
 onMounted(async () => {
+  await fetchFloors()
   await fetchReport()
 
   if (route.query.action === 'print') {
@@ -427,8 +463,16 @@ watch(searchQuery, () => {
   }, 450)
 })
 
+// Watch ALL filter fields including dates so any change triggers a re-fetch
 watch(
-  () => [filters.value.room, filters.value.floor, filters.value.status, filters.value.payment],
+  () => [
+    filters.value.room,
+    filters.value.floor,
+    filters.value.status,
+    filters.value.payment,
+    filters.value.dateFrom,
+    filters.value.dateTo,
+  ],
   () => fetchReport()
 )
 
@@ -450,6 +494,10 @@ async function fetchReport() {
 
     allRows.value = result?.rows || []
     uniqueRooms.value = result?.rooms || []
+    // Seed floor options from report if not already populated
+    if (result?.floors?.length) {
+      floorOptions.value = result.floors
+    }
     stats.value = result?.stats || stats.value
     totals.value = result?.totals || totals.value
     generatedAt.value = result?.generated_at || ''
