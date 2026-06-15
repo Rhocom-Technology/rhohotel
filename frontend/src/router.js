@@ -30,12 +30,19 @@ const router = createRouter({
     { path: '/guests/:id', name: 'GuestProfile', component: () => import('@/pages/frontdesk/GuestProfile.vue') },
     { path: '/guests/:id/edit', name: 'EditGuest', component: () => import('@/pages/frontdesk/EditGuest.vue') },
 
+    { path: '/weekly-shift-generator', name: 'WeeklyShiftGenerator', component: () => import('@/pages/shift/WeeklyShiftGenerator.vue') },
+    { path: '/shift-list', name: 'ShiftList', component: () => import('@/pages/shift/ShiftList.vue') },
+    { path: '/swap-requests', name: 'SwapRequestList', component: () => import('@/pages/shift/SwapRequestList.vue') },
+    { path: '/shift-preference', name: 'StaffShiftPreference', component: () => import('@/pages/shift/StaffShiftPreference.vue') },
+    { path: '/staff-roaster-dashboard', name: 'StaffRoasterDashboard', component: () => import('@/pages/shift/StaffRoasterDashboard.vue') },
+
     // Housekeeping
     { path: '/housekeeping', name: 'Housekeeping', component: () => import('@/pages/housekeeping/Housekeeping.vue') },
     { path: '/housekeeping/dashboard', name: 'HousekeepingDashboard', component: () => import('@/pages/housekeeping/HousekeepingDashboard.vue') },
     { path: '/housekeeping/task/new', name: 'NewHousekeepingTask', component: () => import('@/pages/housekeeping/NewHousekeepingTask.vue') },
     { path: '/housekeeping/task/:id', name: 'HousekeepingTask', component: () => import('@/pages/housekeeping/HousekeepingTask.vue') },
     { path: '/housekeeping/report', name: 'HousekeepingReport', component: () => import('@/pages/housekeeping/HousekeepingReport.vue') },
+    { path: '/shift-preference-manager', name: 'StaffShiftPreferenceManagerView', component: () => import('@/pages/shift/StaffShiftPreferenceManagerView.vue') },
 
     // Maintenance
     { path: '/maintenance/list', name: 'MaintenanceList', component: () => import('@/pages/maintenance/MaintenanceList.vue') },

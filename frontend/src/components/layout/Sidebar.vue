@@ -94,6 +94,14 @@ const allNavGroups = [
       { label: 'Hall List',     to: '/hall' },
       { label: 'Hall Bookings', to: '/hall/booking' },
       { label: 'Hall Dashboard', to: '/hall-dashboard' },
+
+      // Shift
+      { label: 'Weekly Shift Generator', to: '/weekly-shift-generator' },
+      { label: 'Shift List', to: '/shift-list' },
+      { label: 'Swap Request List', to: '/swap-requests' },
+      { label: 'Staff Shift Preference', to: '/shift-preference' },
+      { label: 'Staff Shift Preference Manager View', to: '/shift-preference-manager' },
+
     ],
   },
   {

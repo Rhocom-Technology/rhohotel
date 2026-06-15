@@ -49,6 +49,14 @@ const pageMeta = {
 'EditGuest':    { title: 'Edit Existing Guest',        subtitle: 'Guest profile • update guest identity, contact details, preferences, and supporting documents' },
 'NewGuest':     { title: 'New Guest',                  subtitle: 'Guest profile • create a new guest identity, contact details, preferences, and supporting documents' },
 
+  //Shifts
+  'WeeklyShiftGenerator': { title: 'Weekly Shift Generator', subtitle: 'Department supervisor tool • manually assign or AI auto-assign weekly shifts for all staff in selected department' },
+  'ShiftList': { title: 'Shift List', subtitle: 'HRMS • published staff shifts by specific date, including morning, afternoon, and night shifts' },
+  'SwapRequestList': { title: 'Swap Request List', subtitle: 'HRMS • staff shift swap requests, manager review, approval, rejection, and conflict control' },
+  'StaffShiftPreference': { title: 'Staff Shift Preference', subtitle: 'Self-service • current staff can submit preferred weekly shifts for manager guidance' },
+  'StaffRoasterDashboard': { title: 'Staff Roaster Dashboard', subtitle: 'HRMS • weekly planning, AI auto-assignment, staff preferences, published shifts, swaps, and attendance readiness' },
+  'StaffShiftPreferenceManagerView': { title: 'Staff Shift Preference - Manager View', subtitle: 'Manager view • review staff weekly preferences and use them to guide manual or AI shift generation' },
+
   // Housekeeping
   'Housekeeping':             { title: 'Housekeeping', subtitle: 'Housekeeping section • task list view' },
   'HousekeepingDashboard':    { title: 'Housekeeping Dashboard', subtitle: 'Room operations • cleaning status • team workload' },

@@ -901,16 +901,14 @@ async function save(submit) {
 
 onMounted(async () => {
   try {
-    const [h, s, c, paymentModesData] = await Promise.all([
+    const [h, s, paymentModesData] = await Promise.all([
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_halls'),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_services'),
-      callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_customers'),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_payment_modes'),
     ])
 
     halls.value = h || []
     services.value = s || []
-    customers.value = c || []
     paymentModes.value = paymentModesData || []
 
     // PREFILL HALL WHEN COMING FROM HALL DETAIL PAGE
