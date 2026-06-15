@@ -108,7 +108,7 @@ def get_booking_list():
     return bookings
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def create_booking(data):
     if isinstance(data, str):
         data = json.loads(data)

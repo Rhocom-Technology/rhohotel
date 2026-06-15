@@ -44,6 +44,8 @@ def get_context(context):
 		"gym": "gym",
 		"events": "events",
 		"booking-success": "booking-success",
+		"login": "login",
+		"forgot-password": "forgot-password",
 	}
 
 	if page not in page_map:

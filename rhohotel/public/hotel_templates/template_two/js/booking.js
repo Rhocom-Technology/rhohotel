@@ -1070,69 +1070,64 @@ function buildPaymentStep() {
 	const reservation = bookingState.reservation;
 
 	const summary = reservation.summary;
-
-	container.innerHTML = `
-
+container.innerHTML = `
     <div class="row justify-content-center">
-
-        <div class="col-lg-8">
-
-            <div class="card shadow-sm">
-
-                <div class="card-body">
-
-                    <h2>
-                        Complete Your Payment
-                    </h2>
-
-                    <p class="text-muted">
-                        Great — your booking details are ready. To confirm and secure your reservation, please complete payment below.
-                    </p>
-
-                    <hr>
-
-                    <!-- Reservation reference (hidden for now)
-                    <div class="mb-2">
-                        <strong>Reservation:</strong>
-                        ${summary.reservation_number}
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div style="height: 4px; background: linear-gradient(90deg, #1e293b, #475569);"></div>
+                
+                <div class="card-body p-4 p-md-5">
+                    <div class="text-center mb-5">
+                        <h2 class="fw-bold text-dark mb-2" style="letter-spacing: -0.5px;">Complete Your Payment</h2>
+                        <p class="text-muted col-md-10 mx-auto">
+                            Your booking details are securely locked in. Please complete your payment below to finalize your reservation at Serene Stay.
+                        </p>
                     </div>
-                    -->
-
-                    <div class="mb-2">
-                        <strong>Guest:</strong>
-                        ${summary.guest_name}
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 border h-100 d-flex flex-column justify-content-center" style="background-color: #fafafa;">
+                                <small class="text-uppercase tracking-wider text-muted fw-semibold fs-7 mb-1">Guest Details</small>
+                                <div class="fw-bold text-dark fs-5">${summary.guest_name}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 border h-100 d-flex flex-column justify-content-center" style="background-color: #fafafa;">
+                                <small class="text-uppercase tracking-wider text-muted fw-semibold fs-7 mb-1">Accommodation</small>
+                                <div class="fw-bold text-dark fs-5">${summary.rooms_booked}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12">
+                            <div class="p-3 rounded-3 border d-flex justify-content-between align-items-center" style="background-color: #f1f5f9;">
+                                <div>
+                                    <small class="text-uppercase tracking-wider text-muted fw-semibold fs-7 d-block">Total Amount</small>
+                                    <span class="text-muted fs-7">All taxes & fees included</span>
+                                </div>
+                                <div class="fs-3 fw-bolder text-dark">
+                                    ₦${Number(summary.total_amount).toLocaleString()}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="mb-2">
-                        <strong>Rooms:</strong>
-                        ${summary.rooms_booked}
+                    <div class="p-3 rounded-3 border border-dashed mb-5 text-center" style="background-color: #fffdec; border-color: #e2d6b5 !important;">
+                        <p class="mb-0 text-dark-emphasis fs-6">
+                            <strong>Need to finish this later?</strong> A secure payment link has been sent to your email. 
+                            You can use it to complete your booking within the next <strong>15 minutes</strong> before it expires.
+                        </p>
                     </div>
 
-                    <div class="mb-2">
-                        <strong>Total Amount:</strong>
-                        ₦${Number(summary.total_amount).toLocaleString()}
-                    </div>
-
-                    <div class="mt-4">
-
-                        <button
-                            type="button"
-                            id="payNowBtn"
-                            class="web-btn-solid"
-                        >
-                            Pay Now & Confirm Booking
+                    <div class="text-center">
+                        <button type="button" id="payNowBtn" class="web-btn-solid w-100 py-3 fw-bold rounded-3 fs-5 shadow-sm transition-all">
+                            Pay Now & Secure Reservation
                         </button>
-
                     </div>
-
                 </div>
-
             </div>
-
         </div>
-
     </div>
-
 `;
 
 	attachPaymentHandler();

@@ -1,29 +1,61 @@
+<div class="modal fade" id="logoutModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content glass-card">
+
+      <div class="modal-header ">
+        <h5 class="modal-title fw-bold">
+         Confirm
+        </h5>
+
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal">
+        </button>
+      </div>
+
+      <div class="modal-body">
+        Are you sure you want to log out?
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">
+          No
+        </button>
+
+        <button type="button" id="confirmLogoutBtn" class="btn btn-dark">
+          Yes
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <footer class="web-footer">
   <div class="container">
     <div class="row g-5">
       <div class="col-lg-4">
         <div class="web-footer-brand">
           {% if hotel.logo %}
-            <img src="{{ hotel.logo }}" alt="{{ hotel.hotel_name }}" style="max-height: 70px;">
+          <img src="{{ hotel.logo }}" alt="{{ hotel.hotel_name }}" style="max-height: 70px;">
           {% else %}
-            {{ hotel.hotel_name or "SereneStay" }}
+          {{ hotel.hotel_name or "SereneStay" }}
           {% endif %}
         </div>
 
         <p class="web-footer-text">
-          {{ hotel.hotel_name or "Our hotel" }} offers refined rooms, warm service, restful spaces, and memorable hospitality experiences for every guest.
+          {{ hotel.hotel_name or "Our hotel" }} offers refined rooms, warm service, restful spaces, and memorable
+          hospitality experiences for every guest.
         </p>
 
         {% if hotel.social_links %}
-          <div class="web-footer-socials">
-            {% for social in hotel.social_links %}
-              {% if social.is_visible and social.url %}
-                <a href="{{ social.url }}" class="web-footer-social-link" aria-label="{{ social.platform }}" target="_blank">
-                  <i class="{{ social.icon_class or 'fa-solid fa-link' }}"></i>
-                </a>
-              {% endif %}
-            {% endfor %}
-          </div>
+        <div class="web-footer-socials">
+          {% for social in hotel.social_links %}
+          {% if social.is_visible and social.url %}
+          <a href="{{ social.url }}" class="web-footer-social-link" aria-label="{{ social.platform }}" target="_blank">
+            <i class="{{ social.icon_class or 'fa-solid fa-link' }}"></i>
+          </a>
+          {% endif %}
+          {% endfor %}
+        </div>
         {% endif %}
       </div>
 
@@ -34,15 +66,15 @@
           <li><a href="/experiences">Experiences</a></li>
 
           {% if hotel.enable_dining %}
-            <li><a href="/dining">Dining</a></li>
+          <li><a href="/dining">Dining</a></li>
           {% endif %}
 
           {% if hotel.enable_spa %}
-            <li><a href="/spa">Spa</a></li>
+          <li><a href="/spa">Spa</a></li>
           {% endif %}
 
           {% if hotel.enable_events %}
-            <li><a href="/events">Events</a></li>
+          <li><a href="/events">Events</a></li>
           {% endif %}
         </ul>
       </div>
@@ -54,7 +86,7 @@
           <li><a href="/contact">Contact</a></li>
 
           {% if hotel.enable_gym %}
-            <li><a href="/gym">Gym</a></li>
+          <li><a href="/gym">Gym</a></li>
           {% endif %}
 
           <li><a href="/experiences">Leisure</a></li>

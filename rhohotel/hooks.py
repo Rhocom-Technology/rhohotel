@@ -402,6 +402,8 @@ website_route_rules = [
     {"from_route": "/gym", "to_route": "index"},
     {"from_route": "/events", "to_route": "index"},
     {"from_route": "/booking-success", "to_route": "index"},
+    {"from_route": "/login", "to_route": "index"},
+    {"from_route": "/forgot-password", "to_route": "index"},
 
     # # keep old URLs working for now
     # {"from_route": "/hotel", "to_route": "index"},

@@ -105,45 +105,31 @@ function callFrappeMethod(method, args = {}) {
 //get or create customer o
 //============================
 async function getOrCreateCustomer(name, email = "", phone = "") {
-	if (!name) throw new Error("Customer name required");
+	if (!name) {
+		throw new Error("Customer name required");
+	}
 
 	try {
-		const existing = await callFrappeMethod("frappe.client.get_value", {
-			doctype: "Customer",
-			filters: { customer_name: name },
-			fieldname: "name",
-		});
+		console.log(
+			"Calling method:",
+			"rhohotel.rhocom_hotel.api.customer.get_or_create_customer"
+		);
 
-		const existingName = existing?.name || existing?.message?.name;
+		const response = await callFrappeMethod(
+			"rhohotel.rhocom_hotel.api.customer.get_or_create_customer",
+			{
+				name,
+				email,
+				phone,
+			}
+		);
 
-		if (existingName) {
-			return existingName;
-		}
-
-		const customer = await callFrappeMethod("frappe.client.insert", {
-			doc: {
-				doctype: "Customer",
-				customer_name: name,
-				customer_type: "Individual",
-				customer_group: "Individual",
-				territory: "All Territories",
-				email_id: email || "",
-				mobile_no: phone || "",
-			},
-		});
-
-		return customer?.name || customer?.message?.name;
+		return response?.message || response;
 	} catch (err) {
 		console.error("Customer create/check failed:", err);
-
-		const serverMsg = err?._server_messages || err?.exception || err?.message || "";
-		const error = new Error(serverMsg || "Customer creation failed");
-		error.original = err;
-
-		throw error;
+		throw err;
 	}
 }
-
 // ============================
 // FORM SUBMISSION
 // ============================
@@ -288,6 +274,7 @@ function showAlert(message, type = "success") {
 function toUserMessage(err) {
 	let msg = "";
 
+	// extract frappe server message
 	if (err?._server_messages) {
 		try {
 			const parsed = JSON.parse(err._server_messages);
@@ -300,5 +287,22 @@ function toUserMessage(err) {
 	if (!msg && err?.exception) msg = err.exception;
 	if (!msg && err?.message) msg = err.message;
 
-	return msg || "Something went wrong. Please try again.";
+	// ============================
+	// CLEAN USER-FRIENDLY MESSAGES
+	// ============================
+
+	if (msg.includes("Hall") && msg.includes("not available")) {
+		return "This hall is not available for the selected dates. Please choose a different time.";
+	}
+
+	if (msg.includes("Conflicting Booking")) {
+		return "This hall is already booked for the selected period. Please choose another date or time.";
+	}
+
+	if (msg.includes("End Date must be after Start Date")) {
+		return "End time must be after start time.";
+	}
+
+	// fallback
+	return "This hall is not available for the selected time. Please try different dates.";
 }
