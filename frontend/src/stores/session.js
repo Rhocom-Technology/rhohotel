@@ -86,11 +86,12 @@ export const useSessionStore = defineStore('session', () => {
 
   /**
    * Returns true if the user has any of the provided roles,
-   * or if the user is a System Manager (universal access).
+   * or if the user is a System Manager / Hotel Manager (universal access).
    */
   function hasAnyRole(requiredRoles) {
     if (!requiredRoles || requiredRoles.length === 0) return true
     if (roles.value.includes('System Manager')) return true
+    if (roles.value.includes('Hotel Manager')) return true
     return requiredRoles.some((role) => roles.value.includes(role))
   }
 

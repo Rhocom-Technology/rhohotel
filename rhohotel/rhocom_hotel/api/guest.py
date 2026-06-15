@@ -192,11 +192,11 @@ def get_guest(name):
 	# Stay history
 	stays = frappe.get_all(
 		"Hotel Room Check In",
-		filters={"guest": name},
+		filters={"guest": name, "docstatus": ["!=", 2]},
 		fields=[
 			"name", "room_number", "room_type", "check_in_datetime",
 			"expected_check_out_datetime", "actual_check_out_datetime",
-			"status", "total_outstanding_amount", "number_of_nights",
+			"status", "total_charges", "total_outstanding_amount", "number_of_nights",
 			"reservation_source",
 		],
 		order_by="check_in_datetime desc",
@@ -204,8 +204,22 @@ def get_guest(name):
 	)
 
 	total_stays = len(stays)
-	completed_stays = [s for s in stays if s.get("status") == "Checked Out"]
-	lifetime_spend = sum(flt(s.get("total_outstanding_amount", 0)) for s in completed_stays)
+	checkin_totals = _get_checkin_invoice_totals([s.get("name") for s in stays if s.get("name")])
+	lifetime_spend = 0
+	for stay in stays:
+		checkin_name = stay.get("name")
+		totals = checkin_totals.get(checkin_name, {})
+		amount = flt(totals.get("amount"))
+		outstanding = flt(totals.get("outstanding"))
+		paid_amount = flt(totals.get("paid_amount"))
+
+		if paid_amount > 0:
+			lifetime_spend += paid_amount
+		elif amount > 0:
+			lifetime_spend += max(0, amount - outstanding)
+		else:
+			# Fallback for older stays without linked invoices.
+			lifetime_spend += max(0, flt(stay.get("total_charges")) - flt(stay.get("total_outstanding_amount")))
 
 	# Build timeline from stay history
 	timeline = []
@@ -247,6 +261,83 @@ def get_guest(name):
 		"timeline": timeline,
 		"current_status": "In-House" if active_ci else "Checked Out",
 	}
+
+
+def _get_checkin_invoice_totals(checkin_names):
+	"""Return invoiced and outstanding totals keyed by Hotel Room Check In name."""
+	totals = {}
+	if not checkin_names:
+		return totals
+
+	for checkin_name in checkin_names:
+		totals[checkin_name] = {"amount": 0, "outstanding": 0, "paid_amount": 0}
+
+	placeholders = ", ".join(["%s"] * len(checkin_names))
+
+	if _has_column("Sales Invoice", "custom_hotel_room_check_in"):
+		rows = frappe.db.sql(
+			"""
+			SELECT
+				custom_hotel_room_check_in AS checkin,
+				SUM(grand_total) AS amount,
+				SUM(outstanding_amount) AS outstanding
+			FROM `tabSales Invoice`
+			WHERE docstatus = 1
+			  AND custom_hotel_room_check_in IN ({0})
+			GROUP BY custom_hotel_room_check_in
+			""".format(placeholders),
+			tuple(checkin_names),
+			as_dict=True,
+		)
+		for row in rows:
+			if row.get("checkin") in totals:
+				totals[row.get("checkin")]["amount"] += flt(row.get("amount"))
+				totals[row.get("checkin")]["outstanding"] += flt(row.get("outstanding"))
+
+	if _has_column("POS Invoice", "custom_hotel_room_check_in"):
+		rows = frappe.db.sql(
+			"""
+			SELECT
+				custom_hotel_room_check_in AS checkin,
+				SUM(grand_total) AS amount,
+				SUM(outstanding_amount) AS outstanding
+			FROM `tabPOS Invoice`
+			WHERE docstatus = 1
+			  AND custom_hotel_room_check_in IN ({0})
+			GROUP BY custom_hotel_room_check_in
+			""".format(placeholders),
+			tuple(checkin_names),
+			as_dict=True,
+		)
+		for row in rows:
+			if row.get("checkin") in totals:
+				totals[row.get("checkin")]["amount"] += flt(row.get("amount"))
+				totals[row.get("checkin")]["outstanding"] += flt(row.get("outstanding"))
+
+	if _has_column("Payment Entry", "custom_hotel_room_check_in"):
+		rows = frappe.db.sql(
+			"""
+			SELECT
+				custom_hotel_room_check_in AS checkin,
+				SUM(paid_amount) AS paid_amount
+			FROM `tabPayment Entry`
+			WHERE docstatus = 1
+			  AND payment_type = 'Receive'
+			  AND custom_hotel_room_check_in IN ({0})
+			GROUP BY custom_hotel_room_check_in
+			""".format(placeholders),
+			tuple(checkin_names),
+			as_dict=True,
+		)
+		for row in rows:
+			if row.get("checkin") in totals:
+				totals[row.get("checkin")]["paid_amount"] += flt(row.get("paid_amount"))
+
+	return totals
+
+
+def _has_column(doctype, column):
+	return column in frappe.db.get_table_columns(f"tab{doctype}")
 
 
 def _get_guest_id_document_url(doc):

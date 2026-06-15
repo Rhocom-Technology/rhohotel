@@ -89,8 +89,6 @@ const allNavGroups = [
       { label: 'Payments', to: '/payments' },
       { label: 'Guest List', to: '/guests' },
       { label: 'Night Audit', to: '/night-audit' },
-
-      //  Hall
       { label: 'Hall List',     to: '/hall' },
       { label: 'Hall Bookings', to: '/hall/booking' },
       { label: 'Hall Dashboard', to: '/hall-dashboard' },
@@ -115,22 +113,22 @@ const allNavGroups = [
   {
     label: 'Housekeeping',
     icon: Sparkles,
-    allowedRoles: ROLE_GROUPS.housekeeping,
+    allowedRoles: ROLE_GROUPS.housekeepingList,
     children: [
-      { label: 'Dashboard', to: '/housekeeping/dashboard' },
+      { label: 'Dashboard', to: '/housekeeping/dashboard', allowedRoles: ROLE_GROUPS.housekeepingFull },
       { label: 'Task List', to: '/housekeeping' },
-      { label: 'Housekeeping Report', to: '/housekeeping/report' },
+      { label: 'Housekeeping Report', to: '/housekeeping/report', allowedRoles: ROLE_GROUPS.housekeepingFull },
     ],
   },
   {
     label: 'Maintenance',
     icon: Wrench,
-    allowedRoles: ROLE_GROUPS.maintenance,
+    allowedRoles: ROLE_GROUPS.maintenanceList,
     children: [
       { label: 'Maintenance List', to: '/maintenance/list' },
-      { label: 'Dashboard', to: '/maintenance/dashboard' },
-      { label: 'Request', to: '/maintenance/request' },
-      { label: 'Technician List', to: '/maintenance/technicians' },
+      { label: 'Dashboard', to: '/maintenance/dashboard', allowedRoles: ROLE_GROUPS.maintenanceFull },
+      { label: 'Request', to: '/maintenance/request', allowedRoles: ROLE_GROUPS.maintenanceFull },
+      { label: 'Technician List', to: '/maintenance/technicians', allowedRoles: ROLE_GROUPS.maintenanceFull },
     ],
   },
   {
@@ -146,28 +144,28 @@ const allNavGroups = [
   {
     label: 'Reports',
     icon: BarChart2,
-    allowedRoles: ROLE_GROUPS.reports,
+    allowedRoles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsHousekeeping],
     children: [
       { label: 'Report List',                    to: '/reports' },
-      { label: 'Daily Occupancy Report',         to: '/reports/daily-occupancy-report' },
-      { label: 'Guest Stay History Report',      to: '/reports/guest-stay-history-report' },
-      { label: 'Night Audit Summary Report',    to: '/reports/night-audit-summary-report' },
-      { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement' },
-      { label: 'Corporate Billing Statement', to: '/reports/corporate-billing-statement' },
-      { label: 'Complimentary & House Use', to: '/reports/complimentary-house-use-report' },
-      { label: 'POS Sales Report', to: '/reports/pos-sales-report' },
-      { label: 'Housekeeping Productivity Report', to: '/reports/house-keeping-productivity-report' },
+      { label: 'Daily Occupancy Report',         to: '/reports/daily-occupancy-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Guest Stay History Report',      to: '/reports/guest-stay-history-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Night Audit Summary Report',    to: '/reports/night-audit-summary-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Corporate Billing Statement', to: '/reports/corporate-billing-statement', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Complimentary & House Use', to: '/reports/complimentary-house-use-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'POS Sales Report', to: '/reports/pos-sales-report', allowedRoles: ROLE_GROUPS.reportsPos },
+      { label: 'Housekeeping Productivity Report', to: '/reports/house-keeping-productivity-report', allowedRoles: ROLE_GROUPS.reportsHousekeeping },
     ],
   },
   {
     label: 'Point of Sales',
     icon: ShoppingCart,
-    allowedRoles: ROLE_GROUPS.pos,
+    allowedRoles: ROLE_GROUPS.posBasic,
     children: [
       { label: 'POS Dashboard', to: '/pos' },
-      { label: 'Manager Dashboard', to: '/pos/manager-dashboard', allowedRoles: ['Front Desk Manager', 'Hotel Manager'] },   
-      { label: 'POS Invoice List', to: '/pos/invoices' },
-      { label: 'Shift Difference Log', to: '/pos/shift-difference-log' }, 
+      { label: 'Manager Dashboard', to: '/pos/manager-dashboard', allowedRoles: ROLE_GROUPS.posManager },
+      { label: 'POS Invoice List', to: '/pos/invoices', allowedRoles: ROLE_GROUPS.posManager },
+      { label: 'Shift Difference Log', to: '/pos/shift-difference-log', allowedRoles: ROLE_GROUPS.posManager },
     ],
   },
   {
@@ -194,15 +192,14 @@ const allNavGroups = [
         { label: 'New Complimentary',     to: '/complimentary/new' },
     ],
   },
-  
   {
     label: 'Asset Management',
     icon: Settings,
     allowedRoles: ROLE_GROUPS.assetManagement,
     children: [
-     { label: 'Dashboard',  to: '/assets-mgmt' },
-  { label: 'Asset List', to: '/assets-mgmt/list' },
-  { label: 'Asset Maintenance', to: '/assets-mgmt/maintenance' },
+      { label: 'Dashboard',  to: '/assets-mgmt' },
+      { label: 'Asset List', to: '/assets-mgmt/list' },
+      { label: 'Asset Maintenance', to: '/assets-mgmt/maintenance' },
     ],
   },
 ]

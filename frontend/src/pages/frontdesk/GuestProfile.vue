@@ -74,7 +74,7 @@
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Lifetime Spend</p>
           <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(guest.lifetime_spend) }}</p>
-          <p class="text-xs font-medium text-blue-600 mt-1">Completed stays</p>
+          <p class="text-xs font-medium text-blue-600 mt-1">Posted payments</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Loyalty Tier</p>
