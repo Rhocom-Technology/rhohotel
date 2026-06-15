@@ -104,8 +104,9 @@
       </button>
       <button
         class="px-4 py-2 text-xs font-semibold text-white rounded-lg transition-colors"
-        :class="checkingOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-800'"
-        :disabled="checkingOut"
+        :class="checkingOut || (!isFrontDeskManager && grandNetOutstanding > 0) ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-900 hover:bg-gray-800'"
+        :disabled="checkingOut || (!isFrontDeskManager && grandNetOutstanding > 0)"
+        :title="!isFrontDeskManager && grandNetOutstanding > 0 ? 'Cannot checkout guest with outstanding balance. Contact a manager.' : ''"
         @click="startCheckout">
         {{ checkingOut ? 'Processing...' : 'Check Out' }}
       </button>
@@ -113,6 +114,10 @@
         class="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">
         Cancel
       </button>
+    </div>
+    <div v-if="!isFrontDeskManager && grandNetOutstanding > 0" class="bg-red-50 border border-red-200 rounded-xl px-5 py-3">
+      <p class="text-xs font-bold text-red-700 mb-1">Checkout Blocked</p>
+      <p class="text-xs text-red-600">Guest has an outstanding balance of {{ formatCurrency(grandNetOutstanding) }}. Collect payment or contact a manager to proceed.</p>
     </div>
     <div v-if="checkoutError" class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
       <p class="text-xs font-bold text-amber-700 mb-1">Checkout Pending</p>
@@ -490,7 +495,7 @@
           <p v-if="checkoutError" class="text-xs font-semibold text-red-500 mt-3">{{ checkoutError }}</p>
         </div>
         <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
-          <button @click="continueCheckout(false)"
+          <button v-if="isFrontDeskManager" @click="continueCheckout(false)"
             :disabled="checkingOut"
             class="px-4 py-2 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-60">
             Skip Charge
@@ -511,6 +516,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useSessionStore } from '@/stores/session'
 import RoomTransferModal from '@/components/checkin/RoomTransferModal.vue'
 import StayAdjustmentModal from '@/components/checkin/StayAdjustmentModal.vue'
 import RefundRequestModal from '@/components/checkin/RefundRequestModal.vue'
@@ -535,6 +541,8 @@ const selectedPayment = ref(null)
 
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
+const isFrontDeskManager = computed(() => session.hasAnyRole(['Front Desk Manager']))
 const activeTab = ref('Details')
 const showCreateMenu = ref(false)
 const invoices = ref([])

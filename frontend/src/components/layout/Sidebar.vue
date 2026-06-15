@@ -92,14 +92,6 @@ const allNavGroups = [
       { label: 'Hall List',     to: '/hall' },
       { label: 'Hall Bookings', to: '/hall/booking' },
       { label: 'Hall Dashboard', to: '/hall-dashboard' },
-
-      // Shift
-      { label: 'Weekly Shift Generator', to: '/weekly-shift-generator' },
-      { label: 'Shift List', to: '/shift-list' },
-      { label: 'Swap Request List', to: '/swap-requests' },
-      { label: 'Staff Shift Preference', to: '/shift-preference' },
-      { label: 'Staff Shift Preference Manager View', to: '/shift-preference-manager' },
-
     ],
   },
   {
@@ -171,8 +163,16 @@ const allNavGroups = [
   {
     label: 'Staff Roaster',
     icon: ShoppingCart,
-    allowedRoles: ROLE_GROUPS.staffRoaster,
-    to: '/pos/staff-roaster',
+    allowedRoles: ROLE_GROUPS.staffRoasterView,
+    children: [
+      { label: 'Swap Request', to: '/swap-requests' },
+      { label: 'Shift Preference', to: '/shift-preference' },
+      { label: 'Roaster Dashboard', to: '/staff-roaster-dashboard', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+      { label: 'Weekly Shift Generator', to: '/weekly-shift-generator', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+      { label: 'Shift List', to: '/shift-list', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+      { label: 'Shift Preference Manager View', to: '/shift-preference-manager', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+      { label: 'Staff Roaster Page', to: '/pos/staff-roaster', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+    ],
   },
   {
     label: 'Kitchen Terminal',

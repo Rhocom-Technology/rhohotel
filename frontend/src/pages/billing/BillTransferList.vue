@@ -282,7 +282,11 @@
               <div v-if="!detailLoading && detailTarget.status === 'Pending Approval'"
                 class="border-t border-gray-100 px-7 py-5 bg-white">
 
-                <div v-if="!showRejectForm" class="flex items-center gap-3">
+                <div v-if="!isFrontDeskManager" class="text-center">
+                  <p class="text-xs text-yellow-600 font-medium">A manager must approve or reject this transfer.</p>
+                </div>
+
+                <div v-else-if="!showRejectForm" class="flex items-center gap-3">
                   <button @click="showRejectForm = true"
                     class="flex-1 px-4 py-2.5 text-xs font-semibold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors">
                     Reject Transfer
@@ -331,6 +335,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useSessionStore } from '@/stores/session'
+
+const session = useSessionStore()
+const isFrontDeskManager = computed(() => session.hasAnyRole(['Front Desk Manager']))
 
 const transfers = ref([])
 const loading = ref(true)

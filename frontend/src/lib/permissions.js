@@ -16,7 +16,7 @@ const ROLE_GROUPS = {
 
   // Housekeeping - task list only (staff level)
   housekeepingList: ['House keeper', 'Housekeeping Manager'],
-  // Housekeeping - full module (dashboard, report)
+  // Housekeeping - full module (dashboard, report, assign)
   housekeepingFull: ['Housekeeping Manager'],
 
   // Maintenance - list only (staff level)
@@ -39,19 +39,27 @@ const ROLE_GROUPS = {
   // POS - full module (manager dashboard, invoices, shift logs)
   posManager: ['Sales Manager'],
 
-  // Staff Roaster - visible to all operational roles
-  staffRoaster: [
+  // Staff Roaster - view published only (all staff)
+  staffRoasterView: [
     'Hotel Receptionist', 'Front Desk Manager',
     'Sales User', 'Sales Manager',
     'House keeper', 'Housekeeping Manager',
     'Technician', 'Maintenance Manager',
+    'Kitchen User',
+  ],
+  // Staff Roaster - full module (managers only, filtered to department)
+  staffRoasterFull: [
+    'Front Desk Manager',
+    'Sales Manager',
+    'Housekeeping Manager',
+    'Maintenance Manager',
   ],
 
   // Kitchen Terminal
   kitchen: ['Sales User', 'Sales Manager', 'Kitchen User'],
 
-  // Complimentary management
-  complimentary: ['Hotel Receptionist', 'Front Desk Manager', 'Sales Manager'],
+  // Complimentary management (managers only)
+  complimentary: ['Front Desk Manager', 'Sales Manager'],
 
   // Asset Management
   assetManagement: ['Maintenance Manager'],
@@ -74,6 +82,15 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/hall-dashboard', roles: ROLE_GROUPS.frontDesk },
   { prefix: '/hall', roles: ROLE_GROUPS.frontDesk },
 
+  // Staff Roaster / Shift — manager pages
+  { prefix: '/weekly-shift-generator', roles: ROLE_GROUPS.staffRoasterFull },
+  { prefix: '/shift-list', roles: ROLE_GROUPS.staffRoasterFull },
+  { prefix: '/shift-preference-manager', roles: ROLE_GROUPS.staffRoasterFull },
+  { prefix: '/staff-roaster-dashboard', roles: ROLE_GROUPS.staffRoasterFull },
+  // Staff Roaster / Shift — all staff pages
+  { prefix: '/swap-requests', roles: ROLE_GROUPS.staffRoasterView },
+  { prefix: '/shift-preference', roles: ROLE_GROUPS.staffRoasterView },
+
   // Rooms
   { prefix: '/rooms', roles: ROLE_GROUPS.rooms },
 
@@ -92,7 +109,8 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/maintenance/list', roles: ROLE_GROUPS.maintenanceList },
   { prefix: '/maintenance/task', roles: ROLE_GROUPS.maintenanceList },
 
-  // Billing
+  // Billing — specific paths before general
+  { prefix: '/billing/reconcile', roles: ['Front Desk Manager'] },
   { prefix: '/billing', roles: ROLE_GROUPS.billing },
 
   // Reports — individual report routes
@@ -108,7 +126,7 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/reports', roles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsHousekeeping] },
 
   // POS — specific paths before general
-  { prefix: '/pos/staff-roaster', roles: ROLE_GROUPS.staffRoaster },
+  { prefix: '/pos/staff-roaster', roles: ROLE_GROUPS.staffRoasterFull },
   { prefix: '/pos/manager-dashboard', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos/invoices', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos/shift-difference-log', roles: ROLE_GROUPS.posManager },

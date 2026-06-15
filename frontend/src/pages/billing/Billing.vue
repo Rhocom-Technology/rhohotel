@@ -27,7 +27,7 @@
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="$router.push('/billing/payments')">Payment List</button>
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="$router.push('/billing/invoices')">Invoice List</button>
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="$router.push('/billing/corporate')">Corporate Billing</button>
-          <button class="px-4 py-2 text-xs font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 transition-colors" @click="$router.push('/billing/reconcile')">Payment Reconciliation</button>
+          <button v-if="isFrontDeskManager" class="px-4 py-2 text-xs font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 transition-colors" @click="$router.push('/billing/reconcile')">Payment Reconciliation</button>
           <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">New Invoice</button>
         </div>
       </div>
@@ -293,6 +293,10 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { callMethod } from '@/lib/api'
+import { useSessionStore } from '@/stores/session'
+
+const session = useSessionStore()
+const isFrontDeskManager = computed(() => session.hasAnyRole(['Front Desk Manager']))
 
 // ── API ──────────────────────────────────────────────────────────────────────
 async function getBillingDashboardData(from, to) {

@@ -204,10 +204,11 @@
           <div class="flex items-center justify-end gap-2 pt-2">
             <button @click="$emit('close')"
               class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Close</button>
-            <button @click="approveAndExecute" :disabled="approving"
+            <button v-if="isFrontDeskManager" @click="approveAndExecute" :disabled="approving"
               class="px-5 py-2.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60">
               {{ approving ? 'Processing...' : 'Approve & Execute Transfer' }}
             </button>
+            <p v-else class="text-xs text-yellow-600">A manager must approve this transfer.</p>
           </div>
         </div>
 
@@ -237,6 +238,10 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { humanizeErrorMessage } from '@/lib/api'
+import { useSessionStore } from '@/stores/session'
+
+const session = useSessionStore()
+const isFrontDeskManager = computed(() => session.hasAnyRole(['Front Desk Manager']))
 
 const props = defineProps({ checkIn: { type: Object, required: true } })
 const emit = defineEmits(['close', 'done'])
