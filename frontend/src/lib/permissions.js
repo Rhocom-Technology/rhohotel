@@ -45,7 +45,7 @@ const ROLE_GROUPS = {
     'Sales User', 'Sales Manager',
     'House keeper', 'Housekeeping Manager',
     'Technician', 'Maintenance Manager',
-    'Kitchen User',
+    'Kitchen User', 'Employee',
   ],
   // Staff Roaster - full module (managers only, filtered to department)
   staffRoasterFull: [
@@ -84,7 +84,7 @@ export const ROUTE_PERMISSIONS = [
 
   // Staff Roaster / Shift — manager pages
   { prefix: '/weekly-shift-generator', roles: ROLE_GROUPS.staffRoasterFull },
-  { prefix: '/shift-list', roles: ROLE_GROUPS.staffRoasterFull },
+  { prefix: '/shift-list', roles: ROLE_GROUPS.staffRoasterView },
   { prefix: '/shift-preference-manager', roles: ROLE_GROUPS.staffRoasterFull },
   { prefix: '/staff-roaster-dashboard', roles: ROLE_GROUPS.staffRoasterFull },
   // Staff Roaster / Shift — all staff pages

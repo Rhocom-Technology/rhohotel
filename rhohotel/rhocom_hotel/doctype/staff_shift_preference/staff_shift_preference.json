@@ -1,0 +1,135 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "format:SSP-{YYYY}-{#####}",
+  "creation": "2026-06-15 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "employee",
+    "employee_name",
+    "user",
+    "company",
+    "department",
+    "week_start",
+    "week_end",
+    "status",
+    "submitted_on",
+    "preferences"
+  ],
+  "fields": [
+    {
+      "fieldname": "employee",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Employee",
+      "options": "Employee",
+      "reqd": 1
+    },
+    {
+      "fieldname": "employee_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Employee Name",
+      "read_only": 1
+    },
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "label": "User",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "department",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Department",
+      "options": "Department",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "week_start",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Week Start",
+      "reqd": 1
+    },
+    {
+      "fieldname": "week_end",
+      "fieldtype": "Date",
+      "label": "Week End",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Draft\nSubmitted",
+      "reqd": 1
+    },
+    {
+      "fieldname": "submitted_on",
+      "fieldtype": "Datetime",
+      "label": "Submitted On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "preferences",
+      "fieldtype": "Table",
+      "label": "Preferences",
+      "options": "Staff Shift Preference Detail"
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-06-15 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Rhocom Hotel",
+  "name": "Staff Shift Preference",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Employee Self Service",
+      "write": 1
+    },
+    {
+      "read": 1,
+      "role": "Hotel Manager"
+    },
+    {
+      "read": 1,
+      "role": "Front Desk Manager"
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

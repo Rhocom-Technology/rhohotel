@@ -35,6 +35,7 @@ const router = createRouter({
     { path: '/swap-requests', name: 'SwapRequestList', component: () => import('@/pages/shift/SwapRequestList.vue') },
     { path: '/shift-preference', name: 'StaffShiftPreference', component: () => import('@/pages/shift/StaffShiftPreference.vue') },
     { path: '/staff-roaster-dashboard', name: 'StaffRoasterDashboard', component: () => import('@/pages/shift/StaffRoasterDashboard.vue') },
+    { path: '/swap-employee-shift', name: 'SwapEmployeeShift', component: () => import('@/pages/shift/SwapEmployeeShift.vue') },
 
     // Housekeeping
     { path: '/housekeeping', name: 'Housekeeping', component: () => import('@/pages/housekeeping/Housekeeping.vue') },
