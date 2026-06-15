@@ -244,29 +244,21 @@ def get_payment_modes():
         order_by="name asc",
     )
 
-
-@frappe.whitelist()
-def get_halls():
-    return frappe.db.get_all(
-        "Hall",
-        filters={
-            "availability_status": ["!=", "Unavailable"]
-        },
-        fields=["name", "hall_name", "hall_type", "capacity", "rate"],
-        order_by="hall_name asc",
-    )
-
-
 @frappe.whitelist()
 def get_halls():
     halls = frappe.get_all(
         "Hall",
+        filters={
+            "availability_status": ["!=", "Unavailable"]
+        },
         fields=[
             "name",
             "hall_name",
             "hall_type",
             "capacity",
             "rate",
+            "availability_status",
+            "unavailable_reason",
         ],
         order_by="hall_name asc",
     )
@@ -276,40 +268,32 @@ def get_halls():
 
         hall["facilities"] = []
 
-        if doc.get("projector_av"):
+        if doc.get("has_projector_av"):
             hall["facilities"].append("Projector / AV")
-
-        if doc.get("sound_system"):
+        if doc.get("has_sound_system"):
             hall["facilities"].append("Sound System")
-
-        if doc.get("air_conditioning"):
+        if doc.get("has_air_conditioning"):
             hall["facilities"].append("Air Conditioning")
-
-        if doc.get("stage"):
+        if doc.get("has_stage"):
             hall["facilities"].append("Stage")
-
-        if doc.get("restroom_access"):
+        if doc.get("has_restroom_access"):
             hall["facilities"].append("Restroom Access")
-
-        if doc.get("parking_access"):
+        if doc.get("has_parking_access"):
             hall["facilities"].append("Parking Access")
-
-        if doc.get("kitchen_support"):
+        if doc.get("has_kitchen_support"):
             hall["facilities"].append("Kitchen Support")
-
-        if doc.get("private_entrance"):
+        if doc.get("has_private_entrance"):
             hall["facilities"].append("Private Entrance")
 
-        hall["amenities"] = []
-
-        for row in doc.get("table_tdts", []):
-            hall["amenities"].append({
+        hall["amenities"] = [
+            {
                 "item": row.item,
                 "amenity_name": row.amenity_name
-            })
+            }
+            for row in doc.get("table_tdts", [])
+        ]
 
     return halls
-
 
 @frappe.whitelist()
 def get_event_types():
