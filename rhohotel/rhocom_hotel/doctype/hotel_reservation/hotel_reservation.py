@@ -547,9 +547,20 @@ class HotelReservation(Document):
     # ------------------------------------------------------------------
 
     def _reserve_rooms(self):
-        """Mark explicitly allocated rooms as Reserved once the reservation is submitted."""
+        """Mark explicitly allocated rooms as Reserved only if arrival is today.
+
+        Future reservations should NOT change the room status — rooms remain
+        available for sale until the actual arrival date.  A scheduled job
+        (mark_today_reserved_rooms) handles flipping status on the morning of arrival.
+        """
         if self.reservation_status not in (STATUS_CONFIRMED, STATUS_CHECKED_IN):
             return
+
+        from frappe.utils import getdate, today
+        arrival = getdate(self.from_date)
+        if arrival != getdate(today()):
+            return
+
         for row in self.rooms:
             if not row.room_number:
                 continue
@@ -2872,3 +2883,48 @@ def process_reservation_lifecycle():
         frappe.db.commit()
 
     return {"expired": len(expired_holds), "no_show": len(no_shows)}
+
+
+def mark_today_reserved_rooms():
+    """Daily scheduled job: mark rooms as Reserved for today's confirmed arrivals.
+
+    Also releases rooms that are still marked 'Reserved' but have no confirmed
+    reservation arriving today (leftover from yesterday or stale data).
+    """
+    today = frappe.utils.today()
+
+    # Find all rooms with confirmed reservations arriving today
+    today_rooms = frappe.db.sql(
+        """
+        SELECT DISTINCT rr.room_number
+        FROM `tabHotel Reservation Room` rr
+        INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
+        WHERE hr.docstatus != 2
+          AND hr.reservation_status = 'Confirmed'
+          AND hr.from_date = %s
+          AND rr.room_number IS NOT NULL
+          AND rr.room_number != ''
+        """,
+        today,
+        as_list=True,
+    )
+    today_room_numbers = {row[0] for row in today_rooms}
+
+    # Mark today's arrival rooms as Reserved
+    for room_number in today_room_numbers:
+        current_status = frappe.db.get_value("Hotel Room", room_number, "status")
+        if current_status == "Vacant":
+            frappe.db.set_value("Hotel Room", room_number, "status", "Reserved", update_modified=False)
+
+    # Release stale Reserved rooms that have no today arrival
+    stale_reserved = frappe.get_all(
+        "Hotel Room",
+        filters={"status": "Reserved"},
+        pluck="name",
+    )
+    for room_name in stale_reserved:
+        if room_name not in today_room_numbers:
+            frappe.db.set_value("Hotel Room", room_name, "status", "Vacant", update_modified=False)
+
+    frappe.db.commit()
+    return {"reserved": len(today_room_numbers), "released": len([r for r in stale_reserved if r not in today_room_numbers])}

@@ -96,6 +96,7 @@
           <option>Restaurant</option>
           <option>Front Desk</option>
           <option>Housekeeping</option>
+          <option>Laundry</option>
           <option>GM Office</option>
           <option>Operations</option>
         </select>

@@ -337,7 +337,10 @@ def _get_checkin_invoice_totals(checkin_names):
 
 
 def _has_column(doctype, column):
-	return column in frappe.db.get_table_columns(f"tab{doctype}")
+	try:
+		return bool(frappe.db.has_column(doctype, column))
+	except Exception:
+		return False
 
 
 def _get_guest_id_document_url(doc):

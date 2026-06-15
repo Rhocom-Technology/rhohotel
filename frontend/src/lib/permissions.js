@@ -15,12 +15,12 @@ const ROLE_GROUPS = {
   rooms: ['Front Desk Manager'],
 
   // Housekeeping - task list only (staff level)
-  housekeepingList: ['Housekeeping User', 'Housekeeping Manager'],
+  housekeepingList: ['House keeper', 'Housekeeping Manager'],
   // Housekeeping - full module (dashboard, report)
   housekeepingFull: ['Housekeeping Manager'],
 
   // Maintenance - list only (staff level)
-  maintenanceList: ['Maintenance User', 'Maintenance Manager'],
+  maintenanceList: ['Technician', 'Maintenance Manager'],
   // Maintenance - full module (dashboard, requests, technicians)
   maintenanceFull: ['Maintenance Manager'],
 
@@ -29,8 +29,8 @@ const ROLE_GROUPS = {
 
   // Reports - front desk related
   reportsFrontDesk: ['Hotel Receptionist', 'Front Desk Manager'],
-  // Reports - POS related
-  reportsPos: ['Sales User', 'Sales Manager'],
+  // Reports - POS related (manager only)
+  reportsPos: ['Sales Manager'],
   // Reports - housekeeping related
   reportsHousekeeping: ['Housekeeping Manager'],
 
@@ -43,8 +43,8 @@ const ROLE_GROUPS = {
   staffRoaster: [
     'Hotel Receptionist', 'Front Desk Manager',
     'Sales User', 'Sales Manager',
-    'Housekeeping User', 'Housekeeping Manager',
-    'Maintenance User', 'Maintenance Manager',
+    'House keeper', 'Housekeeping Manager',
+    'Technician', 'Maintenance Manager',
   ],
 
   // Kitchen Terminal
@@ -112,7 +112,7 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/pos/manager-dashboard', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos/invoices', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos/shift-difference-log', roles: ROLE_GROUPS.posManager },
-  { prefix: '/pos/shift-close', roles: ROLE_GROUPS.posBasic },
+  { prefix: '/pos/shift-close', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos', roles: ROLE_GROUPS.posBasic },
 
   // Kitchen

@@ -628,7 +628,7 @@ def get_hall_bookings():
                 hb.customer_name,
                 hb.start_datetime,
                 hb.end_datetime,
-                hb.total_hours,
+                hb.total_days,
                 hb.net_total,
                 hb.sales_invoice,
                 si.status AS invoice_status

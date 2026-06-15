@@ -15,6 +15,7 @@ CONSUMPTION_ROLES = {
     "Restaurant": {"System Manager", "Hotel Manager", "Front Desk Manager", "Restaurant Manager","Sales User"},
     "Front Desk": {"System Manager", "Hotel Manager", "Front Desk Manager", "Hotel Receptionist", "Front Desk"},
     "Housekeeping": {"System Manager", "Hotel Manager", "Hotel Housekeeping", "Housekeeping Manager"},
+    "Laundry": {"System Manager", "Hotel Manager", "Front Desk Manager", "Hotel Housekeeping", "Housekeeping Manager"},
     "GM Office": {"System Manager", "Hotel Manager"},
     "Operations": {"System Manager", "Hotel Manager", "Front Desk Manager"},
 }
@@ -129,7 +130,7 @@ def redeem_complimentary_value(complimentary_name, applied_amount, transaction_r
     }
 
 
-def _validate_redeemable(doc, department="Restaurant"):
+def _validate_redeemable(doc, department=None):
     if doc.status not in {"Approved", "In Progress"}:
         frappe.throw(_("Complimentary {0} is not approved for redemption.").format(doc.name))
     if department and doc.department != department:
@@ -650,11 +651,16 @@ def get_complimentary_pos_discount(complimentary_name, bill_total, manual_discou
 
 
 @frappe.whitelist()
-def get_redeemable_complimentaries(check_in=None, room=None, guest=None, department="Restaurant", complimentary_type=None):
-    """Approved complimentary records that can be applied from POS."""
-    department = department or "Restaurant"
-    if not _is_manager() and not _has_any(CONSUMPTION_ROLES.get(department, set())):
-        frappe.throw(_("You do not have the role required to redeem complimentaries."), frappe.PermissionError)
+def get_redeemable_complimentaries(check_in=None, room=None, guest=None, department=None, complimentary_type=None):
+    """Approved complimentary records that can be applied from POS or any department."""
+    if department:
+        if not _is_manager() and not _has_any(CONSUMPTION_ROLES.get(department, set())):
+            frappe.throw(_("You do not have the role required to redeem complimentaries."), frappe.PermissionError)
+    else:
+        # When no department specified, check if user can consume in any department
+        consumer_roles = set().union(*CONSUMPTION_ROLES.values())
+        if not _is_manager() and not _has_any(consumer_roles):
+            frappe.throw(_("You do not have the role required to redeem complimentaries."), frappe.PermissionError)
 
     rows = _unused_complimentary_rows(
         check_in=check_in,

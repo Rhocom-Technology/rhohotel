@@ -192,6 +192,9 @@ def get_room_view_data(filters=None):
 		status = _normalize_room_status(room.get("status"))
 		if reservation and status == "Vacant":
 			status = "Reserved"
+		elif status == "Reserved" and not reservation:
+			# Room was marked Reserved for a future reservation — treat as Vacant for today's view
+			status = "Vacant"
 		housekeeping_status = _normalize_housekeeping_status(room.get("housekeeping_status"))
 		expected_checkout = checkin.get("expected_check_out_datetime")
 		overdue = bool(status == "Occupied" and expected_checkout and expected_checkout < now)

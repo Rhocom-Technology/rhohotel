@@ -177,6 +177,7 @@ after_migrate = ["rhohotel.rhocom_hotel.patches.add_hotel_check_in_to_invoices.e
 scheduler_events = {
 	"daily": [
 		"rhohotel.rhocom_hotel.api.complimentary.expire_unused_complimentaries",
+		"rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.mark_today_reserved_rooms",
 	],
 	"cron": {
 		"0 11 * * *": ["rhohotel.rhocom_hotel.auto_close_pos_shift.auto_close_pos_shifts"],
