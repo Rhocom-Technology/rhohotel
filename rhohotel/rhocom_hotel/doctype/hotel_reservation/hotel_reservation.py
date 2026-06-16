@@ -101,7 +101,7 @@ def _assert_reservation_mutable(doc, action=None):
 # Statuses that mean a room is no longer occupied / unavailable
 STATUS_COMPLETED = STATUS_CHECKED_OUT   # alias for readability in queries
 _TERMINAL_STATUSES = {STATUS_CANCELLED, STATUS_COMPLETED, STATUS_NO_SHOW, STATUS_EXPIRED}
-_DEFAULT_HOLD_HOURS = 1
+_DEFAULT_HOLD_MINUTES = 15
 
 
 def _mark_reservation_room_checked_in(row_name, check_in_reference, check_in_time):
@@ -276,12 +276,12 @@ class HotelReservation(Document):
                     previous, current
                 )
             )
-
+    
     def _set_hold_expiry(self):
         """Stamp hold expiry when a reservation enters Hold."""
         if self.reservation_status == STATUS_HOLD and not self.hold_expires_at:
             self.hold_expires_at = frappe.utils.add_to_date(
-                now_datetime(), hours=_DEFAULT_HOLD_HOURS
+                now_datetime(), minutes=_DEFAULT_HOLD_MINUTES
             )
         elif self.reservation_status in (STATUS_CONFIRMED, STATUS_CHECKED_IN, STATUS_CHECKED_OUT):
             self.hold_expires_at = None

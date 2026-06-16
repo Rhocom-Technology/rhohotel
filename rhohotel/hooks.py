@@ -181,7 +181,7 @@ scheduler_events = {
 	],
 	"cron": {
 		"0 11 * * *": ["rhohotel.rhocom_hotel.auto_close_pos_shift.auto_close_pos_shifts"],
-		"*/15 * * * *": [
+		"*/5 * * * *": [
 			"rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.process_reservation_lifecycle"
 		],
 	}
