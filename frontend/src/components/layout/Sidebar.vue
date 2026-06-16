@@ -134,22 +134,6 @@ const allNavGroups = [
     ],
   },
   {
-    label: 'Reports',
-    icon: BarChart2,
-    allowedRoles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsHousekeeping],
-    children: [
-      { label: 'Report List',                    to: '/reports' },
-      { label: 'Daily Occupancy Report',         to: '/reports/daily-occupancy-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
-      { label: 'Guest Stay History Report',      to: '/reports/guest-stay-history-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
-      { label: 'Night Audit Summary Report',    to: '/reports/night-audit-summary-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
-      { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
-      { label: 'Corporate Billing Statement', to: '/reports/corporate-billing-statement', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
-      { label: 'Complimentary & House Use', to: '/reports/complimentary-house-use-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
-      { label: 'POS Sales Report', to: '/reports/pos-sales-report', allowedRoles: ROLE_GROUPS.reportsPos },
-      { label: 'Housekeeping Productivity Report', to: '/reports/house-keeping-productivity-report', allowedRoles: ROLE_GROUPS.reportsHousekeeping },
-    ],
-  },
-  {
     label: 'Point of Sales',
     icon: ShoppingCart,
     allowedRoles: ROLE_GROUPS.posBasic,
@@ -165,13 +149,13 @@ const allNavGroups = [
     icon: ShoppingCart,
     allowedRoles: ROLE_GROUPS.staffRoasterView,
     children: [
-      { label: 'Staff Roaster', to: '/pos/staff-roaster' },
-      { label: 'Weekly Shift Generator', to: '/weekly-shift-generator', allowedRoles: ['Hotel Manager'] },
+      { label: 'Staff Roaster', to: '/pos/staff-roaster', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+      { label: 'Weekly Shift Generator', to: '/weekly-shift-generator', allowedRoles: ROLE_GROUPS.staffRoasterFull },
       { label: 'Shift List', to: '/shift-list' },
       { label: 'Swap Request List', to: '/swap-requests' },
       { label: 'Staff Shift Preference', to: '/shift-preference' },
-      { label: 'Staff Shift Preference Manager View', to: '/shift-preference-manager', },
-      { label: 'Staff Roaster Dashboard', to: '/staff-roaster-dashboard' },
+      { label: 'Shift Preference Manager View', to: '/shift-preference-manager', allowedRoles: ROLE_GROUPS.staffRoasterFull },
+      { label: 'Staff Roaster Dashboard', to: '/staff-roaster-dashboard', allowedRoles: ROLE_GROUPS.staffRoasterFull },
     ],
   },
   {
@@ -199,6 +183,22 @@ const allNavGroups = [
     children: [
       { label: 'Dashboard',  to: '/assets-mgmt' },
       { label: 'Asset List', to: '/assets-mgmt/list' },
+    ],
+  },
+  {
+    label: 'Reports',
+    icon: BarChart2,
+    allowedRoles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsHousekeeping],
+    children: [
+      { label: 'Report List',                    to: '/reports', allowedRoles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsHousekeeping] },
+      { label: 'Daily Occupancy Report',         to: '/reports/daily-occupancy-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Guest Stay History Report',      to: '/reports/guest-stay-history-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Night Audit Summary Report',    to: '/reports/night-audit-summary-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Corporate Account Statement', to: '/reports/corporate-account-statement', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Corporate Billing Statement', to: '/reports/corporate-billing-statement', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'Complimentary & House Use', to: '/reports/complimentary-house-use-report', allowedRoles: ROLE_GROUPS.reportsFrontDesk },
+      { label: 'POS Sales Report', to: '/reports/pos-sales-report', allowedRoles: ROLE_GROUPS.reportsPos },
+      { label: 'Housekeeping Productivity Report', to: '/reports/house-keeping-productivity-report', allowedRoles: ROLE_GROUPS.reportsHousekeeping },
     ],
   },
 ]

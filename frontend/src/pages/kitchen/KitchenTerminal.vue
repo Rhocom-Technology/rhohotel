@@ -118,7 +118,7 @@
               <span class="text-gray-400">Source: {{ t.source }}</span>
               <span class="font-semibold" :class="newTicketAgeClass(t)">{{ countdownLabel(t, kitchenSettings.newTicketMinutes) }}</span>
             </div>
-            <button class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            <button v-if="canEditKitchen" class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'In Progress')">
               {{ updating === t.id ? 'Updating...' : 'Start Prep' }}
@@ -149,7 +149,7 @@
                 :class="preparingBadgeClass(t)">
                 {{ countdownLabel(t, kitchenSettings.preparationMinutes) }}
               </span>
-              <button class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              <button v-if="canEditKitchen" class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 :disabled="updating === t.id"
                 @click="setStatus(t.id, 'Ready')">Mark Ready</button>
             </div>
@@ -178,7 +178,7 @@
                 {{ countdownLabel(t, kitchenSettings.readyPickupMinutes) }}
               </span>
             </div>
-            <button class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            <button v-if="canEditKitchen" class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'Served')">Dispatch</button>
           </div>
@@ -202,11 +202,11 @@
             <div v-for="line in noteLines(t)" :key="`${t.id}-note-${line}`" class="text-xs text-gray-500">{{ line }}</div>
             <div class="flex items-center gap-2 mt-2.5">
               <span class="px-2.5 py-1 text-xs font-semibold bg-red-100 text-red-500 rounded-full">{{ timerMins(t) }} mins</span>
-              <button class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              <button v-if="canEditKitchen" class="px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 :disabled="updating === t.id"
                 @click="setStatus(t.id, 'In Progress')">Escalate Chef</button>
             </div>
-            <button class="mt-2 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            <button v-if="canEditKitchen" class="mt-2 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'Ready')">Mark Ready</button>
           </div>
@@ -230,7 +230,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createResource } from 'frappe-ui'
+import { useSessionStore } from '@/stores/session'
+import { ROLE_GROUPS } from '@/lib/permissions'
 import KitchenSettingsModal from '@/components/kitchen/KitchenSettingsModal.vue'
+
+const session = useSessionStore()
+const canEditKitchen = computed(() => session.hasAnyRole(ROLE_GROUPS.kitchenActions))
 
 const autoRefresh = ref(true)
 const showSettings = ref(false)

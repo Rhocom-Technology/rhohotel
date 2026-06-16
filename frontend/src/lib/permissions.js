@@ -45,7 +45,7 @@ const ROLE_GROUPS = {
     'Sales User', 'Sales Manager',
     'House keeper', 'Housekeeping Manager',
     'Technician', 'Maintenance Manager',
-    'Kitchen User', 'Employee',
+    'Kitchen Staff', 'Employee',
   ],
   // Staff Roaster - full module (managers only, filtered to department)
   staffRoasterFull: [
@@ -55,8 +55,10 @@ const ROLE_GROUPS = {
     'Maintenance Manager',
   ],
 
-  // Kitchen Terminal
-  kitchen: ['Sales User', 'Sales Manager', 'Kitchen User'],
+  // Kitchen Terminal - view access
+  kitchen: ['Sales User', 'Sales Manager', 'Kitchen Staff'],
+  // Kitchen Terminal - can update ticket status (kitchen staff only, not POS users)
+  kitchenActions: ['Kitchen Staff'],
 
   // Complimentary management (managers only)
   complimentary: ['Front Desk Manager', 'Sales Manager'],
@@ -97,12 +99,13 @@ export const ROUTE_PERMISSIONS = [
   // Housekeeping — specific paths before general
   { prefix: '/housekeeping/dashboard', roles: ROLE_GROUPS.housekeepingFull },
   { prefix: '/housekeeping/report', roles: ROLE_GROUPS.housekeepingFull },
-  { prefix: '/housekeeping', roles: ROLE_GROUPS.housekeepingList },
+  { prefix: '/housekeeping/task/new', roles: [...ROLE_GROUPS.housekeepingList, ...ROLE_GROUPS.frontDesk] },
+  { prefix: '/housekeeping', roles: [...ROLE_GROUPS.housekeepingList, ...ROLE_GROUPS.frontDesk] },
 
   // Maintenance — specific paths before general
   { prefix: '/maintenance/dashboard', roles: ROLE_GROUPS.maintenanceFull },
   { prefix: '/maintenance/request', roles: ROLE_GROUPS.maintenanceFull },
-  { prefix: '/maintenance/new-request', roles: ROLE_GROUPS.maintenanceFull },
+  { prefix: '/maintenance/new-request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
   { prefix: '/maintenance/technicians', roles: ROLE_GROUPS.maintenanceFull },
   { prefix: '/maintenance/new-technician', roles: ROLE_GROUPS.maintenanceFull },
   { prefix: '/maintenance/new-task', roles: ROLE_GROUPS.maintenanceFull },

@@ -1,0 +1,1 @@
+import{_ as s,o as a,d as o,e as t}from"./index.js";const r={},n={class:"p-6"};function c(l,e){return a(),o("div",n,[...e[0]||(e[0]=[t("h1",{class:"text-xl font-bold text-gray-900"},"Swap Employee Shift",-1),t("p",{class:"text-sm text-gray-500 mt-2"},"This page is under development.",-1)])])}var d=s(r,[["render",c]]);export{d as default};
