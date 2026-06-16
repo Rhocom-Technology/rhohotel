@@ -86,7 +86,7 @@
         <span class="text-yellow-500 text-base">⏳</span>
         <div>
           <p class="text-xs font-semibold text-yellow-800">Pending Approval — {{ task.workflow_state }}</p>
-          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited.</p>
+          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited. Actions are taken in the Frappe desk by the approver.</p>
         </div>
       </div>
 
@@ -769,10 +769,48 @@ function onPartSelect(part, items = stockItems.value) {
   }
 }
 
+// Field requirements for transitions guarded by a workflow condition, mirrored
+// from the Maintenance Task Workflow fixture so we can give a specific error
+// message instead of the generic "Not a valid Workflow Action" from Frappe.
+function validateTransitionFields(action) {
+  const errors = []
+  if (action === 'Send to Witness' || action === 'Send to Store') {
+    if (!form.value.start_time) errors.push('Start Time is required.')
+    if (!form.value.end_time) errors.push('End Time is required.')
+    if (form.value.start_time && form.value.end_time &&
+        new Date(form.value.end_time) <= new Date(form.value.start_time)) {
+      errors.push('End Time must be after Start Time.')
+    }
+    if (!(form.value.work_performed || '').trim()) errors.push('Work Performed is required.')
+  }
+  return errors
+}
+
 async function applyWorkflow(action) {
+  const fieldErrors = validateTransitionFields(action)
+  if (fieldErrors.length) {
+    fieldErrors.forEach(e => showToast(e, 'warning'))
+    return
+  }
+
   saving.value = true
 
   try {
+    // Persist the latest form edits first — task.value can be stale (last loaded
+    // snapshot), and the workflow transition is applied against whatever's
+    // currently saved on the server, not what's sitting unsaved in the form.
+    const saveRes = await saveResource.fetch({
+      task_name: taskId,
+      task_data: form.value,
+      parts_used: partsUsed.value.filter(p => p.item_code),
+      parts_returned: partsReturned.value.filter(p => p.item_code),
+    })
+    if (!saveRes?.success) {
+      showToast('Failed to save before transition: ' + (saveRes?.error || 'Unknown error'))
+      return
+    }
+    await loadTask()
+
     const workflowDoc = {
       ...task.value,
       doctype: 'Maintenance Task'
