@@ -41,7 +41,9 @@
 "corporate_billing_print_format",
 "corporate_account_statement_print_format",
 "asset_maintenance_print_format",
-"hall_booking_print_format"
+"hall_booking_print_format",
+"shift_print_format",
+"shift_preference_manager_print_format"
  ],
  "fields": [
   {
@@ -239,6 +241,18 @@
   "fieldname": "hall_booking_print_format",
   "fieldtype": "Link",
   "label": "Hall Booking Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "shift_print_format",
+  "fieldtype": "Link",
+  "label": "Shift List Print Format",
+  "options": "Print Format"
+},
+{
+  "fieldname": "shift_preference_manager_print_format",
+  "fieldtype": "Link",
+  "label": "Staff Shift Preference Manager View Print Format",
   "options": "Print Format"
 }
  ],

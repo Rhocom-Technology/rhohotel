@@ -1,5 +1,6 @@
 import frappe
-from frappe.utils import getdate, add_days, formatdate
+from frappe.utils import getdate, add_days, formatdate, now_datetime, format_datetime
+from frappe.utils.pdf import get_pdf
 
 
 def _get_default_company():
@@ -214,3 +215,75 @@ def get_preference_review(department=None, week_start=None, submission_status="A
             "mostPreferredPct": most_pct,
         }
     }
+    
+    
+@frappe.whitelist()
+def download_preference_review_report(
+    department=None,
+    week_start=None,
+    submission_status="All Staff",
+    search_text=None
+):
+    result = get_preference_review(
+        department=department,
+        week_start=week_start,
+        submission_status=submission_status,
+        search_text=search_text
+    )
+
+    days = result.get("days", [])
+    staff = result.get("staff", [])
+
+    week_start_date = _get_week_start(week_start)
+    week_end_date = _get_week_end(week_start_date)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    context = {
+        "company": company,
+        "days": days,
+        "staff": staff,
+        "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "filters": {
+            "department": department or "All Departments",
+            "submission_status": submission_status or "All Staff",
+            "search_text": search_text or "",
+            "week_start": formatdate(week_start_date, "dd MMM yyyy"),
+            "week_end": formatdate(week_end_date, "dd MMM yyyy"),
+        },
+    }
+
+    settings = frappe.get_single("Hotel Settings")
+    print_format = settings.shift_preference_manager_print_format
+
+    if not print_format:
+        frappe.throw("Please set Staff Shift Preference Manager View Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "10mm",
+        "margin-left": "8mm",
+        "margin-right": "8mm",
+    })
+
+    filename = "Shift-Preference-Review-{0}-to-{1}.pdf".format(
+        str(week_start_date),
+        str(week_end_date)
+    )
+
+    frappe.local.response.filename = filename
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type = "download"

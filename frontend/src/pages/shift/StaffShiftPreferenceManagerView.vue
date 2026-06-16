@@ -386,7 +386,17 @@ function resetFilters() {
 }
 
 function printSummary() {
-  window.print()
+  const params = new URLSearchParams({
+    department: department.value || '',
+    week_start: isoDate(weekStart.value),
+    submission_status: submissionStatus.value || '',
+    search_text: searchText.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.shift_preference_manager.download_preference_review_report?${params.toString()}`,
+    '_blank'
+  )
 }
 
 function shiftClass(value) {

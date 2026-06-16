@@ -1930,79 +1930,85 @@ def bulk_assign_shift(employees, company, shift_type, start_date, end_date=None,
 # AI Auto Assign (preview)
 # ---------------------------------------------------------------------------
 
+
 @frappe.whitelist()
 def ai_auto_assign(department=None, week_start=None):
-    """Return a rules-based weekly shift suggestion for the department, in
-    the same shape as get_weekly_roster, for the user to review.
+    frappe.throw("AI Auto Assign is not yet available.")
+    
+    
+# @frappe.whitelist()
+# def ai_auto_assign(department=None, week_start=None):
+    # """Return a rules-based weekly shift suggestion for the department, in
+    # the same shape as get_weekly_roster, for the user to review.
 
-    This is a preview only -- it does not write anything to the database.
-    Use bulk_assign_shift (via the Shift Assignment Tool modal) to actually
-    create Shift Assignments.
-    """
-    roster = get_weekly_roster(department=department, week_start=week_start)
-    staff = roster["staff"]
-    week_dates = _week_dates(week_start)
-    day_keys = [cstr(d) for d in week_dates]
+    # This is a preview only -- it does not write anything to the database.
+    # Use bulk_assign_shift (via the Shift Assignment Tool modal) to actually
+    # create Shift Assignments.
+    # """
+    # roster = get_weekly_roster(department=department, week_start=week_start)
+    # staff = roster["staff"]
+    # week_dates = _week_dates(week_start)
+    # day_keys = [cstr(d) for d in week_dates]
 
-    if not staff:
-        return roster
+    # if not staff:
+    #     return roster
 
-    shift_types = frappe.get_all("Shift Type", fields=["name", "start_time", "end_time"], order_by="name asc")
-    if not shift_types:
-        return roster
+    # shift_types = frappe.get_all("Shift Type", fields=["name", "start_time", "end_time"], order_by="name asc")
+    # if not shift_types:
+    #     return roster
 
-    shift_lookup = {s.name: _format_shift_time(s.start_time, s.end_time) for s in shift_types}
-    names = [s.name for s in shift_types]
+    # shift_lookup = {s.name: _format_shift_time(s.start_time, s.end_time) for s in shift_types}
+    # names = [s.name for s in shift_types]
 
-    def pick(*keywords):
-        for name in names:
-            lowered = name.lower()
-            if any(k in lowered for k in keywords):
-                return name
-        return None
+    # def pick(*keywords):
+    #     for name in names:
+    #         lowered = name.lower()
+    #         if any(k in lowered for k in keywords):
+    #             return name
+    #     return None
 
-    morning = pick("morning") or names[0]
-    afternoon = pick("afternoon", "evening") or (names[1] if len(names) > 1 else morning)
-    supervisor = pick("supervisor", "lead")
+    # morning = pick("morning") or names[0]
+    # afternoon = pick("afternoon", "evening") or (names[1] if len(names) > 1 else morning)
+    # supervisor = pick("supervisor", "lead")
 
-    rotation = [morning, morning, afternoon, morning, morning, afternoon, None]
+    # rotation = [morning, morning, afternoon, morning, morning, afternoon, None]
 
-    for idx, row in enumerate(staff):
-        designation = (row.get("designation") or "").lower()
-        existing_leave = {d for d, v in row["shifts"].items() if v["status"] == "Leave"}
+    # for idx, row in enumerate(staff):
+    #     designation = (row.get("designation") or "").lower()
+    #     existing_leave = {d for d, v in row["shifts"].items() if v["status"] == "Leave"}
 
-        if supervisor and "supervisor" in designation:
-            for key in day_keys:
-                if key in existing_leave:
-                    continue
-                row["shifts"][key] = {"shift_type": supervisor, "status": "Active", "time": shift_lookup.get(supervisor, "")}
-            continue
+    #     if supervisor and "supervisor" in designation:
+    #         for key in day_keys:
+    #             if key in existing_leave:
+    #                 continue
+    #             row["shifts"][key] = {"shift_type": supervisor, "status": "Active", "time": shift_lookup.get(supervisor, "")}
+    #         continue
 
-        offset = idx % 7
-        for i, key in enumerate(day_keys):
-            if key in existing_leave:
-                continue
-            shift_name = rotation[(i + offset) % len(rotation)]
-            if shift_name is None:
-                row["shifts"][key] = {"shift_type": "OFF", "status": "Off", "time": ""}
-            else:
-                row["shifts"][key] = {"shift_type": shift_name, "status": "Active", "time": shift_lookup.get(shift_name, "")}
+    #     offset = idx % 7
+    #     for i, key in enumerate(day_keys):
+    #         if key in existing_leave:
+    #             continue
+    #         shift_name = rotation[(i + offset) % len(rotation)]
+    #         if shift_name is None:
+    #             row["shifts"][key] = {"shift_type": "OFF", "status": "Off", "time": ""}
+    #         else:
+    #             row["shifts"][key] = {"shift_type": shift_name, "status": "Active", "time": shift_lookup.get(shift_name, "")}
 
-    total_slots = len(staff) * 7
-    assigned_slots = sum(
-        1
-        for row in staff
-        for value in row["shifts"].values()
-        if value["status"] == "Active"
-    )
-    coverage_level = round((assigned_slots / total_slots) * 100) if total_slots else 0
+    # total_slots = len(staff) * 7
+    # assigned_slots = sum(
+    #     1
+    #     for row in staff
+    #     for value in row["shifts"].values()
+    #     if value["status"] == "Active"
+    # )
+    # coverage_level = round((assigned_slots / total_slots) * 100) if total_slots else 0
 
-    return {
-        "staff": staff,
-        "stats": {
-            "coverage_level": coverage_level,
-            "conflict_alerts": _count_conflicts(staff),
-            "total_slots": total_slots,
-            "assigned_slots": assigned_slots,
-        },
-    }
+    # return {
+    #     "staff": staff,
+    #     "stats": {
+    #         "coverage_level": coverage_level,
+    #         "conflict_alerts": _count_conflicts(staff),
+    #         "total_slots": total_slots,
+    #         "assigned_slots": assigned_slots,
+    #     },
+    # }

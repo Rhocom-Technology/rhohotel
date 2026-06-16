@@ -1,5 +1,6 @@
 import frappe
-from frappe.utils import getdate, add_days, formatdate
+from frappe.utils import now_datetime, format_datetime, getdate, add_days, formatdate
+from frappe.utils.pdf import get_pdf
 
 
 def _to_int(value, default_value):
@@ -424,3 +425,84 @@ def get_shift_calendar(department=None, week_start=None, shift_type=None):
         "days": days,
         "staff": list(staff_map.values())
     }
+    
+@frappe.whitelist()
+def download_shift_list_report(
+    department=None,
+    week_start=None,
+    shift_type=None
+):
+    from rhohotel.rhocom_hotel.api.shift_list import (
+        get_shift_calendar,
+        get_shift_stats,
+        _get_week_start
+    )
+
+    calendar_result = get_shift_calendar(
+        department=department,
+        week_start=week_start,
+        shift_type=shift_type
+    )
+
+    days = calendar_result.get("days", [])
+    staff = calendar_result.get("staff", [])
+
+    week_start_date = _get_week_start(week_start)
+    week_end_date = add_days(week_start_date, 6)
+
+    stats = get_shift_stats(
+        department=department,
+        week_start=week_start_date,
+        shift_type=shift_type
+    )
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    context = {
+        "company": company,
+        "days": days,
+        "staff": staff,
+        "stats": stats,
+        "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "filters": {
+            "department": department or "All Departments",
+            "shift_type": shift_type or "All Shifts",
+            "week_start": formatdate(week_start_date, "dd MMM yyyy"),
+            "week_end": formatdate(week_end_date, "dd MMM yyyy"),
+        },
+    }
+
+    settings = frappe.get_single("Hotel Settings")
+    print_format = settings.shift_print_format
+
+    if not print_format:
+        frappe.throw("Please set Shift List Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "10mm",
+        "margin-left": "8mm",
+        "margin-right": "8mm",
+    })
+
+    filename = "Shift-Calendar-{0}-to-{1}.pdf".format(
+        str(week_start_date),
+        str(week_end_date)
+    )
+
+    frappe.local.response.filename = filename
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type = "download"

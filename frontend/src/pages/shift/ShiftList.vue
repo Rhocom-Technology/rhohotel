@@ -490,11 +490,43 @@ function prevPage() {
 }
 
 function exportShifts() {
-  window.print()
+  const headers = ['Shift ID', 'Staff', 'Role / Station', 'Day', 'Shift', 'Time', 'Status']
+
+  const csvRows = [
+    headers.join(','),
+    ...shiftRecords.value.map(row => [
+      row.id || '',
+      row.staff || '',
+      row.roleStation || '',
+      row.day || '',
+      row.shift || '',
+      row.time || '',
+      row.status || '',
+    ].map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')),
+  ]
+
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = `shift-list-${isoDate(weekStart.value)}.csv`
+  link.click()
+
+  URL.revokeObjectURL(url)
 }
 
 function printShifts() {
-  window.print()
+  const params = new URLSearchParams({
+    department: department.value || '',
+    week_start: isoDate(weekStart.value),
+    shift_type: shiftType.value || '',
+  })
+
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.shift_list.download_shift_list_report?${params.toString()}`,
+    '_blank'
+  )
 }
 
 function newShift() {
