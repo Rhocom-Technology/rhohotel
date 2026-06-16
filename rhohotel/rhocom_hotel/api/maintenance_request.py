@@ -217,6 +217,9 @@ def get_maintenance_request(request_name):
         "completion_date":       str(req.completion_date) if req.completion_date else None,
         "issue_description":     req.issue_description or "",
         "asset":                 req.asset or "",
+        "image_1":               req.image_1 or "",
+        "image_2":               req.image_2 or "",
+        "image_3":               req.image_3 or "",
     }
 
 
@@ -264,6 +267,9 @@ def create_maintenance_request(request_data):
         req.issue_description = request_data.get("issue_description") or ""
         req.asset            = asset
         req.status           = "Pending"
+        req.image_1          = request_data.get("image_1") or None
+        req.image_2          = request_data.get("image_2") or None
+        req.image_3          = request_data.get("image_3") or None
 
         # Auto-resolve departments from employee records
         if req.reported_by:
@@ -304,6 +310,15 @@ def approve_request(request_name, assigned_technician=None, witness_employee=Non
 
         if not req.witness_employee:
             return {"success": False, "error": "Please select a Supervisor / Witness before approving"}
+
+        technician_employee = frappe.db.get_value(
+            "Maintenance Technician", req.assigned_technician, "employee"
+        )
+        if technician_employee and technician_employee == req.witness_employee:
+            return {
+                "success": False,
+                "error": "The assigned technician cannot also be the Supervisor / Witness. Please choose a different witness or technician."
+            }
 
         req.approved = "Approved"
         req.save(ignore_permissions=True)
@@ -350,7 +365,8 @@ def update_maintenance_request(request_name, request_data):
         editable = [
             "location_type", "room", "asset_location", "asset", "location",
             "issue_type", "priority", "reported_by",
-            "witness_employee", "issue_description"
+            "witness_employee", "issue_description",
+            "image_1", "image_2", "image_3"
         ]
         for field in editable:
             if field in request_data and request_data[field] is not None:
@@ -377,6 +393,57 @@ def update_maintenance_request(request_name, request_data):
         frappe.log_error(frappe.get_traceback(), "update_maintenance_request error")
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def retry_task_creation(request_name, assigned_technician=None, witness_employee=None):
+    """Recovery path for a request that is stuck 'Approved' with no linked Task —
+    this happens if approval succeeded but Maintenance Task auto-creation failed
+    (e.g. the chosen technician's employee was the same as the witness). Lets staff
+    correct the technician/witness and retry, without reopening full edit access.
+    """
+    req = frappe.get_doc("Maintenance Request", request_name)
+
+    if req.approved != "Approved":
+        return {"success": False, "error": "This action is only available for Approved requests."}
+
+    if req.task:
+        return {"success": False, "error": "A Maintenance Task already exists for this request."}
+
+    if assigned_technician:
+        req.assigned_technician = assigned_technician
+    if witness_employee:
+        req.witness_employee = witness_employee
+
+    if not req.assigned_technician:
+        return {"success": False, "error": "Please assign a technician."}
+    if not req.witness_employee:
+        return {"success": False, "error": "Please select a Supervisor / Witness."}
+
+    technician_employee = frappe.db.get_value(
+        "Maintenance Technician", req.assigned_technician, "employee"
+    )
+    if technician_employee and technician_employee == req.witness_employee:
+        return {
+            "success": False,
+            "error": "The assigned technician cannot also be the Supervisor / Witness. Please choose a different witness or technician."
+        }
+
+    try:
+        req.flags.ignore_validate_update_after_submit = True
+        req.save(ignore_permissions=True)
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "retry_task_creation error")
+        return {"success": False, "error": str(e)}
+
+    req.reload()
+    if req.task:
+        return {"success": True, "task": req.task}
+    return {
+        "success": False,
+        "error": "Task still could not be created. Check the Error Log for details."
+    }
 
 
 @frappe.whitelist()
@@ -427,11 +494,26 @@ def get_employees_for_request():
 
 
 @frappe.whitelist()
+def get_current_employee_for_request():
+    """Resolve the logged-in user to their Employee record for auto-filling
+    'Reported By' on a new Maintenance Request. Returns None if the current
+    session user has no linked Employee."""
+    user = frappe.session.user
+    employee = frappe.db.get_value(
+        "Employee",
+        {"user_id": user, "status": "Active"},
+        ["name", "employee_name", "designation", "department"],
+        as_dict=True,
+    )
+    return employee
+
+
+@frappe.whitelist()
 def get_technicians_for_request():
     return frappe.get_all(
         "Maintenance Technician",
         filters={"visible_for_assignment": 1, "availability": ["!=", "Unavailable"]},
-        fields=["name", "technician_name", "availability", "primary_specialization"],
+        fields=["name", "technician_name", "availability", "primary_specialization", "employee"],
         order_by="technician_name asc",
         limit_page_length=200
     )
@@ -443,6 +525,37 @@ def get_assets_for_request():
     return frappe.get_all(
         "Asset",
         filters={"docstatus": 1},
+        fields=["name", "asset_name", "asset_category", "location"],
+        order_by="asset_name asc",
+        limit_page_length=500
+    )
+
+
+@frappe.whitelist()
+def get_assets_for_location(location_type=None, room=None, asset_location=None):
+    """Return only assets linked to the selected Room or Asset Location.
+
+    For location_type = 'Room', the Room's room_number is matched against
+    a Location of the same name (this app's convention: a Location record
+    is created per room, named after the room_number, e.g. 'Room 8406').
+    For location_type = 'Asset Location', asset_location is already a
+    Location name and is used directly.
+    """
+    resolved_location = None
+
+    if location_type == "Room" and room:
+        room_number = frappe.db.get_value("Hotel Room", room, "room_number")
+        if room_number and frappe.db.exists("Location", room_number):
+            resolved_location = room_number
+    elif location_type == "Asset Location" and asset_location:
+        resolved_location = asset_location
+
+    if not resolved_location:
+        return []
+
+    return frappe.get_all(
+        "Asset",
+        filters={"docstatus": 1, "location": resolved_location},
         fields=["name", "asset_name", "asset_category", "location"],
         order_by="asset_name asc",
         limit_page_length=500

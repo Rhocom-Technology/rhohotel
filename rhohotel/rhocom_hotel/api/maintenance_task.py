@@ -561,6 +561,12 @@ def get_maintenance_dashboard_summary():
     """, (week_start,), as_dict=1)
     avg_resolution_hrs = round(avg_res[0].avg_hrs or 0, 1) if avg_res else 0
 
+    pending_requests = frappe.db.count("Maintenance Request", {"status": "Pending"})
+    urgent_pending_requests = frappe.db.count(
+        "Maintenance Request",
+        {"status": "Pending", "priority": ["in", ["Critical", "High"]]},
+    )
+
     top_locations = frappe.db.sql("""
         SELECT location, COUNT(name) as open_tasks
         FROM `tabMaintenance Task`
@@ -600,6 +606,8 @@ def get_maintenance_dashboard_summary():
             "urgent_open": urgent_open,
             "done_this_week": done_this_week,
             "avg_resolution_hrs": avg_resolution_hrs,
+            "pending_requests": pending_requests,
+            "urgent_pending_requests": urgent_pending_requests,
         },
         "type_mix": type_mix,
         "corrective_pct": corrective_pct,

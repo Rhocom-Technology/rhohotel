@@ -47,8 +47,8 @@
     </div>
 
     <!-- Stats skeleton -->
-    <div v-if="loading" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-      <div v-for="n in 4" :key="n" class="bg-white rounded-xl border border-gray-200 px-5 py-4 animate-pulse">
+    <div v-if="loading" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+      <div v-for="n in 5" :key="n" class="bg-white rounded-xl border border-gray-200 px-5 py-4 animate-pulse">
         <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
         <div class="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
         <div class="h-2 bg-gray-100 rounded w-2/3"></div>
@@ -56,7 +56,15 @@
     </div>
 
     <!-- Stats -->
-    <div v-else-if="data" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div v-else-if="data" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-400">Pending Requests</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-600 rounded-full">New</span>
+        </div>
+        <p class="text-3xl font-bold text-gray-900">{{ data.stats.pending_requests }}</p>
+        <p class="text-xs text-gray-400 mt-1">{{ data.stats.urgent_pending_requests }} urgent</p>
+      </div>
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-400">Open Tasks</p>

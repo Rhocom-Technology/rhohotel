@@ -10,10 +10,7 @@
       <h3 class="text-sm font-bold text-gray-900 mb-1">Asset Control Center</h3>
       <p class="text-xs text-gray-400 mb-4">Manage all physical assets, track maintenance history, monitor asset conditions, and access related operational records quickly.</p>
       <div class="flex items-center justify-end gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          @click="$router.push('/assets-mgmt/maintenance')">Asset Maintenance</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          @click="$router.push('/assets-mgmt/repair')">Asset Repair</button>
+      
         <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           @click="$router.push('/assets-mgmt/list')">Asset List</button>
       </div>
@@ -144,11 +141,7 @@
           <p class="text-xs font-bold text-gray-900 mb-1">Asset List</p>
           <p class="text-xs text-gray-500">View and manage all registered assets.</p>
         </div>
-        <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 transition-colors"
-          @click="$router.push('/assets-mgmt/maintenance')">
-          <p class="text-xs font-bold text-gray-900 mb-1">Asset Maintenance</p>
-          <p class="text-xs text-gray-500">Manage preventive maintenance schedules.</p>
-        </div>
+       
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 cursor-pointer hover:border-blue-300 transition-colors"
           @click="$router.push('/maintenance/list')">
           <p class="text-xs font-bold text-gray-900 mb-1">Maintenance Tasks</p>

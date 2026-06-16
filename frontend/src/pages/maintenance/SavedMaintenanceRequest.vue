@@ -218,6 +218,17 @@
               <p v-else class="text-xs text-gray-400 italic">No description provided.</p>
             </div>
 
+            <!-- Photos -->
+            <div v-if="req.image_1 || req.image_2 || req.image_3" class="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 class="text-sm font-bold text-gray-900 mb-3">Photos</h3>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                <a v-for="(img, idx) in [req.image_1, req.image_2, req.image_3].filter(Boolean)" :key="idx"
+                  :href="img" target="_blank" rel="noopener">
+                  <img :src="img" class="w-full h-28 object-cover rounded-lg border border-gray-200 hover:opacity-90" />
+                </a>
+              </div>
+            </div>
+
           </template>
 
           <!-- EDIT mode -->
@@ -320,6 +331,33 @@
                 <p class="text-xs text-gray-500 mb-1.5">Issue Description</p>
                 <textarea v-model="editForm.issue_description" rows="4" placeholder="Describe the issue..."
                   class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1.5">Photos <span class="text-gray-400">(optional, up to 3)</span></p>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+                  <div v-for="idx in [0, 1, 2]" :key="idx">
+                    <p class="text-[10px] text-gray-400 mb-1">{{ idx === 0 ? 'Image 1 (Primary)' : `Image ${idx + 1}` }}</p>
+                    <!-- newly selected replacement preview -->
+                    <div v-if="editImagePreviews[idx]" class="relative">
+                      <img :src="editImagePreviews[idx]" class="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                      <button type="button" @click="removeEditImage(idx)"
+                        class="absolute top-1 right-1 bg-white/90 rounded-full w-5 h-5 flex items-center justify-center text-xs text-gray-600 hover:text-red-600 shadow">✕</button>
+                    </div>
+                    <!-- existing saved image -->
+                    <div v-else-if="editImageUrls[idx]" class="relative">
+                      <img :src="editImageUrls[idx]" class="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                      <button type="button" @click="removeEditImage(idx)"
+                        class="absolute top-1 right-1 bg-white/90 rounded-full w-5 h-5 flex items-center justify-center text-xs text-gray-600 hover:text-red-600 shadow">✕</button>
+                    </div>
+                    <!-- empty slot -->
+                    <label v-else
+                      class="flex flex-col items-center justify-center h-24 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-gray-400">
+                      <span class="text-lg leading-none">📷</span>
+                      <span class="text-[10px] mt-1">Add photo</span>
+                      <input type="file" accept="image/*" class="hidden" @change="onEditImageChange(idx, $event)" />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </template>
@@ -502,10 +540,13 @@
               <select v-model="approveForm.assigned_technician"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600">
                 <option value="">— select technician —</option>
-                <option v-for="t in technicians" :key="t.name" :value="t.name">
+                <option v-for="t in availableTechnicians" :key="t.name" :value="t.name">
                   {{ t.technician_name }}{{ t.availability !== 'Available' ? ` (${t.availability})` : '' }}
                 </option>
               </select>
+              <p v-if="approveForm.witness_employee && availableTechnicians.length < technicians.length" class="text-xs text-gray-400 mt-1">
+                The selected witness is hidden from this list — a technician can't also be the supervisor.
+              </p>
             </div>
 
             <div class="mb-5">
@@ -520,7 +561,7 @@
               <p v-if="approveForm.witness_employee" class="text-xs text-green-600 mt-1">
                 ✓ Pre-filled from request — change if needed
               </p>
-              <p v-else class="text-xs text-gray-400 mt-1">This person will verify the completed work before the Hotel Manager approves.</p>
+              <p v-else class="text-xs text-gray-400 mt-1">This person will verify the completed work before the Manager approves.</p>
             </div>
 
             <div class="flex items-center justify-end gap-2">
@@ -543,9 +584,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import { callMethodForm, requestApi } from '@/lib/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -566,6 +608,23 @@ const assets = ref([])
 
 const editForm = ref({})
 const approveForm = ref({ assigned_technician: '', witness_employee: '' })
+
+// Exclude any technician whose linked Employee is the currently selected witness —
+// that pairing is rejected on approval (technician can't also be the supervisor),
+// so hide it up front rather than letting the user pick it and hit an error.
+const availableTechnicians = computed(() => {
+  const witness = approveForm.value.witness_employee
+  if (!witness) return technicians.value
+  return technicians.value.filter(t => t.employee !== witness)
+})
+
+// If the witness changes and the currently selected technician is no longer valid, clear it.
+watch(() => approveForm.value.witness_employee, () => {
+  const stillValid = availableTechnicians.value.some(t => t.name === approveForm.value.assigned_technician)
+  if (approveForm.value.assigned_technician && !stillValid) {
+    approveForm.value.assigned_technician = ''
+  }
+})
 
 // Resolve witness name from employees list
 const witnessName = computed(() => {
@@ -663,6 +722,10 @@ async function rejectRequest() {
 }
 
 // ─── Edit mode ────────────────────────────────────────────────────────────────
+const editImageUrls = ref([null, null, null])      // existing saved image URLs, null if removed/empty
+const editImageFiles = ref([null, null, null])      // newly selected files pending upload
+const editImagePreviews = ref([null, null, null])   // local object URLs for newly selected files
+
 function enterEdit() {
   editForm.value = {
     location_type:     req.value.location_type || 'Room',
@@ -676,7 +739,30 @@ function enterEdit() {
     issue_description: req.value.issue_description || '',
     asset:             req.value.asset || '',
   }
+  editImageUrls.value = [req.value.image_1 || null, req.value.image_2 || null, req.value.image_3 || null]
+  editImageFiles.value = [null, null, null]
+  editImagePreviews.value = [null, null, null]
   editMode.value = true
+}
+
+function onEditImageChange(slotIndex, event) {
+  const [file] = event.target.files || []
+  editImageFiles.value[slotIndex] = file || null
+  if (editImagePreviews.value[slotIndex]) {
+    URL.revokeObjectURL(editImagePreviews.value[slotIndex])
+  }
+  editImagePreviews.value[slotIndex] = file ? URL.createObjectURL(file) : null
+}
+
+function removeEditImage(slotIndex) {
+  // Clears both an existing saved image and any newly-selected replacement for this slot.
+  // The actual deletion on the server happens in saveEdit() via set_value(fieldname, '').
+  if (editImagePreviews.value[slotIndex]) {
+    URL.revokeObjectURL(editImagePreviews.value[slotIndex])
+  }
+  editImageUrls.value[slotIndex] = null
+  editImageFiles.value[slotIndex] = null
+  editImagePreviews.value[slotIndex] = null
 }
 
 function cancelEdit() { editMode.value = false; editForm.value = {} }
@@ -697,10 +783,51 @@ async function saveEdit() {
   saving.value = true
   try {
     const res = await updateResource.fetch({ request_name: requestId, request_data: editForm.value })
-    if (res?.success) { showToast('Request updated', 'success'); editMode.value = false; await loadRequest() }
+    if (res?.success) {
+      await syncEditImages()
+      showToast('Request updated', 'success'); editMode.value = false; await loadRequest()
+    }
     else showToast('Failed: ' + (res?.error || 'Unknown'))
   } catch (e) { showToast('Error: ' + (e?.message || String(e))) }
   finally { saving.value = false }
+}
+
+async function syncEditImages() {
+  const originalImages = [req.value.image_1 || null, req.value.image_2 || null, req.value.image_3 || null]
+
+  for (let i = 0; i < 3; i++) {
+    const fieldname = `image_${i + 1}`
+    const newFile = editImageFiles.value[i]
+    const wasRemoved = !editImageUrls.value[i] && !newFile && originalImages[i]
+
+    if (newFile) {
+      const body = new FormData()
+      body.append('file', newFile)
+      body.append('doctype', 'Maintenance Request')
+      body.append('docname', requestId)
+      body.append('fieldname', fieldname)
+      body.append('is_private', '0')
+      try {
+        const payload = await requestApi('/api/method/upload_file', { method: 'POST', body })
+        const fileUrl = payload?.message?.file_url || ''
+        if (fileUrl) {
+          await callMethodForm('frappe.client.set_value', {
+            doctype: 'Maintenance Request', name: requestId, fieldname, value: fileUrl,
+          })
+        }
+      } catch (e) {
+        showToast(`Image ${i + 1} failed to upload: ` + (e?.message || String(e)), 'warning')
+      }
+    } else if (wasRemoved) {
+      try {
+        await callMethodForm('frappe.client.set_value', {
+          doctype: 'Maintenance Request', name: requestId, fieldname, value: '',
+        })
+      } catch (e) {
+        showToast(`Failed to remove image ${i + 1}: ` + (e?.message || String(e)), 'warning')
+      }
+    }
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

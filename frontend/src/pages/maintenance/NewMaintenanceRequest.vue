@@ -87,14 +87,9 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-3">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Reported By <span class="text-red-400">*</span></p>
-              <select v-model="form.reported_by"
-                class="w-full px-3 py-2.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600"
-                :class="attempted && !form.reported_by ? 'border-red-300 bg-red-50' : 'border-gray-200'">
-                <option value="">Select staff</option>
-                <option v-for="e in employees" :key="e.name" :value="e.name">
-                  {{ e.employee_name }}{{ e.department ? ` · ${e.department}` : '' }}
-                </option>
-              </select>
+              <div class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg bg-gray-50 text-gray-600">
+                {{ currentEmployee ? currentEmployee.employee_name : (loadingCurrentEmployee ? 'Loading…' : 'No employee record linked to your account') }}
+              </div>
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Reported At <span class="text-red-400">*</span></p>
@@ -112,7 +107,7 @@
         <!-- Supervisor / Witness -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-1">Supervisor / Witness <span class="text-red-400">*</span></h3>
-          <p class="text-xs text-gray-400 mb-4">The person who will verify the completed work before the Hotel Manager approves.</p>
+          <p class="text-xs text-gray-400 mb-4">The person who will verify the completed work before the Manager approves.</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Supervisor / Witness <span class="text-red-400">*</span></p>
@@ -205,11 +200,16 @@
             <select v-model="form.asset"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700">
               <option value="">— no specific asset —</option>
-              <option v-for="a in assets" :key="a.name" :value="a.name">
+              <option v-for="a in assetOptions" :key="a.name" :value="a.name">
                 {{ a.asset_name || a.name }}{{ a.asset_category ? ` · ${a.asset_category}` : '' }}
               </option>
             </select>
-            <p class="text-xs text-gray-400 mt-1">Link to a specific ERPNext asset if this issue relates to one.</p>
+            <p class="text-xs text-gray-400 mt-1">
+              <span v-if="loadingLocationAssets">Loading assets for this location…</span>
+              <span v-else-if="form.location_type !== 'Other Location' && assetOptions.length === 0">No assets are linked to this location yet.</span>
+              <span v-else-if="form.location_type === 'Other Location'">Showing all assets — location-based filtering isn't available for "Other" locations.</span>
+              <span v-else>Showing assets linked to the selected location.</span>
+            </p>
           </div>
 
           <div>
@@ -217,6 +217,29 @@
             <textarea v-model="form.issue_description" rows="5"
               placeholder="Describe the fault, when it started, symptoms, guest impact, and any temporary measures taken..."
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
+          </div>
+
+          <div class="mt-4">
+            <p class="text-xs text-gray-500 mb-1.5">Photos <span class="text-gray-400">(optional, up to 3)</span></p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div v-for="(slot, idx) in [0, 1, 2]" :key="idx">
+                <p class="text-[10px] text-gray-400 mb-1">{{ idx === 0 ? 'Image 1 (Primary)' : `Image ${idx + 1}` }}</p>
+                <div v-if="imagePreviews[idx]" class="relative">
+                  <img :src="imagePreviews[idx]" class="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                  <button type="button" @click="removeImage(idx)"
+                    class="absolute top-1 right-1 bg-white/90 rounded-full w-5 h-5 flex items-center justify-center text-xs text-gray-600 hover:text-red-600 shadow">
+                    ✕
+                  </button>
+                </div>
+                <label v-else
+                  class="flex flex-col items-center justify-center h-24 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-gray-400">
+                  <span class="text-lg leading-none">📷</span>
+                  <span class="text-[10px] mt-1">Add photo</span>
+                  <input type="file" accept="image/*" class="hidden" @change="onImageChange(idx, $event)" />
+                </label>
+              </div>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">Photos help the technician understand the issue before arriving on site.</p>
           </div>
         </div>
 
@@ -290,9 +313,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import { callMethodForm, requestApi } from '@/lib/api'
 
 const router = useRouter()
 const submitting = ref(false)
@@ -301,6 +325,10 @@ const rooms = ref([])
 const employees = ref([])
 const assetLocations = ref([])
 const assets = ref([])
+const currentEmployee = ref(null)
+const loadingCurrentEmployee = ref(true)
+const assetsForLocation = ref(null)
+const loadingLocationAssets = ref(false)
 
 const toasts = ref([])
 let toastId = 0
@@ -328,6 +356,27 @@ const form = ref({
   asset: '',
 })
 
+// ─── Image attachments (selected locally, uploaded after the request is created) ──
+const imageFiles = ref([null, null, null])
+const imagePreviews = ref([null, null, null])
+
+function onImageChange(slotIndex, event) {
+  const [file] = event.target.files || []
+  imageFiles.value[slotIndex] = file || null
+  if (imagePreviews.value[slotIndex]) {
+    URL.revokeObjectURL(imagePreviews.value[slotIndex])
+  }
+  imagePreviews.value[slotIndex] = file ? URL.createObjectURL(file) : null
+}
+
+function removeImage(slotIndex) {
+  if (imagePreviews.value[slotIndex]) {
+    URL.revokeObjectURL(imagePreviews.value[slotIndex])
+  }
+  imageFiles.value[slotIndex] = null
+  imagePreviews.value[slotIndex] = null
+}
+
 // ─── Computed labels ──────────────────────────────────────────────────────────
 const locationLabel = computed(() => {
   if (form.value.location_type === 'Room')
@@ -339,17 +388,13 @@ const locationLabel = computed(() => {
   return form.value.location || null
 })
 
-const reportedByLabel = computed(() =>
-  employees.value.find(x => x.name === form.value.reported_by)?.employee_name || null
-)
+const reportedByLabel = computed(() => currentEmployee.value?.employee_name || null)
 
 const witnessLabel = computed(() =>
   employees.value.find(x => x.name === form.value.witness_employee)?.employee_name || null
 )
 
-const requestingDepartmentLabel = computed(() =>
-  employees.value.find(x => x.name === form.value.reported_by)?.department || null
-)
+const requestingDepartmentLabel = computed(() => currentEmployee.value?.department || null)
 
 const assetLabel = computed(() =>
   assets.value.find(x => x.name === form.value.asset)?.asset_name || null
@@ -370,7 +415,7 @@ const validationErrors = computed(() => {
     e.push('Asset Location is required')
   if (form.value.location_type === 'Other Location' && !form.value.location)
     e.push('Location is required')
-  if (!form.value.reported_by)       e.push('Reported by is required')
+  if (!form.value.reported_by)       e.push('No employee record is linked to your account, so this request cannot be submitted. Contact your administrator.')
   if (!form.value.witness_employee)  e.push('Supervisor / Witness is required')
   if (!form.value.reported_at)       e.push('Reported at is required')
   return e
@@ -380,7 +425,39 @@ const roomsResource          = createResource({ url: 'rhohotel.rhocom_hotel.api.
 const employeesResource      = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_employees_for_request', auto: false })
 const assetLocationsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_asset_locations_for_request', auto: false })
 const assetsResource         = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_assets_for_request', auto: false })
+const currentEmployeeResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_current_employee_for_request', auto: false })
+const assetsForLocationResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_assets_for_location', auto: false })
 const createResource_        = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.create_maintenance_request', auto: false })
+
+async function uploadImages(requestName) {
+  for (let i = 0; i < imageFiles.value.length; i++) {
+    const file = imageFiles.value[i]
+    if (!file) continue
+
+    const fieldname = `image_${i + 1}`
+    const body = new FormData()
+    body.append('file', file)
+    body.append('doctype', 'Maintenance Request')
+    body.append('docname', requestName)
+    body.append('fieldname', fieldname)
+    body.append('is_private', '0')
+
+    try {
+      const payload = await requestApi('/api/method/upload_file', { method: 'POST', body })
+      const fileUrl = payload?.message?.file_url || ''
+      if (fileUrl) {
+        await callMethodForm('frappe.client.set_value', {
+          doctype: 'Maintenance Request',
+          name: requestName,
+          fieldname,
+          value: fileUrl,
+        })
+      }
+    } catch (e) {
+      showToast(`Image ${i + 1} failed to upload: ` + (e?.message || String(e)), 'warning')
+    }
+  }
+}
 
 async function submitRequest() {
   attempted.value = true
@@ -392,6 +469,10 @@ async function submitRequest() {
   try {
     const res = await createResource_.fetch({ request_data: form.value })
     if (res?.success && res?.request_name) {
+      const hasImages = imageFiles.value.some(f => f)
+      if (hasImages) {
+        await uploadImages(res.request_name)
+      }
       const msg = res.already_existed
         ? 'A request already exists: ' + res.request_name
         : 'Request submitted: ' + res.request_name
@@ -414,17 +495,50 @@ function priorityTextClass(p) {
   return { Critical: 'text-red-600', High: 'text-orange-500', Medium: 'text-yellow-600', Low: 'text-blue-500' }[p] || 'text-blue-800'
 }
 
+async function refreshAssetsForLocation() {
+  const { location_type, room, asset_location } = form.value
+  if (location_type === 'Room' && !room) { assetsForLocation.value = []; return }
+  if (location_type === 'Asset Location' && !asset_location) { assetsForLocation.value = []; return }
+  if (location_type === 'Other Location') { assetsForLocation.value = null; return } // no filtering possible, fall back to full list
+
+  loadingLocationAssets.value = true
+  try {
+    const res = await assetsForLocationResource.fetch({ location_type, room, asset_location })
+    assetsForLocation.value = res || []
+    // Clear a previously selected asset if it's no longer in the filtered list
+    if (form.value.asset && !assetsForLocation.value.some(a => a.name === form.value.asset)) {
+      form.value.asset = ''
+    }
+  } finally {
+    loadingLocationAssets.value = false
+  }
+}
+
+watch(() => [form.value.location_type, form.value.room, form.value.asset_location], refreshAssetsForLocation)
+
+// assetOptions: filtered to the selected room/asset location when available,
+// otherwise falls back to the full asset list (e.g. for 'Other Location').
+const assetOptions = computed(() => assetsForLocation.value ?? assets.value)
+
 onMounted(async () => {
-  const [rRes, eRes, aRes, asRes] = await Promise.all([
+  const [rRes, eRes, aRes, asRes, curEmpRes] = await Promise.all([
     roomsResource.fetch(),
     employeesResource.fetch(),
     assetLocationsResource.fetch(),
     assetsResource.fetch(),
+    currentEmployeeResource.fetch(),
   ])
   rooms.value          = rRes || []
   employees.value      = eRes || []
   assetLocations.value = aRes || []
   assets.value         = asRes || []
+  currentEmployee.value = curEmpRes || null
+  form.value.reported_by = curEmpRes?.name || ''
+  loadingCurrentEmployee.value = false
+  if (!curEmpRes) {
+    showToast('No employee record is linked to your account. You will not be able to submit this request.', 'warning', 8000)
+  }
+  refreshAssetsForLocation()
 })
 </script>
 

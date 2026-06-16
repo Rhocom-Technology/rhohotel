@@ -86,7 +86,7 @@
         <span class="text-yellow-500 text-base">⏳</span>
         <div>
           <p class="text-xs font-semibold text-yellow-800">Pending Approval — {{ task.workflow_state }}</p>
-          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited. Actions are taken in the Frappe desk by the approver.</p>
+          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited.</p>
         </div>
       </div>
 

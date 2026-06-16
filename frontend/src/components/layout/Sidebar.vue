@@ -199,7 +199,6 @@ const allNavGroups = [
     children: [
       { label: 'Dashboard',  to: '/assets-mgmt' },
       { label: 'Asset List', to: '/assets-mgmt/list' },
-      { label: 'Asset Maintenance', to: '/assets-mgmt/maintenance' },
     ],
   },
 ]
