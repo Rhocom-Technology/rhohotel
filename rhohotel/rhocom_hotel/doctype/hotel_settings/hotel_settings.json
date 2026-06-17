@@ -27,23 +27,23 @@
   "paystack_secret_key",
   "consumable_warehouse_section",
   "consumable_warehouse",
-
   "sb_shift_login_restriction",
   "enable_shift_login_restriction",
   "shift_login_grace_minutes",
-
   "reports_print_formats_section",
-"daily_occupancy_print_format",
-"guest_stay_history_print_format",
-"night_audit_print_format",
-"pos_sales_print_format",
-"housekeeping_productivity_print_format",
-"corporate_billing_print_format",
-"corporate_account_statement_print_format",
-"asset_maintenance_print_format",
-"hall_booking_print_format",
-"shift_print_format",
-"shift_preference_manager_print_format"
+  "daily_occupancy_print_format",
+  "guest_stay_history_print_format",
+  "night_audit_print_format",
+  "pos_sales_print_format",
+  "housekeeping_productivity_print_format",
+  "corporate_billing_print_format",
+  "corporate_account_statement_print_format",
+  "asset_maintenance_print_format",
+  "hall_booking_print_format",
+  "shift_print_format",
+  "shift_preference_manager_print_format",
+  "sb_iptv_settings",
+  "iptv_api_key"
  ],
  "fields": [
   {
@@ -162,8 +162,6 @@
    "fieldtype": "Check",
    "label": "Enable Late Check-out Charges"
   },
-
-  
   {
    "fieldname": "sb_shift_login_restriction",
    "fieldtype": "Section Break",
@@ -185,76 +183,87 @@
    "label": "Login Grace Period (Minutes)"
   },
   {
-  "fieldname": "reports_print_formats_section",
-  "fieldtype": "Section Break",
-  "label": "Reports / Print Formats"
-},
-{
-  "fieldname": "daily_occupancy_print_format",
-  "fieldtype": "Link",
-  "label": "Daily Occupancy Report Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "guest_stay_history_print_format",
-  "fieldtype": "Link",
-  "label": "Guest Stay History Report Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "night_audit_print_format",
-  "fieldtype": "Link",
-  "label": "Night Audit Summary Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "pos_sales_print_format",
-  "fieldtype": "Link",
-  "label": "POS Sales Performance Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "housekeeping_productivity_print_format",
-  "fieldtype": "Link",
-  "label": "Housekeeping Productivity Report Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "corporate_billing_print_format",
-  "fieldtype": "Link",
-  "label": "Corporate Billing Statement Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "corporate_account_statement_print_format",
-  "fieldtype": "Link",
-  "label": "Corporate Account Statement Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "asset_maintenance_print_format",
-  "fieldtype": "Link",
-  "label": "Asset Maintenance Report Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "hall_booking_print_format",
-  "fieldtype": "Link",
-  "label": "Hall Booking Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "shift_print_format",
-  "fieldtype": "Link",
-  "label": "Shift List Print Format",
-  "options": "Print Format"
-},
-{
-  "fieldname": "shift_preference_manager_print_format",
-  "fieldtype": "Link",
-  "label": "Staff Shift Preference Manager View Print Format",
-  "options": "Print Format"
-}
+   "fieldname": "reports_print_formats_section",
+   "fieldtype": "Section Break",
+   "label": "Reports / Print Formats"
+  },
+  {
+   "fieldname": "daily_occupancy_print_format",
+   "fieldtype": "Link",
+   "label": "Daily Occupancy Report Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "guest_stay_history_print_format",
+   "fieldtype": "Link",
+   "label": "Guest Stay History Report Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "night_audit_print_format",
+   "fieldtype": "Link",
+   "label": "Night Audit Summary Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "pos_sales_print_format",
+   "fieldtype": "Link",
+   "label": "POS Sales Performance Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "housekeeping_productivity_print_format",
+   "fieldtype": "Link",
+   "label": "Housekeeping Productivity Report Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "corporate_billing_print_format",
+   "fieldtype": "Link",
+   "label": "Corporate Billing Statement Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "corporate_account_statement_print_format",
+   "fieldtype": "Link",
+   "label": "Corporate Account Statement Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "asset_maintenance_print_format",
+   "fieldtype": "Link",
+   "label": "Asset Maintenance Report Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "hall_booking_print_format",
+   "fieldtype": "Link",
+   "label": "Hall Booking Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "shift_print_format",
+   "fieldtype": "Link",
+   "label": "Shift List Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "shift_preference_manager_print_format",
+   "fieldtype": "Link",
+   "label": "Staff Shift Preference Manager View Print Format",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "sb_iptv_settings",
+   "fieldtype": "Section Break",
+   "label": "IPTV Integration"
+  },
+  {
+   "fieldname": "iptv_api_key",
+   "fieldtype": "Password",
+   "label": "IPTV API Key",
+   "description": "Secret key used to authenticate IPTV system requests. Send as X-IPTV-API-Key header."
+  }
  ],
  "issingle": 1,
  "links": [],

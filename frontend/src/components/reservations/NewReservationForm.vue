@@ -392,7 +392,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { callMethod } from '@/lib/api'
 import GuestSelector from '@/components/reservations/GuestSelector.vue'
 
-const props = defineProps({ type: { type: String, required: true } })
+const props = defineProps({
+  type: { type: String, required: true },
+  editDoc: { type: Object, default: null },
+})
 const emit = defineEmits(['close', 'saved'])
 const router = useRouter()
 const route = useRoute()
@@ -567,6 +570,52 @@ function handleClickOutside(e) {
     roomDropdownOpen.value = false
   }
 }
+
+// Pre-populate form when editing an existing draft
+watch(
+  () => props.editDoc,
+  (doc) => {
+    if (!doc) return
+    const t = doc.reservation_type
+    if (reservationTypes.includes(t)) reservationType.value = t
+    form.value = {
+      from_date: doc.from_date || '',
+      to_date: doc.to_date || '',
+      primary_guest_name: doc.primary_guest_name || '',
+      primary_guest_email: doc.primary_guest_email || '',
+      primary_guest_phone: doc.primary_guest_phone || '',
+      corporate_guest: doc.corporate_guest || '',
+      individual_guest: doc.hotel_guest || doc.individual_guest || '',
+      discount_type: doc.discount_type || '',
+      discount: Number(doc.discount || 0),
+      group_name: doc.group_name || '',
+      group_billing_mode: doc.group_billing_mode || '',
+      group_master_customer: doc.group_master_customer || '',
+      ota_channel: doc.ota_channel || '',
+      ota_collection_model: doc.ota_collection_model || '',
+      ota_virtual_card_ref: doc.ota_virtual_card_ref || '',
+      ota_commission_amount: Number(doc.ota_commission_amount || 0),
+      comp_reason: doc.comp_reason || '',
+      internal_cost_center: doc.internal_cost_center || '',
+      source_channel: doc.source_channel || '',
+    }
+    if (doc.group_master_customer) {
+      customerSearch.value = doc.group_master_customer
+    }
+    selectedRooms.value = (Array.isArray(doc.rooms) ? doc.rooms : []).map((row) => ({
+      name: row.room_number,
+      room_number: row.room_number,
+      room_type: row.room_type || '',
+      rate_per_night: Number(row.rate_per_night || 0),
+      discount: Number(row.discount || 0),
+      room_total: Number(row.room_total || 0),
+      rate_code: row.rate_code || '',
+      meal_plan_snapshot: row.meal_plan_snapshot || '',
+      cancellation_policy_snapshot: row.cancellation_policy_snapshot || '',
+    }))
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside)
@@ -1031,13 +1080,20 @@ async function saveReservation(submitAfterSave) {
       })) : undefined,
     }
 
-    const inserted = await callMethod('frappe.client.insert', { doc })
-    let target = inserted
+    let saved
+    if (props.editDoc?.name) {
+      saved = await callMethod('frappe.client.save', {
+        doc: { ...doc, name: props.editDoc.name, docstatus: 0 },
+      })
+    } else {
+      saved = await callMethod('frappe.client.insert', { doc })
+    }
+    let target = saved
 
     if (submitAfterSave) {
       const docToSubmit = {
-        ...inserted,
-        reservation_status: inserted?.reservation_status || 'Confirmed',
+        ...saved,
+        reservation_status: saved?.reservation_status || 'Confirmed',
       }
       if (docToSubmit.reservation_status === 'Draft' || docToSubmit.reservation_status === 'Hold') {
         docToSubmit.reservation_status = 'Confirmed'

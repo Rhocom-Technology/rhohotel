@@ -41,6 +41,8 @@
         <div class="flex items-center gap-2 flex-wrap mt-4">
           <button v-if="reservation.docstatus === 0" :disabled="actionLoading || isCancelled" @click="emit('submit-reservation')"
             class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40">Submit Reservation</button>
+          <button v-if="reservation.docstatus === 0 && !isCancelled" :disabled="actionLoading" @click="emit('edit-draft')"
+            class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-40">Edit Draft</button>
           <button :disabled="actionLoading || isCancelled" @click="!isCancelled && (showPaymentModal = true)" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Receive Payment</button>
           <button
             v-if="hasTransferableInvoices"
@@ -592,6 +594,7 @@ const emit = defineEmits([
   'cancel-reservation',
   'create-invoice',
   'submit-reservation',
+  'edit-draft',
 ])
 
 const showAdjustModal = ref(false)

@@ -15,6 +15,7 @@
     @cancel-reservation="cancelReservation"
     @create-invoice="createInvoice"
     @submit-reservation="submitReservation"
+    @edit-draft="editDraft"
   />
 </template>
 
@@ -453,6 +454,12 @@ async function submitReservation() {
   } finally {
     actionLoading.value = false
   }
+}
+
+function editDraft() {
+  const id = getReservationId()
+  if (!id) return
+  router.push({ name: 'NewReservation', query: { draft: id } })
 }
 
 async function cancelReservation() {

@@ -93,7 +93,7 @@
         </div>
 
         <!-- Assignment -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Assignment</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
             <div>
@@ -410,6 +410,10 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import { useSessionStore } from '@/stores/session'
+
+const session = useSessionStore()
+const isHousekeepingManager = computed(() => session.hasAnyRole(['Housekeeping Manager']))
 
 const router = useRouter()
 const route = useRoute()

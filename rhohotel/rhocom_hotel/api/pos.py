@@ -2093,6 +2093,7 @@ def get_pos_shift_stats(pos_opening_entry=None):
         "difference": 0,
         "cashier": frappe.db.get_value("User", entry_doc.user, "full_name") or entry_doc.user,
         "pos_profile": entry_doc.pos_profile,
+        "allow_discount_change": bool(frappe.db.get_value("POS Profile", entry_doc.pos_profile, "allow_discount_change")),
         "shift_date": cstr(entry_doc.period_start_date),
         "opening_time": cstr(entry_doc.period_start_date),
         "tender_breakdown": tender,

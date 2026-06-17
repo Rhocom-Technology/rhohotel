@@ -93,7 +93,6 @@ def build_stats(bookings, halls, from_date, to_date):
     today_bookings = [
         b for b in bookings
         if b.docstatus == 1
-        and b.payment_status == "Paid"
         and getdate(b.start_datetime) <= today
         and getdate(b.end_datetime) >= today
     ]

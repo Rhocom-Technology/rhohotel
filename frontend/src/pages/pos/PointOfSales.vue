@@ -225,7 +225,7 @@
         </div>
 
         <!-- Discount -->
-        <div class="mb-4">
+        <div v-if="terminalInfo.allow_discount_change" class="mb-4">
           <button @click="showDiscountPanel = !showDiscountPanel"
             class="w-full py-2 text-xs font-medium border border-dashed rounded-lg transition-all"
             :class="manualDiscountAmount > 0 ? 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100' : 'text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-300'">
@@ -598,6 +598,7 @@ const terminalInfo = computed(() => {
     shift_date: d.shift_date || '',
     has_open_shift: !!d.has_open_shift,
     pos_opening_entry: d.pos_opening_entry || null,
+    allow_discount_change: !!d.allow_discount_change,
   }
 })
 
@@ -868,6 +869,7 @@ const redeemableComplimentaries = ref([])
 const unusedComplimentaries = ref([])
 
 const manualDiscountAmount = computed(() => {
+  if (!terminalInfo.value.allow_discount_change) return 0
   const val = parseFloat(discountInput.value) || 0
   if (!val) return 0
   if (discountType.value === 'percent') return Math.min(Math.round(subTotal.value * val / 100), subTotal.value)

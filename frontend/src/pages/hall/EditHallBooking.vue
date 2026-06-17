@@ -698,11 +698,10 @@ async function load() {
   error.value = null
 
   try {
-    const [booking, h, s, c] = await Promise.all([
+    const [booking, h, s] = await Promise.all([
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_booking', { name: route.params.id }),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_halls'),
       callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_services'),
-      callMethod('rhohotel.rhocom_hotel.api.hall_booking.get_customers'),
     ])
 
     if (booking.docstatus !== 0) {
@@ -712,7 +711,7 @@ async function load() {
 
     halls.value = h || []
     services.value = s || []
-    customers.value = c || []
+    customers.value = []
     
 
     form.value.customer_name = booking.customer_name || ''
@@ -740,6 +739,14 @@ async function load() {
 
     const selected = customers.value.find(cus => cus.name === form.value.customer_name)
     customerSearch.value = selected ? (selected.customer_name || selected.name) : form.value.customer_name
+    // Seed the customer dropdown with a search so existing selection appears
+    if (form.value.customer_name) {
+      const results = await callMethod(
+        'rhohotel.rhocom_hotel.api.hall_booking.search_customers',
+        { query: form.value.customer_name },
+      ).catch(() => [])
+      customers.value = results || []
+    }
     phoneSearch.value = form.value.mobile_number || ''
     customerLocked.value = !!form.value.customer_name
     phoneLocked.value = !!form.value.mobile_number

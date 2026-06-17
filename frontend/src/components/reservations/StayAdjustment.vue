@@ -65,10 +65,7 @@
     </div>
 
     <!-- Body -->
-      <div v-if="reservation.docstatus !== 1" class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-xs text-yellow-700">
-        ⚠️ This reservation must be submitted before adjusting the stay.
-      </div>
-      <div v-else style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
 
       <!-- Left: Adjustment Details -->
       <div>

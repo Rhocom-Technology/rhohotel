@@ -9,28 +9,18 @@
       </div>
       <div class="na-navbar-right">
         <span class="na-navbar-date">{{ nowLabel }}</span>
-        <button @click="closeDay" class="na-btn-close">Close Day</button>
+        <label class="na-date-label">
+          Audit Date:
+          <input v-model="auditDate" type="date" class="na-date-input" />
+        </label>
+        <button @click="loadData" class="na-btn-refresh">Refresh</button>
+        <button @click="closeDay" :disabled="closingDay" class="na-btn-close">{{ closingDay ? 'Closing...' : 'Close Day' }}</button>
         <div class="na-avatar">{{ avatarInitials }}</div>
       </div>
     </header>
 
     <!-- ── Main Body ──────────────────────────────────────────────────── -->
     <main class="na-body">
-
-      <!-- Close Day Banner (inside body) -->
-      <div class="na-close-banner">
-        <div class="na-close-banner-meta">
-          <span class="na-meta-ts">{{ nowLabel }}</span>
-          <label class="na-date-label">
-            Audit Date:
-            <input v-model="auditDate" type="date" class="na-date-input" />
-          </label>
-        </div>
-        <div class="na-close-banner-right">
-          <button @click="loadData" class="na-btn-refresh">Refresh</button>
-          <button @click="closeDay" :disabled="closingDay" class="na-btn-close-lg">{{ closingDay ? 'Closing...' : 'Close Day' }}</button>
-        </div>
-      </div>
 
       <div v-if="closeDaySuccess" class="na-inline-ok">{{ closeDaySuccess }}</div>
       <div v-if="closeDayError" class="na-inline-err">{{ closeDayError }}</div>

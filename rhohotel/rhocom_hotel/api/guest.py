@@ -40,7 +40,7 @@ def get_guests(search=None, guest_type=None, loyalty_tier=None, status=None,
 	active_checkins = frappe.get_all(
 		"Hotel Room Check In",
 		filters={"status": "Checked In"},
-		fields=["guest", "room_number", "total_outstanding_amount"],
+		fields=["name", "guest", "room_number"],
 		limit_page_length=5000,
 	)
 	checkin_map = {}
@@ -48,6 +48,24 @@ def get_guests(search=None, guest_type=None, loyalty_tier=None, status=None,
 		g = cstr(ci.get("guest")).strip()
 		if g:
 			checkin_map[g] = ci
+
+	# Compute live outstanding balances from Sales Invoices linked to active check-ins
+	checkin_names = [ci["name"] for ci in active_checkins]
+	outstanding_map = {}
+	if checkin_names and frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in"):
+		rows = frappe.db.sql(
+			"""
+			SELECT custom_hotel_room_check_in, COALESCE(SUM(outstanding_amount), 0) AS outstanding
+			FROM `tabSales Invoice`
+			WHERE custom_hotel_room_check_in IN %(checkins)s
+			  AND status != 'Cancelled'
+			GROUP BY custom_hotel_room_check_in
+			""",
+			{"checkins": checkin_names},
+			as_dict=True,
+		)
+		for row in rows:
+			outstanding_map[row.custom_hotel_room_check_in] = flt(row.outstanding)
 
 	# Attach stay counts
 	stay_counts = frappe.db.sql(
@@ -100,7 +118,8 @@ def get_guests(search=None, guest_type=None, loyalty_tier=None, status=None,
 
 		stays = stay_map.get(name, 0)
 		last_stay = last_stay_map.get(name)
-		balance = flt(ci.get("total_outstanding_amount", 0)) if ci else 0
+		checkin_name = ci.get("name") if ci else None
+		balance = outstanding_map.get(checkin_name, 0) if checkin_name else 0
 
 		result.append({
 			"name": name,
@@ -143,15 +162,30 @@ def get_guest_stats():
 
 	vip_count = frappe.db.count("Hotel Guest", {"loyalty_tier": ["in", ["VIP", "Platinum", "Gold"]]})
 
-	outstanding_raw = frappe.db.sql(
-		"""
-		SELECT COALESCE(SUM(total_outstanding_amount), 0) as total
-		FROM `tabHotel Room Check In`
-		WHERE status = 'Checked In' AND total_outstanding_amount > 0
-		""",
-		as_dict=True,
-	)
-	outstanding = flt(outstanding_raw[0].total) if outstanding_raw else 0
+	outstanding = 0
+	if frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in"):
+		outstanding_raw = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(si.outstanding_amount), 0) AS total
+			FROM `tabSales Invoice` si
+			JOIN `tabHotel Room Check In` ci ON ci.name = si.custom_hotel_room_check_in
+			WHERE ci.status = 'Checked In'
+			  AND si.status != 'Cancelled'
+			  AND si.outstanding_amount > 0
+			""",
+			as_dict=True,
+		)
+		outstanding = flt(outstanding_raw[0].total) if outstanding_raw else 0
+	else:
+		outstanding_raw = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(total_outstanding_amount), 0) as total
+			FROM `tabHotel Room Check In`
+			WHERE status = 'Checked In' AND total_outstanding_amount > 0
+			""",
+			as_dict=True,
+		)
+		outstanding = flt(outstanding_raw[0].total) if outstanding_raw else 0
 
 	def fmt_currency(amount):
 		if amount >= 1_000_000:
