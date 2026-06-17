@@ -100,11 +100,12 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/housekeeping/dashboard', roles: ROLE_GROUPS.housekeepingFull },
   { prefix: '/housekeeping/report', roles: ROLE_GROUPS.housekeepingFull },
   { prefix: '/housekeeping/task/new', roles: [...ROLE_GROUPS.housekeepingList, ...ROLE_GROUPS.frontDesk] },
+  { prefix: '/housekeeping/task', roles: [...ROLE_GROUPS.housekeepingList, 'Front Desk Manager'] },
   { prefix: '/housekeeping', roles: [...ROLE_GROUPS.housekeepingList, ...ROLE_GROUPS.frontDesk] },
 
   // Maintenance — specific paths before general
   { prefix: '/maintenance/dashboard', roles: ROLE_GROUPS.maintenanceFull },
-  { prefix: '/maintenance/request', roles: ROLE_GROUPS.maintenanceFull },
+  { prefix: '/maintenance/request', roles: [...ROLE_GROUPS.maintenanceFull, 'Front Desk Manager'] },
   { prefix: '/maintenance/new-request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
   { prefix: '/maintenance/technicians', roles: ROLE_GROUPS.maintenanceFull },
   { prefix: '/maintenance/new-technician', roles: ROLE_GROUPS.maintenanceFull },

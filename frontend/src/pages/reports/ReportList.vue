@@ -163,20 +163,34 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useSessionStore } from '@/stores/session'
+import { ROLE_GROUPS } from '@/lib/permissions'
 
 const router = useRouter()
+const session = useSessionStore()
 const searchQuery = ref('')
 const selectedCategory = ref('')
 const showCategoryDropdown = ref(false)
 
-const categories = [
-  'Front Desk',
-  'Guest Management',
-  'Billing',
-  'Point of Sale',
-  'Housekeeping',
-  'Asset Management',
-]
+const CATEGORY_ROLES = {
+  'Front Desk': ROLE_GROUPS.reportsFrontDesk,
+  'Guest Management': ROLE_GROUPS.reportsFrontDesk,
+  'Billing': ROLE_GROUPS.reportsFrontDesk,
+  'Point of Sale': ROLE_GROUPS.reportsPos,
+  'Housekeeping': ROLE_GROUPS.reportsHousekeeping,
+  'Asset Management': ROLE_GROUPS.assetManagement,
+}
+
+const categories = computed(() => {
+  return [
+    'Front Desk',
+    'Guest Management',
+    'Billing',
+    'Point of Sale',
+    'Housekeeping',
+    'Asset Management',
+  ].filter(cat => session.hasAnyRole(CATEGORY_ROLES[cat] || []))
+})
 
 const reports = ref([
   {
@@ -247,6 +261,8 @@ const reports = ref([
 
 const filteredReports = computed(() => {
   return reports.value.filter(r => {
+    const allowedRoles = CATEGORY_ROLES[r.category]
+    if (allowedRoles && !session.hasAnyRole(allowedRoles)) return false
     const matchesSearch = !searchQuery.value ||
       r.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       r.category.toLowerCase().includes(searchQuery.value.toLowerCase())

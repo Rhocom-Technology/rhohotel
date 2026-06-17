@@ -314,11 +314,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import { callMethodForm, requestApi } from '@/lib/api'
 
 const router = useRouter()
+const route = useRoute()
 const submitting = ref(false)
 const attempted = ref(false)
 const rooms = ref([])
@@ -534,6 +535,10 @@ onMounted(async () => {
   assets.value         = asRes || []
   currentEmployee.value = curEmpRes || null
   form.value.reported_by = curEmpRes?.name || ''
+  if (route.query.room) {
+    form.value.location_type = 'Room'
+    form.value.room = route.query.room
+  }
   loadingCurrentEmployee.value = false
   if (!curEmpRes) {
     showToast('No employee record is linked to your account. You will not be able to submit this request.', 'warning', 8000)

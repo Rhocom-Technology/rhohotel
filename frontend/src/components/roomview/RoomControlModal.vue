@@ -332,7 +332,7 @@ async function blockRoom() {
   }
 }
 
-function goMaintenance() { emit('close'); router.push('/maintenance/new-request') }
+function goMaintenance() { emit('close'); router.push({ path: '/maintenance/new-request', query: { room: props.room.name } }) }
 function goHousekeeping() { emit('close'); router.push({ path: '/housekeeping/task/new', query: { room: props.room.name } }) }
 function goRoomDetails() { emit('close'); router.push('/rooms/' + props.room.room_number) }
 </script>
