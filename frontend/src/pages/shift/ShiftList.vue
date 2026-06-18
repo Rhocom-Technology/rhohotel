@@ -13,10 +13,17 @@
       <div class="flex items-end gap-3 flex-wrap">
         <div style="min-width:220px;">
           <p class="text-xs text-gray-500 mb-1.5">Department</p>
-          <select v-model="department" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+          <select
+            v-model="department"
+            :disabled="!canViewAllDepartments"
+            :class="['w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600', !canViewAllDepartments ? 'bg-gray-50 cursor-not-allowed' : '']"
+          >
             <option v-if="!departmentOptions.length" value="">No department found</option>
             <option v-for="dept in departmentOptions" :key="dept" :value="dept">{{ dept }}</option>
           </select>
+          <p v-if="!canViewAllDepartments && department" class="text-xs text-gray-400 mt-1">
+            Showing your department only
+          </p>
         </div>
 
         <div style="min-width:190px;">
@@ -102,10 +109,10 @@
 
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
-          <p class="text-xs text-gray-400">Unpublished Items</p>
-          <span class="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Draft</span>
+          <p class="text-xs text-gray-400">Your Shifts This Week</p>
+          <span class="px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">You</span>
         </div>
-        <p class="text-3xl font-bold text-gray-900">{{ loading ? '...' : stats.unpublished }}</p>
+        <p class="text-3xl font-bold text-gray-900">{{ loading ? '...' : stats.yourShiftsThisWeek }}</p>
       </div>
     </div>
 
@@ -120,7 +127,7 @@
       </div>
 
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse" style="min-width:1100px;">
+        <table class="w-full border-collapse" style="min-width:1000px;">
           <thead>
             <tr class="bg-gray-50">
               <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 rounded-l-lg">Shift ID</th>
@@ -129,18 +136,17 @@
               <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500">Day</th>
               <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500">Shift</th>
               <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500">Time</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500">Status</th>
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 rounded-r-lg">Action</th>
+              <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 rounded-r-lg">Status</th>
             </tr>
           </thead>
 
           <tbody>
             <tr v-if="loading">
-              <td colspan="8" class="px-3 py-8 text-center text-xs text-gray-400">Loading shifts...</td>
+              <td colspan="7" class="px-3 py-8 text-center text-xs text-gray-400">Loading shifts...</td>
             </tr>
 
             <tr v-else-if="!shiftRecords.length">
-              <td colspan="8" class="px-3 py-8 text-center text-xs text-gray-400">No published shifts found for this week.</td>
+              <td colspan="7" class="px-3 py-8 text-center text-xs text-gray-400">No published shifts found for this week.</td>
             </tr>
 
             <template v-else>
@@ -159,11 +165,6 @@
                   <span class="px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-600 rounded-full">
                     {{ row.status }}
                   </span>
-                </td>
-                <td class="px-3 py-3.5">
-                  <button class="px-4 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" @click="viewShift(row)">
-                    View
-                  </button>
                 </td>
               </tr>
             </template>
@@ -257,11 +258,13 @@ import { callMethod } from '@/lib/api'
 
 const departmentOptions = ref([])
 const department = ref('')
+const canViewAllDepartments = ref(true)
 
 const shiftTypeOptions = ref(['All Shifts'])
 const shiftType = ref('All Shifts')
 
-const viewMode = ref('list')
+// Calendar is the default view.
+const viewMode = ref('calendar')
 const loading = ref(false)
 const error = ref('')
 
@@ -269,6 +272,7 @@ const stats = reactive({
   publishedThisWeek: 0,
   staffScheduled: 0,
   unpublished: 0,
+  yourShiftsThisWeek: 0,
   shiftTypeCounts: [],
 })
 
@@ -359,6 +363,12 @@ async function loadDepartments() {
     const result = await callMethod('rhohotel.rhocom_hotel.api.shift_list.get_departments')
     departmentOptions.value = result || []
 
+    // If the backend only returned one department, the user is restricted
+    // to it (not an Administrator/Hotel Manager) -- lock the dropdown.
+    // get_departments() itself already enforces this server-side; this is
+    // just to drive the UI's disabled state.
+    canViewAllDepartments.value = departmentOptions.value.length !== 1
+
     if (!department.value && departmentOptions.value.length) {
       department.value = departmentOptions.value[0]
     }
@@ -385,6 +395,7 @@ function resetStats(newStats) {
     publishedThisWeek: 0,
     staffScheduled: 0,
     unpublished: 0,
+    yourShiftsThisWeek: 0,
     shiftTypeCounts: [],
     ...(newStats || {}),
   })
@@ -527,14 +538,6 @@ function printShifts() {
     `/api/method/rhohotel.rhocom_hotel.api.shift_list.download_shift_list_report?${params.toString()}`,
     '_blank'
   )
-}
-
-function newShift() {
-  window.location.href = '/app/shift-assignment/new-shift-assignment'
-}
-
-function viewShift(row) {
-  window.location.href = `/app/shift-assignment/${row.id}`
 }
 
 watch([department, weekStart, shiftType], () => {

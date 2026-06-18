@@ -6,6 +6,7 @@ from rhohotel.rhocom_hotel.api.weekly_shift_generator import (
     _get_overlapping_assignment,
     _apply_draft_assignments,
     _format_shift_time,
+    _get_default_company,
 )
 
 MANAGER_ROLES = ("System Manager", "Hotel Manager", "Front Desk Manager")
@@ -18,6 +19,8 @@ def _require_logged_in():
 
 
 def _is_manager():
+    if frappe.session.user == "Administrator":
+        return True
     roles = set(frappe.get_roles(frappe.session.user))
     return bool(roles.intersection(MANAGER_ROLES))
 
@@ -142,6 +145,14 @@ def _build_checks(department, date, requesting_employee, target_employee):
 
     errors = []
     checks = []
+
+    if date < getdate():
+        errors.append(_("You cannot request a shift swap for a past date."))
+        checks.append({
+            "level": "warning",
+            "title": "Past Date Selected",
+            "detail": "Choose today or a future date for the swap.",
+        })
 
     if requesting.name == target.name:
         errors.append(_("Requesting Employee and Target Employee cannot be the same."))
@@ -460,6 +471,11 @@ def get_swap_requests(department=None, date=None, status=None, search=None, limi
     conditions = []
     values = {}
 
+    # Non-managers are ALWAYS restricted to requests where they are either
+    # the requesting or target employee, regardless of what department/date/
+    # status/search filters the client sends. This is enforced server-side
+    # so it can't be bypassed by calling the API directly with different
+    # parameters.
     if not _is_manager():
         current_employee = _get_logged_in_employee()
         conditions.append(
@@ -470,9 +486,18 @@ def get_swap_requests(department=None, date=None, status=None, search=None, limi
         )
         values["current_employee"] = current_employee.name
 
-    department = cstr(department or "").strip()
-    status = cstr(status or "").strip()
-    search = cstr(search or "").strip()
+        # Department/status/search filters are only meaningful for managers
+        # browsing everyone's requests -- a non-manager's own requests are
+        # already a small, fixed set, so don't let stray filter values (e.g.
+        # a stale department selection) accidentally hide their own data.
+        department = None
+        status = None
+        search = None
+        date = None
+    else:
+        department = cstr(department or "").strip()
+        status = cstr(status or "").strip()
+        search = cstr(search or "").strip()
 
     if department and department != "All Departments":
         conditions.append("department = %(department)s")
@@ -703,7 +728,9 @@ def get_swap_request_stats(department=None, date=None):
     
 @frappe.whitelist()
 def get_departments():
-    _require_logged_in()
+    _require_manager()
+
+    default_company = _get_default_company()
 
     rows = frappe.db.sql(
         """
@@ -712,8 +739,10 @@ def get_departments():
         WHERE status = 'Active'
           AND department IS NOT NULL
           AND department != ''
+          AND (%(company)s = '' OR company = %(company)s)
         ORDER BY department ASC
         """,
+        {"company": default_company or ""},
         as_dict=True,
     )
 

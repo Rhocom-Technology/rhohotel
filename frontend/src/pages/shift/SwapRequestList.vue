@@ -17,7 +17,7 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
       <h3 class="text-sm font-bold text-gray-900">Swap Request Control</h3>
 
-      <div class="flex items-end gap-3 flex-wrap mt-4">
+      <div v-if="myContext.is_manager" class="flex items-end gap-3 flex-wrap mt-4">
         <div style="min-width:180px;">
           <p class="text-xs text-gray-500 mb-1.5">Department</p>
           <select
@@ -77,14 +77,21 @@
         >
           Refresh
         </button>
+      </div>
 
-       <button
-        v-if="myContext.has_employee"
-        class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-        @click="openNewModal"
-      >
-        New Swap Request
-      </button>
+      <!-- Non-managers only get the New Swap Request action -- department,
+           date, status, search, and reset/refresh controls are hidden since
+           they can only ever see their own requests regardless of filters.
+           Managers never see this button at all: requesting a swap is a
+           staff-only action, not something a manager account should do. -->
+      <div v-else class="mt-4">
+        <button
+          v-if="myContext.has_employee"
+          class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          @click="openNewModal"
+        >
+          New Swap Request
+        </button>
       </div>
     </div>
 
@@ -229,6 +236,7 @@
                 <input
                   v-model="newForm.date"
                   type="date"
+                  :min="todayIso()"
                   class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg"
                 />
               </div>
@@ -431,13 +439,15 @@
                 <textarea
   v-model="reviewNote"
   rows="4"
-  :readonly="activeRequest.status !== 'Pending'"
-  :disabled="activeRequest.status !== 'Pending'"
-  :placeholder="activeRequest.status === 'Pending'
+  :readonly="!canEditReviewNote"
+  :disabled="!canEditReviewNote"
+  :placeholder="canEditReviewNote
     ? 'Add approval/rejection note...'
-    : 'Request is closed. Manager note cannot be edited.'"
+    : (myContext.is_manager
+        ? 'Request is closed. Manager note cannot be edited.'
+        : 'Only a manager can add a review note.')"
   class="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-lg"
-  :class="activeRequest.status !== 'Pending'
+  :class="!canEditReviewNote
     ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
     : 'bg-white'"
 />
@@ -446,7 +456,7 @@
           </div>
 
           <div
-            v-if="activeRequest.status === 'Pending'"
+            v-if="activeRequest.status === 'Pending' && myContext.is_manager"
             class="px-8 py-5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3"
           >
             <button
@@ -496,12 +506,19 @@ const pageLength = ref(25)
 const departments = ref([])
 
 async function loadDepartments() {
+  if (!myContext.is_manager) {
+    departments.value = []
+    return
+  }
   departments.value = await callMethod('rhohotel.rhocom_hotel.api.swap_request.get_departments') || []
 }
 
+// Specific Date starts empty (not "today") so a staff member's own past- or
+// future-dated requests show up by default instead of being hidden behind
+// a same-day-only filter.
 const filters = reactive({
   department: 'All Departments',
-  date: todayIso(),
+  date: '',
   status: 'All Statuses',
   search: '',
 })
@@ -546,6 +563,13 @@ const canCreateRequest = computed(() => {
     newForm.request_reason.trim() &&
     checkOk.value
   )
+})
+
+// The Manager Review Note is only ever editable by a manager, and only
+// while the request is still Pending -- a requester or target employee
+// viewing their own request should never be able to write into it.
+const canEditReviewNote = computed(() => {
+  return Boolean(myContext.is_manager && activeRequest.value?.status === 'Pending')
 })
 
 function toast(message, type = 'success') {
@@ -690,7 +714,7 @@ async function openNewModal() {
 
   await loadMyContext()
 
-  newForm.date = filters.date || todayIso()
+  newForm.date = todayIso()
   newForm.target_employee = ''
   newForm.request_reason = ''
   requestingShift.value = null
@@ -775,7 +799,7 @@ async function rejectRequest() {
 
 function resetFilters() {
   filters.department = 'All Departments'
-  filters.date = todayIso()
+  filters.date = ''
   filters.status = 'All Statuses'
   filters.search = ''
   page.value = 1

@@ -59,13 +59,20 @@
         </div>
 
         <button
-          class="px-4 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 py-2.5 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="loading"
           @click="openAssignmentTool">Shift Assignment Tool</button>
         <button
-          class="px-4 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 py-2.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="loading"
           @click="openAddShiftType">Add Shift Type</button>
+        <button
+          class="px-4 py-2.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="loading"
+          @click="openViewShiftTypes">View All Shift Types</button>
+
+
+          
         <button
           class="px-4 py-2.5 text-xs font-semibold text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           style="background: linear-gradient(90deg, #8b5cf6, #6366f1);"
@@ -84,7 +91,7 @@
         </template>
         <button
           v-else
-          class="px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 bg-blue-600 text-white py-2.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="loading"
           @click="loadRoster">Refresh</button>
       </div>
@@ -146,7 +153,7 @@
           <table class="w-full border-collapse" style="min-width:1200px;">
             <thead>
               <tr class="bg-gray-50">
-                <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 rounded-l-lg" style="min-width:180px;">Staff / Role</th>
+                <th class="text-left px-3 py-2.5 text-xs font-semibold text-black rounded-l-lg" style="min-width:180px;">Staff / Role</th>
                 <th v-for="day in days" :key="day.label" class="text-left px-3 py-2.5" style="min-width:150px;">
                   <p class="text-xs font-semibold text-gray-700">{{ day.label }}</p>
                   <p class="text-xs text-gray-400">{{ day.dateLabel }}</p>
@@ -486,6 +493,124 @@
       </div>
     </Teleport>
 
+    <!-- View All Shift Types Modal -->
+    <Teleport to="body" v-if="showViewShiftTypes">
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-6"
+        style="background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);"
+        @click.self="closeViewShiftTypes">
+        <div class="bg-white rounded-2xl w-full shadow-2xl overflow-y-auto" style="max-width:600px;max-height:92vh;">
+
+          <!-- Header -->
+          <div class="px-8 pt-7 pb-5 flex items-start justify-between border-b border-gray-100">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">All Shift Types</h2>
+              <p class="text-xs text-gray-400 mt-1">View every Shift Type and its time range. Click Edit on a row to change its time.</p>
+            </div>
+            <button @click="closeViewShiftTypes"
+              class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">Close</button>
+          </div>
+
+          <div class="px-8 py-6">
+
+            <div v-if="loadingShiftTypeList" class="py-10 text-center text-xs text-gray-400">Loading Shift Types...</div>
+            <div v-else-if="!allShiftTypes.length" class="py-10 text-center text-xs text-gray-400">No Shift Types found.</div>
+
+            <div v-else class="border border-gray-100 rounded-lg overflow-hidden">
+              <table class="w-full border-collapse">
+                <thead>
+                  <tr class="bg-gray-50">
+                    <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500">Name</th>
+                    <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500">Time</th>
+                    <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500">In Use</th>
+                    <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500" style="width:80px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="st in allShiftTypes" :key="st.name" class="border-t border-gray-100">
+                    <td class="px-3 py-2.5 text-xs font-semibold text-gray-900">{{ st.name }}</td>
+                    <td class="px-3 py-2.5 text-xs text-gray-600">{{ st.time_label || '—' }}</td>
+                    <td class="px-3 py-2.5 text-xs text-gray-500">{{ st.in_use_count }} assignment(s)</td>
+                    <td class="px-3 py-2.5">
+                      <button
+                        class="px-3 py-1 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        @click="openEditShiftType(st)">Edit</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Edit Shift Type Modal -->
+    <Teleport to="body" v-if="showEditShiftType">
+      <div class="fixed inset-0 z-[55] flex items-center justify-center p-6"
+        style="background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);"
+        @click.self="closeEditShiftType">
+        <div class="bg-white rounded-2xl w-full shadow-2xl overflow-y-auto" style="max-width:480px;max-height:92vh;">
+
+          <!-- Header -->
+          <div class="px-8 pt-7 pb-5 flex items-start justify-between border-b border-gray-100">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">Edit Shift Type</h2>
+              <p class="text-xs text-gray-400 mt-1">{{ editShiftTypeForm.name }}</p>
+            </div>
+            <button @click="closeEditShiftType"
+              class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">Close</button>
+          </div>
+
+          <div class="px-8 py-6 space-y-5">
+
+            <div v-if="editShiftTypeMessage" class="px-3 py-2 text-xs rounded-lg" :class="editShiftTypeMessageType === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'">
+              {{ editShiftTypeMessage }}
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+              <h3 class="text-sm font-bold text-gray-900 mb-3">Shift Type Details</h3>
+              <div class="space-y-4">
+                <div>
+                  <p class="text-xs font-semibold text-gray-700 mb-1.5">Name</p>
+                  <input :value="editShiftTypeForm.name" disabled type="text"
+                    class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg text-gray-500 bg-gray-50" />
+                  <p class="text-xs text-gray-400 mt-1">Renaming a Shift Type isn't supported here.</p>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+                  <div>
+                    <p class="text-xs font-semibold text-gray-700 mb-1.5">Start Time <span class="text-red-500">*</span></p>
+                    <input v-model="editShiftTypeForm.start_time" type="time"
+                      class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700" />
+                  </div>
+                  <div>
+                    <p class="text-xs font-semibold text-gray-700 mb-1.5">End Time <span class="text-red-500">*</span></p>
+                    <input v-model="editShiftTypeForm.end_time" type="time"
+                      class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700" />
+                  </div>
+                </div>
+                <p class="text-xs text-gray-400">If End Time is earlier than Start Time, the shift is treated as an overnight shift (e.g. Night: 22:00 - 06:00).</p>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Footer Actions -->
+          <div class="px-8 py-5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <button
+              class="px-6 py-2.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              @click="closeEditShiftType">Cancel</button>
+            <button
+              class="px-6 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="!canSaveEditShiftType || savingEditShiftType"
+              @click="saveEditShiftType">{{ savingEditShiftType ? 'Saving...' : 'Save Changes' }}</button>
+          </div>
+
+        </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -506,8 +631,11 @@ import { callMethod } from '@/lib/api'
 //   ],
 //   stats: { coverage_level, conflict_alerts, total_slots, assigned_slots }
 // }
-//   shift_type is the real Shift Type name, or "OFF" / "Leave" pseudo-values.
-//   status is "Active" | "Off" | "Leave". time is "hh:mm A - hh:mm A" or "".
+//   shift_type is always the real Shift Type name (or "OFF" when no
+//   assignment exists). status is "Active" | "Off" | "Leave" -- "Leave"
+//   means the underlying Shift Assignment is Inactive, but it no longer
+//   changes the displayed label or color, both of which are driven purely
+//   by shift_type. time is "hh:mm A - hh:mm A" or "".
 //
 // ai_auto_assign(department, week_start) -> same shape as get_weekly_roster
 //   (preview only, does not write to the database)
@@ -537,7 +665,6 @@ const serverStats = ref(null)
 const previewMode = ref(false)
 const shiftTypeOptions = ref([
   { value: 'OFF', label: 'OFF' },
-  { value: 'Leave', label: 'Leave' },
 ])
 
 const loading = ref(false)
@@ -717,6 +844,68 @@ function buildDraftAssignments() {
   return assignments
 }
 
+// Only includes employee/day entries whose value actually differs from the
+// last-loaded baseline (draftSnapshot). Sending the full grid on every
+// save/publish caused already-published, unchanged multi-day Shift
+// Assignment records to be needlessly re-processed (split/recreated) by
+// the backend, which could collide with itself and trigger HRMS's native
+// "already has an active Shift Assignment" conflict for days that were
+// never actually touched in this session.
+function buildChangedAssignments() {
+  const current = buildDraftAssignments()
+  let baseline = {}
+  try {
+    baseline = draftSnapshot.value ? JSON.parse(draftSnapshot.value) : {}
+  } catch (e) {
+    baseline = {}
+  }
+
+  const changed = {}
+  Object.keys(current).forEach((staffId) => {
+    const currentDayMap = current[staffId] || {}
+    const baselineDayMap = baseline[staffId] || {}
+    const changedDays = {}
+
+    Object.keys(currentDayMap).forEach((date) => {
+      const currentValue = currentDayMap[date]
+      const baselineValue = baselineDayMap[date] !== undefined ? baselineDayMap[date] : 'OFF'
+      if (currentValue !== baselineValue) {
+        changedDays[date] = currentValue
+      }
+    })
+
+    if (Object.keys(changedDays).length) {
+      changed[staffId] = changedDays
+    }
+  })
+
+  return changed
+}
+
+// Publish needs more than "what changed in this editing session" --
+// it also needs every cell that's already saved as an unpublished draft
+// (docstatus=0), since a prior Save Draft call refreshes draftSnapshot to
+// match the saved state, which would otherwise make buildChangedAssignments()
+// return an empty diff and silently publish nothing. This merges genuinely
+// new edits with every cell currently flagged staff.shifts[date].draft.
+function buildPublishAssignments() {
+  const merged = buildChangedAssignments()
+
+  staffList.value.forEach((staff) => {
+    days.value.forEach((day) => {
+      const cell = staff.shifts[day.date]
+      if (!cell?.draft) return
+
+      if (!merged[staff.id]) merged[staff.id] = {}
+      if (merged[staff.id][day.date] === undefined) {
+        merged[staff.id][day.date] = cell.value || 'OFF'
+      }
+    })
+  })
+
+  return merged
+}
+
 const isDraftDirty = computed(() => JSON.stringify(buildDraftAssignments()) !== draftSnapshot.value)
 
 const saving = ref('')
@@ -728,7 +917,7 @@ async function saveDraft() {
     const result = await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.save_weekly_draft', {
       department: department.value,
       week_start: isoDate(weekStart.value),
-      assignments: buildDraftAssignments(),
+      assignments: buildChangedAssignments(),
     })
     await loadDraft()
     const warnings = result?.warnings || []
@@ -746,13 +935,19 @@ async function saveDraft() {
 }
 
 async function publishDraft() {
+  const payload = buildPublishAssignments()
+  if (!Object.keys(payload).length) {
+    showToastMessage('Nothing to publish -- there are no draft or changed shifts for this week.', 'error')
+    return
+  }
+
   saving.value = 'publish'
   message.value = ''
   try {
     const result = await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.publish_weekly_draft', {
       department: department.value,
       week_start: isoDate(weekStart.value),
-      assignments: buildDraftAssignments(),
+      assignments: payload,
     })
     const warnings = result?.warnings || []
     if (warnings.length) {
@@ -819,14 +1014,12 @@ const coverageBadgeClass = computed(() => {
 function eventLabel(cell) {
   if (!cell) return 'OFF'
   if (cell.status === 'Off') return 'OFF'
-  if (cell.status === 'Leave') return 'Leave'
   return cell.shift_type || 'Shift'
 }
 
 function eventColor(cell) {
   if (!cell) return 'ev-gray'
   if (cell.status === 'Off') return 'ev-gray'
-  if (cell.status === 'Leave') return 'ev-offday'
 
   const lowered = (cell.shift_type || '').toLowerCase()
   if (lowered.includes('supervisor') || lowered.includes('lead')) return 'ev-green'
@@ -854,9 +1047,8 @@ const legendEntries = computed(() => {
     }
   }
 
-  // Always show Off / Leave even if not present in the current grid.
+  // Always show Off even if not present in the current grid.
   if (!labelsByColor['ev-gray']) labelsByColor['ev-gray'] = new Set(['OFF'])
-  if (!labelsByColor['ev-offday']) labelsByColor['ev-offday'] = new Set(['Leave'])
 
   return LEGEND_ORDER
     .filter((color) => labelsByColor[color])
@@ -881,9 +1073,8 @@ async function loadShiftTypeOptions() {
   }
 }
 
-function colorForShiftValue(value) {
+function colorForShiftValue(value, cell) {
   if (value === 'OFF') return 'gray'
-  if (value === 'Leave') return 'offday'
 
   const lowered = (value || '').toLowerCase()
   if (lowered.includes('supervisor') || lowered.includes('lead')) return 'green'
@@ -924,13 +1115,13 @@ const SWATCH_CLASS_MAP = {
 }
 
 function shiftClass(value, cell) {
-  const base = SHIFT_CLASS_MAP[colorForShiftValue(value)]
+  const base = SHIFT_CLASS_MAP[colorForShiftValue(value, cell)]
   if (cell?.draft) return `${base} ring-2 ring-amber-400 ring-offset-1`
   return base
 }
 
 function chevronClass(value, cell) {
-  return CHEVRON_CLASS_MAP[colorForShiftValue(value)]
+  return CHEVRON_CLASS_MAP[colorForShiftValue(value, cell)]
 }
 
 function isLocked(cell) {
@@ -1051,7 +1242,7 @@ async function openAssignmentTool() {
     company: toolOptions.value.default_company || '',
     shift_type: '',
     status: 'Active',
-    start_date: weekStartInput.value,
+    start_date: isoDate(new Date()),
     end_date: '',
     department: department.value || '',
     branch: '',
@@ -1132,11 +1323,11 @@ async function assignShift() {
       status: toolForm.value.status,
     })
     const successList = result?.success || []
-    const failureCount = result?.failure?.length || 0
+    const failureList = result?.failure || []
 
     const names = successList.map((item) => {
-  return item.employee_name || item.employee || item.name || item
-})
+      return item.employee_name || item.employee || item.name || item
+    })
 
     await refreshData()
     let toastText
@@ -1147,11 +1338,18 @@ async function assignShift() {
     } else {
       toastText = 'No shifts were assigned.'
     }
-    if (failureCount) {
-      toastText += ` ${failureCount} failed.`
+    if (failureList.length) {
+      // Surface the actual reason(s) rather than just a bare count -- this
+      // is what was previously swallowed, leaving conflicts (e.g. "already
+      // has an active Shift Assignment") invisible to the user.
+      const reasons = failureList.map((f) => {
+        const who = f.employee_name || f.employee || 'Unknown'
+        return f.reason ? `${who}: ${f.reason}` : who
+      })
+      toastText += ` ${failureList.length} failed (${reasons.join('; ')}).`
     }
 
-    showToastMessage(toastText, failureCount && !names.length ? 'error' : 'success')
+    showToastMessage(toastText, failureList.length && !names.length ? 'error' : 'success')
 
     showAssignmentTool.value = false
   } catch (err) {
@@ -1208,6 +1406,104 @@ async function createShiftType() {
     shiftTypeMessage.value = err.message || 'Failed to add Shift Type.'
   } finally {
     creatingShiftType.value = false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// View All Shift Types modal
+// ---------------------------------------------------------------------------
+
+const showViewShiftTypes = ref(false)
+const allShiftTypes = ref([])
+const loadingShiftTypeList = ref(false)
+
+async function loadAllShiftTypes() {
+  loadingShiftTypeList.value = true
+  try {
+    allShiftTypes.value = await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.get_all_shift_types') || []
+  } catch (err) {
+    showToastMessage(err.message || 'Failed to load Shift Types.', 'error')
+    allShiftTypes.value = []
+  } finally {
+    loadingShiftTypeList.value = false
+  }
+}
+
+async function openViewShiftTypes() {
+  showViewShiftTypes.value = true
+  await loadAllShiftTypes()
+}
+
+function closeViewShiftTypes() {
+  showViewShiftTypes.value = false
+}
+
+// ---------------------------------------------------------------------------
+// Edit Shift Type modal (opened from a row inside View All Shift Types)
+// ---------------------------------------------------------------------------
+
+const showEditShiftType = ref(false)
+const editShiftTypeForm = ref({ name: '', start_time: '', end_time: '' })
+const savingEditShiftType = ref(false)
+const editShiftTypeMessage = ref('')
+const editShiftTypeMessageType = ref('success')
+
+function _toTimeInputValue(value) {
+  // Shift Type stores time as "HH:MM:SS" (or a timedelta string) -- the
+  // <input type="time"> element wants "HH:MM".
+  const str = cstr(value || '')
+  const parts = str.split(':')
+  if (parts.length >= 2) return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`
+  return ''
+}
+
+function cstr(value) {
+  return value === null || value === undefined ? '' : String(value)
+}
+
+function openEditShiftType(shiftType) {
+  editShiftTypeForm.value = {
+    name: shiftType.name,
+    start_time: _toTimeInputValue(shiftType.start_time),
+    end_time: _toTimeInputValue(shiftType.end_time),
+  }
+  editShiftTypeMessage.value = ''
+  showEditShiftType.value = true
+}
+
+function closeEditShiftType() {
+  if (savingEditShiftType.value) return
+  showEditShiftType.value = false
+}
+
+const canSaveEditShiftType = computed(() =>
+  Boolean(editShiftTypeForm.value.start_time && editShiftTypeForm.value.end_time)
+)
+
+async function saveEditShiftType() {
+  if (!canSaveEditShiftType.value) return
+  savingEditShiftType.value = true
+  editShiftTypeMessage.value = ''
+  try {
+    await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.update_shift_type', {
+      name: editShiftTypeForm.value.name,
+      start_time: editShiftTypeForm.value.start_time,
+      end_time: editShiftTypeForm.value.end_time,
+    })
+
+    // Refresh both the list modal (so the new time shows immediately) and
+    // the dropdown options used across the draft editor / assignment tool.
+    await loadAllShiftTypes()
+    await loadShiftTypeOptions()
+    await loadAssignmentToolOptions()
+
+    showToastMessage(`Shift Type "${editShiftTypeForm.value.name}" updated.`, 'success')
+    showEditShiftType.value = false
+  } catch (err) {
+    editShiftTypeMessageType.value = 'error'
+    editShiftTypeMessage.value = err.message || 'Failed to update Shift Type.'
+  } finally {
+    savingEditShiftType.value = false
   }
 }
 </script>

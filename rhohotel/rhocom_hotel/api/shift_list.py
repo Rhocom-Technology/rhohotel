@@ -50,15 +50,55 @@ def _empty_stats():
         "publishedThisWeek": 0,
         "staffScheduled": 0,
         "unpublished": 0,
+        "yourShiftsThisWeek": 0,
         "shiftTypeCounts": []
     }
 
 
+def _can_view_all_departments():
+    """Administrator and Hotel Manager can see/filter every department.
+    Everyone else is restricted to their own department only."""
+    user = frappe.session.user
+    if user == "Administrator":
+        return True
+    roles = frappe.get_roles(user)
+    return "Hotel Manager" in roles
+
+
+def _get_user_department():
+    """Resolve the current user's own department via their linked Employee
+    record. Returns None if no Employee is linked or it has no department."""
+    user = frappe.session.user
+    employee = frappe.db.get_value("Employee", {"user_id": user, "status": "Active"}, "name")
+    if not employee:
+        return None
+    return frappe.db.get_value("Employee", employee, "department")
+
+
+def _resolve_department_filter(requested_department):
+    """Server-side enforcement of the department restriction: restricted
+    users always get their own department regardless of what's requested
+    from the client, so this can't be bypassed by calling the API directly
+    with a different department value."""
+    if _can_view_all_departments():
+        return requested_department
+
+    own_department = _get_user_department()
+    return own_department or "__NONE__"  # no department linked -> see nothing
+
+
 @frappe.whitelist()
 def get_departments():
+    """Department dropdown options. Administrator/Hotel Manager get every
+    department in the company; everyone else only gets their own (so the
+    dropdown reflects what they're actually allowed to see)."""
     company = _get_default_company()
     if not company:
         return []
+
+    if not _can_view_all_departments():
+        own_department = _get_user_department()
+        return [own_department] if own_department else []
 
     rows = frappe.db.sql("""
         select distinct emp.department
@@ -87,6 +127,7 @@ def get_shift_types():
 @frappe.whitelist()
 def get_shift_list(department=None, week_start=None, shift_type=None, page=1, page_size=15):
     company = _get_default_company()
+    department = _resolve_department_filter(department)
 
     if not company:
         return {
@@ -213,9 +254,35 @@ def get_shift_list(department=None, week_start=None, shift_type=None, page=1, pa
     }
 
 
+def _expand_to_week_days(rows, week_start_date, week_end_date):
+    """Given Shift Assignment rows (each with start_date/end_date possibly
+    spanning many days), expand each into one entry per day that actually
+    falls within [week_start_date, week_end_date]. A single 7-day
+    assignment becomes 7 entries here; a single 1-day assignment becomes 1.
+    This is what 'Published Shifts This Week' / 'Shift Type Counts' /
+    'Your Shifts This Week' are actually meant to count: shift-days
+    occurring this week, not assignment records.
+    """
+    expanded = []
+    for row in rows:
+        start = getdate(row.start_date)
+        end = getdate(row.end_date or row.start_date)
+        day = max(start, week_start_date)
+        last_day = min(end, week_end_date)
+        while day <= last_day:
+            expanded.append({
+                "employee": row.employee,
+                "shift_type": row.shift_type,
+                "date": day,
+            })
+            day = add_days(day, 1)
+    return expanded
+
+
 @frappe.whitelist()
 def get_shift_stats(department=None, week_start=None, shift_type=None):
     company = _get_default_company()
+    department = _resolve_department_filter(department)
 
     if not company:
         return _empty_stats()
@@ -240,29 +307,12 @@ def get_shift_stats(department=None, week_start=None, shift_type=None):
         shift_condition = " and sa.shift_type = %(shift_type)s"
         filters["shift_type"] = shift_type
 
-    published_rows = frappe.db.sql("""
-        select
-            sa.shift_type,
-            count(*) as total
-        from `tabShift Assignment` sa
-        inner join `tabEmployee` emp on emp.name = sa.employee
-        where
-            sa.docstatus = 1
-            and emp.status = 'Active'
-            and emp.company = %(company)s
-            and sa.start_date <= %(week_end)s
-            and ifnull(sa.end_date, sa.start_date) >= %(week_start)s
-            {department_condition}
-            {shift_condition}
-        group by sa.shift_type
-        order by sa.shift_type asc
-    """.format(
-        department_condition=department_condition,
-        shift_condition=shift_condition
-    ), filters, as_dict=True)
-
-    published_week_row = frappe.db.sql("""
-        select count(*) as total
+    # Fetch the raw overlapping rows once -- everything else is derived
+    # from expanding these into individual shift-days in Python, since the
+    # date-range schema makes day-level counting awkward to express purely
+    # in SQL.
+    published_assignment_rows = frappe.db.sql("""
+        select sa.employee, sa.shift_type, sa.start_date, sa.end_date
         from `tabShift Assignment` sa
         inner join `tabEmployee` emp on emp.name = sa.employee
         where
@@ -278,8 +328,8 @@ def get_shift_stats(department=None, week_start=None, shift_type=None):
         shift_condition=shift_condition
     ), filters, as_dict=True)
 
-    unpublished_row = frappe.db.sql("""
-        select count(*) as total
+    unpublished_assignment_rows = frappe.db.sql("""
+        select sa.employee, sa.shift_type, sa.start_date, sa.end_date
         from `tabShift Assignment` sa
         inner join `tabEmployee` emp on emp.name = sa.employee
         where
@@ -295,22 +345,37 @@ def get_shift_stats(department=None, week_start=None, shift_type=None):
         shift_condition=shift_condition
     ), filters, as_dict=True)
 
-    staff_scheduled = 0
-    shift_type_counts = []
+    published_days = _expand_to_week_days(published_assignment_rows, week_start_date, week_end_date)
+    unpublished_days = _expand_to_week_days(unpublished_assignment_rows, week_start_date, week_end_date)
 
-    for row in published_rows:
-        count = row.total or 0
-        staff_scheduled += count
+    published_this_week = len(published_days)
+    staff_scheduled = len(set(d["employee"] for d in published_days))
 
-        shift_type_counts.append({
-            "shift_type": row.shift_type or "Unknown",
-            "count": count
-        })
+    shift_type_totals = {}
+    for d in published_days:
+        key = d["shift_type"] or "Unknown"
+        shift_type_totals[key] = shift_type_totals.get(key, 0) + 1
+
+    shift_type_counts = [
+        {"shift_type": k, "count": v}
+        for k, v in sorted(shift_type_totals.items())
+    ]
+
+    # "Your Shifts This Week" -- shift-days for the currently logged-in
+    # user specifically, not all staff. Resolved via their linked Employee.
+    current_employee = frappe.db.get_value(
+        "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"
+    )
+    your_shifts_this_week = (
+        sum(1 for d in published_days if d["employee"] == current_employee)
+        if current_employee else 0
+    )
 
     return {
-        "publishedThisWeek": published_week_row[0].total if published_week_row else 0,
+        "publishedThisWeek": published_this_week,
         "staffScheduled": staff_scheduled,
-        "unpublished": unpublished_row[0].total if unpublished_row else 0,
+        "unpublished": len(unpublished_days),
+        "yourShiftsThisWeek": your_shifts_this_week,
         "shiftTypeCounts": shift_type_counts
     }
 
@@ -318,6 +383,7 @@ def get_shift_stats(department=None, week_start=None, shift_type=None):
 @frappe.whitelist()
 def get_shift_calendar(department=None, week_start=None, shift_type=None):
     company = _get_default_company()
+    department = _resolve_department_filter(department)
 
     if not company:
         return {
@@ -425,7 +491,8 @@ def get_shift_calendar(department=None, week_start=None, shift_type=None):
         "days": days,
         "staff": list(staff_map.values())
     }
-    
+
+
 @frappe.whitelist()
 def download_shift_list_report(
     department=None,
@@ -437,6 +504,8 @@ def download_shift_list_report(
         get_shift_stats,
         _get_week_start
     )
+
+    department = _resolve_department_filter(department)
 
     calendar_result = get_shift_calendar(
         department=department,
