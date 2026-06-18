@@ -1,4 +1,4 @@
-import{c as W,u as A,r as h,b as P,m as _,A as $,o as r,d as i,e as t,t as l,w as R,v as G,x as S,f as I,h as L,g as z,F as M,q as j,i as N,n as F,s as E}from"./index.js";/**
+import{c as W,u as A,r as h,b as P,m as _,C as $,o as r,d as i,e as t,t as l,w as R,v as G,y as S,f as I,h as L,g as z,F as M,q as j,i as N,n as F,s as E}from"./index.js";/**
  * @license lucide-vue-next v0.378.0 - ISC
  *
  * This source code is licensed under the ISC license.

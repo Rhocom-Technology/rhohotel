@@ -612,7 +612,7 @@
 
 
 import frappe
-from frappe.utils import getdate, nowdate, flt, cint, get_datetime
+from frappe.utils import getdate, nowdate, flt, cint, get_datetime, cstr
 
 
 def _date_or_default(value, default_value):
@@ -647,6 +647,24 @@ def _get_value(doc, field):
     if field:
         return doc.get(field)
     return None
+
+
+def _night_audit_invoice_source(value):
+    return cstr(value).strip().lower()
+
+
+def _is_room_revenue_source(source):
+    source = _night_audit_invoice_source(source)
+    if not source:
+        return True
+    room_keywords = ("room", "accommodation", "lodging", "stay", "night audit")
+    return any(keyword in source for keyword in room_keywords)
+
+
+def _is_fnb_revenue_source(source):
+    source = _night_audit_invoice_source(source)
+    fnb_keywords = ("restaurant", "bar", "food", "beverage", "f&b", "pos")
+    return any(keyword in source for keyword in fnb_keywords)
 
 
 def _status_class(status):
@@ -691,6 +709,7 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
     status_field = _get_field("Sales Invoice", ["status"])
     pos_profile_field = _get_field("Sales Invoice", ["pos_profile"])
     is_pos_field = _get_field("Sales Invoice", ["is_pos"])
+    source_field = _get_field("Sales Invoice", ["custom_invoice_source"])
 
     room_checkin_field = _get_field(
         "Sales Invoice",
@@ -725,22 +744,6 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
         conditions.append("{0} = %(pos_profile)s".format(pos_profile_field))
         params["pos_profile"] = pos_profile
 
-    if revenue_type == "Room Revenue" and room_checkin_field:
-        conditions.append("{0} IS NOT NULL AND {0} != ''".format(room_checkin_field))
-
-    if revenue_type == "POS Revenue" and is_pos_field:
-        conditions.append("{0} = 1".format(is_pos_field))
-
-        if room_checkin_field:
-            conditions.append("({0} IS NULL OR {0} = '')".format(room_checkin_field))
-
-    if revenue_type == "Other Revenue":
-        if room_checkin_field:
-            conditions.append("({0} IS NULL OR {0} = '')".format(room_checkin_field))
-
-        if is_pos_field:
-            conditions.append("({0} = 0 OR {0} IS NULL)".format(is_pos_field))
-
     if search:
         search_fields = ["name"]
 
@@ -750,6 +753,7 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
             room_checkin_field,
             reservation_field,
             pos_profile_field,
+            source_field,
         ]:
             if field and field not in search_fields:
                 search_fields.append(field)
@@ -772,6 +776,7 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
         status_field,
         pos_profile_field,
         is_pos_field,
+        source_field,
         room_checkin_field,
         reservation_field,
     ]:
@@ -794,14 +799,18 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
     for inv in invoices:
         invoice_name = inv.get("name")
         room_checkin = _get_value(inv, room_checkin_field)
+        source = _night_audit_invoice_source(_get_value(inv, source_field))
         is_pos = cint(_get_value(inv, is_pos_field)) if is_pos_field else 0
 
-        if room_checkin:
+        if room_checkin and _is_room_revenue_source(source):
             transaction_type = "Room Revenue"
-        elif is_pos:
+        elif _is_fnb_revenue_source(source) or is_pos:
             transaction_type = "POS Revenue"
         else:
             transaction_type = "Other Revenue"
+
+        if revenue_type and transaction_type != revenue_type:
+            continue
 
         rows.append(
             {
@@ -815,14 +824,8 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
                 "payment_mode": _payment_mode_from_invoice(invoice_name),
                 "net_amount": flt(_get_value(inv, net_total_field)),
                 "tax": flt(_get_value(inv, tax_field)),
-                # discount_amount on Sales Invoice is the line-item discount total;
-                # additional_discount_amount is the overall invoice discount.
-                # We show whichever field is available (already resolved by _get_field).
                 "discount": flt(_get_value(inv, discount_field)),
                 "gross_amount": flt(_get_value(inv, grand_total_field)),
-                # paid_amount on the Sales Invoice doctype reflects how much has been
-                # allocated via Payment Entries.  When it is 0 we fall back to
-                # grand_total – outstanding so the column is always meaningful.
                 "paid_amount": flt(_get_value(inv, paid_field)) or max(
                     flt(_get_value(inv, grand_total_field)) - flt(_get_value(inv, outstanding_field)), 0
                 ),
@@ -833,6 +836,128 @@ def _get_sales_invoice_rows(audit_date, revenue_type=None, pos_profile=None, sea
 
     return rows
 
+
+def _get_pos_invoice_rows(audit_date, revenue_type=None, pos_profile=None, search=None):
+    if revenue_type and revenue_type != "POS Revenue":
+        return []
+
+    if not _has_doctype("POS Invoice"):
+        return []
+
+    posting_date_field = _get_field("POS Invoice", ["posting_date"])
+    customer_field = _get_field("POS Invoice", ["customer"])
+    customer_name_field = _get_field("POS Invoice", ["customer_name"])
+    grand_total_field = _get_field("POS Invoice", ["grand_total", "rounded_total"])
+    net_total_field = _get_field("POS Invoice", ["net_total", "base_net_total"])
+    tax_field = _get_field("POS Invoice", ["total_taxes_and_charges"])
+    discount_field = _get_field("POS Invoice", ["discount_amount", "additional_discount_amount"])
+    status_field = _get_field("POS Invoice", ["status"])
+    pos_profile_field = _get_field("POS Invoice", ["pos_profile"])
+    room_checkin_field = _get_field("POS Invoice", ["custom_hotel_room_check_in"])
+    consolidated_field = _get_field("POS Invoice", ["consolidated_invoice"])
+
+    if not posting_date_field:
+        return []
+
+    conditions = [
+        "pi.docstatus = 1",
+        "pi.{0} = %(audit_date)s".format(posting_date_field),
+    ]
+    params = {"audit_date": audit_date}
+
+    if consolidated_field:
+        conditions.append("(pi.{0} IS NULL OR pi.{0} = '')".format(consolidated_field))
+
+    if pos_profile and pos_profile_field:
+        conditions.append("pi.{0} = %(pos_profile)s".format(pos_profile_field))
+        params["pos_profile"] = pos_profile
+
+    if search:
+        search_fields = ["pi.name"]
+        for field in [customer_field, customer_name_field, pos_profile_field, room_checkin_field]:
+            if field:
+                search_fields.append("pi.{0}".format(field))
+        conditions.append("(" + " OR ".join(["{0} LIKE %(search)s".format(f) for f in search_fields]) + ")")
+        params["search"] = "%{0}%".format(search)
+
+    room_link_expr = "pi.{0}".format(room_checkin_field) if room_checkin_field else "NULL"
+    select_fields = ["pi.name"]
+    group_fields = ["pi.name"]
+    aliases = {
+        posting_date_field: "posting_date",
+        customer_field: "customer",
+        customer_name_field: "customer_name",
+        grand_total_field: "grand_total",
+        net_total_field: "net_total",
+        tax_field: "tax",
+        discount_field: "discount",
+        status_field: "status",
+        pos_profile_field: "pos_profile",
+        room_checkin_field: "room",
+    }
+
+    for field, alias in aliases.items():
+        if field:
+            select_fields.append("pi.{0} AS {1}".format(field, alias))
+            group_fields.append("pi.{0}".format(field))
+
+    sql = """
+        SELECT {fields},
+               COALESCE(SUM(
+                   CASE
+                     WHEN LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%room%%'
+                       OR LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%folio%%'
+                       OR LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%post to room%%'
+                       OR (LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%credit%%'
+                           AND {room_link_expr} IS NOT NULL AND {room_link_expr} != '')
+                     THEN pip.amount ELSE 0
+                   END
+               ), 0) AS room_posting_amount,
+               GROUP_CONCAT(DISTINCT pip.mode_of_payment ORDER BY pip.mode_of_payment SEPARATOR ', ') AS payment_mode
+        FROM `tabPOS Invoice` pi
+        LEFT JOIN `tabPOS Invoice Payment` pip ON pip.parent = pi.name
+        WHERE {conditions}
+        GROUP BY {group_fields}
+        ORDER BY pi.name DESC
+    """.format(
+        fields=", ".join(select_fields),
+        conditions=" AND ".join(conditions),
+        group_fields=", ".join(group_fields),
+        room_link_expr=room_link_expr,
+    )
+
+    try:
+        invoices = frappe.db.sql(sql, params, as_dict=True)
+    except Exception:
+        return []
+
+    rows = []
+    for inv in invoices:
+        gross = max(flt(inv.get("grand_total")) - flt(inv.get("room_posting_amount")), 0)
+        if gross <= 0:
+            continue
+        net = flt(inv.get("net_total"))
+        rows.append(
+            {
+                "date": str(inv.get("posting_date") or ""),
+                "transaction_type": "POS Revenue",
+                "reference": inv.get("name"),
+                "guest": inv.get("customer_name") or inv.get("customer") or "",
+                "room": inv.get("room") or "",
+                "reservation": "",
+                "pos_profile": inv.get("pos_profile") or "",
+                "payment_mode": inv.get("payment_mode") or "",
+                "net_amount": min(net, gross) if net else gross,
+                "tax": flt(inv.get("tax")),
+                "discount": flt(inv.get("discount")),
+                "gross_amount": gross,
+                "paid_amount": gross,
+                "outstanding_amount": 0,
+                "status": _status_class(inv.get("status") or "Paid"),
+            }
+        )
+
+    return rows
 
 def _get_payment_entry_rows(audit_date, search=None):
     """
@@ -1068,6 +1193,7 @@ def get_night_audit_summary_report(
     audit_date = _date_or_default(audit_date, nowdate())
 
     invoice_rows = _get_sales_invoice_rows(audit_date, revenue_type, pos_profile, search)
+    invoice_rows += _get_pos_invoice_rows(audit_date, revenue_type, pos_profile, search)
     payment_rows = _get_payment_entry_rows(audit_date, search)
 
     # All rows for display in the detailed table

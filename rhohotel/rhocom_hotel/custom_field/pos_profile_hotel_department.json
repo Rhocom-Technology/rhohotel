@@ -1,0 +1,9 @@
+{
+    "dt": "POS Profile",
+    "fieldname": "hotel_department",
+    "fieldtype": "Select",
+    "label": "Hotel Department",
+    "options": "\nRestaurant\nLaundry\nFront Desk\nHousekeeping\nGM Office\nOperations",
+    "insert_after": "name",
+    "description": "Maps this POS terminal to a hotel department for complimentary voucher redemption."
+}

@@ -105,7 +105,7 @@ const allNavGroups = [
   {
     label: 'Housekeeping',
     icon: Sparkles,
-    allowedRoles: ROLE_GROUPS.housekeepingList,
+    allowedRoles: [...ROLE_GROUPS.housekeepingList, ...ROLE_GROUPS.frontDesk],
     children: [
       { label: 'Dashboard', to: '/housekeeping/dashboard', allowedRoles: ROLE_GROUPS.housekeepingFull },
       { label: 'Task List', to: '/housekeeping' },
@@ -115,11 +115,11 @@ const allNavGroups = [
   {
     label: 'Maintenance',
     icon: Wrench,
-    allowedRoles: ROLE_GROUPS.maintenanceList,
+    allowedRoles: ROLE_GROUPS.maintenanceFrontDesk,
     children: [
       { label: 'Maintenance List', to: '/maintenance/list' },
       { label: 'Dashboard', to: '/maintenance/dashboard', allowedRoles: ROLE_GROUPS.maintenanceFull },
-      { label: 'Request', to: '/maintenance/request', allowedRoles: ROLE_GROUPS.maintenanceFull },
+      { label: 'Request', to: '/maintenance/request', allowedRoles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
       { label: 'Technician List', to: '/maintenance/technicians', allowedRoles: ROLE_GROUPS.maintenanceFull },
     ],
   },

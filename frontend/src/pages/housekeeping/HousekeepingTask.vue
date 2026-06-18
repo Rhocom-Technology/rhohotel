@@ -31,7 +31,7 @@
       <div class="flex items-center gap-2">
         <button @click="router.push('/housekeeping')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
 
-        <template v-if="!isSubmitted">
+        <template v-if="!isSubmitted && isHousekeepingManager">
           <button @click="saveTask" :disabled="saving" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
             <span v-if="saving" class="flex items-center gap-1.5">
               <svg class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
@@ -48,7 +48,7 @@
           </button>
         </template>
 
-        <template v-else>
+        <template v-else-if="isHousekeepingManager">
           <button @click="cancelTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Cancel Task</button>
           <button @click="deleteTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Delete Task</button>
         </template>
@@ -105,7 +105,7 @@
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Task Type</p>
-              <select v-model="formData.task_type" :disabled="isSubmitted" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted}">
+              <select v-model="formData.task_type" :disabled="isSubmitted || !isHousekeepingManager" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager}">
                 <option value="Checkout Cleaning">Checkout Cleaning</option>
                 <option value="Deep Cleaning">Deep Cleaning</option>
                 <option value="Turndown Service">Turndown Service</option>
@@ -115,7 +115,7 @@
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Priority</p>
-              <select v-model="formData.priority" :disabled="isSubmitted" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted}">
+              <select v-model="formData.priority" :disabled="isSubmitted || !isHousekeepingManager" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager}">
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
@@ -126,7 +126,7 @@
         </div>
 
         <!-- Room Details -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Room Details</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;" class="mb-4">
             <div>
@@ -264,7 +264,7 @@
 
          <!-- Inventory Update -->
         <!-- Inventory Update -->
-<div class="bg-white rounded-xl border border-gray-200 p-5">
+<div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
 
   <!-- Read-only room inventory -->
   <div class="mb-6">
@@ -425,7 +425,7 @@
 </div>
 
         <!-- Housekeeping Checklist -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-bold text-gray-900">Housekeeping Checklist</h3>
             <div class="flex items-center gap-2">
@@ -538,7 +538,7 @@
 
       <!-- Right Column -->
       <div class="space-y-4">
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Status Update Section</h3>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Current Task Status</p>
@@ -575,7 +575,7 @@
         </div>
 
         <!-- Quick Summary -->
-        <div class="bg-blue-50 rounded-xl border border-blue-100 p-4">
+        <div v-if="isHousekeepingManager" class="bg-blue-50 rounded-xl border border-blue-100 p-4">
           <h4 class="text-xs font-bold text-blue-700 mb-3">Task Summary</h4>
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">

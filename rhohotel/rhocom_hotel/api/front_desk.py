@@ -39,6 +39,24 @@ def _normalize_housekeeping_status(value):
 	return mapping.get(status, cstr(value).strip() or "Unknown")
 
 
+def _night_audit_invoice_source(value):
+	return cstr(value).strip().lower()
+
+
+def _is_room_revenue_source(source):
+	source = _night_audit_invoice_source(source)
+	if not source:
+		return True
+	room_keywords = ("room", "accommodation", "lodging", "stay", "night audit")
+	return any(keyword in source for keyword in room_keywords)
+
+
+def _is_fnb_revenue_source(source):
+	source = _night_audit_invoice_source(source)
+	fnb_keywords = ("restaurant", "bar", "food", "beverage", "f&b", "pos")
+	return any(keyword in source for keyword in fnb_keywords)
+
+
 def _room_column_expr(fieldname, alias=None, fallback="NULL"):
 	alias = alias or fieldname
 	if frappe.db.has_column("Hotel Room", fieldname):
@@ -733,45 +751,74 @@ def get_night_audit_data(audit_date=None):
 	occupancy_pct = round((occupied / total_rooms * 100), 1) if total_rooms else 0.0
 
 	# ── Revenue ──────────────────────────────────────────────────────────────
-	# Sales Invoices submitted today (room charges posted via Hotel Room Check In)
+	# Count each posted charge once. POS bills posted to a room create both a
+	# linked Sales Invoice and a POS Invoice for shift tracking, so consolidated
+	# POS rows are excluded here and the linked Sales Invoice is classified by
+	# custom_invoice_source.
+	source_field = "si.custom_invoice_source" if frappe.db.has_column("Sales Invoice", "custom_invoice_source") else "NULL"
 	room_invoices = frappe.db.sql(
 		"""
 		SELECT si.name, si.grand_total, si.custom_hotel_room_check_in,
+		       {source_field} AS custom_invoice_source,
 		       ci.room_number, ci.room_type
 		FROM `tabSales Invoice` si
 		LEFT JOIN `tabHotel Room Check In` ci ON ci.name = si.custom_hotel_room_check_in
 		WHERE si.posting_date = %s AND si.docstatus = 1
-		""",
+		""".format(source_field=source_field),
 		audit_date_str,
 		as_dict=True,
 	)
 
-	room_revenue = flt(sum(r.grand_total or 0 for r in room_invoices if r.custom_hotel_room_check_in))
-
-	# POS Invoices (F&B / restaurant)
+	room_revenue = 0.0
 	fnb_revenue = 0.0
+	other_revenue = 0.0
+	by_room_type_map = {}
+
+	for r in room_invoices:
+		amount = flt(r.grand_total)
+		source = _night_audit_invoice_source(r.get("custom_invoice_source"))
+		if r.custom_hotel_room_check_in and _is_room_revenue_source(source):
+			room_revenue += amount
+			if r.room_type:
+				by_room_type_map[r.room_type] = by_room_type_map.get(r.room_type, 0) + amount
+		elif _is_fnb_revenue_source(source):
+			fnb_revenue += amount
+		else:
+			other_revenue += amount
+
 	try:
-		fnb_rows = frappe.db.sql(
-			"SELECT COALESCE(SUM(grand_total), 0) as total FROM `tabPOS Invoice` WHERE posting_date = %s AND docstatus = 1",
+		pos_conditions = ["pi.posting_date = %s", "pi.docstatus = 1"]
+		pos_room_field = "pi.custom_hotel_room_check_in" if frappe.db.has_column("POS Invoice", "custom_hotel_room_check_in") else "NULL"
+		if frappe.db.has_column("POS Invoice", "consolidated_invoice"):
+			pos_conditions.append("(pi.consolidated_invoice IS NULL OR pi.consolidated_invoice = '')")
+
+		pos_rows = frappe.db.sql(
+			"""
+			SELECT pi.name, pi.grand_total,
+			       COALESCE(SUM(
+			           CASE
+			             WHEN LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%room%%'
+			               OR LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%folio%%'
+			               OR LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%post to room%%'
+			               OR (LOWER(IFNULL(pip.mode_of_payment, '')) LIKE '%%credit%%'
+			                   AND {pos_room_field} IS NOT NULL AND {pos_room_field} != '')
+			             THEN pip.amount ELSE 0
+			           END
+			       ), 0) AS room_posting_amount
+			FROM `tabPOS Invoice` pi
+			LEFT JOIN `tabPOS Invoice Payment` pip ON pip.parent = pi.name
+			WHERE {conditions}
+			GROUP BY pi.name, pi.grand_total
+			""".format(conditions=" AND ".join(pos_conditions), pos_room_field=pos_room_field),
 			audit_date_str,
 			as_dict=True,
 		)
-		fnb_revenue = flt((fnb_rows or [{}])[0].get("total") or 0)
+		for row in pos_rows:
+			fnb_revenue += max(flt(row.grand_total) - flt(row.room_posting_amount), 0)
 	except Exception:
 		pass
 
-	other_revenue = flt(
-		sum(r.grand_total or 0 for r in room_invoices if not r.custom_hotel_room_check_in)
-	)
-
-	total_revenue = room_revenue + fnb_revenue + other_revenue
-
-	# Revenue by room type
-	by_room_type_map = {}
-	for r in room_invoices:
-		if r.custom_hotel_room_check_in and r.room_type:
-			by_room_type_map[r.room_type] = by_room_type_map.get(r.room_type, 0) + flt(r.grand_total)
-
+	total_revenue = flt(room_revenue + fnb_revenue + other_revenue)
 	by_room_type = [{"room_type": k, "revenue": v} for k, v in sorted(by_room_type_map.items())]
 
 	# ── Payments ─────────────────────────────────────────────────────────────
@@ -794,37 +841,87 @@ def get_night_audit_data(audit_date=None):
 	]
 
 	# ── Outstanding Balances ─────────────────────────────────────────────────
-	outstanding_rows = frappe.db.sql(
+	# Pending payment/open invoices are based on live submitted Sales Invoice
+	# balances. The ledger below remains an in-house folio view for follow-up.
+	open_invoice_rows = frappe.db.sql(
 		"""
-		SELECT ci.name as check_in, ci.guest, ci.room_number,
-		       ci.total_outstanding_amount
+		SELECT si.name, si.customer, si.customer_name, si.outstanding_amount
+		FROM `tabSales Invoice` si
+		WHERE si.docstatus = 1
+		  AND si.outstanding_amount > 0
+		  AND IFNULL(si.status, '') != 'Cancelled'
+		ORDER BY si.posting_date ASC, si.name ASC
+		""",
+		as_dict=True,
+	)
+	total_outstanding = flt(sum(flt(row.outstanding_amount) for row in open_invoice_rows))
+	open_invoice_count = len(open_invoice_rows)
+
+	active_checkin_rows = frappe.db.sql(
+		"""
+		SELECT ci.name as check_in, ci.guest, ci.room_number
 		FROM `tabHotel Room Check In` ci
 		WHERE ci.status = 'Checked In'
 		  AND ci.docstatus = 1
-		  AND ci.total_outstanding_amount > 0
-		ORDER BY ci.total_outstanding_amount DESC
 		""",
 		as_dict=True,
 	)
 
-	total_outstanding = flt(sum(r.total_outstanding_amount or 0 for r in outstanding_rows))
+	checkin_names = [r.check_in for r in active_checkin_rows]
+	outstanding_map = {}
+	if checkin_names and frappe.db.has_column("Sales Invoice", "custom_hotel_room_check_in"):
+		si_rows = frappe.db.sql(
+			"""
+			SELECT custom_hotel_room_check_in,
+			       COALESCE(SUM(outstanding_amount), 0) AS outstanding
+			FROM `tabSales Invoice`
+			WHERE custom_hotel_room_check_in IN %(checkins)s
+			  AND docstatus = 1
+			  AND outstanding_amount > 0
+			  AND IFNULL(status, '') != 'Cancelled'
+			GROUP BY custom_hotel_room_check_in
+			""",
+			{"checkins": checkin_names},
+			as_dict=True,
+		)
+		for row in si_rows:
+			outstanding_map[row.custom_hotel_room_check_in] = flt(row.outstanding)
+	elif checkin_names:
+		# Fallback: stored field if custom column doesn't exist
+		fb_rows = frappe.db.sql(
+			"""
+			SELECT name AS check_in, total_outstanding_amount AS outstanding
+			FROM `tabHotel Room Check In`
+			WHERE name IN %(checkins)s
+			""",
+			{"checkins": checkin_names},
+			as_dict=True,
+		)
+		for row in fb_rows:
+			outstanding_map[row.check_in] = flt(row.outstanding)
 
-	# Resolve guest display names
+	guest_name_cache = {}
 	ledger = []
-	for r in outstanding_rows:
-		guest_name = r.guest
-		if guest_name:
-			display = frappe.db.get_value("Hotel Guest", guest_name, "hotel_guest_name") or guest_name
+	for r in active_checkin_rows:
+		amount = outstanding_map.get(r.check_in, 0)
+		if amount <= 0:
+			continue
+		gid = r.guest
+		if gid:
+			if gid not in guest_name_cache:
+				guest_name_cache[gid] = frappe.db.get_value("Hotel Guest", gid, "hotel_guest_name") or gid
+			display = guest_name_cache[gid]
 		else:
 			display = "—"
-		ledger.append(
-			{
-				"check_in": r.check_in,
-				"guest": display,
-				"room": r.room_number or "—",
-				"amount": flt(r.total_outstanding_amount),
-			}
-		)
+		ledger.append({
+			"check_in": r.check_in,
+			"guest": display,
+			"room": r.room_number or "—",
+			"amount": amount,
+		})
+
+	ledger.sort(key=lambda x: x["amount"], reverse=True)
+	in_house_outstanding = flt(sum(row["amount"] for row in ledger))
 
 	# ── Room Status Snapshot ─────────────────────────────────────────────────
 	rooms = frappe.get_all(
@@ -967,7 +1064,9 @@ def get_night_audit_data(audit_date=None):
 		},
 		"outstanding": {
 			"total_outstanding": total_outstanding,
+			"open_invoice_count": open_invoice_count,
 			"guest_count": len(ledger),
+			"in_house_outstanding": in_house_outstanding,
 			"ledger": ledger,
 		},
 		"room_status": room_status,
@@ -976,6 +1075,7 @@ def get_night_audit_data(audit_date=None):
 			"unallocated_payments": unallocated_payments,
 		},
 		"hourly_movement": hourly_movement,
+		"is_closed": bool(frappe.cache().get_value("rhohotel:night_audit_closed:{0}".format(audit_date_str))),
 	}
 
 
@@ -1105,12 +1205,12 @@ def close_day(audit_date=None, force_close=False, reason=None):
 	try:
 		outstanding_rows = frappe.db.sql(
 			"""
-			SELECT COALESCE(SUM(total_outstanding_amount), 0) AS total,
+			SELECT COALESCE(SUM(outstanding_amount), 0) AS total,
 			       COUNT(*) AS cnt
-			FROM `tabHotel Room Check In`
-			WHERE status = 'Checked In'
-			  AND docstatus = 1
-			  AND total_outstanding_amount > 0
+			FROM `tabSales Invoice`
+			WHERE docstatus = 1
+			  AND outstanding_amount > 0
+			  AND IFNULL(status, '') != 'Cancelled'
 			""",
 			as_dict=True,
 		)
@@ -1127,7 +1227,7 @@ def close_day(audit_date=None, force_close=False, reason=None):
 	if unallocated_payments > 0:
 		blockers.append(_("{0} unallocated payments").format(unallocated_payments))
 	if outstanding_count > 0:
-		blockers.append(_("{0} in-house folios with outstanding balance").format(outstanding_count))
+		blockers.append(_("{0} open invoices with outstanding balance").format(outstanding_count))
 
 	if blockers and not force_close:
 		frappe.throw(

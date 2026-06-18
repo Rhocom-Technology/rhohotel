@@ -121,7 +121,7 @@
         
 
        <!-- Room Inventory Management -->
-<div class="bg-white rounded-xl border border-gray-200 p-5">
+<div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
 
   <!-- Room Inventory Before Task -->
   <div class="mb-6">
@@ -274,7 +274,7 @@
       </div>
 
         <!-- Checklist -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Checklist <span class="text-xs font-normal text-gray-400">(optional)</span></h3>
 
           <!-- Template selector -->
@@ -348,7 +348,7 @@
 
       <!-- Right Column -->
       <div class="space-y-4">
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Status & Notes</h3>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Initial Status</p>
@@ -367,7 +367,7 @@
         </div>
 
         <!-- Summary -->
-        <div class="bg-blue-50 rounded-xl border border-blue-100 p-4">
+        <div v-if="isHousekeepingManager" class="bg-blue-50 rounded-xl border border-blue-100 p-4">
           <h4 class="text-xs font-bold text-blue-700 mb-3">Summary</h4>
           <div class="space-y-1.5">
             <div class="flex justify-between">

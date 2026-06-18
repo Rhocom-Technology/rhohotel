@@ -149,6 +149,7 @@ const props = defineProps({
   kitchenNote: { type: String, default: '' },
   cashier: { type: String, default: '' },
   posProfile: { type: String, default: '' },
+  department: { type: String, default: '' },
   billTo: { type: String, default: '' },
   existingDraft: { type: String, default: null },
 })
@@ -239,6 +240,7 @@ function confirm() {
     narration: postingNarration.value || null,
     kitchen_note: props.kitchenNote || null,
     pos_profile: props.posProfile || null,
+    department: props.department || null,
     existing_draft: props.existingDraft || null,
   })
 }

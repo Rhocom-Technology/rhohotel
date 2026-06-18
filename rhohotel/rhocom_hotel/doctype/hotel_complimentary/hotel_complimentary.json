@@ -12,6 +12,8 @@
         "reservation",
         "check_in",
         "complimentary_type",
+        "upgrade_room",
+        "late_checkout_time",
         "column_break_main",
         "department",
         "approval_level",
@@ -81,6 +83,21 @@
             "label": "Complimentary Type",
             "options": "\nFood Voucher\nRoom Voucher\nAirport Transfer\nRoom Upgrade\nAmenity Basket\nLate Checkout\nLaundry\nTransport / Food\nAmenity / Late CO\nLaundry / Amenity",
             "reqd": 1
+        },
+        {
+            "fieldname": "upgrade_room",
+            "fieldtype": "Link",
+            "label": "Upgrade To Room",
+            "options": "Hotel Room",
+            "depends_on": "eval:doc.complimentary_type=='Room Upgrade'",
+            "description": "On approval, guest will be automatically transferred to this room and the rate difference waived."
+        },
+        {
+            "fieldname": "late_checkout_time",
+            "fieldtype": "Time",
+            "label": "Late Checkout Time",
+            "depends_on": "eval:doc.complimentary_type=='Late Checkout'",
+            "description": "On approval, the guest's expected checkout time is updated to this time and late checkout charge is waived."
         },
         {
             "fieldname": "column_break_main",

@@ -21,6 +21,8 @@ const ROLE_GROUPS = {
 
   // Maintenance - list only (staff level)
   maintenanceList: ['Technician', 'Maintenance Manager'],
+  // Maintenance - front desk access (request view only)
+  maintenanceFrontDesk: ['Hotel Receptionist', 'Front Desk Manager', 'Technician', 'Maintenance Manager'],
   // Maintenance - full module (dashboard, requests, technicians)
   maintenanceFull: ['Maintenance Manager'],
 
@@ -105,7 +107,7 @@ export const ROUTE_PERMISSIONS = [
 
   // Maintenance — specific paths before general
   { prefix: '/maintenance/dashboard', roles: ROLE_GROUPS.maintenanceFull },
-  { prefix: '/maintenance/request', roles: [...ROLE_GROUPS.maintenanceFull, 'Front Desk Manager'] },
+  { prefix: '/maintenance/request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
   { prefix: '/maintenance/new-request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
   { prefix: '/maintenance/technicians', roles: ROLE_GROUPS.maintenanceFull },
   { prefix: '/maintenance/new-technician', roles: ROLE_GROUPS.maintenanceFull },

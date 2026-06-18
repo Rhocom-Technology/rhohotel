@@ -336,6 +336,36 @@
           </div>
         </div>
 
+        <!-- Room Vouchers -->
+        <div v-if="form.guest" class="rounded-xl border px-6 py-5"
+          :class="guestRoomVouchers.length ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200'">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold" :class="guestRoomVouchers.length ? 'text-emerald-800' : 'text-gray-900'">Room Vouchers</h3>
+            <span v-if="guestRoomVouchers.length"
+              class="px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">
+              {{ guestRoomVouchers.length }} available
+            </span>
+          </div>
+          <div v-if="loadingRoomVouchers" class="text-xs text-gray-400">Loading vouchers...</div>
+          <div v-else-if="!guestRoomVouchers.length" class="text-xs text-gray-400">No approved Room Vouchers for this guest.</div>
+          <div v-else class="space-y-2">
+            <div v-for="v in guestRoomVouchers" :key="v.name"
+              class="bg-white rounded-lg border border-emerald-200 px-4 py-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-gray-900">{{ v.name }}</span>
+                <span class="text-xs font-bold text-emerald-700">{{ formatCurrency(v.remaining_value || v.value) }} remaining</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5">{{ v.reason || v.redemption_rule || 'Room charge voucher' }}</p>
+              <p class="text-xs text-gray-400 mt-0.5">
+                Issued {{ v.issue_date }}<span v-if="v.expiry_date"> · Expires {{ v.expiry_date }}</span>
+              </p>
+            </div>
+            <p class="text-xs text-emerald-700 mt-2">
+              ✓ After check-in, apply via the guest's Check-In Detail → Discount / Voucher button.
+            </p>
+          </div>
+        </div>
+
         <!-- Stay Summary -->
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Stay Summary</h3>
@@ -396,6 +426,33 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
 import { isValidPhone, phoneError } from '@/lib/phone'
+
+// ---- Room Vouchers ----
+const guestRoomVouchers = ref([])
+const loadingRoomVouchers = ref(false)
+
+async function loadGuestRoomVouchers() {
+  if (!form.guest) {
+    guestRoomVouchers.value = []
+    return
+  }
+  loadingRoomVouchers.value = true
+  try {
+    const result = await callMethodForm(
+      'rhohotel.rhocom_hotel.api.complimentary.get_redeemable_complimentaries',
+      {
+        guest: selectedGuest.value?.hotel_guest_name || guestQuery.value || null,
+        department: 'Front Desk',
+        complimentary_type: 'Room Voucher',
+      },
+    )
+    guestRoomVouchers.value = Array.isArray(result) ? result : []
+  } catch {
+    guestRoomVouchers.value = []
+  } finally {
+    loadingRoomVouchers.value = false
+  }
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -490,6 +547,7 @@ async function selectReservation(r) {
         if (matchedGuest.phone_number) {
           form.contact_number = matchedGuest.phone_number
         }
+        loadGuestRoomVouchers()
       }
     } catch {
       // Keep reservation guest details if lookup fails.
@@ -581,6 +639,7 @@ async function selectGuest(g) {
   if (g.id_type) form.id_type = g.id_type
   showGuestDropdown.value = false
   guestResults.value = []
+  loadGuestRoomVouchers()
 
   // Fetch full guest doc to get id_number and any other fields not in search results
   try {

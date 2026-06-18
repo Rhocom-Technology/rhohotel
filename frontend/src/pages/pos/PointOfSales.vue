@@ -398,6 +398,7 @@
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
+      :department="terminalInfo.hotel_department"
       :bill-to="selectedBillTo?.name || billToSearch || ''"
       :existing-draft="resumedDraftInvoice"
       @room-selected="onRoomSelected"
@@ -414,6 +415,7 @@
       :kitchen-note="kitchenNote"
       :cashier="terminalInfo.cashier"
       :pos-profile="terminalInfo.pos_profile"
+      :department="terminalInfo.hotel_department"
       :pre-selected-room="selectedBillTo?.room ? { room: selectedBillTo.room, guest: selectedBillTo.name, check_in: selectedBillTo.id } : null"
       :existing-draft="resumedDraftInvoice"
       @confirmed="onSplitConfirmed"
@@ -595,6 +597,7 @@ const terminalInfo = computed(() => {
   return {
     cashier: d.cashier || '',
     pos_profile: d.pos_profile || '',
+    hotel_department: d.hotel_department || 'Restaurant',
     shift_date: d.shift_date || '',
     has_open_shift: !!d.has_open_shift,
     pos_opening_entry: d.pos_opening_entry || null,
@@ -917,7 +920,7 @@ function loadComplimentaries() {
     check_in: selectedBillTo.value?.id || null,
     room: selectedBillTo.value?.room || roomNumber.value || null,
     guest: selectedBillTo.value?.name || billToSearch.value || null,
-    department: 'Restaurant',
+    department: terminalInfo.value.hotel_department,
   })
   loadComplimentaryIndicator()
 }
@@ -1625,6 +1628,7 @@ function onChargeNow() {
     complimentary_name: selectedComplimentaryName.value || null,
     kitchen_note: kitchenNote.value || null,
     pos_profile: terminalInfo.value?.pos_profile || null,
+    department: terminalInfo.value?.hotel_department || null,
     existing_draft: resumedDraftInvoice.value || null,
   })
 }

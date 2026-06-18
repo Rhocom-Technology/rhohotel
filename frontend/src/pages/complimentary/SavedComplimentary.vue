@@ -160,7 +160,15 @@
             <p class="text-xs text-gray-500 mb-1.5">Complimentary Type</p>
             <div class="px-3 py-2.5 text-xs text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ record.complimentary_type }}</div>
           </div>
-          <div>
+          <div v-if="record.complimentary_type === 'Room Upgrade' && record.upgrade_room">
+            <p class="text-xs text-gray-500 mb-1.5">Upgrade To Room</p>
+            <div class="px-3 py-2.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg">{{ record.upgrade_room }}</div>
+          </div>
+          <div v-else-if="record.complimentary_type === 'Late Checkout' && record.late_checkout_time">
+            <p class="text-xs text-gray-500 mb-1.5">Approved Checkout Time</p>
+            <div class="px-3 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">{{ record.late_checkout_time?.slice(0,5) }}</div>
+          </div>
+          <div v-else>
             <p class="text-xs text-gray-500 mb-1.5">Value</p>
             <div class="px-3 py-2.5 text-xs font-bold text-gray-900 bg-gray-50 border border-gray-200 rounded-lg">{{ formatValue(record.value) }}</div>
           </div>
@@ -316,7 +324,14 @@ const approveResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.complimentary.approve_complimentary',
   onSuccess(res) {
     if (res.success) {
-      actionMsg.value = 'Record approved successfully.'
+      if (res.room_upgraded) {
+        const waiver = res.value ? ` (₦${Number(res.value).toLocaleString()} waived)` : ''
+        actionMsg.value = `Room upgrade executed — guest moved to Room ${res.new_room}${waiver}. Rate difference automatically waived.`
+      } else if (res.late_checkout_applied) {
+        actionMsg.value = `Late checkout approved — guest checkout extended to ${res.new_checkout_time} on ${res.checkout_date}. Late checkout charge waived.`
+      } else {
+        actionMsg.value = 'Record approved successfully.'
+      }
       loadRecord()
     } else {
       errorMsg.value = res.error || 'Approval failed'

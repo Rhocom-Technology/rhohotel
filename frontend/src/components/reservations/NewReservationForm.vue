@@ -1059,6 +1059,7 @@ async function saveReservation(submitAfterSave) {
       discount_amount: parentDiscountAmount,
       total_amount: Number(grandTotal.value || 0),
       net_total: Number(grandTotal.value || 0),
+      reservation_status: submitAfterSave ? 'Confirmed' : (props.editDoc?.reservation_status || 'Draft'),
       rooms: selectedRooms.value.map((room) => ({
         room_number: room.name,
         rate_per_night: getRoomRate(room),
@@ -1083,7 +1084,7 @@ async function saveReservation(submitAfterSave) {
     let saved
     if (props.editDoc?.name) {
       saved = await callMethod('frappe.client.save', {
-        doc: { ...doc, name: props.editDoc.name, docstatus: 0 },
+        doc: { ...props.editDoc, ...doc, name: props.editDoc.name, docstatus: 0, modified: props.editDoc.modified, creation: props.editDoc.creation, owner: props.editDoc.owner },
       })
     } else {
       saved = await callMethod('frappe.client.insert', { doc })

@@ -14,7 +14,7 @@
           <input v-model="auditDate" type="date" class="na-date-input" />
         </label>
         <button @click="loadData" class="na-btn-refresh">Refresh</button>
-        <button @click="closeDay" :disabled="closingDay" class="na-btn-close">{{ closingDay ? 'Closing...' : 'Close Day' }}</button>
+        <button @click="closeDay" :disabled="closingDay || isDayClosed" class="na-btn-close" :class="{ 'na-btn-closed': isDayClosed }">{{ closingDay ? 'Closing...' : isDayClosed ? 'Day Closed' : 'Close Day' }}</button>
         <div class="na-avatar">{{ avatarInitials }}</div>
       </div>
     </header>
@@ -74,7 +74,7 @@
             <div class="na-stat-card">
               <p class="na-stat-label">Total Pending Payment</p>
               <p class="na-stat-value na-value-dark">{{ fmt(data.outstanding.total_outstanding) }}</p>
-              <p class="na-stat-badge na-badge-red">{{ data.outstanding.guest_count }} open unsettled bills</p>
+              <p class="na-stat-badge na-badge-red">{{ data.outstanding.open_invoice_count || 0 }} open invoices</p>
             </div>
             <div class="na-stat-card na-stat-green-tint">
               <p class="na-stat-label">Occupancy %</p>
@@ -88,8 +88,8 @@
             </div>
             <div class="na-stat-card">
               <p class="na-stat-label">Open Invoices</p>
-              <p class="na-stat-value na-value-dark">{{ data.outstanding.guest_count }}</p>
-              <p class="na-stat-badge na-badge-red">Unsettled bills requiring follow-up</p>
+              <p class="na-stat-value na-value-dark">{{ data.outstanding.open_invoice_count || 0 }}</p>
+              <p class="na-stat-badge na-badge-red">Submitted invoices requiring follow-up</p>
             </div>
           </div>
         </section>
@@ -254,7 +254,7 @@
           <div class="na-table-header">
             <div>
               <h3 class="na-card-title">Guest Ledger — Outstanding Balances</h3>
-              <p class="na-card-sub">Guests with unpaid balances currently in house</p>
+              <p class="na-card-sub">In-house folios with unpaid invoice balances</p>
             </div>
             <span class="na-badge-pill na-badge-red-pill">{{ data.outstanding.guest_count }} accounts</span>
           </div>
@@ -349,7 +349,12 @@ import { callMethodForm } from '@/lib/api'
 const router = useRouter()
 const session = useSessionStore()
 
-const today = new Date().toISOString().slice(0, 10)
+function localDateISO(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10)
+}
+
+const today = localDateISO()
 const auditDate = ref(today)
 const roomSearch = ref('')
 const roomStatusFilter = ref('')
@@ -358,6 +363,7 @@ const roomPageSize = 30
 const closingDay = ref(false)
 const closeDayError = ref('')
 const closeDaySuccess = ref('')
+const isDayClosed = computed(() => !!data.value?.is_closed)
 
 // ── Session / avatar ─────────────────────────────────────────────────────
 const avatarInitials = computed(() => {
@@ -416,11 +422,12 @@ const revenueBars = computed(() => {
 const criticalItems = computed(() => {
   if (!data.value) return []
   const items = []
-  if (data.value.outstanding.guest_count > 0) {
+  const openInvoices = data.value.outstanding.open_invoice_count || 0
+  if (openInvoices > 0) {
     items.push({
       title: 'Unsettled Invoices',
-      desc: `${data.value.outstanding.guest_count} guest folios remain open with pending settlement.`,
-      count: data.value.outstanding.guest_count,
+      desc: `${openInvoices} submitted invoices remain open with pending settlement.`,
+      count: openInvoices,
     })
   }
   const openPos = data.value.critical?.open_pos_orders || 0
@@ -553,7 +560,7 @@ function hkStatusClass(s) {
   return { Clean: 'pill-green-soft', Dirty: 'pill-yellow', 'In Progress': 'pill-blue-soft', Inspected: 'pill-purple' }[s] || 'pill-gray'
 }
 async function closeDay() {
-  if (closingDay.value) return
+  if (closingDay.value || isDayClosed.value) return
   closeDayError.value = ''
   closeDaySuccess.value = ''
   if (!confirm('Are you sure you want to close the day? This action cannot be undone.')) return
@@ -566,7 +573,7 @@ async function closeDay() {
       reason: '',
     })
     closeDaySuccess.value = result?.message || 'Day close completed successfully.'
-    await loadData()
+    await loadData()  // reloads data.is_closed → disables button
   } catch (e) {
     const msg = String(e?.message || 'Day close failed.')
     // Allow manager override from UI when server blocks with exceptions.
@@ -614,7 +621,7 @@ const nightAuditContext = computed(() => {
     departures: data.value.occupancy?.departures,
     noshows: data.value.occupancy?.noshows ?? 0,
     outstanding_total: data.value.outstanding?.total_outstanding,
-    outstanding_count: data.value.outstanding?.guest_count,
+    outstanding_count: data.value.outstanding?.open_invoice_count ?? data.value.outstanding?.guest_count,
     critical_items_count: criticalItems.value.length,
   }
 })
@@ -654,6 +661,9 @@ const nightAuditContext = computed(() => {
   font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
 }
 .na-btn-close:hover { background: #dc2626; }
+.na-btn-close.na-btn-closed,
+.na-btn-close:disabled { background: #6b7280; cursor: not-allowed; opacity: 0.75; }
+.na-btn-close.na-btn-closed:hover { background: #6b7280; }
 .na-avatar {
   width: 32px; height: 32px; border-radius: 50%;
   background: #2563eb; color: #fff;

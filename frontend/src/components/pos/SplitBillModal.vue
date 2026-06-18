@@ -162,6 +162,7 @@ const props = defineProps({
   kitchenNote: { type: String, default: '' },
   cashier: { type: String, default: '' },
   posProfile: { type: String, default: '' },
+  department: { type: String, default: '' },
   preSelectedRoom: { type: Object, default: null },
   existingDraft: { type: String, default: null },
 })
@@ -465,6 +466,7 @@ async function applySplit() {
       complimentary_name: props.complimentaryName || null,
       kitchen_note: props.kitchenNote || null,
       pos_profile: props.posProfile || null,
+      department: props.department || null,
       existing_draft: props.existingDraft || null,
     })
 

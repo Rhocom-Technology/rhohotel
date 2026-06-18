@@ -120,10 +120,13 @@ def _mark_reservation_room_checked_in(row_name, check_in_reference, check_in_tim
 def link_reservation_invoices_to_check_in(reservation_name, check_in_name, room_row_name=None):
     """Back-link submitted reservation invoices to a Hotel Room Check In.
 
-    Split group reservations have one invoice per room, so only the checked-in
-    room row's invoice and row-specific adjustment invoices should move into
-    that check-in folio. Central/non-split reservations use the reservation
-    invoice ledger.
+    Three cases:
+    1. Group + Split billing → only the per-room split invoice (and its
+       adjustment invoices) belong in that room's check-in folio.
+    2. Corporate reservation → the master invoice is billed to the company,
+       not to any individual occupying guest's folio. Skip linking entirely.
+    3. Everything else (Individual, non-split Group, House Use, etc.) →
+       link all reservation invoices to this check-in.
     """
     if not reservation_name or not check_in_name:
         return []
@@ -137,12 +140,18 @@ def link_reservation_invoices_to_check_in(reservation_name, check_in_name, room_
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
     invoice_names = []
     if _is_group_split_billing(doc) and room_row_name:
+        # Case 1: per-room split invoice only
         room_row = next((row for row in doc.rooms or [] if row.name == room_row_name), None)
         if room_row:
             if getattr(room_row, "split_invoice", None):
                 invoice_names.append(room_row.split_invoice)
             invoice_names.extend(_get_split_room_adjustment_invoice_names(doc, room_row))
+    elif _is_corporate_billing(doc):
+        # Case 2: corporate reservation — master invoice belongs to the company,
+        # not to any individual room's check-in folio. Return early.
+        return []
     else:
+        # Case 3: individual / non-split group / house use etc.
         invoice_names.extend(_get_reservation_invoice_names(doc))
 
     linked = []
@@ -2459,6 +2468,18 @@ def _is_group_split_billing(doc):
     reservation_type = (doc.reservation_type or "").strip().lower()
     billing_mode = (doc.group_billing_mode or "").strip().lower()
     return reservation_type == "group" and billing_mode.startswith("split")
+
+
+def _is_corporate_billing(doc):
+    """Return True when this is a corporate reservation with a single master invoice.
+
+    Corporate reservations bill the company directly. Their master
+    ``sales_invoice`` must not be attached to any individual guest's room
+    check-in folio — it should only appear at the reservation / corporate
+    billing level.
+    """
+    reservation_type = (doc.reservation_type or "").strip().lower()
+    return reservation_type == "corporate"
 
 
 @frappe.whitelist()

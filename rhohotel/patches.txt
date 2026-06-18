@@ -15,3 +15,4 @@ rhohotel.rhocom_hotel.patches.fix_hotel_room_rate_autoname
 rhohotel.rhocom_hotel.patches.add_maintenance_item_permissions
 rhohotel.rhocom_hotel.patches.backfill_reservation_room_checkin_status
 rhohotel.rhocom_hotel.patches.backfill_complimentary_redemption_amounts
+rhohotel.rhocom_hotel.patches.add_pos_profile_hotel_department

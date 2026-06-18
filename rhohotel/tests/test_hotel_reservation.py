@@ -371,7 +371,7 @@ class TestHotelReservation(unittest.TestCase):
             patch.object(hr_module.frappe, "get_doc", return_value=doc),
             patch.object(hr_module.frappe.db, "exists", side_effect=fake_exists, create=True),
             patch.object(hr_module.frappe.db, "has_column", return_value=True, create=True),
-            patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value),
+            patch.object(hr_module.frappe.db, "get_value", side_effect=fake_get_value, create=True),
             patch.object(hr_module.frappe.db, "set_value", side_effect=fake_set_value, create=True),
             patch.object(hr_module, "_get_split_room_adjustment_invoice_names", return_value=["INV-ADJ-1"]),
             patch("rhohotel.rhocom_hotel.utils.folio.sync_checkin_folio_totals", return_value={}),
@@ -380,6 +380,99 @@ class TestHotelReservation(unittest.TestCase):
 
         self.assertEqual(linked, ["INV-ROOM-1", "INV-ADJ-1"])
         self.assertEqual(linked_values, {"INV-ROOM-1": "CHK-1", "INV-ADJ-1": "CHK-1"})
+
+    def test_link_reservation_invoices_corporate_skips_all_linking(self):
+        """Corporate reservations must not attach their master invoice to any
+        individual room check-in folio (case 2 in link_reservation_invoices_to_check_in)."""
+        doc = types.SimpleNamespace(
+            reservation_type="Corporate",
+            group_billing_mode=None,
+            corporate_guest="Netflix",
+            sales_invoice="ACC-SINV-CORP-001",
+            rooms=[
+                Row(name="ROW-1", split_invoice=None),
+                Row(name="ROW-2", split_invoice=None),
+            ],
+            reservation_invoices=[],
+        )
+        linked_values = {}
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+
+        def fake_exists(doctype, name):
+            return True
+
+        def fake_set_value(doctype, name, fieldname, value, **kwargs):
+            linked_values[name] = value
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module.frappe.db, "exists", side_effect=fake_exists, create=True),
+            patch.object(hr_module.frappe.db, "has_column", return_value=True, create=True),
+            patch.object(hr_module.frappe.db, "set_value", side_effect=fake_set_value, create=True),
+        ):
+            linked = hr_module.link_reservation_invoices_to_check_in(
+                "RES-TEST-CORP-001", "CHK-CORP-1", "ROW-1"
+            )
+
+        # Nothing should be linked — corporate invoice stays at reservation level
+        self.assertEqual(linked, [])
+        self.assertEqual(linked_values, {})
+
+    def test_link_reservation_invoices_corporate_second_checkin_also_skipped(self):
+        """Even when a second room checks in on a corporate reservation,
+        the master invoice must not be linked to that check-in either."""
+        doc = types.SimpleNamespace(
+            reservation_type="Corporate",
+            group_billing_mode="",
+            corporate_guest="Netflix",
+            sales_invoice="ACC-SINV-CORP-001",
+            rooms=[
+                Row(name="ROW-1", split_invoice=None),
+                Row(name="ROW-2", split_invoice=None),
+            ],
+            reservation_invoices=[],
+        )
+        linked_values = {}
+        if not hasattr(hr_module.frappe, "db"):
+            hr_module.frappe.db = types.SimpleNamespace()
+
+        def fake_exists(doctype, name):
+            return True
+
+        def fake_set_value(doctype, name, fieldname, value, **kwargs):
+            linked_values[name] = value
+
+        with (
+            patch.object(hr_module.frappe, "get_doc", return_value=doc),
+            patch.object(hr_module.frappe.db, "exists", side_effect=fake_exists, create=True),
+            patch.object(hr_module.frappe.db, "has_column", return_value=True, create=True),
+            patch.object(hr_module.frappe.db, "set_value", side_effect=fake_set_value, create=True),
+        ):
+            # First room checks in
+            linked1 = hr_module.link_reservation_invoices_to_check_in(
+                "RES-TEST-CORP-001", "CHK-CORP-1", "ROW-1"
+            )
+            # Second room checks in
+            linked2 = hr_module.link_reservation_invoices_to_check_in(
+                "RES-TEST-CORP-001", "CHK-CORP-2", "ROW-2"
+            )
+
+        self.assertEqual(linked1, [])
+        self.assertEqual(linked2, [])
+        self.assertEqual(linked_values, {})
+
+    def test_is_corporate_billing_helper(self):
+        """_is_corporate_billing should return True only for Corporate type."""
+        corp_doc = types.SimpleNamespace(reservation_type="Corporate", group_billing_mode=None)
+        indiv_doc = types.SimpleNamespace(reservation_type="Individual", group_billing_mode=None)
+        group_doc = types.SimpleNamespace(reservation_type="Group", group_billing_mode="Split")
+        corp_upper = types.SimpleNamespace(reservation_type="CORPORATE", group_billing_mode=None)
+
+        self.assertTrue(hr_module._is_corporate_billing(corp_doc))
+        self.assertTrue(hr_module._is_corporate_billing(corp_upper))
+        self.assertFalse(hr_module._is_corporate_billing(indiv_doc))
+        self.assertFalse(hr_module._is_corporate_billing(group_doc))
 
     def test_saved_reservation_invoice_ledger_opens_invoice_detail_modal(self):
         app_root = Path(__file__).resolve().parents[2]

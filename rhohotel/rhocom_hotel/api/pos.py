@@ -269,7 +269,7 @@ def _resolve_pos_customer(explicit_customer=None, profile_doc=None, allow_guest_
     return None
 
 
-def _get_complimentary_discount(complimentary_name, bill_total, manual_discount=0):
+def _get_complimentary_discount(complimentary_name, bill_total, manual_discount=0, department=None):
     if not complimentary_name:
         return 0
     from rhohotel.rhocom_hotel.api.complimentary import get_complimentary_pos_discount
@@ -278,11 +278,11 @@ def _get_complimentary_discount(complimentary_name, bill_total, manual_discount=
         complimentary_name,
         bill_total,
         manual_discount=manual_discount,
-        department="Restaurant",
+        department=department or "Restaurant",
     ))
 
 
-def _redeem_complimentary(complimentary_name, pos_invoice_name, bill_total, manual_discount=0):
+def _redeem_complimentary(complimentary_name, pos_invoice_name, bill_total, manual_discount=0, department=None):
     if not complimentary_name:
         return None
     from rhohotel.rhocom_hotel.api.complimentary import redeem_complimentary_for_pos
@@ -292,7 +292,7 @@ def _redeem_complimentary(complimentary_name, pos_invoice_name, bill_total, manu
         pos_invoice_name,
         bill_total,
         manual_discount=manual_discount,
-        department="Restaurant",
+        department=department or "Restaurant",
     )
 
 
@@ -816,7 +816,7 @@ def get_occupied_rooms_for_pos(search=None):
 @frappe.whitelist()
 def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
                         service_charge=0, kitchen_note=None, pos_profile=None, discount_amount=0,
-                        existing_draft=None, complimentary_name=None):
+                        existing_draft=None, complimentary_name=None, department=None):
     """Create and submit a POS Invoice for non-room-posting settlements."""
     import json
 
@@ -887,7 +887,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 
         _items_total = flt(sum(flt(i.get("price", 0)) * flt(i.get("qty", 1)) for i in items)) + flt(service_charge)
         manual_discount = flt(discount_amount)
-        complimentary_discount = _get_complimentary_discount(complimentary_name, _items_total, manual_discount)
+        complimentary_discount = _get_complimentary_discount(complimentary_name, _items_total, manual_discount, department=department)
         total_discount = min(_items_total, manual_discount + complimentary_discount)
         pi.discount_amount = total_discount
         if total_discount > 0:
@@ -910,7 +910,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
         if table_display_name:
             frappe.db.set_value("POS Invoice", pi.name, "customer_name",
                                 table_display_name, update_modified=False)
-        complimentary = _redeem_complimentary(complimentary_name, pi.name, _items_total, manual_discount)
+        complimentary = _redeem_complimentary(complimentary_name, pi.name, _items_total, manual_discount, department=department)
         frappe.db.commit()
     except Exception as e:
         safe_items = []
@@ -964,7 +964,7 @@ def _derive_invoice_source(pos_profile_name):
 
 
 @frappe.whitelist()
-def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None, existing_draft=None, complimentary_name=None):
+def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narration=None, kitchen_note=None, pos_profile=None, existing_draft=None, complimentary_name=None, department=None):
     """Create a Sales Invoice linked to a Hotel Room Check In folio, then immediately
     create and consolidate a POS Invoice against the open shift so the transaction
     appears in shift reports without waiting for the end-of-shift consolidation job."""
@@ -1048,7 +1048,7 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
         flt(it.get("price", 0)) * flt(it.get("qty", 1)) for it in items
     )) + flt(service_charge)
     manual_discount = flt(discount_amount)
-    complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount)
+    complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount, department=department)
 
     # Discount
     disc = min(items_total, manual_discount + complimentary_discount)
@@ -1140,7 +1140,7 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
                 # Mark as immediately consolidated — the room folio Sales Invoice
                 # serves as the consolidated invoice; no end-of-shift re-processing needed.
                 frappe.db.set_value("POS Invoice", pi.name, "consolidated_invoice", si.name)
-                _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount)
+                _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount, department=department)
                 frappe.db.commit()
                 pos_invoice_name = pi.name
     except Exception:
@@ -1153,6 +1153,7 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
             _("Sales Invoice {0}").format(si.name),
             items_total,
             manual_discount,
+            department=department,
         )
         frappe.db.commit()
 
@@ -2093,6 +2094,7 @@ def get_pos_shift_stats(pos_opening_entry=None):
         "difference": 0,
         "cashier": frappe.db.get_value("User", entry_doc.user, "full_name") or entry_doc.user,
         "pos_profile": entry_doc.pos_profile,
+        "hotel_department": frappe.db.get_value("POS Profile", entry_doc.pos_profile, "hotel_department") or "Restaurant",
         "allow_discount_change": bool(frappe.db.get_value("POS Profile", entry_doc.pos_profile, "allow_discount_change")),
         "shift_date": cstr(entry_doc.period_start_date),
         "opening_time": cstr(entry_doc.period_start_date),
@@ -2690,7 +2692,7 @@ def get_open_pos_terminals():
 @frappe.whitelist()
 def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
                              kitchen_note=None, pos_profile=None, discount_amount=0,
-                             existing_draft=None, complimentary_name=None):
+                             existing_draft=None, complimentary_name=None, department=None):
     import json
 
     items = json.loads(items) if isinstance(items, str) else items
@@ -2740,7 +2742,7 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
     )) + flt(service_charge)
 
     manual_discount = flt(discount_amount)
-    complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount)
+    complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount, department=department)
     total_discount = min(items_total, manual_discount + complimentary_discount)
     net_total = max(0, items_total - total_discount)
 
@@ -2874,7 +2876,7 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
     if draft_table_display_name:
         frappe.db.set_value("POS Invoice", pi.name, "customer_name",
                             draft_table_display_name, update_modified=False)
-    complimentary = _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount)
+    complimentary = _redeem_complimentary(complimentary_name, pi.name, items_total, manual_discount, department=department)
     for p in portions:
         if cstr(p.get("paymentType")) == "Post to Room":
             room_invoice = create_room_split_invoice(p)
