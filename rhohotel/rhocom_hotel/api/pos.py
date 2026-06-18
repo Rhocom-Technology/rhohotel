@@ -2166,7 +2166,18 @@ def close_pos_shift(pos_opening_entry, tender_rows=None, closing_note=None, atta
                 closing.remarks = closing_note
 
         closing.insert()
-        closing.submit()
+
+        # The on_submit hook triggers consolidate_pos_invoices which enqueues
+        # a background job as frappe.session.user.  POS cashier accounts don't
+        # have Sales Invoice create permission, so the job would fail.
+        # Temporarily elevate to Administrator so the merge job runs with full
+        # access, then restore the original user.
+        _original_user = frappe.session.user
+        try:
+            frappe.set_user("Administrator")
+            closing.submit()
+        finally:
+            frappe.set_user(_original_user)
 
         # Attach uploaded file to the closing entry if provided
         if attachment_url:
