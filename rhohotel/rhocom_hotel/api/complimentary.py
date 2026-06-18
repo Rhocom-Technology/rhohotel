@@ -564,8 +564,6 @@ def approve_complimentary(complimentary_name):
         doc.status = "Approved"
         doc.approved_by = frappe.session.user
         doc.approved_on = now_datetime()
-        doc.save()
-        frappe.db.commit()
 
         # ── Room Upgrade auto-execution ──────────────────────────────────────
         upgrade_room = getattr(doc, "upgrade_room", None)
@@ -574,8 +572,12 @@ def approve_complimentary(complimentary_name):
 
         # ── Late Checkout auto-execution ──────────────────────────────────
         if doc.complimentary_type == "Late Checkout" and doc.check_in:
+            if not getattr(doc, "late_checkout_time", None):
+                return {"success": False, "error": _("Approved Checkout Time is required for Late Checkout vouchers.")}
             return _execute_late_checkout(doc)
 
+        doc.save()
+        frappe.db.commit()
         return {"success": True}
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "approve_complimentary error")
@@ -674,7 +676,7 @@ def _execute_room_upgrade(doc):
 
 def _execute_late_checkout(doc):
     """Set late_checkout=1 on the check-in and extend checkout time to the approved time."""
-    from frappe.utils import get_datetime, get_time
+    from frappe.utils import get_datetime
 
     check_in_name = doc.check_in
     late_time = getattr(doc, "late_checkout_time", None)
@@ -685,14 +687,21 @@ def _execute_late_checkout(doc):
 
     current_checkout_dt = get_datetime(ci.expected_check_out_datetime)
     checkout_date = current_checkout_dt.date()
-    old_time_str = current_checkout_dt.strftime("%H:%M")
 
-    new_checkout_dt = current_checkout_dt
-    if late_time:
-        # late_checkout_time is stored as "HH:MM:SS" by Frappe
-        time_str = str(late_time)[:5]  # "HH:MM"
-        from datetime import datetime
-        new_checkout_dt = datetime.strptime(f"{checkout_date} {time_str}", "%Y-%m-%d %H:%M")
+    if not late_time:
+        return {"success": False, "error": _("Select an approved late checkout time.")}
+
+    # late_checkout_time is stored as "HH:MM:SS" by Frappe
+    time_str = str(late_time)[:5]  # "HH:MM"
+    from datetime import datetime
+    new_checkout_dt = datetime.strptime(f"{checkout_date} {time_str}", "%Y-%m-%d %H:%M")
+    if new_checkout_dt <= current_checkout_dt:
+        return {
+            "success": False,
+            "error": _("Late checkout time must be later than the current checkout time ({0}).").format(
+                current_checkout_dt.strftime("%H:%M")
+            ),
+        }
 
     # Update the check-in with db_set to bypass submit restrictions
     frappe.db.set_value(
@@ -709,7 +718,7 @@ def _execute_late_checkout(doc):
     doc.status = "Consumed"
     doc.consumed_on = now_datetime()
     doc.consumption_reference = _("Late Checkout approved — checkout extended to {0}").format(
-        new_checkout_dt.strftime("%H:%M") if late_time else old_time_str
+        new_checkout_dt.strftime("%H:%M")
     )
     doc.flags.ignore_permissions = True
     doc.save()

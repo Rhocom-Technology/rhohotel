@@ -320,6 +320,10 @@ watch(() => form.complimentary_type, (type) => {
     }
     return
   }
+  if (type === 'Laundry') {
+    form.department = 'Laundry'
+    return
+  }
   if (type !== 'Room Voucher') return
   form.department = 'Front Desk'
   if (!form.redemption_rule) {
