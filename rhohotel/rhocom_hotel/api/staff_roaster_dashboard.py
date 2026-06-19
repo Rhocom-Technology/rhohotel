@@ -23,34 +23,6 @@ def _week_dates(week_start):
     return [add_days(start, i) for i in range(7)]
 
 
-def _classify_shift_bucket(shift_type, start_time):
-    """Buckets a Shift Type into Morning / Afternoon / Night for the
-    'Today's Shift Split' card, based on its configured start_time.
-    Falls back to name-matching if start_time isn't available, consistent
-    with how WeeklyShiftGenerator.vue colors shift cells by name.
-    """
-    name = cstr(shift_type or "").lower()
-    if "night" in name:
-        return "night"
-    if "afternoon" in name or "evening" in name:
-        return "afternoon"
-    if "morning" in name or "day" in name:
-        return "morning"
-
-    if start_time is not None:
-        try:
-            hour = int(cstr(start_time).split(":")[0])
-            if hour < 12:
-                return "morning"
-            if hour < 18:
-                return "afternoon"
-            return "night"
-        except (ValueError, IndexError):
-            pass
-
-    return "morning"
-
-
 @frappe.whitelist()
 def get_dashboard(week_start=None):
     company = _get_default_company()
@@ -68,7 +40,7 @@ def get_dashboard(week_start=None):
     # actually covers within the requested range, not one entry total.
     rows = frappe.db.sql(
         """
-        SELECT sa.employee, sa.shift_type, sa.start_date, sa.end_date, emp.department,
+        SELECT sa.employee, sa.shift_type, sa.start_date, sa.end_date, sa.status, emp.department,
                st.start_time
         FROM `tabShift Assignment` sa
         INNER JOIN `tabEmployee` emp ON emp.name = sa.employee
@@ -93,6 +65,7 @@ def get_dashboard(week_start=None):
             entry = {
                 "employee": row.employee,
                 "shift_type": row.shift_type,
+                "status": row.status,
                 "department": _short_department(row.department),
                 "start_time": row.start_time,
                 "date": cstr(day),
@@ -104,10 +77,10 @@ def get_dashboard(week_start=None):
 
     published_today = len(today_rows)
 
-    # --- Weekly Coverage (reuses the same definition as Weekly Shift
-    # Generator: a day is a conflict if any Shift Type in the system has
-    # zero coverage that day; coverage = conflict-free days / 7) ----------
-    total_shift_types = frappe.db.count("Shift Type")
+    # --- Weekly Coverage (a day is a conflict if any Shift Type in the
+    # system has zero coverage that day; coverage = conflict-free days / 7) -
+    all_shift_type_names = [r.name for r in frappe.get_all("Shift Type", fields=["name"], order_by="name asc")]
+    total_shift_types = len(all_shift_type_names)
     conflict_days = 0
     for day in week_dates:
         day_str = cstr(day)
@@ -141,37 +114,105 @@ def get_dashboard(week_start=None):
     # company-agnostic (counts all pending swap requests system-wide).
     swap_pending = frappe.db.count("Shift Swap Request", {"status": "Pending"})
 
-    # --- Today's Shift Split (Morning / Afternoon / Night) ------------------
-    shift_split = {"morning": 0, "afternoon": 0, "night": 0}
+    # --- Today's Shift Split (one entry per real Shift Type name) -----------
+    shift_split_today = {name: 0 for name in all_shift_type_names}
     for row in today_rows:
-        bucket = _classify_shift_bucket(row["shift_type"], row["start_time"])
-        shift_split[bucket] += 1
+        if row["shift_type"] in shift_split_today:
+            shift_split_today[row["shift_type"]] += 1
+        elif row["shift_type"]:
+            # A shift type that's been assigned but no longer exists as a
+            # Shift Type record (e.g. deleted/renamed) -- still surface it
+            # rather than silently dropping the count.
+            shift_split_today[row["shift_type"]] = shift_split_today.get(row["shift_type"], 0) + 1
 
-    # --- Department Overview (today, per department) ------------------------
+    # --- This Week's Shift Split (same, across all 7 days) ------------------
+    shift_split_week = {name: 0 for name in all_shift_type_names}
+    for row in published_days:
+        if row["shift_type"]:
+            shift_split_week[row["shift_type"]] = shift_split_week.get(row["shift_type"], 0) + 1
+
+    # --- Table 1: Shift Type totals per day (pivot: shift type x day) -------
+    shift_type_by_day = {
+        name: {cstr(d): 0 for d in week_dates} for name in all_shift_type_names
+    }
+    for row in published_days:
+        st = row["shift_type"]
+        if not st:
+            continue
+        if st not in shift_type_by_day:
+            shift_type_by_day[st] = {cstr(d): 0 for d in week_dates}
+        shift_type_by_day[st][row["date"]] += 1
+
+    shift_type_table = [
+        {"shift_type": name, "days": days, "total": sum(days.values())}
+        for name, days in sorted(shift_type_by_day.items())
+    ]
+
+    # --- Today's Department Overview: which shift types were covered today,
+    # per department --------------------------------------------------------
     dept_today = {}
     for row in today_rows:
         dept = row["department"] or "Unassigned"
-        bucket = _classify_shift_bucket(row["shift_type"], row["start_time"])
-        if dept not in dept_today:
-            dept_today[dept] = {"morning": 0, "afternoon": 0, "night": 0}
-        dept_today[dept][bucket] += 1
+        dept_today.setdefault(dept, set())
+        if row["shift_type"]:
+            dept_today[dept].add(row["shift_type"])
 
     dept_overview = []
-    for dept, counts in sorted(dept_today.items()):
-        total = counts["morning"] + counts["afternoon"] + counts["night"]
-        if total == 0:
+    for dept, covered in sorted(dept_today.items()):
+        if not covered:
             coverage = "Gap"
-        elif counts["morning"] and counts["afternoon"] and counts["night"]:
+        elif total_shift_types and len(covered) >= total_shift_types:
             coverage = "Covered"
         else:
             coverage = "Watch"
         dept_overview.append({
             "department": dept,
-            "morning": counts["morning"],
-            "afternoon": counts["afternoon"],
-            "night": counts["night"],
+            "shift_types": sorted(covered),
             "coverage": coverage,
         })
+
+    # --- Table 2: per department, per day, staff with published assignment -
+    # Count unique employees that have a published Shift Assignment on each
+    # day, regardless of assignment status.
+    dept_week = {}
+    for row in published_days:
+        dept = row["department"] or "Unassigned"
+        if dept not in dept_week:
+            dept_week[dept] = {cstr(d): set() for d in week_dates}
+        if row.get("employee") and row.get("shift_type"):
+            dept_week[dept][row["date"]].add(row["employee"])
+
+    dept_overview_week = []
+    for dept, days in sorted(dept_week.items()):
+        zero_days = sum(1 for v in days.values() if not v)
+        if zero_days >= 4:
+            coverage = "Gap"
+        elif zero_days >= 1:
+            coverage = "Watch"
+        else:
+            coverage = "Covered"
+        dept_overview_week.append({
+            "department": dept,
+            "days": {d: sorted(v) for d, v in days.items()},
+            "coverage": coverage,
+        })
+
+    # --- Table 3: per department, per day, number of published shifts -----
+    # Count all published shift assignments for the week (docstatus=1),
+    # regardless of assignment status, to reflect total shift volume.
+    dept_shift_count_week_map = {}
+    for row in published_days:
+        if not row.get("shift_type"):
+            continue
+        dept = row["department"] or "Unassigned"
+        if dept not in dept_shift_count_week_map:
+            dept_shift_count_week_map[dept] = {cstr(d): 0 for d in week_dates}
+        dept_shift_count_week_map[dept][row["date"]] += 1
+
+    dept_shift_count_week = [
+        {"department": dept, "days": days}
+        for dept, days in sorted(dept_shift_count_week_map.items())
+    ]
 
     return {
         "company": company or "",
@@ -180,13 +221,20 @@ def get_dashboard(week_start=None):
         "week_label": week_label,
         "today_label": today_label,
         "today_date": today.strftime("%d %b %Y"),
+        "week_dates": [cstr(d) for d in week_dates],
+        "shift_type_names": all_shift_type_names,
         "stats": {
             "publishedToday": published_today,
+            "publishedThisWeek": len(published_days),
             "weeklyCoverage": weekly_coverage,
             "preferenceSubmitted": preference_submitted,
             "preferenceTotal": preference_total,
             "swapRequestsPending": swap_pending,
         },
-        "shiftSplit": shift_split,
+        "shiftSplitToday": shift_split_today,
+        "shiftSplitWeek": shift_split_week,
+        "shiftTypeTable": shift_type_table,
         "deptOverview": dept_overview,
+        "deptOverviewWeek": dept_overview_week,
+        "deptShiftCountWeek": dept_shift_count_week,
     }

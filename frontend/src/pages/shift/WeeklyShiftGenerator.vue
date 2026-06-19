@@ -699,7 +699,9 @@ function isoDate(date) {
 
 function startOfWeek(date) {
   const d = new Date(date)
-  d.setDate(d.getDate() - d.getDay()) // 0 = Sunday
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day // ISO week starts on Monday
+  d.setDate(d.getDate() + diff)
   d.setHours(0, 0, 0, 0)
   return d
 }
