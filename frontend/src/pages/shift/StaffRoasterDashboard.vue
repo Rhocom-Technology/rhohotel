@@ -220,37 +220,6 @@
       </div>
     </div>
 
-    <!-- WEEKLY DEPARTMENT SHIFT COUNTS -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100">
-        <h3 class="text-sm font-bold text-gray-900">Weekly Department Shift Counts</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Number of published shifts per department for each day of the selected week.</p>
-      </div>
-
-      <div class="px-5 py-4 overflow-x-auto">
-        <table class="w-full border-collapse">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 rounded-l-lg">Department</th>
-              <th v-for="d in weekDates" :key="`shift-count-${d}`" class="text-center px-3 py-2.5 text-xs font-semibold text-gray-500">
-                {{ shortDayLabel(d) }}
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr v-for="row in deptShiftCountWeek" :key="`shift-count-row-${row.department}`" class="border-b border-gray-100">
-              <td class="px-3 py-2.5 text-xs font-bold text-gray-900">{{ row.department }}</td>
-              <td v-for="d in weekDates" :key="`shift-count-cell-${row.department}-${d}`" class="text-center px-3 py-2.5 text-xs">
-                <span v-if="row.days[d]" class="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-full">{{ row.days[d] }}</span>
-                <span v-else class="text-gray-300">&mdash;</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
     <!-- Roaster Intelligence -->
     <div class="rounded-xl border px-6 py-4" style="background:#f5f3ff; border-color:#e9d5ff;">
       <h3 class="text-sm font-bold" style="color:#7c3aed;">Roaster Intelligence</h3>
