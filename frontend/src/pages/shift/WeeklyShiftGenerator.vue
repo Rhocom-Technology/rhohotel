@@ -77,7 +77,7 @@
           class="px-4 py-2.5 text-xs font-semibold text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           style="background: linear-gradient(90deg, #8b5cf6, #6366f1);"
           :disabled="loading || aiRunning"
-          @click="aiAutoAssign">{{ aiRunning ? 'Generating...' : 'AI Auto Assign' }}</button>
+          @click="aiAutoAssign">{{ aiRunning ? 'Generating...' : 'AI Suggest Shifts' }}</button>
 
         <template v-if="viewMode === 'draft'">
           <button
@@ -131,15 +131,44 @@
 
     <!-- Weekly Draft Editor -->
     <div v-if="viewMode === 'draft'" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 class="text-sm font-bold text-gray-900">Weekly Draft Editor{{ previewMode ? ' - AI Preview' : '' }}</h3>
-          <p class="text-xs text-gray-400 mt-0.5">{{ department || '...' }} &bull; {{ weekRangeLabel }}</p>
+      <div class="px-6 py-4 border-b border-gray-100">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-gray-900">Weekly Draft Editor{{ previewMode ? ' - AI Preview' : '' }}</h3>
+            <p class="text-xs text-gray-400 mt-0.5">{{ department || '...' }} &bull; {{ weekRangeLabel }}</p>
+          </div>
+          <button
+            v-if="previewMode"
+            class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            @click="loadDraft">Exit Preview</button>
         </div>
-        <button
-          v-if="previewMode"
-          class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          @click="loadDraft">Exit Preview</button>
+
+        <!-- AI Suggestion Review Toolbar -->
+        <div v-if="previewMode && hasSuggestions" class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <BrainCircuit class="w-3.5 h-3.5 text-violet-600 shrink-0" />
+            <span class="text-xs font-semibold text-violet-700">
+              {{ aiSuggestionSummary?.total ?? 0 }} suggestion(s) · {{ aiSuggestionSource === 'ai' ? (aiStore.providerLabel || 'AI') : 'Rule-based fallback' }}
+            </span>
+            <span class="text-xs text-gray-400 shrink-0">|</span>
+            <span class="text-xs text-gray-500">{{ pendingCount }} pending</span>
+            <span v-if="approvedCount" class="text-xs text-green-600">&bull; {{ approvedCount }} approved</span>
+            <span v-if="rejectedCount" class="text-xs text-red-500">&bull; {{ rejectedCount }} rejected</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              :disabled="pendingCount === 0 && rejectedCount === 0"
+              class="px-3 py-1.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              @click="approveAllSuggestions">Approve All</button>
+            <button
+              :disabled="pendingCount === 0 && approvedCount === 0"
+              class="px-3 py-1.5 text-xs font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              @click="rejectAllSuggestions">Reject All</button>
+          </div>
+        </div>
+        <div v-if="previewMode && aiSuggestionWarnings.length" class="mt-2 text-xs text-amber-600">
+          &#9888; {{ aiSuggestionWarnings.join(' ') }}
+        </div>
       </div>
 
       <div class="px-6 py-4 overflow-x-auto">
@@ -167,19 +196,40 @@
                   <p class="text-xs text-gray-400">{{ staff.role }}<span v-if="staff.area"> &bull; {{ staff.area }}</span></p>
                 </td>
                 <td v-for="day in days" :key="day.label" class="px-3 py-2.5 align-top">
-                  <div class="relative">
+                  <div class="relative" :class="aiCellRingClass(staff.id, day.date)">
                     <select
                       v-model="staff.shifts[day.date].value"
                       :disabled="isLocked(staff.shifts[day.date])"
                       :class="['w-full appearance-none px-3 py-1.5 pr-7 text-xs font-semibold rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-200', isLocked(staff.shifts[day.date]) ? 'cursor-not-allowed opacity-75' : 'cursor-pointer', shiftClass(staff.shifts[day.date].value, staff.shifts[day.date])]"
+                      @change="onCellChange(staff.id, day.date)"
                     >
                       <option v-for="opt in shiftTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                     </select>
                     <ChevronDown class="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" :class="chevronClass(staff.shifts[day.date].value, staff.shifts[day.date])" />
                   </div>
                   <p v-if="isLocked(staff.shifts[day.date])" class="text-xs text-gray-400 mt-1">Published &bull; locked</p>
-                  <p v-else-if="staff.shifts[day.date].draft" class="text-xs text-amber-600 mt-1">Draft &bull; not published</p>
-                  <p v-else-if="staff.shifts[day.date].value === 'OFF'" class="text-xs text-gray-400 mt-1">No shift assigned</p>
+                  <p v-else-if="staff.shifts[day.date].draft && !getSuggestion(staff.id, day.date)" class="text-xs text-amber-600 mt-1">Draft &bull; not published</p>
+                  <p v-else-if="staff.shifts[day.date].value === 'OFF' && !getSuggestion(staff.id, day.date)" class="text-xs text-gray-400 mt-1">No shift assigned</p>
+                  <!-- AI suggestion review controls -->
+                  <template v-if="previewMode && getSuggestion(staff.id, day.date)">
+                    <div v-if="getSuggestion(staff.id, day.date).state === 'pending'" class="mt-1">
+                      <p class="text-xs text-violet-600 truncate cursor-default mb-1" :title="getSuggestion(staff.id, day.date).reason">
+                        {{ getSuggestion(staff.id, day.date).preferenceMatch ? '&#9733; Pref match' : '&#10022; AI suggest' }}
+                      </p>
+                      <div class="flex items-center gap-1">
+                        <button @click="approveSuggestion(staff.id, day.date)" class="flex-1 px-1.5 py-0.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors" title="Accept suggestion">&#10003; Accept</button>
+                        <button @click="rejectSuggestion(staff.id, day.date)" class="flex-1 px-1.5 py-0.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors" title="Reject suggestion">&#10005; Reject</button>
+                      </div>
+                    </div>
+                    <div v-else-if="getSuggestion(staff.id, day.date).state === 'approved'" class="mt-1 flex items-center gap-1">
+                      <span class="text-xs text-green-600 flex-1">&#10003; Accepted</span>
+                      <button @click="rejectSuggestion(staff.id, day.date)" class="px-1.5 py-0.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors" title="Undo accept">&#8617;</button>
+                    </div>
+                    <div v-else-if="getSuggestion(staff.id, day.date).state === 'rejected'" class="mt-1 flex items-center gap-1">
+                      <span class="text-xs text-red-400 flex-1">&#10005; Rejected</span>
+                      <button @click="approveSuggestion(staff.id, day.date)" class="px-1.5 py-0.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded hover:bg-gray-100 transition-colors" title="Undo reject">&#8617;</button>
+                    </div>
+                  </template>
                 </td>
               </tr>
             </tbody>
@@ -616,8 +666,9 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown, BrainCircuit } from 'lucide-vue-next'
 import { callMethod } from '@/lib/api'
+import { useAIStore } from '@/stores/ai'
 
 // ---------------------------------------------------------------------------
 // API contract (rhohotel.rhocom_hotel.api.weekly_shift_generator):
@@ -669,6 +720,14 @@ const shiftTypeOptions = ref([
 
 const loading = ref(false)
 const aiRunning = ref(false)
+// ── AI Suggestion state ─────────────────────────────────────────────────────
+// Each entry keyed by `empId||date` tracks review state for one suggested cell.
+const suggestionMap = ref({})          // key → {state, originalValue, suggestedValue, reason, confidence, preferenceMatch, previousNote}
+const preSuggestionSnapshot = ref({})  // empId → {date → value}, snapshot captured before AI runs
+const aiSuggestionSource = ref('')     // 'ai' | 'fallback'
+const aiSuggestionWarnings = ref([])
+const aiSuggestionSummary = ref(null)
+const aiStore = useAIStore()
 const error = ref('')
 const message = ref('')
 const messageType = ref('success')
@@ -784,6 +843,11 @@ async function loadRoster() {
   error.value = ''
   message.value = ''
   previewMode.value = false
+  suggestionMap.value = {}
+  preSuggestionSnapshot.value = {}
+  aiSuggestionSource.value = ''
+  aiSuggestionWarnings.value = []
+  aiSuggestionSummary.value = null
   buildDays()
   try {
     const result = await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.get_weekly_roster', {
@@ -806,6 +870,11 @@ async function loadDraft() {
   error.value = ''
   message.value = ''
   previewMode.value = false
+  suggestionMap.value = {}
+  preSuggestionSnapshot.value = {}
+  aiSuggestionSource.value = ''
+  aiSuggestionWarnings.value = []
+  aiSuggestionSummary.value = null
   buildDays()
   try {
     const result = await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.get_weekly_draft', {
@@ -869,10 +938,16 @@ function buildChangedAssignments() {
     const changedDays = {}
 
     Object.keys(currentDayMap).forEach((date) => {
-      const currentValue = currentDayMap[date]
+      const sKey = suggestionKey(staffId, date)
+      const suggestion = suggestionMap.value[sKey]
+      // Pending suggestions haven't been approved yet — exclude them from saves
+      // by treating them as if the cell still holds its pre-suggestion value.
+      const effectiveValue = (previewMode.value && suggestion?.state === 'pending')
+        ? (preSuggestionSnapshot.value[staffId]?.[date] ?? 'OFF')
+        : currentDayMap[date]
       const baselineValue = baselineDayMap[date] !== undefined ? baselineDayMap[date] : 'OFF'
-      if (currentValue !== baselineValue) {
-        changedDays[date] = currentValue
+      if (effectiveValue !== baselineValue) {
+        changedDays[date] = effectiveValue
       }
     })
 
@@ -897,6 +972,8 @@ function buildPublishAssignments() {
     days.value.forEach((day) => {
       const cell = staff.shifts[day.date]
       if (!cell?.draft) return
+      // Don't include pending AI suggestions in publish — user hasn't approved them yet
+      if (previewMode.value && suggestionMap.value[suggestionKey(staff.id, day.date)]?.state === 'pending') return
 
       if (!merged[staff.id]) merged[staff.id] = {}
       if (merged[staff.id][day.date] === undefined) {
@@ -908,7 +985,17 @@ function buildPublishAssignments() {
   return merged
 }
 
-const isDraftDirty = computed(() => JSON.stringify(buildDraftAssignments()) !== draftSnapshot.value)
+const pendingCount = computed(() => Object.values(suggestionMap.value).filter((s) => s.state === 'pending').length)
+const approvedCount = computed(() => Object.values(suggestionMap.value).filter((s) => s.state === 'approved').length)
+const rejectedCount = computed(() => Object.values(suggestionMap.value).filter((s) => s.state === 'rejected').length)
+const hasSuggestions = computed(() => Object.keys(suggestionMap.value).length > 0)
+
+const isDraftDirty = computed(() => {
+  if (previewMode.value && hasSuggestions.value) {
+    return approvedCount.value > 0
+  }
+  return JSON.stringify(buildDraftAssignments()) !== draftSnapshot.value
+})
 
 const saving = ref('')
 
@@ -1153,28 +1240,104 @@ const shiftLegend = computed(() => {
 })
 
 // ---------------------------------------------------------------------------
-// AI Auto Assign (preview)
+// AI Suggest Shifts (preview — read-only, no records are written here)
 // ---------------------------------------------------------------------------
 
+// ── Suggestion key helpers ──────────────────────────────────────────────────
+function suggestionKey(empId, date) {
+  return `${empId}||${date}`
+}
+
+function getSuggestion(empId, date) {
+  return suggestionMap.value[suggestionKey(empId, date)] ?? null
+}
+
+// ── Cell ring highlight based on suggestion state ───────────────────────────
+function aiCellRingClass(empId, date) {
+  if (!previewMode.value) return ''
+  const s = getSuggestion(empId, date)
+  if (!s) return ''
+  if (s.state === 'pending') return 'ring-2 ring-violet-300 ring-offset-1 rounded-lg'
+  if (s.state === 'approved') return 'ring-2 ring-green-300 ring-offset-1 rounded-lg'
+  return ''
+}
+
+// ── Per-cell accept / reject ────────────────────────────────────────────────
+function approveSuggestion(empId, date) {
+  const key = suggestionKey(empId, date)
+  const s = suggestionMap.value[key]
+  if (!s) return
+  // Re-approving a previously rejected cell restores the AI-suggested value
+  if (s.state === 'rejected') {
+    const staff = staffList.value.find((st) => st.id === empId)
+    if (staff?.shifts?.[date]) {
+      staff.shifts[date].value = s.suggestedValue
+      staff.shifts[date].aiSuggested = true
+    }
+  }
+  s.state = 'approved'
+}
+
+function rejectSuggestion(empId, date) {
+  const key = suggestionKey(empId, date)
+  const s = suggestionMap.value[key]
+  if (!s || s.state === 'rejected') return
+  // Revert cell to pre-suggestion value
+  const staff = staffList.value.find((st) => st.id === empId)
+  if (staff?.shifts?.[date]) {
+    staff.shifts[date].value = s.originalValue
+    staff.shifts[date].aiSuggested = false
+  }
+  s.state = 'rejected'
+}
+
+function approveAllSuggestions() {
+  for (const key of Object.keys(suggestionMap.value)) {
+    const idx = key.indexOf('||')
+    approveSuggestion(key.substring(0, idx), key.substring(idx + 2))
+  }
+}
+
+function rejectAllSuggestions() {
+  for (const key of Object.keys(suggestionMap.value)) {
+    const idx = key.indexOf('||')
+    rejectSuggestion(key.substring(0, idx), key.substring(idx + 2))
+  }
+}
+
+// Manually changing a pending cell counts as an implicit approval
+function onCellChange(empId, date) {
+  if (!previewMode.value) return
+  const s = suggestionMap.value[suggestionKey(empId, date)]
+  if (s?.state === 'pending') s.state = 'approved'
+}
+
+// ── Main AI suggestion call ─────────────────────────────────────────────────
 async function aiAutoAssign() {
   if (!department.value) return
   aiRunning.value = true
   message.value = ''
   try {
-    const result = await callMethod('rhohotel.rhocom_hotel.api.weekly_shift_generator.ai_auto_assign', {
-      department: department.value,
-      week_start: isoDate(weekStart.value),
-    })
+    // Snapshot current values so rejected suggestions can be cleanly reverted
+    preSuggestionSnapshot.value = JSON.parse(JSON.stringify(buildDraftAssignments()))
+
+    const result = await callMethod(
+      'rhohotel.rhocom_hotel.api.weekly_shift_generator.ai_auto_assign',
+      { department: department.value, week_start: isoDate(weekStart.value) },
+    )
+
     if (result?.staff) {
+      // Apply suggested cells to the draft editor view
       if (viewMode.value === 'draft') {
         staffList.value = result.staff.map((row) => {
           const shifts = {}
           for (const [date, cell] of Object.entries(row.shifts || {})) {
             shifts[date] = {
-              value: cell.status === 'Off' ? 'OFF' : cell.status === 'Leave' ? 'Leave' : cell.shift_type,
+              value: cell.value || 'OFF',
               status: cell.status,
-              time: cell.time,
-              draft: true,
+              time: cell.time || '',
+              draft: Boolean(cell.draft),
+              aiSuggested: Boolean(cell.aiSuggested),
             }
           }
           return { ...mapDraftRow(row), shifts }
@@ -1182,16 +1345,39 @@ async function aiAutoAssign() {
       } else {
         staffList.value = result.staff.map(mapRosterRow)
       }
+
+      // Build suggestion map — all entries start as 'pending' awaiting review
+      const newMap = {}
+      for (const s of result.suggestions || []) {
+        const key = suggestionKey(s.employee, s.date)
+        const originalValue = preSuggestionSnapshot.value[s.employee]?.[s.date] ?? 'OFF'
+        newMap[key] = {
+          state: 'pending',
+          originalValue,
+          suggestedValue: s.shift_type,
+          reason: s.reason || '',
+          confidence: s.confidence || 'medium',
+          preferenceMatch: Boolean(s.preference_match),
+          previousNote: s.previous_shift_note || '',
+          source: s.source || 'fallback',
+        }
+      }
+      suggestionMap.value = newMap
+
       serverStats.value = result.stats || serverStats.value
+      aiSuggestionSource.value = result.source || 'fallback'
+      aiSuggestionWarnings.value = result.warnings || []
+      aiSuggestionSummary.value = result.summary || null
       previewMode.value = true
     }
+
+    const total = result?.summary?.total ?? 0
+    const src = result?.source === 'ai' ? (aiStore.providerLabel || 'AI') : 'rule-based fallback'
     messageType.value = 'success'
-    message.value = viewMode.value === 'draft'
-      ? 'AI Auto Assign preview generated. Review below, then Save Draft or Publish.'
-      : 'AI Auto Assign preview generated. Switch to Draft / Edit to save or publish it.'
+    message.value = `${total} shift suggestion(s) generated by ${src}. Review below — approve or reject before saving.`
   } catch (err) {
     messageType.value = 'error'
-    message.value = err.message || 'AI Auto Assign failed.'
+    message.value = err.message || 'AI Suggest Shifts failed.'
   } finally {
     aiRunning.value = false
   }

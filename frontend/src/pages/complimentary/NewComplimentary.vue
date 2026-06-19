@@ -66,14 +66,14 @@
             <select v-model="form.complimentary_type" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
               <option>Food Voucher</option>
               <option>Room Voucher</option>
-              <option>Airport Transfer</option>
+              <!-- <option>Airport Transfer</option> -->
               <option>Room Upgrade</option>
-              <option>Amenity Basket</option>
+              <!-- <option>Amenity Basket</option> -->
               <option>Late Checkout</option>
               <option>Laundry</option>
-              <option>Transport / Food</option>
-              <option>Amenity / Late CO</option>
-              <option>Laundry / Amenity</option>
+              <!-- <option>Transport / Food</option> -->
+              <!-- <option>Amenity / Late CO</option> -->
+              <!-- <option>Laundry / Amenity</option> -->
             </select>
           </div>
           <div>

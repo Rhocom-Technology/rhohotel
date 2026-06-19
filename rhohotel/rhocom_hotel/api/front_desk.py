@@ -110,7 +110,7 @@ def _matches_room_view_filters(room, filters):
 		return False
 	if _as_bool(filters.get("only_overdue")) and not room.get("overdue"):
 		return False
-	if _as_bool(filters.get("vip_only")) and room.get("status") != "Reserved":
+	if _as_bool(filters.get("vip_only")) and room.get("loyalty_tier") not in ("VIP", "Gold", "Platinum"):
 		return False
 	if _as_bool(filters.get("dirty_only")) and room.get("housekeeping_status") != "Dirty":
 		return False
@@ -149,22 +149,35 @@ def get_room_view_data(filters=None):
 		limit_page_length=1000,
 	)
 
+	_checkin_fields = [
+		"name",
+		"room_number",
+		"guest",
+		"reservation_source",
+		"expected_check_out_datetime",
+		"total_outstanding_amount",
+	]
+
 	active_checkins = frappe.get_all(
 		"Hotel Room Check In",
 		filters={"status": "Checked In"},
-		fields=[
-			"name",
-			"room_number",
-			"guest",
-			"reservation_source",
-			"expected_check_out_datetime",
-			"total_outstanding_amount",
-		],
+		fields=_checkin_fields,
 		limit_page_length=1000,
 	)
 
+	# Fetch loyalty_tier from Hotel Guest for each active check-in
+	guest_ids = list({c.guest for c in active_checkins if c.guest})
+	loyalty_map = {}
+	if guest_ids:
+		g_rows = frappe.db.sql(
+			"SELECT name, loyalty_tier FROM `tabHotel Guest` WHERE name IN %(ids)s",
+			{"ids": guest_ids}, as_dict=True,
+		)
+		loyalty_map = {r.name: r.loyalty_tier or "" for r in g_rows}
+
 	checkin_map = {}
 	for checkin in active_checkins:
+		checkin["loyalty_tier"] = loyalty_map.get(checkin.get("guest"), "")
 		key = cstr(checkin.get("room_number")).strip()
 		if key:
 			checkin_map[key] = checkin
@@ -242,6 +255,7 @@ def get_room_view_data(filters=None):
 			"reservation_source": checkin.get("reservation_source"),
 			"expected_check_out_datetime": expected_checkout,
 			"total_outstanding_amount": flt(checkin.get("total_outstanding_amount")),
+			"loyalty_tier": checkin.get("loyalty_tier") or "",
 			"overdue": overdue,
 			"unpaid": unpaid,
 		}
@@ -258,7 +272,7 @@ def get_room_view_data(filters=None):
 		"maintenance": len([r for r in room_rows if r.get("status") == "Maintenance"]),
 		"overdue": len([r for r in room_rows if r.get("overdue")]),
 		"unpaid": len([r for r in room_rows if r.get("unpaid")]),
-		"vip": len([r for r in room_rows if r.get("status") == "Reserved"]),
+		"vip": len([r for r in room_rows if r.get("loyalty_tier") in ("VIP", "Gold", "Platinum")]),
 	}
 
 	filtered = [row for row in room_rows if _matches_room_view_filters(row, filters)]

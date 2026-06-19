@@ -187,6 +187,15 @@
 						</div>
 						<div class="flex flex-wrap gap-1 justify-end">
 							<span
+								v-if="room.loyalty_tier && room.loyalty_tier !== 'Base'"
+								:style="{
+									background: room.loyalty_tier === 'VIP' ? '#fdf4ff' : room.loyalty_tier === 'Platinum' ? '#f0f9ff' : room.loyalty_tier === 'Gold' ? '#fffbeb' : '#f5f3ff',
+									color: room.loyalty_tier === 'VIP' ? '#a21caf' : room.loyalty_tier === 'Platinum' ? '#0369a1' : room.loyalty_tier === 'Gold' ? '#b45309' : '#6d28d9',
+									fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px',
+								}"
+							>{{ room.loyalty_tier }}</span
+							>
+							<span
 								v-if="room.unpaid"
 								style="
 									background: #fee2e2;
@@ -426,7 +435,7 @@ const filteredRooms = computed(() => {
 	if (filterStatus.value) list = list.filter((r) => r.status === filterStatus.value);
 	if (filterHK.value) list = list.filter((r) => r.housekeeping_status === filterHK.value);
 	if (filterOverdue.value) list = list.filter((r) => r.overdue);
-	if (filterVIP.value) list = list.filter((r) => r.status === "Reserved");
+	if (filterVIP.value) list = list.filter((r) => ['VIP', 'Gold', 'Platinum'].includes(r.loyalty_tier))
 	if (filterDirty.value) list = list.filter((r) => r.housekeeping_status === "Dirty");
 	return list;
 });

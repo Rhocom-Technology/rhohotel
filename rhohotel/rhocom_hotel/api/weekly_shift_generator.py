@@ -1805,4 +1805,630 @@ def bulk_assign_shift(employees, company, shift_type, start_date, end_date=None,
 
 @frappe.whitelist()
 def ai_auto_assign(department=None, week_start=None):
-    frappe.throw("AI Auto Assign is not yet available.")
+    """
+    Suggestion-only endpoint for the weekly shift roster.
+
+    Reads current draft/live cells, submitted staff preferences, previous shift history,
+    and valid Shift Types, then returns shift suggestions for the manager to review.
+
+    THIS METHOD NEVER creates, edits, deletes, saves, publishes, submits, or cancels
+    any Shift Assignment, Staff Shift Preference, or any other record.  All writes
+    remain exclusively under the existing save_weekly_draft() / publish_weekly_draft()
+    endpoints, which are only triggered by explicit user action after review.
+
+    Returns:
+        {
+            "staff":       [...],   # Preview cells — same shape as get_weekly_draft
+            "suggestions": [...],   # Per-cell suggestion metadata
+            "stats":       {...},
+            "source":      "ai" | "fallback",
+            "warnings":    [...],
+            "summary":     {...},
+        }
+    """
+    if frappe.session.user == "Guest":
+        frappe.throw(_("Please log in to use AI Suggest Shifts."))
+
+    week_dates = _week_dates(week_start)
+    week_start_dt, week_end_dt = week_dates[0], week_dates[-1]
+    department = _normalize_department(department)
+    default_company = _get_default_company()
+
+    # ── 1. Active employees ────────────────────────────────────────────────────
+    employees = frappe.db.sql(
+        """
+        SELECT name AS employee, employee_name, designation, department, default_shift
+        FROM `tabEmployee`
+        WHERE status = 'Active'
+          AND (%(company)s = '' OR company = %(company)s)
+          AND (%(department)s = '' OR department LIKE %(department_like)s)
+        ORDER BY employee_name
+        """,
+        {
+            "company": default_company or "",
+            "department": department,
+            "department_like": f"%{department}%",
+        },
+        as_dict=1,
+    )
+
+    if not employees:
+        return {
+            "staff": [],
+            "suggestions": [],
+            "stats": {"coverage_level": 0, "conflict_alerts": 0, "total_slots": 0, "assigned_slots": 0},
+            "source": "fallback",
+            "warnings": ["No active employees found for this department and week."],
+            "summary": {"total": 0, "ai_applied": 0, "fallback_applied": 0, "locked_skipped": 0},
+        }
+
+    employee_names = [e.employee for e in employees]
+
+    # ── 2. Current draft / live cells (read-only) ─────────────────────────────
+    current_cells = _ai_get_current_cells(employee_names, week_dates, week_start_dt, week_end_dt)
+
+    # ── 3. Valid shift types ──────────────────────────────────────────────────
+    shift_type_rows = frappe.get_all(
+        "Shift Type", fields=["name", "start_time", "end_time"], order_by="name asc"
+    )
+    valid_shift_names = {r.name for r in shift_type_rows}
+
+    # ── 4. Submitted preferences for this week (read-only) ───────────────────
+    preferences = _ai_get_preferences(employee_names, week_start_dt)
+
+    # ── 5. Previous 4-week shift history (read-only) ─────────────────────────
+    prev_shifts = _ai_get_previous_shifts(employee_names, week_start_dt, lookback_weeks=4)
+
+    # ── 6. Deterministic fallback suggestions ────────────────────────────────
+    fallback_sug = _ai_fallback_suggestions(
+        employees, week_dates, current_cells, preferences, prev_shifts, valid_shift_names
+    )
+
+    # ── 7. Try AI provider if enabled ────────────────────────────────────────
+    suggestions = fallback_sug
+    source = "fallback"
+    warnings = []
+
+    try:
+        from rhohotel.rhocom_hotel.api import ai_engine as _engine
+        settings = _engine._get_settings()
+        if settings.get("enabled"):
+            ai_raw, ai_warns = _ai_call_provider(
+                employees, week_dates, current_cells, preferences, prev_shifts,
+                valid_shift_names, shift_type_rows, settings, _engine,
+            )
+            if ai_raw:
+                merged, merge_warns = _ai_merge(
+                    ai_raw, fallback_sug, current_cells, valid_shift_names,
+                    week_dates, employee_names,
+                )
+                warnings.extend(merge_warns)
+                suggestions = merged
+                source = "ai"
+            else:
+                # AI call failed or returned unusable output — log internally but
+                # don't surface noisy technical warnings in the UI; fallback is
+                # already populated and the user will get good suggestions.
+                for w in ai_warns:
+                    frappe.log_error(w, "AI Roster Suggest (silent)")
+    except Exception as exc:
+        frappe.log_error(f"AI roster suggestion: {exc}", "AI Roster Suggest")
+
+    # ── 8. Shape preview response ─────────────────────────────────────────────
+    suggestions_map = {(s["employee"], s["date"]): s for s in suggestions}
+    locked_skipped = 0
+    staff_out = []
+
+    for emp in employees:
+        shifts_out = {}
+        for day in week_dates:
+            date_str = cstr(day)
+            cell = current_cells.get(emp.employee, {}).get(date_str, {})
+
+            if _ai_is_locked(cell):
+                locked_skipped += 1
+                shifts_out[date_str] = {
+                    "value": cell.get("value", "OFF"),
+                    "status": cell.get("status", "Active"),
+                    "time": cell.get("time", ""),
+                    "draft": False,
+                    "aiSuggested": False,
+                }
+                continue
+
+            sug = suggestions_map.get((emp.employee, date_str))
+            if sug:
+                st = sug["shift_type"]
+                shifts_out[date_str] = {
+                    "value": st,
+                    "status": (
+                        "Inactive" if st == "Leave"
+                        else "Off" if st == "OFF"
+                        else "Active"
+                    ),
+                    "time": _ai_shift_time(st, shift_type_rows),
+                    "draft": True,
+                    "aiSuggested": True,
+                }
+            else:
+                shifts_out[date_str] = {
+                    "value": cell.get("value", "OFF"),
+                    "status": cell.get("status", "Off"),
+                    "time": cell.get("time", ""),
+                    "draft": cell.get("draft", False),
+                    "aiSuggested": False,
+                }
+
+        staff_out.append({
+            "employee": emp.employee,
+            "employee_name": emp.employee_name,
+            "designation": emp.designation or "",
+            "area": _short_department(emp.department),
+            "shifts": shifts_out,
+        })
+
+    stats_staff = [
+        {
+            "shifts": {
+                d: {"shift_type": c["value"], "status": c["status"]}
+                for d, c in row["shifts"].items()
+            }
+        }
+        for row in staff_out
+    ]
+    coverage_level, conflict_alerts = _compute_coverage_stats(stats_staff, week_dates)
+    total_slots = len(staff_out) * 7
+    assigned_slots = sum(
+        1 for r in staff_out for c in r["shifts"].values() if c["status"] == "Active"
+    )
+    ai_applied = sum(1 for s in suggestions if s.get("source") == "ai")
+
+    return {
+        "staff": staff_out,
+        "suggestions": suggestions,
+        "stats": {
+            "coverage_level": coverage_level,
+            "conflict_alerts": conflict_alerts,
+            "total_slots": total_slots,
+            "assigned_slots": assigned_slots,
+        },
+        "source": source,
+        "warnings": warnings,
+        "summary": {
+            "total": len(suggestions),
+            "ai_applied": ai_applied,
+            "fallback_applied": len(suggestions) - ai_applied,
+            "locked_skipped": locked_skipped,
+        },
+    }
+
+
+# ── AI Roster Helpers ─────────────────────────────────────────────────────────
+# All helpers below are read-only.  None of them create, edit, delete, save,
+# publish, submit, or cancel any record.
+
+def _ai_get_current_cells(employee_names, week_dates, week_start_dt, week_end_dt):
+    """Read current draft + published shift cells for the week (read-only)."""
+    result = {}
+    if not employee_names:
+        return result
+
+    rows = frappe.db.sql(
+        """
+        SELECT sa.employee, sa.shift_type, sa.start_date, sa.end_date,
+               sa.status, sa.docstatus, st.start_time, st.end_time
+        FROM `tabShift Assignment` sa
+        LEFT JOIN `tabShift Type` st ON st.name = sa.shift_type
+        WHERE sa.employee IN %(employees)s
+          AND sa.start_date <= %(end)s
+          AND (sa.end_date IS NULL OR sa.end_date >= %(start)s)
+          AND sa.docstatus < 2
+        ORDER BY sa.docstatus ASC
+        """,
+        {"employees": employee_names, "start": week_start_dt, "end": week_end_dt},
+        as_dict=1,
+    )
+
+    for row in rows:
+        row_start = row.start_date
+        row_end = row.end_date or row.start_date
+        if row_end < row_start:
+            row_end = row_start
+        for day in week_dates:
+            if row_start <= day <= row_end:
+                date_str = cstr(day)
+                existing = result.get(row.employee, {}).get(date_str)
+                if existing is None or row.docstatus == 0:
+                    result.setdefault(row.employee, {})[date_str] = {
+                        "value": row.shift_type or "OFF",
+                        "status": (
+                            "Leave" if row.status == "Inactive"
+                            else "Active" if row.shift_type
+                            else "Off"
+                        ),
+                        "time": _format_shift_time(row.start_time, row.end_time),
+                        "draft": row.docstatus == 0,
+                    }
+
+    return result
+
+
+def _ai_is_locked(cell):
+    """Mirror the frontend isLocked: published (not draft) with a real shift value."""
+    return bool(
+        cell
+        and not cell.get("draft", True)
+        and cell.get("value", "OFF") != "OFF"
+    )
+
+
+def _ai_get_preferences(employee_names, week_start_dt):
+    """Read submitted Staff Shift Preference detail rows for the week (read-only)."""
+    result = {}
+    if not employee_names:
+        return result
+
+    pref_rows = frappe.db.sql(
+        """
+        SELECT pref.employee, pref.name AS pref_name
+        FROM `tabStaff Shift Preference` pref
+        WHERE pref.employee IN %(employees)s
+          AND pref.week_start = %(week_start)s
+          AND pref.status = 'Submitted'
+        """,
+        {"employees": employee_names, "week_start": week_start_dt},
+        as_dict=1,
+    )
+
+    if not pref_rows:
+        return result
+
+    pref_map = {r.pref_name: r.employee for r in pref_rows}
+    pref_names = list(pref_map.keys())
+
+    details = frappe.db.sql(
+        """
+        SELECT parent, date, preferred_shift, alternative_shift, availability, note
+        FROM `tabStaff Shift Preference Detail`
+        WHERE parent IN %(parents)s
+        ORDER BY date ASC
+        """,
+        {"parents": pref_names},
+        as_dict=1,
+    )
+
+    for row in details:
+        emp = pref_map.get(row.parent)
+        if not emp:
+            continue
+        result.setdefault(emp, {})[cstr(row.date)] = {
+            "preferred_shift": row.preferred_shift or "",
+            "alternative_shift": row.alternative_shift or "",
+            "availability": row.availability or "Available",
+            "note": row.note or "",
+        }
+
+    return result
+
+
+def _ai_get_previous_shifts(employee_names, week_start_dt, lookback_weeks=4):
+    """Get published Active shifts in the N weeks before week_start (read-only)."""
+    result = {}
+    if not employee_names:
+        return result
+
+    history_end = add_days(week_start_dt, -1)
+    history_start = add_days(week_start_dt, -(lookback_weeks * 7))
+
+    rows = frappe.db.sql(
+        """
+        SELECT sa.employee, sa.shift_type, sa.start_date, sa.end_date
+        FROM `tabShift Assignment` sa
+        WHERE sa.employee IN %(employees)s
+          AND sa.docstatus = 1
+          AND sa.status = 'Active'
+          AND sa.start_date <= %(end)s
+          AND (sa.end_date IS NULL OR sa.end_date >= %(start)s)
+        """,
+        {"employees": employee_names, "start": history_start, "end": history_end},
+        as_dict=1,
+    )
+
+    hs = getdate(history_start)
+    he = getdate(history_end)
+
+    for row in rows:
+        rs = max(getdate(row.start_date), hs)
+        re = min(getdate(row.end_date or row.start_date), he)
+        if re < rs:
+            continue
+        day = rs
+        while day <= re:
+            result.setdefault(row.employee, []).append({
+                "shift_type": row.shift_type,
+                "day_of_week": day.weekday(),
+            })
+            day = add_days(day, 1)
+
+    return result
+
+
+def _ai_fallback_suggestions(employees, week_dates, current_cells, preferences, prev_shifts, valid_shift_names):
+    """Rule-based shift suggestions used when AI is disabled or unavailable."""
+    from collections import Counter as _Counter
+
+    DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    suggestions = []
+
+    for emp in employees:
+        for day in week_dates:
+            date_str = cstr(day)
+            cell = current_cells.get(emp.employee, {}).get(date_str, {})
+            if _ai_is_locked(cell):
+                continue
+
+            pref = preferences.get(emp.employee, {}).get(date_str, {})
+            dow = day.weekday()
+            day_name = DAY_NAMES[dow]
+            base = {
+                "employee": emp.employee,
+                "date": date_str,
+                "previous_shift_note": "",
+                "source": "fallback",
+            }
+
+            # Rule 1: Unavailable → OFF
+            if pref.get("availability") == "Unavailable":
+                suggestions.append({
+                    **base,
+                    "shift_type": "OFF",
+                    "confidence": "high",
+                    "reason": f"Staff marked unavailable on {day_name}.",
+                    "preference_match": True,
+                })
+                continue
+
+            # Rule 2: Preferred shift (valid)
+            pref_shift = pref.get("preferred_shift", "")
+            if pref_shift and pref_shift in valid_shift_names:
+                suggestions.append({
+                    **base,
+                    "shift_type": pref_shift,
+                    "confidence": "high",
+                    "reason": f"Matches {day_name} preference.",
+                    "preference_match": True,
+                })
+                continue
+
+            # Rule 3: Alternative shift (valid)
+            alt_shift = pref.get("alternative_shift", "")
+            if alt_shift and alt_shift in valid_shift_names and alt_shift != pref_shift:
+                suggestions.append({
+                    **base,
+                    "shift_type": alt_shift,
+                    "confidence": "medium",
+                    "reason": f"Matches {day_name} alternative preference.",
+                    "preference_match": True,
+                })
+                continue
+
+            # Rule 4: Historical day-of-week pattern
+            prev = prev_shifts.get(emp.employee, [])
+            same_dow = [
+                p["shift_type"] for p in prev
+                if p.get("day_of_week") == dow and p.get("shift_type") in valid_shift_names
+            ]
+            if same_dow:
+                top, cnt = _Counter(same_dow).most_common(1)[0]
+                total = len(same_dow)
+                conf = "high" if cnt / total >= 0.7 else "medium"
+                note = f"{top} on {cnt}/{total} recent {day_name}s"
+                suggestions.append({
+                    **base,
+                    "shift_type": top,
+                    "confidence": conf,
+                    "reason": f"Historical pattern: {note}.",
+                    "preference_match": False,
+                    "previous_shift_note": note,
+                })
+                continue
+
+            # Rule 5: Employee default shift
+            default = cstr(emp.get("default_shift") or "")
+            if default and default in valid_shift_names:
+                suggestions.append({
+                    **base,
+                    "shift_type": default,
+                    "confidence": "low",
+                    "reason": "Employee's configured default shift.",
+                    "preference_match": False,
+                })
+                continue
+
+            # Rule 6: Retain existing draft value
+            curr_val = cell.get("value", "OFF")
+            if curr_val != "OFF" and curr_val in valid_shift_names:
+                suggestions.append({
+                    **base,
+                    "shift_type": curr_val,
+                    "confidence": "low",
+                    "reason": "Retaining existing draft assignment.",
+                    "preference_match": False,
+                })
+                continue
+
+            # Rule 7 (catch-all): no data available — pick the first valid shift type
+            # alphabetically so that fully unallocated weeks always get suggestions.
+            ordered = sorted(s for s in valid_shift_names if s not in ("OFF", "Leave"))
+            if ordered:
+                suggestions.append({
+                    **base,
+                    "shift_type": ordered[0],
+                    "confidence": "low",
+                    "reason": "No preference, history, or default shift found; first available shift suggested.",
+                    "preference_match": False,
+                })
+            # If there are genuinely no shift types configured we emit nothing
+            # for this cell (manager should set up Shift Types first).
+
+    return suggestions
+
+
+def _ai_call_provider(
+    employees, week_dates, current_cells, preferences, prev_shifts,
+    valid_shift_names, shift_type_rows, settings, _engine,
+):
+    """Call the configured AI provider with a structured scheduling prompt (read-only)."""
+    from collections import Counter as _Counter
+
+    DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    warnings = []
+
+    week_list = [cstr(d) for d in week_dates]
+    valid_list = sorted(s for s in valid_shift_names if s not in ("Leave",)) + ["OFF"]
+
+    # ── Build compact employee table: id | name | default_shift ──────────────
+    emp_lines = []
+    for e in employees:
+        emp_lines.append(f"{e.employee}|{e.employee_name}|{cstr(e.get('default_shift') or 'OFF')}")
+
+    # ── Build compact unavailability / preference lines ───────────────────────
+    pref_lines = []
+    for emp in employees:
+        for date_str, p in preferences.get(emp.employee, {}).items():
+            avail = p.get("availability", "Available")
+            pref = p.get("preferred_shift", "")
+            alt = p.get("alternative_shift", "")
+            if avail == "Unavailable":
+                pref_lines.append(f"{emp.employee},{date_str},UNAVAILABLE")
+            elif pref:
+                pref_lines.append(f"{emp.employee},{date_str},prefer={pref}" + (f",alt={alt}" if alt else ""))
+
+    # ── Build compact historical pattern lines ────────────────────────────────
+    pattern_lines = []
+    for emp in employees:
+        prev = prev_shifts.get(emp.employee, [])
+        if not prev:
+            continue
+        by_dow = {}
+        for entry in prev:
+            st = entry.get("shift_type", "")
+            if st in valid_shift_names:
+                by_dow.setdefault(entry.get("day_of_week", 0), []).append(st)
+        for dow, shifts in sorted(by_dow.items()):
+            top = _Counter(shifts).most_common(1)[0][0]
+            pattern_lines.append(f"{emp.employee},{DAY_NAMES[dow]},{top}")
+
+    # ── Estimate required output tokens and override max_tokens ──────────────
+    # Each output object: ~{"employee":"HR-EMP-00001","date":"2026-06-22","shift_type":"Day Shift","confidence":"low","reason":"x","preference_match":false}
+    # ≈ 120 chars ≈ 30 tokens.  Add 20% buffer.
+    required_tokens = int(len(employees) * 7 * 35 * 1.2) + 200
+    effective_settings = dict(settings)
+    effective_settings["max_tokens"] = max(settings.get("max_tokens", 600), required_tokens, 2048)
+
+    prompt = (
+        "You are a hotel shift scheduling assistant.\n"
+        "Return ONLY a valid JSON array — no prose, no markdown fences, nothing else.\n\n"
+        "RULES (in priority order):\n"
+        "1. UNAVAILABLE employee on a date → shift_type MUST be \"OFF\".\n"
+        "2. Use prefer= shift when listed, else alt= shift.\n"
+        "3. Use historical day pattern when available.\n"
+        "4. Use employee default_shift, else first from valid_shifts.\n"
+        "5. Cover all employees for all dates. Aim for fair distribution.\n\n"
+        f"Week dates (YYYY-MM-DD): {', '.join(week_list)}\n"
+        f"Valid shifts: {', '.join(valid_list)}\n\n"
+        "Employees (id|name|default_shift):\n"
+        + "\n".join(emp_lines) + "\n\n"
+        + ("Preferences/unavailability (employee,date,info):\n" + "\n".join(pref_lines) + "\n\n" if pref_lines else "")
+        + ("Historical patterns (employee,day,usual_shift):\n" + "\n".join(pattern_lines) + "\n\n" if pattern_lines else "")
+        + "Each JSON object must have exactly these keys: "
+        '"employee" (id), "date" (YYYY-MM-DD), "shift_type", "confidence" (high/medium/low), '
+        '"reason" (≤10 words), "preference_match" (true/false).\n'
+        "Output the JSON array now:"
+    )
+
+    try:
+        if not _engine._is_safe(prompt):
+            return [], ["AI scheduling prompt was blocked by safety filter."]
+
+        messages = [{"role": "user", "content": prompt}]
+        raw = _engine._call_simple(messages, effective_settings)
+        if not raw:
+            return [], ["AI returned an empty response."]
+
+        s = raw.find("[")
+        e_idx = raw.rfind("]")
+        if s == -1 or e_idx == -1:
+            # Log enough of the response to diagnose the problem
+            frappe.log_error(
+                f"AI roster: no JSON array in response (first 400 chars): {raw[:400]}",
+                "AI Roster Suggest",
+            )
+            return [], [f"AI response did not contain a JSON array (got: {raw[:80]!r})."]
+
+        parsed = json.loads(raw[s:e_idx + 1])
+        if not isinstance(parsed, list):
+            return [], ["AI response is not a JSON array."]
+
+        for item in parsed:
+            item["source"] = "ai"
+
+        return parsed, warnings
+
+    except json.JSONDecodeError as exc:
+        frappe.log_error(
+            f"AI roster JSON parse error: {exc}\nRaw (first 400): {raw[:400] if 'raw' in dir() else 'N/A'}",
+            "AI Roster Suggest",
+        )
+        return [], [f"AI JSON parse error: {cstr(exc)[:80]}"]
+    except Exception as exc:
+        frappe.log_error(f"AI roster provider call: {exc}", "AI Roster Suggest")
+        return [], [f"AI call failed: {cstr(exc)[:80]}"]
+
+
+def _ai_merge(ai_raw, fallback_sug, current_cells, valid_shift_names, week_dates, employee_names):
+    """Validate AI suggestions and fill gaps with deterministic fallback."""
+    warnings = []
+    valid_dates = {cstr(d) for d in week_dates}
+    emp_set = set(employee_names)
+
+    ai_map = {}
+    invalid = 0
+
+    for s in ai_raw:
+        emp = s.get("employee", "")
+        date = s.get("date", "")
+        shift = s.get("shift_type", "")
+        if emp not in emp_set or date not in valid_dates:
+            invalid += 1
+            continue
+        if shift not in valid_shift_names and shift != "OFF":
+            invalid += 1
+            continue
+        if _ai_is_locked(current_cells.get(emp, {}).get(date, {})):
+            continue
+        ai_map[(emp, date)] = s
+
+    if invalid:
+        warnings.append(
+            f"AI returned {invalid} suggestion(s) with invalid employee/date/shift — "
+            "those cells were replaced by rule-based fallback."
+        )
+
+    covered = set(ai_map.keys())
+    merged = list(ai_map.values())
+    for s in fallback_sug:
+        if (s["employee"], s["date"]) not in covered:
+            merged.append(s)
+
+    return merged, warnings
+
+
+def _ai_shift_time(shift_type, shift_type_rows):
+    """Look up formatted start–end time label for a Shift Type."""
+    if not shift_type or shift_type == "OFF":
+        return ""
+    for row in shift_type_rows:
+        if row.name == shift_type:
+            return _format_shift_time(row.start_time, row.end_time)
+    return ""
