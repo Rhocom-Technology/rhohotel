@@ -1331,11 +1331,22 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None, charge_
     co.insert(ignore_permissions=True)
     co.submit()
 
+    # --- Smart lock key cancellation (non-blocking) ---
+    lock_cancellation = None
+    cancel_setting = frappe.db.get_single_value("Hotel Settings", "cancel_keys_on_checkout")
+    if cancel_setting:
+        try:
+            from rhohotel.integrations.locks.service import cancel_keys_for_check_in
+            lock_cancellation = cancel_keys_for_check_in(check_in_name, requested_by=frappe.session.user)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"lock cancellation at checkout failed: {check_in_name}")
+
     return {
         "name": co.name,
         "check_in": check_in_name,
         "status": "Checked Out",
         "late_checkout_invoice": late_checkout_invoice,
+        "lock_cancellation": lock_cancellation,
     }
 
 

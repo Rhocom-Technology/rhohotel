@@ -1,0 +1,209 @@
+{
+ "actions": [],
+ "autoname": "GKEY-.YYYY.-.#####",
+ "creation": "2026-06-18 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "check_in",
+  "canonical_reservation",
+  "guest",
+  "room",
+  "cb1",
+  "provider",
+  "external_key_id",
+  "card_uid",
+  "sb_validity",
+  "valid_from",
+  "valid_until",
+  "sb_status",
+  "status",
+  "issued_by",
+  "issued_at",
+  "last_updated_at",
+  "cancelled_at",
+  "cancelled_by",
+  "last_provider_status",
+  "provider_payload"
+ ],
+ "fields": [
+  {
+   "fieldname": "check_in",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Check In",
+   "options": "Hotel Room Check In"
+  },
+  {
+   "fieldname": "canonical_reservation",
+   "fieldtype": "Link",
+   "label": "Reservation",
+   "options": "Hotel Reservation"
+  },
+  {
+   "fieldname": "guest",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Guest",
+   "options": "Hotel Guest"
+  },
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Room",
+   "options": "Hotel Room"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Lock Provider",
+   "options": "Lock Provider"
+  },
+  {
+   "fieldname": "external_key_id",
+   "fieldtype": "Data",
+   "label": "External Key ID",
+   "description": "Key/card identifier in the provider system."
+  },
+  {
+   "fieldname": "card_uid",
+   "fieldtype": "Data",
+   "label": "Card UID",
+   "description": "Physical card UID if available, stored for reference only."
+  },
+  {
+   "fieldname": "sb_validity",
+   "fieldtype": "Section Break",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_until",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Valid Until"
+  },
+  {
+   "fieldname": "sb_status",
+   "fieldtype": "Section Break",
+   "label": "Status & Audit"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nActive\nCancelled\nExpired\nReissued"
+  },
+  {
+   "fieldname": "issued_by",
+   "fieldtype": "Data",
+   "label": "Issued By"
+  },
+  {
+   "fieldname": "issued_at",
+   "fieldtype": "Datetime",
+   "label": "Issued At"
+  },
+  {
+   "fieldname": "last_updated_at",
+   "fieldtype": "Datetime",
+   "label": "Last Updated At"
+  },
+  {
+   "fieldname": "cancelled_at",
+   "fieldtype": "Datetime",
+   "label": "Cancelled At"
+  },
+  {
+   "fieldname": "cancelled_by",
+   "fieldtype": "Data",
+   "label": "Cancelled By"
+  },
+  {
+   "fieldname": "last_provider_status",
+   "fieldtype": "Data",
+   "label": "Last Provider Status"
+  },
+  {
+   "fieldname": "provider_payload",
+   "fieldtype": "Code",
+   "label": "Provider Data (JSON)",
+   "options": "JSON",
+   "description": "Last known provider response for this key. Managed by the integration layer."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-06-18 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Guest Key",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Receptionist",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Front Desk Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 0,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "issued_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

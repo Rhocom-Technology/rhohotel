@@ -47,36 +47,46 @@
  {
   "docstatus": 0,
   "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-18 11:45:40.948442",
   "name": "Pending Store Approval",
-  "workflow_state_name": "Pending Store Approval",
-  "style": "Warning"
-},
-{
+  "style": "Warning",
+  "workflow_state_name": "Pending Store Approval"
+ },
+ {
   "docstatus": 0,
   "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-18 11:45:40.958457",
   "name": "Pending Witness Approval",
-  "workflow_state_name": "Pending Witness Approval",
-  "style": "Info"
-},
-{
+  "style": "Info",
+  "workflow_state_name": "Pending Witness Approval"
+ },
+ {
   "docstatus": 0,
   "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-18 11:45:40.968520",
   "name": "Pending Hotel Manager Approval",
-  "workflow_state_name": "Pending Hotel Manager Approval",
-  "style": "Info"
-},
-{
+  "style": "Info",
+  "workflow_state_name": "Pending Hotel Manager Approval"
+ },
+ {
   "docstatus": 0,
   "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-18 11:45:40.978503",
   "name": "Completed",
-  "workflow_state_name": "Completed",
-  "style": "Success"
-},
-{
+  "style": "Success",
+  "workflow_state_name": "Completed"
+ },
+ {
   "docstatus": 0,
   "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-18 11:45:40.988467",
   "name": "In Progress",
-  "workflow_state_name": "In Progress",
-  "style": "Warning"
-}
+  "style": "Warning",
+  "workflow_state_name": "In Progress"
+ }
 ]

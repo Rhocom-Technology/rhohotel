@@ -479,6 +479,9 @@
       :paymentType="selectedPayment.payment_type"
       @close="showPaymentDetail = false; selectedPayment = null" />
 
+    <!-- Smart Lock / Key Card Panel -->
+    <LockKeyPanel v-if="checkIn.status === 'Checked In'" :checkIn="checkIn" />
+
     <div v-if="showLateCheckoutPrompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div class="w-full max-w-md bg-white rounded-xl border border-gray-200 shadow-xl">
         <div class="px-6 py-5 border-b border-gray-100">
@@ -524,6 +527,7 @@ import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import DiscountModal from '@/components/checkin/DiscountModal.vue'
 import InvoiceDetailModal from '@/components/checkin/InvoiceDetailModal.vue'
 import PaymentDetailModal from '@/components/checkin/PaymentDetailModal.vue'
+import LockKeyPanel from '@/components/checkin/LockKeyPanel.vue'
 import { callMethodForm } from '@/lib/api'
 
 const showRoomTransfer = ref(false)

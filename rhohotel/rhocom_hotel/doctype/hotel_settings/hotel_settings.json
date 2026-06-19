@@ -7,9 +7,12 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "sb_general",
   "default_customer",
+  "cb_general1",
   "default_taxes_and_charges",
   "default_invoice_naming_series",
+  "cb_general2",
   "default_check_in_time",
   "default_check_out_time",
   "reservation_features_section",
@@ -18,24 +21,25 @@
   "enable_late_checkout_charges",
   "late_checkout_grace_hours",
   "late_checkout_policies",
-  "sb_monnify_settings",
-  "monnify_api_key",
-  "monnify_secret_key",
-  "section_break_ypml",
-  "paystack_public_key",
-  "column_break_fkpz",
-  "paystack_secret_key",
   "consumable_warehouse_section",
   "consumable_warehouse",
   "sb_shift_login_restriction",
   "enable_shift_login_restriction",
   "shift_login_grace_minutes",
+  "sb_monnify_settings",
+  "monnify_api_key",
+  "monnify_secret_key",
+  "section_break_ypml",
+  "paystack_public_key",
+  "paystack_secret_key",
+  "column_break_fkpz",
   "reports_print_formats_section",
   "daily_occupancy_print_format",
   "guest_stay_history_print_format",
   "night_audit_print_format",
   "pos_sales_print_format",
   "housekeeping_productivity_print_format",
+  "cb_reports1",
   "corporate_billing_print_format",
   "corporate_account_statement_print_format",
   "asset_maintenance_print_format",
@@ -43,9 +47,23 @@
   "shift_print_format",
   "shift_preference_manager_print_format",
   "sb_iptv_settings",
-  "iptv_api_key"
+  "iptv_api_key",
+  "sb_lock_integration",
+  "enable_lock_integration",
+  "default_lock_provider",
+  "cb_lock1",
+  "cancel_keys_on_checkout",
+  "auto_issue_key_on_check_in",
+  "auto_update_keys_on_stay_adjustment",
+  "auto_handle_keys_on_room_transfer",
+  "lock_key_validity_buffer_minutes"
  ],
  "fields": [
+  {
+   "fieldname": "sb_general",
+   "fieldtype": "Section Break",
+   "label": "General"
+  },
   {
    "fieldname": "default_customer",
    "fieldtype": "Link",
@@ -53,6 +71,10 @@
    "label": "Default Customer",
    "options": "Customer",
    "reqd": 1
+  },
+  {
+   "fieldname": "cb_general1",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "default_taxes_and_charges",
@@ -64,6 +86,10 @@
    "fieldname": "default_invoice_naming_series",
    "fieldtype": "Data",
    "label": "Default Invoice Naming Series"
+  },
+  {
+   "fieldname": "cb_general2",
+   "fieldtype": "Column Break"
   },
   {
    "default": "13:00:00",
@@ -96,50 +122,17 @@
    "label": "Late Checkout"
   },
   {
-   "fieldname": "sb_monnify_settings",
-   "fieldtype": "Section Break",
-   "label": "Monnify Settings"
+   "default": "0",
+   "fieldname": "enable_late_checkout_charges",
+   "fieldtype": "Check",
+   "label": "Enable Late Check-out Charges"
   },
   {
-   "fieldname": "monnify_api_key",
-   "fieldtype": "Password",
-   "label": "Monnify API Key"
-  },
-  {
-   "fieldname": "monnify_secret_key",
-   "fieldtype": "Password",
-   "label": "Monnify Secret Key"
-  },
-  {
-   "description": "This Warehouse is where consumable like tissue, soaps etc for hotel will be removed from",
-   "fieldname": "consumable_warehouse_section",
-   "fieldtype": "Section Break",
-   "label": "Warehouse Section"
-  },
-  {
-   "fieldname": "consumable_warehouse",
-   "fieldtype": "Link",
-   "label": "Consumable Warehouse",
-   "options": "Warehouse"
-  },
-  {
-   "fieldname": "section_break_ypml",
-   "fieldtype": "Section Break",
-   "label": "Paystack Settings"
-  },
-  {
-   "fieldname": "paystack_public_key",
-   "fieldtype": "Data",
-   "label": "Paystack Public Key"
-  },
-  {
-   "fieldname": "column_break_fkpz",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "paystack_secret_key",
-   "fieldtype": "Password",
-   "label": "Paystack Secret Key"
+   "default": "0.25",
+   "depends_on": "enable_late_checkout_charges",
+   "fieldname": "late_checkout_grace_hours",
+   "fieldtype": "Float",
+   "label": "Late Check-out Grace Period (Hours)"
   },
   {
    "depends_on": "enable_late_checkout_charges",
@@ -150,17 +143,16 @@
    "options": "Late Checkout Policy"
   },
   {
-   "default": "0.25",
-   "depends_on": "enable_late_checkout_charges",
-   "fieldname": "late_checkout_grace_hours",
-   "fieldtype": "Float",
-   "label": "Late Check-out Grace Period (Hours)"
+   "description": "Warehouse from which hotel consumables (toiletries, linen, etc.) are drawn.",
+   "fieldname": "consumable_warehouse_section",
+   "fieldtype": "Section Break",
+   "label": "Inventory"
   },
   {
-   "default": "0",
-   "fieldname": "enable_late_checkout_charges",
-   "fieldtype": "Check",
-   "label": "Enable Late Check-out Charges"
+   "fieldname": "consumable_warehouse",
+   "fieldtype": "Link",
+   "label": "Consumable Warehouse",
+   "options": "Warehouse"
   },
   {
    "fieldname": "sb_shift_login_restriction",
@@ -183,74 +175,111 @@
    "label": "Login Grace Period (Minutes)"
   },
   {
+   "fieldname": "sb_monnify_settings",
+   "fieldtype": "Section Break",
+   "label": "Payment Gateways"
+  },
+  {
+   "fieldname": "monnify_api_key",
+   "fieldtype": "Password",
+   "label": "Monnify API Key"
+  },
+  {
+   "fieldname": "monnify_secret_key",
+   "fieldtype": "Password",
+   "label": "Monnify Secret Key"
+  },
+  {
+   "fieldname": "section_break_ypml",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "paystack_public_key",
+   "fieldtype": "Data",
+   "label": "Paystack Public Key"
+  },
+  {
+   "fieldname": "paystack_secret_key",
+   "fieldtype": "Password",
+   "label": "Paystack Secret Key"
+  },
+  {
+   "fieldname": "column_break_fkpz",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "reports_print_formats_section",
    "fieldtype": "Section Break",
-   "label": "Reports / Print Formats"
+   "label": "Reports & Print Formats"
   },
   {
    "fieldname": "daily_occupancy_print_format",
    "fieldtype": "Link",
-   "label": "Daily Occupancy Report Print Format",
+   "label": "Daily Occupancy Report",
    "options": "Print Format"
   },
   {
    "fieldname": "guest_stay_history_print_format",
    "fieldtype": "Link",
-   "label": "Guest Stay History Report Print Format",
+   "label": "Guest Stay History Report",
    "options": "Print Format"
   },
   {
    "fieldname": "night_audit_print_format",
    "fieldtype": "Link",
-   "label": "Night Audit Summary Print Format",
+   "label": "Night Audit Summary",
    "options": "Print Format"
   },
   {
    "fieldname": "pos_sales_print_format",
    "fieldtype": "Link",
-   "label": "POS Sales Performance Print Format",
+   "label": "POS Sales Performance",
    "options": "Print Format"
   },
   {
    "fieldname": "housekeeping_productivity_print_format",
    "fieldtype": "Link",
-   "label": "Housekeeping Productivity Report Print Format",
+   "label": "Housekeeping Productivity Report",
    "options": "Print Format"
+  },
+  {
+   "fieldname": "cb_reports1",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "corporate_billing_print_format",
    "fieldtype": "Link",
-   "label": "Corporate Billing Statement Print Format",
+   "label": "Corporate Billing Statement",
    "options": "Print Format"
   },
   {
    "fieldname": "corporate_account_statement_print_format",
    "fieldtype": "Link",
-   "label": "Corporate Account Statement Print Format",
+   "label": "Corporate Account Statement",
    "options": "Print Format"
   },
   {
    "fieldname": "asset_maintenance_print_format",
    "fieldtype": "Link",
-   "label": "Asset Maintenance Report Print Format",
+   "label": "Asset Maintenance Report",
    "options": "Print Format"
   },
   {
    "fieldname": "hall_booking_print_format",
    "fieldtype": "Link",
-   "label": "Hall Booking Print Format",
+   "label": "Hall Booking",
    "options": "Print Format"
   },
   {
    "fieldname": "shift_print_format",
    "fieldtype": "Link",
-   "label": "Shift List Print Format",
+   "label": "Shift List",
    "options": "Print Format"
   },
   {
    "fieldname": "shift_preference_manager_print_format",
    "fieldtype": "Link",
-   "label": "Staff Shift Preference Manager View Print Format",
+   "label": "Staff Shift Preference Manager View",
    "options": "Print Format"
   },
   {
@@ -263,11 +292,69 @@
    "fieldtype": "Password",
    "label": "IPTV API Key",
    "description": "Secret key used to authenticate IPTV system requests. Send as X-IPTV-API-Key header."
+  },
+  {
+   "fieldname": "sb_lock_integration",
+   "fieldtype": "Section Break",
+   "label": "Smart Lock Integration"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_lock_integration",
+   "fieldtype": "Check",
+   "label": "Enable Lock Integration",
+   "description": "Master switch for all lock operations. When disabled, lock API calls return a clear error and no provider requests are made."
+  },
+  {
+   "fieldname": "default_lock_provider",
+   "fieldtype": "Link",
+   "label": "Default Lock Provider",
+   "options": "Lock Provider",
+   "description": "Fallback provider when a room does not have a specific Room Lock Mapping. Can be overridden per room."
+  },
+  {
+   "fieldname": "cb_lock1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "cancel_keys_on_checkout",
+   "fieldtype": "Check",
+   "label": "Cancel Keys on Checkout",
+   "description": "Automatically cancel active guest keys when a checkout is finalized. Failures are logged but do not block checkout."
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_issue_key_on_check_in",
+   "fieldtype": "Check",
+   "label": "Auto-Issue Key on Check-In",
+   "description": "Attempt to issue a key automatically when a check-in is submitted. Failures are logged and do not block check-in."
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_update_keys_on_stay_adjustment",
+   "fieldtype": "Check",
+   "label": "Auto-Update Key Validity on Stay Adjustment",
+   "description": "Automatically update active key valid-until time when a stay is extended or reduced."
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_handle_keys_on_room_transfer",
+   "fieldtype": "Check",
+   "label": "Auto-Handle Keys on Room Transfer",
+   "description": "Automatically cancel old-room keys and issue new-room keys when a guest is transferred to another room."
+  },
+  {
+   "default": "0",
+   "fieldname": "lock_key_validity_buffer_minutes",
+   "fieldtype": "Int",
+   "label": "Key Validity Buffer (minutes)",
+   "description": "Extra minutes added to the checkout time when setting key validity. Gives staff time to retrieve cards after guest departure."
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-06-12 10:00:00.000000",
+ "modified": "2026-06-18 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rhocom Hotel",
  "name": "Hotel Settings",

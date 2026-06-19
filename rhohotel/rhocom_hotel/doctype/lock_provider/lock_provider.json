@@ -1,0 +1,140 @@
+{
+ "actions": [],
+ "autoname": "field:provider_code",
+ "creation": "2026-06-18 12:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "provider_code",
+  "provider_label",
+  "is_enabled",
+  "is_default",
+  "environment",
+  "cb1",
+  "provider_class_path",
+  "timeout_seconds",
+  "retry_count",
+  "sb_connection",
+  "connection_config",
+  "note"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Code",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Short identifier used in code, e.g. 'mock' or 'tt_hotel'. Cannot change after first save."
+  },
+  {
+   "fieldname": "provider_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Label",
+   "reqd": 1,
+   "description": "Human-readable name shown in UI, e.g. 'TT Hotel (TTLock)'."
+  },
+  {
+   "default": "1",
+   "fieldname": "is_enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default Provider",
+   "description": "Only one provider should be marked as default. Overrides the Hotel Settings default."
+  },
+  {
+   "fieldname": "environment",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Environment",
+   "options": "Development\nProduction"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "provider_class_path",
+   "fieldtype": "Data",
+   "label": "Provider Class Path",
+   "reqd": 1,
+   "description": "Python dotted path to the provider class, e.g. 'rhohotel.integrations.locks.mock_provider.MockLockProvider'."
+  },
+  {
+   "default": "30",
+   "fieldname": "timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Timeout (seconds)"
+  },
+  {
+   "default": "2",
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retry Count"
+  },
+  {
+   "fieldname": "sb_connection",
+   "fieldtype": "Section Break",
+   "label": "Connection Settings"
+  },
+  {
+   "fieldname": "connection_config",
+   "fieldtype": "Code",
+   "label": "Connection Config (JSON)",
+   "options": "JSON",
+   "description": "Non-credential JSON configuration for this provider. Store passwords in the provider-specific settings, not here."
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-06-18 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Lock Provider",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 0,
+   "role": "System Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 0,
+   "role": "Hotel Manager",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

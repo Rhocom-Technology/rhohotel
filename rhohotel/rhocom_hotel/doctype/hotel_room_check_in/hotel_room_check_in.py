@@ -136,6 +136,15 @@ class HotelRoomCheckIn(Document):
 
 		frappe.publish_realtime("rhohotel_front_desk_update")
 
+		# --- Smart lock: auto-issue key if enabled (non-blocking) ---
+		try:
+			auto_issue = frappe.db.get_single_value("Hotel Settings", "auto_issue_key_on_check_in")
+			if auto_issue:
+				from rhohotel.integrations.locks.service import issue_guest_key
+				issue_guest_key(self.name, requested_by=frappe.session.user)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"auto issue_key on check-in failed: {self.name}")
+
 	def on_cancel(self):
 		self.status = "Cancelled"
 		self.db_set("status", "Cancelled")
@@ -1095,12 +1104,25 @@ def adjust_stay(check_in_name, new_checkout, discount_type, new_discount=None, s
 
 		frappe.db.commit()
 
+		# --- Smart lock validity update (non-blocking) ---
+		lock_result = None
+		try:
+			from rhohotel.integrations.locks.service import handle_stay_adjustment
+			lock_result = handle_stay_adjustment(
+				doc.name,
+				new_checkout=str(new_dt),
+				requested_by=frappe.session.user,
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"lock handle_stay_adjustment failed: {doc.name}")
+
 		return {
 			"status": "success",
 			"adjustment_type": adjustment_type,
 			"adjustment_invoice": adjustment_invoice_name,
 			"new_checkout": new_dt,
 			"new_nights": new_nights,
+			"lock_update": lock_result,
 		}
 
 	except Exception as e:
@@ -1211,10 +1233,24 @@ def transfer_room(check_in_name, new_room_number, note=None):
 		frappe.db.commit()
 		frappe.publish_realtime("rhohotel_front_desk_update")
 
+		# --- Smart lock room transfer (non-blocking) ---
+		lock_result = None
+		try:
+			from rhohotel.integrations.locks.service import handle_room_transfer
+			lock_result = handle_room_transfer(
+				check_in_doc.name,
+				old_room=old_room_number,
+				new_room=new_room_number,
+				requested_by=frappe.session.user,
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"lock handle_room_transfer failed: {check_in_doc.name}")
+
 		return {
 			"success": True,
 			"message": _("Guest transferred successfully to Room {0}").format(new_room_number),
 			"rate_invoice": rate_invoice,
+			"lock_transfer": lock_result,
 		}
 	except Exception as e:
 		frappe.db.rollback()

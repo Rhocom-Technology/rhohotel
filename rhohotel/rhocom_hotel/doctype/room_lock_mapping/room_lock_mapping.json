@@ -1,0 +1,136 @@
+{
+ "actions": [],
+ "autoname": "RMAP-.YYYY.-.#####",
+ "creation": "2026-06-18 12:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "room",
+  "provider",
+  "is_enabled",
+  "cb1",
+  "external_lock_id",
+  "lock_alias",
+  "sb_sync",
+  "last_sync_status",
+  "last_sync_time",
+  "provider_payload"
+ ],
+ "fields": [
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Room",
+   "options": "Hotel Room",
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Lock Provider",
+   "options": "Lock Provider",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "external_lock_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "External Lock ID",
+   "reqd": 1,
+   "description": "Lock identifier in the provider system (e.g. TTLock lockId). Never inferred from room number."
+  },
+  {
+   "fieldname": "lock_alias",
+   "fieldtype": "Data",
+   "label": "Lock Alias",
+   "description": "Optional human-readable alias from the provider dashboard."
+  },
+  {
+   "fieldname": "sb_sync",
+   "fieldtype": "Section Break",
+   "label": "Sync Status"
+  },
+  {
+   "fieldname": "last_sync_status",
+   "fieldtype": "Select",
+   "label": "Last Sync Status",
+   "options": "Unknown\nConnected\nDisconnected\nError"
+  },
+  {
+   "fieldname": "last_sync_time",
+   "fieldtype": "Datetime",
+   "label": "Last Sync Time"
+  },
+  {
+   "fieldname": "provider_payload",
+   "fieldtype": "Code",
+   "label": "Provider Data (JSON)",
+   "options": "JSON",
+   "description": "Raw provider metadata for this lock. Managed by the integration layer — do not edit manually."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-06-18 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Room Lock Mapping",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "Hotel Manager",
+   "share": 0,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 0,
+   "role": "Front Desk Manager",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
