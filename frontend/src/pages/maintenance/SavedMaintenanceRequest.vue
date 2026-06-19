@@ -384,19 +384,7 @@
             </div>
           </div>
 
-          <!-- Mark Complete -->
-          <div v-if="req.approved === 'Approved' && req.status !== 'Completed' && !editMode"
-            class="bg-white rounded-xl border border-gray-200 p-5">
-            <button @click="markComplete" :disabled="completing"
-              class="w-full py-2.5 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center justify-center gap-1.5">
-              <svg v-if="completing" class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              {{ completing ? 'Completing...' : '✓ Mark Request as Completed' }}
-            </button>
-            <p class="text-xs text-gray-400 mt-1.5 text-center">Mark request as completed once the maintenance work is done.</p>
-          </div>
+          
 
           <div v-if="req.status === 'Completed'" class="bg-green-50 rounded-xl border border-green-200 p-4 text-center">
             <span class="text-xs text-green-600 font-semibold">✓ Request Completed</span>
@@ -597,7 +585,6 @@ const loading = ref(true)
 const loadError = ref(null)
 const approving = ref(false)
 const saving = ref(false)
-const completing = ref(false)
 const showApproveModal = ref(false)
 const editMode = ref(false)
 const req = ref(null)
@@ -647,7 +634,6 @@ const reqResource      = createResource({ url: 'rhohotel.rhocom_hotel.api.mainte
 const approveResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.approve_request', auto: false })
 const rejectResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.reject_request', auto: false })
 const updateResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.update_maintenance_request', auto: false })
-const completeResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.complete_maintenance_request', auto: false })
 const techResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_technicians_for_request', auto: false })
 const roomsResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_rooms_for_request', auto: false })
 const employeesResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_employees_for_request', auto: false })
@@ -666,17 +652,6 @@ async function loadRequest() {
   }
 }
 
-// ─── Mark complete ────────────────────────────────────────────────────────────
-async function markComplete() {
-  if (!confirm('Mark this request as Completed?')) return
-  completing.value = true
-  try {
-    const res = await completeResource.fetch({ request_name: requestId })
-    if (res?.success) { showToast('Request marked as Completed', 'success'); await loadRequest() }
-    else showToast('Failed: ' + (res?.error || 'Unknown'))
-  } catch (e) { showToast('Error: ' + (e?.message || String(e))) }
-  finally { completing.value = false }
-}
 
 // ─── Approve ──────────────────────────────────────────────────────────────────
 function openApproveModal() {

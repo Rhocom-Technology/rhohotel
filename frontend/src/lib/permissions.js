@@ -20,7 +20,7 @@ const ROLE_GROUPS = {
   housekeepingFull: ['Housekeeping Manager'],
 
   // Maintenance - list only (staff level)
-  maintenanceList: ['Technician', 'Maintenance Manager','Employee'],
+  maintenanceList: ['Technician', 'Maintenance Manager','Employee','Facility Manager'],
   // Maintenance - front desk access (request view only)
   maintenanceFrontDesk: ['Hotel Receptionist', 'Front Desk Manager', 'Technician', 'Maintenance Manager'],
   // Maintenance - full module (dashboard, requests, technicians)

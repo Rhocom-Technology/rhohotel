@@ -180,7 +180,7 @@
                   {{ loc.location_name || loc.name }}
                 </option>
               </select>
-              <p class="text-xs text-gray-400 mt-1">Locations are managed in ERPNext → Assets → Location</p>
+              <p class="text-xs text-gray-400 mt-1">Locations are managed in Assets → Location</p>
             </div>
 
             <!-- Other Location -->

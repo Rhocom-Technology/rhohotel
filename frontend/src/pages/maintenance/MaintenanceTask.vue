@@ -103,7 +103,7 @@
         <span class="text-yellow-500 text-base">⏳</span>
         <div>
           <p class="text-xs font-semibold text-yellow-800">Pending Approval — {{ task.workflow_state }}</p>
-          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited. Actions are taken in the Frappe desk by the approver.</p>
+          <p class="text-xs text-yellow-600 mt-0.5">This task is currently awaiting approval and cannot be edited</p>
         </div>
       </div>
 
@@ -166,6 +166,17 @@
                   <span v-if="task.asset_name" class="text-gray-400 ml-1.5 font-mono text-[10px]">{{ task.asset }}</span>
                 </div>
               </div>
+
+            <!-- Photos from the originating Maintenance Request -->
+            <div v-if="requestPhotos.length" class="mt-3">
+              <p class="text-xs text-gray-400 mb-1.5">Photos <span class="text-gray-300">(from request)</span></p>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                <a v-for="(img, idx) in requestPhotos" :key="idx"
+                  :href="img" target="_blank" rel="noopener">
+                  <img :src="img" class="w-full h-24 object-cover rounded-lg border border-gray-200 hover:opacity-90" />
+                </a>
+              </div>
+            </div>
           </div>
 
           <!-- Task Details -->
@@ -220,15 +231,19 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="mb-3">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Start Time</p>
-                <input v-model="form.start_time" :disabled="isReadOnly" type="datetime-local"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  :class="{'bg-gray-100': isReadOnly}" />
+                <input v-if="isEditable" v-model="form.start_time" type="datetime-local"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <div v-else class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ formatDate(form.start_time) }}
+                </div>
               </div>
               <div>
-                <p class="text-xs text-gray-500 mb-1.5">End Time</p>
-                <input v-model="form.end_time" :disabled="isReadOnly" type="datetime-local"
-                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  :class="{'bg-gray-100': isReadOnly}" />
+                <p class="text-xs text-gray-500 mb-1.5">End Time <span class="text-gray-300">(optional)</span></p>
+                <input v-if="isEditable" v-model="form.end_time" type="datetime-local"
+                  class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <div v-else class="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-700">
+                  {{ form.end_time ? formatDate(form.end_time) : 'N/A' }}
+                </div>
               </div>
             </div>
             <div class="mb-3">
@@ -296,7 +311,8 @@
                       </select>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="0.001"
+                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="1" step="1"
+                        @input="normalizeQty(part)"
                         class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
                         :class="{'bg-gray-100': isReadOnly}" />
                     </td>
@@ -306,7 +322,8 @@
                     <td class="py-2.5 pr-2">
                       <select v-model="part.warehouse" :disabled="isReadOnly"
                         class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}">
+                        :class="{'bg-gray-100': isReadOnly}"
+                        @change="onWarehouseSelect(part)">
                         <option value="">— select warehouse —</option>
                         <option v-for="w in warehouses" :key="w.name" :value="w.name">
                           {{ w.warehouse_name || w.name }}
@@ -384,7 +401,8 @@
                       </select>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="0.001"
+                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="1" step="1"
+                        @input="normalizeQty(part)"
                         class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
                         :class="{'bg-gray-100': isReadOnly}" />
                     </td>
@@ -394,7 +412,8 @@
                     <td class="py-2.5 pr-2">
                       <select v-model="part.warehouse" :disabled="isReadOnly"
                         class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}">
+                        :class="{'bg-gray-100': isReadOnly}"
+                        @change="onWarehouseSelect(part)">
                         <option value="">— select warehouse —</option>
                         <option v-for="w in warehouses" :key="w.name" :value="w.name">
                           {{ w.warehouse_name || w.name }}
@@ -556,12 +575,12 @@
     Send to Store
   </button>
 
-  <!-- In Progress -> Witness -->
+  <!-- In Progress -> Facility Manager -->
   <button
     v-if="task.workflow_state === 'In Progress' && partsUsed.length === 0"
-    @click="applyWorkflow('Send to Witness')"
+    @click="applyWorkflow('Send for approval')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700">
-    Send to Witness
+    Send for approval
   </button>
 
   <!-- Store Approval -->
@@ -580,20 +599,20 @@
     Verify Work
   </button>
 
-  <!-- Hotel Manager Approval -->
+  <!-- Facility Manager Approval -->
   <button
-    v-if="task.workflow_state === 'Pending Hotel Manager Approval'"
-    @click="applyWorkflow('Complete Task')"
+    v-if="task.workflow_state === 'Pending Facility Manager Approval'"
+    @click="applyWorkflow('Approve')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-green-700 rounded-xl hover:bg-green-800">
-    Complete Task
+    Approve
   </button>
 
   <!-- Reject -->
   <button
     v-if="[
       'Pending Store Approval',
-      'Pending Witness Approval',
-      'Pending Hotel Manager Approval'
+      'Pending Facility Manager Approval',
+      'Pending Witness Approval'
     ].includes(task.workflow_state)"
     @click="applyWorkflow('Reject')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700">
@@ -601,14 +620,14 @@
   </button>
 
   <p class="text-xs text-gray-400 text-center">
-    The workflow handles Store → Witness → Manager approval.
+    The workflow handles Store → Manager → Witness approval.
   </p>
 </div>
 
           <!-- Read-only notice -->
           <div v-if="isReadOnly && task.docstatus === 0" class="bg-yellow-50 rounded-xl border border-yellow-100 p-4">
             <p class="text-xs font-semibold text-yellow-800 mb-1">🔒 Awaiting Approval</p>
-            <p class="text-xs text-yellow-600">This task is in <strong>{{ task.workflow_state }}</strong> state. Editing is locked until the current approver takes action in the Frappe desk.</p>
+            <p class="text-xs text-yellow-600">This task is in <strong>{{ task.workflow_state }}</strong> state. Editing is locked until the current approver takes action</p>
           </div>
 
           <div v-if="task.docstatus === 1" class="bg-green-50 rounded-xl border border-green-100 p-4">
@@ -618,9 +637,24 @@
               <p v-if="task.asset" class="text-xs text-green-700">
                 Asset: <span class="font-medium">{{ task.asset_name || task.asset }}</span>
               </p>
+             
+            </div>
+          </div>
+
+          <div v-if="task.material_issue_stock_entry" class="bg-green-50 rounded-xl border border-green-100 p-4">
+            <p class="text-xs font-semibold text-green-800 mb-1">✓ Material Issue Created</p>
+            <p class="text-xs text-green-600">Created after Stock Manager approval and submitted successfully</p>
+            <div v-if="task.material_issue_stock_entry" class="mt-2 space-y-1">
               <p v-if="task.material_issue_stock_entry" class="text-xs text-green-700">
                 Issue: <span class="font-mono">{{ task.material_issue_stock_entry }}</span>
               </p>
+            </div>
+          </div>
+
+          <div v-if="task.material_return_stock_entry" class="bg-green-50 rounded-xl border border-green-100 p-4">
+            <p class="text-xs font-semibold text-green-800 mb-1">✓ Material Receipt Completed</p>
+            <p class="text-xs text-green-600">This stock entry has been submitted</p>
+            <div v-if=" task.material_return_stock_entry" class="mt-2 space-y-1">
               <p v-if="task.material_return_stock_entry" class="text-xs text-green-700">
                 Return: <span class="font-mono">{{ task.material_return_stock_entry }}</span>
               </p>
@@ -690,12 +724,19 @@ const isEditable = computed(() =>
 )
 const isReadOnly = computed(() => !isEditable.value)
 
+// Photos uploaded on the originating Maintenance Request -- read-only here,
+// shown so the technician can see what was reported without navigating away.
+const requestPhotos = computed(() => {
+  if (!task.value) return []
+  return [task.value.request_image_1, task.value.request_image_2, task.value.request_image_3].filter(Boolean)
+})
+
 const workflowSteps = [
   { state: 'Draft',                        label: 'Draft',                      role: 'Technician' },
   { state: 'In Progress',                  label: 'In Progress',                role: 'Technician' },
-  { state: 'Pending Store Approval',       label: 'Pending Store Approval',     role: 'Stock Manager' },
-  { state: 'Pending Witness Approval',     label: 'Pending Witness Approval',   role: 'Supervisor / Witness' },
-  { state: 'Pending Hotel Manager Approval', label: 'Hotel Manager Approval',   role: 'Hotel Manager' },
+  { state: 'Pending Store Approval',           label: 'Pending Store Approval',         role: 'Stock Manager' },
+  { state: 'Pending Facility Manager Approval', label: 'Facility Manager Approval',       role: 'Facilities Manager' },
+  { state: 'Pending Witness Approval',          label: 'Pending Witness Approval',        role: 'Supervisor / Witness' },
   { state: 'Completed',                    label: 'Completed',                  role: 'System' },
 ]
 
@@ -714,6 +755,7 @@ const taskResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenan
 const saveResource  = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.save_maintenance_task', auto: false })
 const itemsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
 const whResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_warehouses_for_parts', auto: false })
+const qtyResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_item_available_qty', auto: false })
 const workflowResource = createResource({
   url: 'frappe.model.workflow.apply_workflow',
   auto: false
@@ -780,7 +822,7 @@ async function loadDropdowns() {
   warehouses.value = whRes || []
 }
 
-function onPartSelect(part, items = stockItems.value) {
+async function onPartSelect(part, items = stockItems.value) {
   const item = items.find(i => i.name === part.item_code)
 
   if (item) {
@@ -792,6 +834,49 @@ function onPartSelect(part, items = stockItems.value) {
     part.uom = ''
     part.available_qty = 0
   }
+
+  await refreshAvailableQty(part)
+}
+
+async function onWarehouseSelect(part) {
+  await refreshAvailableQty(part)
+}
+
+async function refreshAvailableQty(part) {
+  if (!part.item_code) {
+    part.available_qty = 0
+    return
+  }
+
+  try {
+    const res = await qtyResource.fetch({ item_code: part.item_code, warehouse: part.warehouse || '' })
+    part.available_qty = Number(res?.available_qty || 0)
+  } catch (_e) {
+    // Keep prior value if refresh fails.
+  }
+}
+
+function normalizeQty(part) {
+  if (part.qty === '' || part.qty === null || part.qty === undefined) return
+  const n = parseInt(part.qty, 10)
+  part.qty = Number.isNaN(n) || n < 1 ? 1 : n
+}
+
+function validatePartsRows() {
+  const errors = []
+
+  const validateRow = (row, label, idx) => {
+    if (!row.item_code) return
+    if (!row.warehouse) errors.push(`${label} row ${idx + 1}: Warehouse is required.`)
+    if (!Number.isInteger(Number(row.qty)) || Number(row.qty) < 1) {
+      errors.push(`${label} row ${idx + 1}: Quantity must be an integer greater than 0.`)
+    }
+  }
+
+  partsUsed.value.forEach((row, idx) => validateRow(row, 'Parts Used', idx))
+  partsReturned.value.forEach((row, idx) => validateRow(row, 'Parts Returned', idx))
+
+  return errors
 }
 
 // Field requirements for transitions guarded by a workflow condition, mirrored
@@ -799,19 +884,44 @@ function onPartSelect(part, items = stockItems.value) {
 // message instead of the generic "Not a valid Workflow Action" from Frappe.
 function validateTransitionFields(action) {
   const errors = []
-  if (action === 'Send to Witness' || action === 'Send to Store') {
+
+  if (action === 'Send to Store') {
+    // Keep client checks aligned with workflow transition condition:
+    // doc.parts_used and doc.start_time and doc.work_performed
+    const hasParts = partsUsed.value.some(p => p.item_code)
+    if (!hasParts) errors.push('At least one part is required for Send to Store.')
     if (!form.value.start_time) errors.push('Start Time is required.')
-    if (!form.value.end_time) errors.push('End Time is required.')
+    if (form.value.start_time && form.value.end_time &&
+        new Date(form.value.end_time) <= new Date(form.value.start_time)) {
+      errors.push('End Time must be after Start Time.')
+    }
+    if (!(form.value.work_performed || '').trim()) errors.push('Work Performed is required.')
+    return errors
+  }
+
+  if (action === 'Send for approval' || action === 'Send for Approval' || action === 'Send to Witness') {
+    // This is the final handoff once the work is actually done, so the full
+    // completion details are required.
+    const hasParts = partsUsed.value.some(p => p.item_code)
+    if (hasParts) errors.push('Remove parts before sending for approval without store flow.')
+    if (!form.value.start_time) errors.push('Start Time is required.')
     if (form.value.start_time && form.value.end_time &&
         new Date(form.value.end_time) <= new Date(form.value.start_time)) {
       errors.push('End Time must be after Start Time.')
     }
     if (!(form.value.work_performed || '').trim()) errors.push('Work Performed is required.')
   }
+
   return errors
 }
 
 async function applyWorkflow(action) {
+  const rowErrors = validatePartsRows()
+  if (rowErrors.length) {
+    rowErrors.forEach(e => showToast(e, 'warning'))
+    return
+  }
+
   const fieldErrors = validateTransitionFields(action)
   if (fieldErrors.length) {
     fieldErrors.forEach(e => showToast(e, 'warning'))
@@ -858,6 +968,12 @@ async function applyWorkflow(action) {
 
 // ─── Save draft ───────────────────────────────────────────────────────────────
 async function saveDraft() {
+  const rowErrors = validatePartsRows()
+  if (rowErrors.length) {
+    rowErrors.forEach(e => showToast(e, 'warning'))
+    return
+  }
+
   saving.value = true
   try {
     const res = await saveResource.fetch({
@@ -881,7 +997,7 @@ async function saveDraft() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(dt) {
-  if (!dt) return '—'
+  if (!dt) return 'N/A'
   return new Date(dt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
@@ -905,7 +1021,7 @@ function workflowBadgeClass(ws) {
     'In Progress':                    'bg-blue-100 text-blue-700',
     'Pending Store Approval':         'bg-orange-100 text-orange-700',
     'Pending Witness Approval':       'bg-purple-100 text-purple-700',
-    'Pending Hotel Manager Approval': 'bg-yellow-100 text-yellow-700',
+    'Pending Facility Manager Approval': 'bg-yellow-100 text-yellow-700',
     'Completed':                      'bg-green-100 text-green-700',
     'Rejected':                       'bg-red-100 text-red-600',
   }[ws] || 'bg-gray-100 text-gray-600'
@@ -917,7 +1033,7 @@ function workflowDotClass(ws) {
     'In Progress':                    'bg-blue-500',
     'Pending Store Approval':         'bg-orange-500',
     'Pending Witness Approval':       'bg-purple-500',
-    'Pending Hotel Manager Approval': 'bg-yellow-500',
+    'Pending Facility Manager Approval': 'bg-yellow-500',
     'Completed':                      'bg-green-500',
     'Rejected':                       'bg-red-500',
   }[ws] || 'bg-gray-400'
@@ -942,7 +1058,7 @@ function partsApprovalTextClass(s) {
 
 function getStepClass(state) {
   const current = task.value?.workflow_state
-  const order = ['Draft', 'In Progress', 'Pending Store Approval', 'Pending Witness Approval', 'Pending Hotel Manager Approval', 'Completed']
+  const order = ['Draft', 'In Progress', 'Pending Store Approval', 'Pending Facility Manager Approval', 'Pending Witness Approval', 'Completed']
   const ci = order.indexOf(current)
   const si = order.indexOf(state)
   if (state === current) return 'bg-blue-500 text-white'
@@ -952,7 +1068,7 @@ function getStepClass(state) {
 
 function getStepIcon(state) {
   const current = task.value?.workflow_state
-  const order = ['Draft', 'In Progress', 'Pending Store Approval', 'Pending Witness Approval', 'Pending Hotel Manager Approval', 'Completed']
+  const order = ['Draft', 'In Progress', 'Pending Store Approval', 'Pending Facility Manager Approval', 'Pending Witness Approval', 'Completed']
   const ci = order.indexOf(current)
   const si = order.indexOf(state)
   if (state === current) return '→'

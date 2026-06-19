@@ -38,11 +38,11 @@
             New Request
           </button>
         </router-link>
-        <router-link to="/maintenance/new-task">
+        <!-- <router-link to="/maintenance/new-task">
           <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors">
             Create Maintenance Task
           </button>
-        </router-link>
+        </router-link> -->
       </div>
     </div>
 

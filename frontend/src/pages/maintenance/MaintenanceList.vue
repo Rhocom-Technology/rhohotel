@@ -11,9 +11,9 @@
         <router-link to="/maintenance/technicians">
           <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Technicians</button>
         </router-link>
-        <router-link to="/maintenance/new-task">
+        <!-- <router-link to="/maintenance/new-task">
           <button class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">New Maintenance</button>
-        </router-link>
+        </router-link> -->
       </div>
     </div>
 

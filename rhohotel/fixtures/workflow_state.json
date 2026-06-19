@@ -2,20 +2,110 @@
  {
   "docstatus": 0,
   "doctype": "Workflow State",
-  "icon": "question-sign",
-  "modified": "2025-11-06 23:11:19.248298",
-  "name": "Pending",
+  "icon": "",
+  "modified": "2026-05-20 00:00:00",
+  "name": "Pending Verification",
   "style": "",
-  "workflow_state_name": "Pending"
+  "workflow_state_name": "Pending Verification"
  },
  {
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": "",
-  "modified": "2025-11-29 12:23:54.901285",
-  "name": "Draft",
+  "modified": "2026-05-20 00:00:00",
+  "name": "Submitted",
+  "style": "Primary",
+  "workflow_state_name": "Submitted"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Dept Verification",
+  "style": "Primary",
+  "workflow_state_name": "Pending Dept Verification"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Supervisor Verification",
+  "style": "Primary",
+  "workflow_state_name": "Pending Supervisor Verification"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Dept Approval",
+  "style": "Primary",
+  "workflow_state_name": "Pending Dept Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Head Verification",
+  "style": "Primary",
+  "workflow_state_name": "Pending Head Verification"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-20 00:00:00",
+  "name": "Closed",
+  "style": "Success",
+  "workflow_state_name": "Closed"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-20 00:00:00",
+  "name": "Cancelled",
+  "style": "Danger",
+  "workflow_state_name": "Cancelled"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Requesting Officer Approval",
+  "style": "Primary",
+  "workflow_state_name": "Pending Requesting Officer Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Facility Supervisor Approval",
+  "style": "Primary",
+  "workflow_state_name": "Pending Facility Supervisor Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-05-21 00:00:00",
+  "name": "Pending Department Head Signature",
+  "style": "Primary",
+  "workflow_state_name": "Pending Department Head Signature"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "question-sign",
+  "modified": "2025-11-06 23:11:19.248298",
+  "name": "Pending",
   "style": "",
-  "workflow_state_name": "Draft"
+  "workflow_state_name": "Pending"
  },
  {
   "docstatus": 0,
@@ -48,7 +138,7 @@
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": null,
-  "modified": "2026-06-18 11:45:40.948442",
+  "modified": "2026-06-16 13:04:30.703079",
   "name": "Pending Store Approval",
   "style": "Warning",
   "workflow_state_name": "Pending Store Approval"
@@ -57,7 +147,34 @@
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": null,
-  "modified": "2026-06-18 11:45:40.958457",
+  "modified": "2026-06-16 13:04:30.714221",
+  "name": "Pending Facility Manager Approval",
+  "style": "Info",
+  "workflow_state_name": "Pending Facility Manager Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-16 13:04:30.727376",
+  "name": "In Progress",
+  "style": "Warning",
+  "workflow_state_name": "In Progress"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2025-11-29 12:23:54.901285",
+  "name": "Draft",
+  "style": "",
+  "workflow_state_name": "Draft"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": null,
+  "modified": "2026-06-16 13:04:30.708910",
   "name": "Pending Witness Approval",
   "style": "Info",
   "workflow_state_name": "Pending Witness Approval"
@@ -66,27 +183,9 @@
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": null,
-  "modified": "2026-06-18 11:45:40.968520",
-  "name": "Pending Hotel Manager Approval",
-  "style": "Info",
-  "workflow_state_name": "Pending Hotel Manager Approval"
- },
- {
-  "docstatus": 0,
-  "doctype": "Workflow State",
-  "icon": null,
-  "modified": "2026-06-18 11:45:40.978503",
+  "modified": "2026-06-16 13:04:30.719353",
   "name": "Completed",
   "style": "Success",
   "workflow_state_name": "Completed"
- },
- {
-  "docstatus": 0,
-  "doctype": "Workflow State",
-  "icon": null,
-  "modified": "2026-06-18 11:45:40.988467",
-  "name": "In Progress",
-  "style": "Warning",
-  "workflow_state_name": "In Progress"
  }
 ]

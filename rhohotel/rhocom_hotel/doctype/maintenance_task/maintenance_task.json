@@ -97,7 +97,7 @@
       "fieldname": "status",
       "fieldtype": "Select",
       "label": "Status",
-     "options": "Open\nIn Progress\nPending Store Approval\nPending Witness Approval\nPending Hotel Manager Approval\nDone\nHold\nCancelled",
+     "options": "Open\nIn Progress\nPending Store Approval\nPending Witness Approval\nPending Facility Manager Approval\nDone\nHold\nCancelled",
       "default": "Open",
       "in_list_view": 1,
       "in_standard_filter": 1
@@ -398,6 +398,7 @@
   "role": "Employee",
   "read": 1,
   "write": 1,
+  "submit": 1,
   "report": 1,
   "print": 1
 }
@@ -420,7 +421,7 @@
     },
     {
       "color": "Purple",
-      "title": "Pending Hotel Manager Approval"
+      "title": "Pending Facility Manager Approval"
     },
     {
       "color": "Green",
