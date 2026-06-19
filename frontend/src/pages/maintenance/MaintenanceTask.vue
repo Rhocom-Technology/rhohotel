@@ -25,6 +25,23 @@
       <p class="text-sm text-gray-400">Loading task...</p>
     </div>
 
+    <!-- Access Denied -->
+    <div v-else-if="accessDenied" class="flex flex-col items-center justify-center h-64 gap-4">
+      <div class="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+        <svg class="w-7 h-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-6V7m0 0V5m0 2h2m-2 0H10M4.93 4.93l14.14 14.14" />
+        </svg>
+      </div>
+      <div class="text-center">
+        <p class="text-sm font-semibold text-gray-800">Access Restricted</p>
+        <p class="text-xs text-gray-400 mt-1 max-w-xs">You can only view tasks where you are the assigned technician, supervisor/witness, or the person who reported the issue.</p>
+      </div>
+      <button @click="router.push('/maintenance/list')"
+        class="px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        Back to Maintenance List
+      </button>
+    </div>
+
     <!-- Error -->
     <div v-else-if="loadError" class="flex flex-col items-center justify-center h-64 gap-3">
       <p class="text-sm font-medium text-gray-700">Failed to load task</p>
@@ -646,6 +663,7 @@ const taskId = route.params.id
 
 const loading = ref(true)
 const loadError = ref(null)
+const accessDenied = ref(false)
 const saving = ref(false)
 const task = ref(null)
 const stockItems = ref([])
@@ -667,7 +685,8 @@ const form = ref({
 // Task is editable only when docstatus=0 AND workflow_state is Draft or In Progress
 const isEditable = computed(() =>
   task.value?.docstatus === 0 &&
-  ['Draft', 'In Progress'].includes(task.value?.workflow_state)
+  ['Draft', 'In Progress'].includes(task.value?.workflow_state) &&
+  Boolean(task.value?.can_edit)
 )
 const isReadOnly = computed(() => !isEditable.value)
 
@@ -704,6 +723,7 @@ const workflowResource = createResource({
 async function loadTask() {
   loading.value = true
   loadError.value = null
+  accessDenied.value = false
   try {
     const res = await taskResource.fetch({ task_name: taskId })
     task.value = res
@@ -740,7 +760,12 @@ stock_entry: p.stock_entry || ''
     }))
 
   } catch (e) {
-    loadError.value = e?.message || String(e)
+    const msg = e?.message || String(e)
+    if (msg.toLowerCase().includes('you can only view') || msg.toLowerCase().includes('permissionerror') || e?.exc_type === 'PermissionError') {
+      accessDenied.value = true
+    } else {
+      loadError.value = msg
+    }
   } finally {
     loading.value = false
   }

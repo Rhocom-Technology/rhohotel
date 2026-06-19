@@ -2,6 +2,85 @@ import frappe
 import json
 from frappe.utils import nowdate, add_days, get_first_day_of_week
 
+MANAGER_ROLES = ("Maintenance Manager", "System Manager", "Hotel Manager")
+
+
+def _is_maintenance_manager():
+    if frappe.session.user == "Administrator":
+        return True
+    roles = set(frappe.get_roles(frappe.session.user))
+    return bool(roles.intersection(MANAGER_ROLES))
+
+
+def _get_logged_in_employee_name():
+    """Returns the Employee record name linked to the current session user,
+    or None if there isn't one (e.g. Administrator with no Employee record).
+    """
+    return frappe.db.get_value(
+        "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"
+    )
+
+
+def _get_logged_in_technician_name(employee_name=None):
+    """Returns the Maintenance Technician record name linked (via its
+    `employee` field) to the current session user, or None if the user
+    has no Employee record or no Maintenance Technician record at all.
+    """
+    employee_name = employee_name if employee_name is not None else _get_logged_in_employee_name()
+    if not employee_name:
+        return None
+    return frappe.db.get_value(
+        "Maintenance Technician", {"employee": employee_name}, "name"
+    )
+
+
+def _can_view_task(task, employee_name=None, technician_name=None):
+    """A user can view a Maintenance Task's detail if they are:
+    - A Maintenance Manager, System Manager, or Hotel Manager (sees everything)
+    - The assigned technician on the task
+    - The supervisor/witness on the task
+    - The employee who originally reported/created the request (reported_by)
+    Anyone else gets a PermissionError regardless of role.
+    """
+    if _is_maintenance_manager():
+        return True
+
+    if employee_name is None:
+        employee_name = _get_logged_in_employee_name()
+    if technician_name is None:
+        technician_name = _get_logged_in_technician_name(employee_name)
+
+    if technician_name and task.assigned_technician == technician_name:
+        return True
+
+    if employee_name and task.supervisor == employee_name:
+        return True
+
+    if employee_name and task.reported_by == employee_name:
+        return True
+
+    return False
+
+
+def _can_edit_task(task, employee_name=None, technician_name=None):
+    """Editing the task form (filling work performed, times, parts, checklist)
+    is restricted to the assigned technician and manager roles only.
+    Supervisors, reporters, and other viewers can open the task but cannot
+    write to it -- their role is approval, not task execution.
+    """
+    if _is_maintenance_manager():
+        return True
+
+    if employee_name is None:
+        employee_name = _get_logged_in_employee_name()
+    if technician_name is None:
+        technician_name = _get_logged_in_technician_name(employee_name)
+
+    if technician_name and task.assigned_technician == technician_name:
+        return True
+
+    return False
+
 
 @frappe.whitelist()
 def get_maintenance_dashboard():
@@ -177,6 +256,12 @@ def get_maintenance_task(task_name):
 
     task = frappe.get_doc("Maintenance Task", task_name)
 
+    if not _can_view_task(task):
+        frappe.throw(
+            "You can only view tasks assigned to you or where you are the supervisor/witness.",
+            frappe.PermissionError,
+        )
+
     # Resolve technician name
     technician_name = None
     if task.assigned_technician:
@@ -313,6 +398,13 @@ def get_maintenance_task(task_name):
         "material_return_stock_entry": task.material_return_stock_entry or "",
         "asset": task.asset or "",
         "asset_name": asset_name or "",
+
+        # Whether the current user is allowed to fill/edit the task form.
+        # True only for the assigned technician and manager roles
+        # (Maintenance Manager, System Manager, Hotel Manager).
+        # Supervisors, reporters, and other viewers can see the task
+        # but not write to it.
+        "can_edit": _can_edit_task(task),
     }
 
 
@@ -561,12 +653,6 @@ def get_maintenance_dashboard_summary():
     """, (week_start,), as_dict=1)
     avg_resolution_hrs = round(avg_res[0].avg_hrs or 0, 1) if avg_res else 0
 
-    pending_requests = frappe.db.count("Maintenance Request", {"status": "Pending"})
-    urgent_pending_requests = frappe.db.count(
-        "Maintenance Request",
-        {"status": "Pending", "priority": ["in", ["Critical", "High"]]},
-    )
-
     top_locations = frappe.db.sql("""
         SELECT location, COUNT(name) as open_tasks
         FROM `tabMaintenance Task`
@@ -606,8 +692,6 @@ def get_maintenance_dashboard_summary():
             "urgent_open": urgent_open,
             "done_this_week": done_this_week,
             "avg_resolution_hrs": avg_resolution_hrs,
-            "pending_requests": pending_requests,
-            "urgent_pending_requests": urgent_pending_requests,
         },
         "type_mix": type_mix,
         "corrective_pct": corrective_pct,

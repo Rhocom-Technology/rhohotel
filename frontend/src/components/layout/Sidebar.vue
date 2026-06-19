@@ -118,7 +118,7 @@ const allNavGroups = [
     allowedRoles: ROLE_GROUPS.maintenanceFrontDesk,
     children: [
       { label: 'Maintenance List', to: '/maintenance/list' },
-      { label: 'Dashboard', to: '/maintenance/dashboard', allowedRoles: ROLE_GROUPS.maintenanceFull },
+      { label: 'Dashboard', to: '/maintenance/dashboard', allowedRoles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
       { label: 'Request', to: '/maintenance/request', allowedRoles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
       { label: 'Technician List', to: '/maintenance/technicians', allowedRoles: ROLE_GROUPS.maintenanceFull },
     ],
