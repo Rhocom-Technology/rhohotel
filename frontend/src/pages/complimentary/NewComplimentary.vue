@@ -50,7 +50,7 @@
           </select>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Guest</p>
             <input v-model="form.guest" type="text" placeholder="Guest name"
@@ -87,74 +87,12 @@
               <option>Operations</option>
             </select>
           </div>
-
-          <!-- Room Upgrade: target room picker -->
-          <template v-if="form.complimentary_type === 'Room Upgrade'">
-            <div class="col-span-2">
-              <p class="text-xs text-gray-500 mb-1.5">Upgrade To Room</p>
-              <div v-if="loadingUpgradeRooms" class="px-3 py-2.5 text-xs text-gray-400 border border-gray-200 rounded-lg bg-gray-50">Loading vacant rooms…</div>
-              <select v-else v-model="form.upgrade_room" @change="onUpgradeRoomChange"
-                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-                <option value="">-- Select upgrade room --</option>
-                <option v-for="r in upgradeRooms" :key="r.name" :value="r.name">
-                  Room {{ r.room_number || r.name }} — {{ r.room_type }}
-                </option>
-              </select>
-              <p v-if="!form.check_in" class="text-xs text-amber-600 mt-1">Select an active guest above to see available rooms.</p>
-            </div>
-            <!-- Rate diff preview -->
-            <div v-if="upgradePreview" class="col-span-2 rounded-xl border px-4 py-3"
-              :class="upgradePreview.is_upgrade ? 'bg-green-50 border-green-200' : (upgradePreview.rate_diff_per_night === 0 ? 'bg-gray-50 border-gray-200' : 'bg-amber-50 border-amber-200')">
-              <p class="text-xs font-bold mb-1"
-                :class="upgradePreview.is_upgrade ? 'text-green-700' : (upgradePreview.rate_diff_per_night === 0 ? 'text-gray-600' : 'text-amber-700')">
-                {{ upgradePreview.is_upgrade ? 'Upgrade — Rate Difference Waiver' : (upgradePreview.rate_diff_per_night === 0 ? 'Same Rate — No Charge' : 'Downgrade — Credit to Guest') }}
-              </p>
-              <p class="text-xs text-gray-700">Current room: {{ upgradePreview.current_room }} @ ₦{{ Number(upgradePreview.old_rate).toLocaleString() }}/night</p>
-              <p class="text-xs text-gray-700">Upgrade room: {{ upgradePreview.upgrade_room }} ({{ upgradePreview.upgrade_room_type }}) @ ₦{{ Number(upgradePreview.new_rate).toLocaleString() }}/night</p>
-              <p class="text-xs text-gray-700">Remaining nights: {{ upgradePreview.remaining_nights }}</p>
-              <p class="text-xs font-semibold mt-1"
-                :class="upgradePreview.is_upgrade ? 'text-green-700' : 'text-gray-600'">
-                Total waiver: ₦{{ Number(upgradePreview.total_waiver).toLocaleString() }}
-              </p>
-            </div>
-          </template>
-
-          <!-- Late Checkout: time picker -->
-          <template v-if="form.complimentary_type === 'Late Checkout'">
-            <div class="col-span-2">
-              <p class="text-xs text-gray-500 mb-1.5">Approved Checkout Time</p>
-              <div class="flex gap-2 flex-wrap">
-                <button v-for="t in lateCheckoutPresets" :key="t"
-                  type="button"
-                  @click="form.late_checkout_time = t; onLateCheckoutTimeChange()"
-                  class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors"
-                  :class="form.late_checkout_time === t ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-600 border-gray-300 hover:bg-gray-50'">
-                  {{ t }}
-                </button>
-                <input v-model="form.late_checkout_time" @change="onLateCheckoutTimeChange" type="time"
-                  class="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <p v-if="!form.check_in" class="text-xs text-amber-600 mt-1">Select an active guest above to preview the checkout extension.</p>
-            </div>
-            <!-- Checkout preview -->
-            <div v-if="lateCheckoutPreview" class="col-span-2 rounded-xl border px-4 py-3"
-              :class="lateCheckoutPreview.is_extension ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'">
-              <p class="text-xs font-bold mb-1"
-                :class="lateCheckoutPreview.is_extension ? 'text-blue-700' : 'text-amber-700'">
-                {{ lateCheckoutPreview.is_extension ? 'Late Checkout — Time Extended' : 'Warning: New time is earlier than current checkout' }}
-              </p>
-              <p class="text-xs text-gray-700">Current checkout: {{ lateCheckoutPreview.checkout_date }} at {{ lateCheckoutPreview.current_time }}</p>
-              <p v-if="lateCheckoutPreview.new_time" class="text-xs font-semibold text-blue-700 mt-1">Extended to: {{ lateCheckoutPreview.checkout_date }} at {{ lateCheckoutPreview.new_time }}</p>
-              <p class="text-xs text-gray-500 mt-1">Late checkout charge will be automatically waived on approval.</p>
-            </div>
-          </template>
-
-          <div v-if="form.complimentary_type !== 'Room Upgrade' && form.complimentary_type !== 'Late Checkout'">
+          <div>
             <p class="text-xs text-gray-500 mb-1.5">Value (₦)</p>
             <input v-model="form.value" type="text" placeholder="0.00"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div v-if="form.complimentary_type !== 'Room Upgrade' && form.complimentary_type !== 'Late Checkout'">
+          <div>
             <p class="text-xs text-gray-500 mb-1.5">Quantity / Limit</p>
             <input v-model="form.quantity" type="text" placeholder="1 unit / single use"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -245,16 +183,8 @@
           <div class="bg-blue-50 rounded-xl border border-blue-200 px-4 py-4">
             <p class="text-xs font-bold text-blue-700 mb-2">{{ form.complimentary_type }} • {{ form.department }}</p>
             <p class="text-xs text-blue-600">Guest: {{ form.guest || 'Select guest' }}</p>
-            <p v-if="form.complimentary_type === 'Room Upgrade'" class="text-xs text-blue-600">
-              Upgrade to: {{ form.upgrade_room || 'Select room' }}
-            </p>
-            <p v-else-if="form.complimentary_type === 'Late Checkout'" class="text-xs text-blue-600">
-              Checkout time: {{ form.late_checkout_time || 'Select time' }}
-            </p>
-            <p v-else class="text-xs text-blue-600">Value: {{ form.value ? '₦' + form.value : '₦0.00' }}</p>
+            <p class="text-xs text-blue-600">Value: {{ form.value ? '₦' + form.value : '₦0.00' }}</p>
             <p class="text-xs text-blue-600">Approval: {{ form.approval_level }}</p>
-            <p v-if="form.complimentary_type === 'Room Upgrade'" class="text-xs text-green-700 font-semibold mt-1">Room transfer will execute automatically on approval.</p>
-            <p v-if="form.complimentary_type === 'Late Checkout'" class="text-xs text-blue-700 font-semibold mt-1">Checkout time will be updated automatically on approval.</p>
           </div>
         </div>
 
@@ -296,94 +226,15 @@ const form = reactive({
   note: '',
   approval_level: 'General Manager',
   source_category: 'Service Recovery',
-  upgrade_room: '',
-  late_checkout_time: '',
 })
 
-const upgradeRooms = ref([])
-const loadingUpgradeRooms = ref(false)
-const upgradePreview = ref(null)
-
 watch(() => form.complimentary_type, (type) => {
-  if (type === 'Room Upgrade') {
-    form.department = 'Front Desk'
-    if (!form.redemption_rule) {
-      form.redemption_rule = 'Automatic room transfer and rate waiver applied on approval. No cash exchange.'
-    }
-    if (form.check_in) loadUpgradeRooms()
-    return
-  }
-  if (type === 'Late Checkout') {
-    form.department = 'Front Desk'
-    if (!form.redemption_rule) {
-      form.redemption_rule = 'Late checkout approved. Checkout time extended and any late checkout charge waived on approval.'
-    }
-    return
-  }
-  if (type === 'Laundry') {
-    form.department = 'Laundry'
-    return
-  }
   if (type !== 'Room Voucher') return
   form.department = 'Front Desk'
   if (!form.redemption_rule) {
     form.redemption_rule = 'Redeem at Front Desk against approved room charge or stay benefit. No cash exchange.'
   }
 })
-
-async function loadUpgradeRooms() {
-  if (!form.check_in) { upgradeRooms.value = []; return }
-  loadingUpgradeRooms.value = true
-  try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_rooms_for_transfer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({ current_room: form.room || '', check_in_dt: '', check_out_dt: '', exclude_reservation: '' }),
-    })
-    const data = await res.json()
-    upgradeRooms.value = data.message || []
-  } catch { upgradeRooms.value = [] } finally { loadingUpgradeRooms.value = false }
-}
-
-async function onUpgradeRoomChange() {
-  upgradePreview.value = null
-  if (!form.upgrade_room || !form.check_in) return
-  try {
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.complimentary.get_room_upgrade_preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body: new URLSearchParams({ check_in: form.check_in, upgrade_room: form.upgrade_room }),
-    })
-    const data = await res.json()
-    const preview = data.message || {}
-    if (!preview.error) {
-      upgradePreview.value = preview
-      // auto-set value to total waiver amount (informational)
-      form.value = preview.total_waiver > 0 ? preview.total_waiver.toFixed(2) : '0'
-    }
-  } catch { /* silent */ }
-}
-
-// ── Late Checkout ─────────────────────────────────────────────────────────────
-const lateCheckoutPresets = ['14:00', '15:00', '16:00', '18:00']
-const lateCheckoutPreview = ref(null)
-
-async function onLateCheckoutTimeChange() {
-  lateCheckoutPreview.value = null
-  if (!form.check_in) return
-  try {
-    const body = new URLSearchParams({ check_in: form.check_in })
-    if (form.late_checkout_time) body.append('late_checkout_time', form.late_checkout_time + ':00')
-    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.complimentary.get_late_checkout_preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
-      body,
-    })
-    const data = await res.json()
-    const preview = data.message || {}
-    if (!preview.error) lateCheckoutPreview.value = preview
-  } catch { /* silent */ }
-}
 
 // ── Active check-ins for guest/room dropdowns ─────────────────────────────────
 const checkins = ref([])
@@ -403,14 +254,9 @@ function onCheckinSelect() {
     form.reservation = selected.reservation || ''
     form.guest = selected.guest
     form.room = selected.room_number
-    if (form.complimentary_type === 'Room Upgrade') loadUpgradeRooms()
-    if (form.complimentary_type === 'Late Checkout' && form.late_checkout_time) onLateCheckoutTimeChange()
   } else {
     form.check_in = ''
     form.reservation = ''
-    upgradeRooms.value = []
-    upgradePreview.value = null
-    lateCheckoutPreview.value = null
   }
 }
 
@@ -458,8 +304,6 @@ function payload() {
     note: form.note,
     approval_level: form.approval_level,
     source_category: form.source_category,
-    upgrade_room: form.upgrade_room || null,
-    late_checkout_time: form.late_checkout_time ? form.late_checkout_time + ':00' : null,
   }
 }
 

@@ -1597,6 +1597,7 @@ function onChargeNow() {
         complimentary_name: selectedComplimentaryName.value || null,
         kitchen_note: kitchenNote.value || null,
         pos_profile: terminalInfo.value?.pos_profile || null,
+        department: terminalInfo.value?.hotel_department || null,
         existing_draft: resumedDraftInvoice.value || null,
       })
       return

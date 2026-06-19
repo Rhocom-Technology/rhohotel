@@ -296,6 +296,23 @@ def _redeem_complimentary(complimentary_name, pos_invoice_name, bill_total, manu
     )
 
 
+def _resolve_pos_department(department=None, pos_profile=None):
+    """Resolve the hotel department from the active POS Profile, falling back to the request."""
+    resolved_profile = pos_profile
+    try:
+        open_entry = _get_open_pos_entry(frappe.session.user, pos_profile)
+        if open_entry and open_entry.get("pos_profile"):
+            resolved_profile = open_entry.get("pos_profile")
+    except Exception:
+        pass
+
+    profile_department = None
+    if resolved_profile and frappe.db.has_column("POS Profile", "hotel_department"):
+        profile_department = cstr(frappe.db.get_value("POS Profile", resolved_profile, "hotel_department") or "").strip()
+
+    return profile_department or cstr(department or "").strip() or "Restaurant"
+
+
 def _get_sent_to_kitchen_map(pos_invoice):
     """Return total kitchen-sent quantities by item code for a POS Invoice."""
     if not pos_invoice:
@@ -842,6 +859,7 @@ def create_pos_invoice(items, mode_of_payment="Cash", customer=None,
 
         # Always align profile to the currently open shift to satisfy POS invoice validation.
         pos_profile = pos_opening_entry.get("pos_profile") or pos_profile
+        department = _resolve_pos_department(department, pos_profile)
 
         # Ensure mode of payment is valid for the resolved POS profile.
         profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
@@ -1047,6 +1065,7 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
     items_total = flt(sum(
         flt(it.get("price", 0)) * flt(it.get("qty", 1)) for it in items
     )) + flt(service_charge)
+    department = _resolve_pos_department(department, pos_profile)
     manual_discount = flt(discount_amount)
     complimentary_discount = _get_complimentary_discount(complimentary_name, items_total, manual_discount, department=department)
 
@@ -2729,6 +2748,7 @@ def create_split_pos_invoice(items, portions, customer=None, service_charge=0,
         frappe.throw(_("No open POS Opening Entry found for your user. Please open a shift before charging."))
 
     pos_profile = pos_opening_entry.get("pos_profile") or pos_profile
+    department = _resolve_pos_department(department, pos_profile)
     profile_doc = frappe.get_cached_doc("POS Profile", pos_profile)
 
     allowed_modes = [

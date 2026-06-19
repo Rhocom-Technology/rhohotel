@@ -22,7 +22,7 @@ CONSUMPTION_ROLES = {
 ALLOWED_FIELDS = {
     "guest", "room", "reservation", "check_in", "complimentary_type", "department",
     "value", "quantity", "issue_date", "expiry_date", "reason", "redemption_rule",
-    "note", "approval_level", "source_category", "upgrade_room", "late_checkout_time",
+    "note", "approval_level", "source_category",
 }
 
 
@@ -175,7 +175,7 @@ def _set_doc_fields(doc, data):
             value = flt(value or 0)
         if field == "quantity":
             value = value or "1"
-        if field in {"reservation", "check_in", "expiry_date", "upgrade_room", "late_checkout_time"}:
+        if field in {"reservation", "check_in", "expiry_date"}:
             value = value or None
         setattr(doc, field, value)
 
@@ -221,8 +221,6 @@ def _record_response(doc, audit_trail=None):
         "approved_on": str(doc.approved_on) if doc.approved_on else None,
         "consumption_reference": doc.consumption_reference,
         "consumed_on": str(doc.consumed_on) if doc.consumed_on else None,
-        "upgrade_room": getattr(doc, "upgrade_room", None),
-        "late_checkout_time": str(getattr(doc, "late_checkout_time", None) or "") or None,
         "audit_trail": audit_trail or [],
     }
 
@@ -547,12 +545,7 @@ def submit_complimentary(complimentary_name):
 
 @frappe.whitelist()
 def approve_complimentary(complimentary_name):
-    """Approve a pending complimentary record.
-
-    For Room Upgrade type: if upgrade_room and check_in are set, automatically
-    transfers the guest to the new room, calculates the rate difference, creates
-    a credit note to waive it, and marks the complimentary as Consumed.
-    """
+    """Approve a pending complimentary record."""
     try:
         doc = frappe.get_doc(DOCTYPE, complimentary_name)
         _require_write(doc)
@@ -564,18 +557,6 @@ def approve_complimentary(complimentary_name):
         doc.status = "Approved"
         doc.approved_by = frappe.session.user
         doc.approved_on = now_datetime()
-
-        # ── Room Upgrade auto-execution ──────────────────────────────────────
-        upgrade_room = getattr(doc, "upgrade_room", None)
-        if doc.complimentary_type == "Room Upgrade" and upgrade_room and doc.check_in:
-            return _execute_room_upgrade(doc)
-
-        # ── Late Checkout auto-execution ──────────────────────────────────
-        if doc.complimentary_type == "Late Checkout" and doc.check_in:
-            if not getattr(doc, "late_checkout_time", None):
-                return {"success": False, "error": _("Approved Checkout Time is required for Late Checkout vouchers.")}
-            return _execute_late_checkout(doc)
-
         doc.save()
         frappe.db.commit()
         return {"success": True}
@@ -583,234 +564,6 @@ def approve_complimentary(complimentary_name):
         frappe.log_error(frappe.get_traceback(), "approve_complimentary error")
         frappe.db.rollback()
         return {"success": False, "error": str(e)}
-
-
-def _execute_room_upgrade(doc):
-    """Transfer the guest to the upgrade room and waive the rate difference."""
-    from rhohotel.rhocom_hotel.doctype.hotel_room_check_in.hotel_room_check_in import (
-        transfer_room,
-        apply_discount,
-    )
-
-    check_in_name = doc.check_in
-    upgrade_room = doc.upgrade_room
-
-    # Capture old room BEFORE transfer
-    old_room = frappe.db.get_value("Hotel Room Check In", check_in_name, "room_number") or ""
-
-    # Step 1: transfer the guest — this creates a rate_invoice for the difference
-    try:
-        result = transfer_room(check_in_name, upgrade_room, note=f"Room Upgrade — {doc.name}")
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Room Upgrade transfer failed")
-        frappe.db.rollback()
-        return {
-            "success": False,
-            "error": _("Room transfer failed: {0}").format(str(e)),
-        }
-
-    rate_invoice = result.get("rate_invoice")
-
-    # Step 2: waive the rate difference via a credit note (if an invoice was created)
-    credit_note = None
-    if rate_invoice:
-        # Get the invoice total to waive
-        invoice_total = flt(
-            frappe.db.get_value("Sales Invoice", rate_invoice, "grand_total")
-        )
-        if invoice_total > 0:
-            try:
-                discount_result = apply_discount(
-                    check_in_name,
-                    invoice_total,
-                    reason=_("Room Upgrade Waiver — Complimentary {0}").format(doc.name),
-                    source_invoice=rate_invoice,
-                )
-                credit_note = discount_result.get("credit_note")
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), "Room Upgrade discount failed")
-                # Transfer succeeded; note the failure but don't roll back
-                frappe.log_error(
-                    _("Rate invoice {0} was created but the waiver credit note failed: {1}").format(
-                        rate_invoice, str(e)
-                    ),
-                    "Room Upgrade waiver incomplete",
-                )
-
-    # Step 3: mark the complimentary as Consumed
-    rate_diff = flt(frappe.db.get_value("Sales Invoice", rate_invoice, "grand_total")) if rate_invoice else 0
-    doc.value = rate_diff
-    doc.redeemed_amount = rate_diff
-    doc.remaining_value = 0
-    doc.status = "Consumed"
-    doc.consumed_on = now_datetime()
-    doc.consumption_reference = credit_note or rate_invoice or _("Room transfer — no rate difference")
-    doc.flags.ignore_permissions = True
-    doc.save()
-    frappe.db.commit()
-
-    # Step 4: notify front desk in real-time
-    try:
-        frappe.publish_realtime(
-            "rhohotel_room_upgrade",
-            {
-                "guest": doc.guest,
-                "old_room": old_room,
-                "new_room": upgrade_room,
-                "complimentary": doc.name,
-                "waiver": rate_diff,
-            },
-        )
-    except Exception:
-        pass  # non-critical: task queue will still surface this move
-
-    return {
-        "success": True,
-        "room_upgraded": True,
-        "new_room": upgrade_room,
-        "rate_invoice": rate_invoice,
-        "credit_note": credit_note,
-        "value": rate_diff,
-    }
-
-
-def _execute_late_checkout(doc):
-    """Set late_checkout=1 on the check-in and extend checkout time to the approved time."""
-    from frappe.utils import get_datetime
-
-    check_in_name = doc.check_in
-    late_time = getattr(doc, "late_checkout_time", None)
-
-    ci = frappe.get_doc("Hotel Room Check In", check_in_name)
-    if ci.status != "Checked In":
-        return {"success": False, "error": _("Guest is not currently checked in.")}
-
-    current_checkout_dt = get_datetime(ci.expected_check_out_datetime)
-    checkout_date = current_checkout_dt.date()
-
-    if not late_time:
-        return {"success": False, "error": _("Select an approved late checkout time.")}
-
-    # late_checkout_time is stored as "HH:MM:SS" by Frappe
-    time_str = str(late_time)[:5]  # "HH:MM"
-    from datetime import datetime
-    new_checkout_dt = datetime.strptime(f"{checkout_date} {time_str}", "%Y-%m-%d %H:%M")
-    if new_checkout_dt <= current_checkout_dt:
-        return {
-            "success": False,
-            "error": _("Late checkout time must be later than the current checkout time ({0}).").format(
-                current_checkout_dt.strftime("%H:%M")
-            ),
-        }
-
-    # Update the check-in with db_set to bypass submit restrictions
-    frappe.db.set_value(
-        "Hotel Room Check In",
-        check_in_name,
-        {
-            "late_checkout": 1,
-            "expected_check_out_datetime": new_checkout_dt,
-        },
-        update_modified=True,
-    )
-
-    # Mark complimentary as Consumed
-    doc.status = "Consumed"
-    doc.consumed_on = now_datetime()
-    doc.consumption_reference = _("Late Checkout approved — checkout extended to {0}").format(
-        new_checkout_dt.strftime("%H:%M")
-    )
-    doc.flags.ignore_permissions = True
-    doc.save()
-    frappe.db.commit()
-
-    try:
-        frappe.publish_realtime("rhohotel_front_desk_update")
-    except Exception:
-        pass
-
-    return {
-        "success": True,
-        "late_checkout_applied": True,
-        "new_checkout_time": new_checkout_dt.strftime("%H:%M"),
-        "checkout_date": str(checkout_date),
-        "guest": doc.guest,
-    }
-
-
-@frappe.whitelist()
-def get_late_checkout_preview(check_in, late_checkout_time=None):
-    """Return current checkout time and the new time if the voucher is approved."""
-    try:
-        from frappe.utils import get_datetime
-
-        if not frappe.db.exists("Hotel Room Check In", check_in):
-            return {"error": "Check-in not found"}
-
-        ci = frappe.db.get_value(
-            "Hotel Room Check In",
-            check_in,
-            ["expected_check_out_datetime", "status", "late_checkout"],
-            as_dict=True,
-        )
-        if not ci or ci.status != "Checked In":
-            return {"error": "Guest is not currently checked in"}
-        if ci.late_checkout:
-            return {"error": "Guest already has late checkout approved"}
-
-        current_dt = get_datetime(ci.expected_check_out_datetime)
-        result = {
-            "current_checkout": ci.expected_check_out_datetime,
-            "current_time": current_dt.strftime("%H:%M"),
-            "checkout_date": str(current_dt.date()),
-        }
-
-        if late_checkout_time:
-            from datetime import datetime
-            time_str = str(late_checkout_time)[:5]
-            new_dt = datetime.strptime(f"{current_dt.date()} {time_str}", "%Y-%m-%d %H:%M")
-            result["new_checkout"] = str(new_dt)
-            result["new_time"] = new_dt.strftime("%H:%M")
-            result["is_extension"] = new_dt > current_dt
-
-        return result
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "get_late_checkout_preview error")
-        return {"error": str(e)}
-
-
-@frappe.whitelist()
-def get_pending_room_moves():
-    """Return today's Room Upgrade complimentaries not yet acknowledged by front desk."""
-    frappe.has_permission(DOCTYPE, "read", throw=True)
-    today = nowdate()
-    records = frappe.get_all(
-        DOCTYPE,
-        filters={
-            "complimentary_type": "Room Upgrade",
-            "status": "Consumed",
-            "consumed_on": [">=", today + " 00:00:00"],
-        },
-        fields=["name", "guest", "room", "upgrade_room", "consumed_on", "consumption_reference"],
-        order_by="consumed_on desc",
-        limit=20,
-    )
-    pending = [
-        r for r in records
-        if not frappe.cache().get_value(f"rhohotel:room_move_ack:{r.name}")
-    ]
-    return pending
-
-
-@frappe.whitelist()
-def acknowledge_room_move(complimentary_name):
-    """Mark a room move task as seen/acknowledged by front desk (cached 24 h)."""
-    if not frappe.db.exists(DOCTYPE, complimentary_name):
-        frappe.throw(_("Complimentary {0} not found").format(complimentary_name))
-    frappe.cache().set_value(
-        f"rhohotel:room_move_ack:{complimentary_name}", 1, expires_in_sec=86400
-    )
-    return {"success": True}
 
 
 @frappe.whitelist()
@@ -993,59 +746,6 @@ def get_active_checkins():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "get_active_checkins error")
         return {"checkins": []}
-
-
-@frappe.whitelist()
-def get_room_upgrade_preview(check_in, upgrade_room):
-    """Return the estimated rate difference and remaining nights for a Room Upgrade preview."""
-    try:
-        from frappe.utils.data import date_diff
-        from rhohotel.rhocom_hotel.doctype.hotel_room_check_in.hotel_room_check_in import get_room_rate
-
-        if not frappe.db.exists("Hotel Room Check In", check_in):
-            return {"error": "Check-in not found"}
-        if not frappe.db.exists("Hotel Room", upgrade_room):
-            return {"error": "Room not found"}
-
-        ci = frappe.db.get_value(
-            "Hotel Room Check In",
-            check_in,
-            ["room_number", "rate_amount", "check_in_datetime", "expected_check_out_datetime", "status"],
-            as_dict=True,
-        )
-        if not ci or ci.status != "Checked In":
-            return {"error": "Guest is not currently checked in"}
-        if ci.room_number == upgrade_room:
-            return {"error": "Guest is already in this room"}
-
-        new_room = frappe.get_doc("Hotel Room", upgrade_room)
-        if new_room.status != "Vacant":
-            return {"error": f"Room {upgrade_room} is not vacant"}
-
-        today = getdate(nowdate())
-        expected_checkout = getdate(ci.expected_check_out_datetime)
-        remaining_nights = max(date_diff(expected_checkout, today), 1)
-
-        new_rate_data = get_room_rate(new_room.room_type, "", str(today))
-        new_rate = flt(new_rate_data)
-        old_rate = flt(ci.rate_amount)
-        rate_diff_per_night = new_rate - old_rate
-        total_waiver = rate_diff_per_night * remaining_nights
-
-        return {
-            "current_room": ci.room_number,
-            "upgrade_room": upgrade_room,
-            "upgrade_room_type": new_room.room_type,
-            "old_rate": old_rate,
-            "new_rate": new_rate,
-            "rate_diff_per_night": rate_diff_per_night,
-            "remaining_nights": remaining_nights,
-            "total_waiver": total_waiver,
-            "is_upgrade": rate_diff_per_night > 0,
-        }
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "get_room_upgrade_preview error")
-        return {"error": str(e)}
 
 
 @frappe.whitelist()
