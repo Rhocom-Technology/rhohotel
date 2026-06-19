@@ -36,6 +36,7 @@ const router = createRouter({
     { path: '/shift-preference', name: 'StaffShiftPreference', component: () => import('@/pages/shift/StaffShiftPreference.vue') },
     { path: '/staff-roaster-dashboard', name: 'StaffRoasterDashboard', component: () => import('@/pages/shift/StaffRoasterDashboard.vue') },
     { path: '/swap-employee-shift', name: 'SwapEmployeeShift', component: () => import('@/pages/shift/SwapEmployeeShift.vue') },
+    { path: '/shift-preference-manager', name: 'StaffShiftPreferenceManagerView', component: () => import('@/pages/shift/StaffShiftPreferenceManagerView.vue') },
 
     // Housekeeping
     { path: '/housekeeping', name: 'Housekeeping', component: () => import('@/pages/housekeeping/Housekeeping.vue') },
@@ -43,7 +44,6 @@ const router = createRouter({
     { path: '/housekeeping/task/new', name: 'NewHousekeepingTask', component: () => import('@/pages/housekeeping/NewHousekeepingTask.vue') },
     { path: '/housekeeping/task/:id', name: 'HousekeepingTask', component: () => import('@/pages/housekeeping/HousekeepingTask.vue') },
     { path: '/housekeeping/report', name: 'HousekeepingReport', component: () => import('@/pages/housekeeping/HousekeepingReport.vue') },
-    { path: '/shift-preference-manager', name: 'StaffShiftPreferenceManagerView', component: () => import('@/pages/shift/StaffShiftPreferenceManagerView.vue') },
 
     // Maintenance
     { path: '/maintenance/list', name: 'MaintenanceList', component: () => import('@/pages/maintenance/MaintenanceList.vue') },
@@ -63,7 +63,6 @@ const router = createRouter({
     { path: '/pos/invoices', name: 'POSInvoiceList', component: () => import('@/pages/pos/POSInvoiceList.vue') },
     { path: '/pos/manager-dashboard', name: 'POSManagerDashboard', component: () => import('@/pages/pos/POSManagerDashboard.vue') },
     { path: '/pos/shift-difference-log', name: 'POSShiftDifferenceLog', component: () => import('@/pages/pos/ShiftDifferenceLog.vue') },
-    { path: '/pos/staff-roaster', name: 'StaffRoasterPage', component: () => import('@/pages/pos/StaffRoasterPage.vue') },
 
     // Kitchen
     { path: '/kitchen', name: 'KitchenTerminal', component: () => import('@/pages/kitchen/KitchenTerminal.vue') },

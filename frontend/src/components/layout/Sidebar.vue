@@ -149,7 +149,6 @@ const allNavGroups = [
     icon: ShoppingCart,
     allowedRoles: ROLE_GROUPS.staffRoasterView,
     children: [
-      { label: 'Staff Roaster', to: '/pos/staff-roaster', allowedRoles: ROLE_GROUPS.staffRoasterFull },
       { label: 'Weekly Shift Generator', to: '/weekly-shift-generator', allowedRoles: ROLE_GROUPS.staffRoasterFull },
       { label: 'Shift List', to: '/shift-list' },
       { label: 'Swap Request List', to: '/swap-requests' },

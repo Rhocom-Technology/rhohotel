@@ -41,7 +41,7 @@
           <div class="flex items-center gap-2">
             <button
               class="px-2.5 py-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-              :disabled="isLocked || loading"
+              :disabled="loading"
               @click="changeWeek(-1)"
             >
               &lsaquo;
@@ -50,13 +50,13 @@
             <input
               v-model="weekStartInput"
               type="date"
-              :disabled="isLocked || loading"
+              :disabled="loading"
               class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 bg-white disabled:bg-gray-50 disabled:cursor-not-allowed"
             />
 
             <button
               class="px-2.5 py-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-              :disabled="isLocked || loading"
+              :disabled="loading"
               @click="changeWeek(1)"
             >
               &rsaquo;
