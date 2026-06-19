@@ -115,7 +115,7 @@ const allNavGroups = [
   {
     label: 'Maintenance',
     icon: Wrench,
-    allowedRoles: ROLE_GROUPS.maintenanceFrontDesk,
+    // allowedRoles: ROLE_GROUPS.maintenanceFrontDesk,
     children: [
       { label: 'Maintenance List', to: '/maintenance/list' },
       { label: 'Dashboard', to: '/maintenance/dashboard', allowedRoles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
