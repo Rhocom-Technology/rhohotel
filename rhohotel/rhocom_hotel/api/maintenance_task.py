@@ -1378,6 +1378,10 @@ def get_maintenance_dashboard_summary():
     hold_count      = frappe.db.count("Maintenance Task", {"status": "Hold"})
     cancelled_count = frappe.db.count("Maintenance Task", {"status": "Cancelled"})
     urgent_open     = frappe.db.count("Maintenance Task", {"priority": "High", "status": ["not in", ["Done", "Cancelled"]]})
+    pending_requests = frappe.db.count("Maintenance Request", {"status": "Pending"})
+    urgent_pending_requests = frappe.db.count(
+        "Maintenance Request", {"status": "Pending", "priority": ["in", ["Critical", "High"]]}
+    )
 
     done_this_week = frappe.db.sql("""
         SELECT COUNT(name) as cnt FROM `tabMaintenance Task`
@@ -1435,6 +1439,8 @@ def get_maintenance_dashboard_summary():
 
     return {
         "stats": {
+            "pending_requests": pending_requests,
+            "urgent_pending_requests": urgent_pending_requests,
             "open": open_count,
             "in_progress": in_progress,
             "done": done_count,
