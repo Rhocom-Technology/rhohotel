@@ -8,8 +8,8 @@
         <!-- Header -->
         <div class="px-8 pt-8 pb-5 flex items-start justify-between border-b border-gray-100">
           <div>
-            <h2 class="text-xl font-bold text-gray-900">Apply Discount</h2>
-            <p class="text-xs text-gray-400 mt-1">Select an invoice then enter the discount — a credit note will be created against it</p>
+            <h2 class="text-xl font-bold text-gray-900">{{ voucherOnly ? 'Apply Room Voucher' : 'Apply Discount' }}</h2>
+            <p class="text-xs text-gray-400 mt-1">{{ voucherOnly ? 'Select an invoice then apply an approved room voucher as a credit note.' : 'Select an invoice then enter the discount — a credit note will be created against it' }}</p>
           </div>
           <button @click="$emit('close')"
             class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm flex-shrink-0">✕</button>
@@ -29,7 +29,7 @@
           </div>
 
           <!-- Room Voucher -->
-          <div class="bg-emerald-50 rounded-xl border border-emerald-200 px-4 py-3">
+          <div v-if="voucherOnly" class="bg-emerald-50 rounded-xl border border-emerald-200 px-4 py-3">
             <div class="flex items-center justify-between gap-3 mb-2">
               <div>
                 <p class="text-xs font-bold text-emerald-800">Room Voucher</p>
@@ -64,7 +64,7 @@
 
           <!-- Step 1: Invoice Selector -->
           <div>
-            <h3 class="text-sm font-bold text-gray-900 mb-2">1. Select Invoice</h3>
+            <h3 class="text-sm font-bold text-gray-900 mb-2">{{ voucherOnly ? 'Select Invoice' : '1. Select Invoice' }}</h3>
             <div v-if="chargeableInvoices.length === 0"
               class="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
               <p class="text-xs text-yellow-700">No invoices with an outstanding balance found for this check-in.</p>
@@ -102,7 +102,7 @@
           </div>
 
           <!-- Step 2: Discount details (shown only after invoice is selected, hidden when applying a voucher) -->
-          <template v-if="selectedInvoice && !selectedVoucher">
+          <template v-if="selectedInvoice && !selectedVoucher && !voucherOnly">
             <div>
               <h3 class="text-sm font-bold text-gray-900 mb-3">2. Discount Details</h3>
 
@@ -171,7 +171,7 @@
           <div class="flex items-center justify-end gap-2 pt-2">
             <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               @click="$emit('close')">Cancel</button>
-            <button v-if="!selectedVoucher"
+            <button v-if="!selectedVoucher && !voucherOnly"
               :disabled="submitting || !selectedInvoice || !(computedDiscountAmount > 0) || !reason.trim()"
               @click="submit"
               class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -188,7 +188,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { humanizeErrorMessage } from '@/lib/api'
 
-const props = defineProps({ checkIn: { type: Object, required: true } })
+const props = defineProps({
+  checkIn: { type: Object, required: true },
+  voucherOnly: { type: Boolean, default: false },
+})
 const emit = defineEmits(['close', 'done'])
 
 const discountType = ref('fixed')

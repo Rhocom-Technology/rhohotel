@@ -454,6 +454,7 @@ const checklistItems = ref([])
 // ─── Resources ────────────────────────────────────────────────────────────────
 const employees = createResource({
   url: 'rhohotel.rhocom_hotel.api.housekeeping.get_employees',
+  params: { department: 'Housekeeping' },
   auto: true
 })
 

@@ -172,7 +172,7 @@ const allNavGroups = [
     children: [
        { label: 'Dashboard',             to: '/complimentary' },
         { label: 'Complimentary List',    to: '/complimentary/list' },
-        { label: 'New Complimentary',     to: '/complimentary/new' },
+        { label: 'New Complimentary',     to: '/complimentary/new', allowedRoles: ROLE_GROUPS.complimentaryCreate },
     ],
   },
   {

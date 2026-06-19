@@ -225,6 +225,7 @@ const tasks = createResource({
 // Fetch employees for dropdown
 const employees = createResource({
   url: 'rhohotel.rhocom_hotel.api.housekeeping.get_employees',
+  params: { department: 'Housekeeping' },
   auto: true,
   onError: (error) => {
     console.error('Error fetching employees:', error)

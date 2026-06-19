@@ -269,19 +269,31 @@ def get_dashboard():
 
 
 @frappe.whitelist()
-def get_employees():
+def get_employees(department=None):
     """
-    Get list of employees for dropdown filter
+    Get list of employees for dropdown filter, optionally filtered by department.
+    Supports partial department match (e.g. 'Housekeeping' matches 'Housekeeping - WC').
     """
-    employees = frappe.db.sql("""
-        SELECT 
-            name,
-            employee_name
-        FROM `tabEmployee`
-        WHERE status = 'Active'
-        ORDER BY employee_name ASC
-    """, as_dict=1)
-    
+    if department:
+        employees = frappe.db.sql("""
+            SELECT
+                name,
+                employee_name
+            FROM `tabEmployee`
+            WHERE status = 'Active'
+              AND department LIKE %(department)s
+            ORDER BY employee_name ASC
+        """, {"department": f"%{department}%"}, as_dict=1)
+    else:
+        employees = frappe.db.sql("""
+            SELECT
+                name,
+                employee_name
+            FROM `tabEmployee`
+            WHERE status = 'Active'
+            ORDER BY employee_name ASC
+        """, as_dict=1)
+
     return employees
 
 

@@ -19,6 +19,10 @@ CONSUMPTION_ROLES = {
     "GM Office": {"System Manager", "Hotel Manager"},
     "Operations": {"System Manager", "Hotel Manager", "Front Desk Manager"},
 }
+# Roles that can only see specific departments (not full access)
+DEPARTMENT_RESTRICTED_ROLES = {
+    "Sales Manager": ["Restaurant", "Laundry"],
+}
 ALLOWED_FIELDS = {
     "guest", "room", "reservation", "check_in", "complimentary_type", "department",
     "value", "quantity", "issue_date", "expiry_date", "reason", "redemption_rule",
@@ -38,6 +42,17 @@ def _roles(user=None):
 
 def _has_any(required_roles):
     return bool(_roles() & set(required_roles))
+
+
+def _get_department_filter():
+    """Return list of allowed departments for the current user, or None if unrestricted."""
+    if _is_manager():
+        return None
+    user_roles = _roles()
+    for role, depts in DEPARTMENT_RESTRICTED_ROLES.items():
+        if role in user_roles:
+            return depts
+    return None
 
 
 def _is_manager():
@@ -226,17 +241,27 @@ def _record_response(doc, audit_trail=None):
 
 
 def _identity_conditions(check_in=None, room=None, guest=None):
+    """Build WHERE conditions to match a complimentary to a guest/check-in.
+
+    Priority: if a check_in name is given it takes sole precedence — we never
+    fall back to room/guest matching when we have a concrete check-in link.
+    This prevents vouchers that belonged to a previous guest in the same room
+    from surfacing on a new check-in.
+    """
     conditions = []
     params = {}
     if check_in:
+        # Strict: only records explicitly linked to this check-in
         conditions.append("check_in = %(check_in)s")
         params["check_in"] = check_in
-    if room:
-        conditions.append("room = %(room)s")
-        params["room"] = room
-    if guest:
-        conditions.append("guest LIKE %(guest)s")
-        params["guest"] = f"%{guest}%"
+    else:
+        # Fallback for callers (e.g. POS) that don't have a check-in name
+        if room:
+            conditions.append("room = %(room)s")
+            params["room"] = room
+        if guest:
+            conditions.append("guest = %(guest)s")
+            params["guest"] = guest
     return conditions, params
 
 
@@ -324,20 +349,35 @@ def get_complimentary_dashboard():
     today = nowdate()
     expire_unused_complimentaries(commit=True)
 
-    issued_today = frappe.db.count(DOCTYPE, {"issue_date": today})
-    draft_count = frappe.db.count(DOCTYPE, {"status": "Draft"})
-    pending_approval = frappe.db.count(DOCTYPE, {"status": "Pending"})
-    consumed_today = frappe.db.count(DOCTYPE, {"status": "Consumed", "issue_date": today})
-    active_count = frappe.db.count(DOCTYPE, {"status": ["in", ["Approved", "In Progress"]]})
-    expired_unused = frappe.db.count(DOCTYPE, {"status": "Expired"})
+    dept_filter = _get_department_filter()
+    dept_condition = ""
+    dept_params = {}
+    if dept_filter:
+        placeholders = ", ".join(f"%({f'dept_{i}'})s" for i in range(len(dept_filter)))
+        dept_condition = f" AND department IN ({placeholders})"
+        dept_params = {f"dept_{i}": d for i, d in enumerate(dept_filter)}
 
+    def _count(filters):
+        if dept_filter:
+            filters["department"] = ["in", dept_filter]
+        return frappe.db.count(DOCTYPE, filters)
+
+    issued_today = _count({"issue_date": today})
+    draft_count = _count({"status": "Draft"})
+    pending_approval = _count({"status": "Pending"})
+    consumed_today = _count({"status": "Consumed", "issue_date": today})
+    active_count = _count({"status": ["in", ["Approved", "In Progress"]]})
+    expired_unused = _count({"status": "Expired"})
+
+    params = {"today": today}
+    params.update(dept_params)
     result = frappe.db.sql(
-        """
+        f"""
         SELECT COALESCE(SUM(value), 0) as total
         FROM `tabHotel Complimentary`
-        WHERE issue_date = %s AND status != 'Cancelled'
+        WHERE issue_date = %(today)s AND status != 'Cancelled'{dept_condition}
         """,
-        (today,),
+        params,
         as_dict=1,
     )
     budget_impact_today = flt(result[0].total) if result else 0.0
@@ -373,6 +413,14 @@ def get_complimentary_list(
 
     conditions = ["1 = 1"]
     params = {"limit": page_size, "offset": (page - 1) * page_size}
+
+    # Department restriction for roles like Sales Manager
+    dept_filter = _get_department_filter()
+    if dept_filter:
+        placeholders = ", ".join(f"%({f'dept_{i}'})s" for i in range(len(dept_filter)))
+        conditions.append(f"department IN ({placeholders})")
+        for i, d in enumerate(dept_filter):
+            params[f"dept_{i}"] = d
 
     if filter_type:
         conditions.append("complimentary_type = %(filter_type)s")

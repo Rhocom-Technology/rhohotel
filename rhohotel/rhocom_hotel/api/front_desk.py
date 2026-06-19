@@ -46,14 +46,15 @@ def _night_audit_invoice_source(value):
 def _is_room_revenue_source(source):
 	source = _night_audit_invoice_source(source)
 	if not source:
+		# No source tag — treat as room revenue only when caller confirms a check-in link
 		return True
-	room_keywords = ("room", "accommodation", "lodging", "stay", "night audit")
+	room_keywords = ("room", "accommodation", "lodging", "stay", "night audit", "late charge", "transfer")
 	return any(keyword in source for keyword in room_keywords)
 
 
 def _is_fnb_revenue_source(source):
 	source = _night_audit_invoice_source(source)
-	fnb_keywords = ("restaurant", "bar", "food", "beverage", "f&b", "pos")
+	fnb_keywords = ("restaurant", "bar", "food", "beverage", "f&b", "pos", "laundry", "spa", "minibar")
 	return any(keyword in source for keyword in fnb_keywords)
 
 
@@ -777,7 +778,8 @@ def get_night_audit_data(audit_date=None):
 	for r in room_invoices:
 		amount = flt(r.grand_total)
 		source = _night_audit_invoice_source(r.get("custom_invoice_source"))
-		if r.custom_hotel_room_check_in and _is_room_revenue_source(source):
+		has_checkin = bool(r.custom_hotel_room_check_in)
+		if has_checkin and _is_room_revenue_source(source):
 			room_revenue += amount
 			if r.room_type:
 				by_room_type_map[r.room_type] = by_room_type_map.get(r.room_type, 0) + amount
@@ -841,17 +843,20 @@ def get_night_audit_data(audit_date=None):
 	]
 
 	# ── Outstanding Balances ─────────────────────────────────────────────────
-	# Pending payment/open invoices are based on live submitted Sales Invoice
-	# balances. The ledger below remains an in-house folio view for follow-up.
+	# Pending-payment stat: only invoices posted on the audit date.
+	# This represents what was charged and not yet settled on this specific day.
 	open_invoice_rows = frappe.db.sql(
 		"""
 		SELECT si.name, si.customer, si.customer_name, si.outstanding_amount
 		FROM `tabSales Invoice` si
 		WHERE si.docstatus = 1
+		  AND si.posting_date = %s
 		  AND si.outstanding_amount > 0
-		  AND IFNULL(si.status, '') != 'Cancelled'
-		ORDER BY si.posting_date ASC, si.name ASC
+		  AND IFNULL(si.is_return, 0) = 0
+		  AND IFNULL(si.status, '') NOT IN ('Cancelled', 'Return')
+		ORDER BY si.name ASC
 		""",
+		audit_date_str,
 		as_dict=True,
 	)
 	total_outstanding = flt(sum(flt(row.outstanding_amount) for row in open_invoice_rows))

@@ -57,7 +57,7 @@
         </div>
         <button
           v-if="checkIn.status === 'Checked In'"
-          @click="showDiscount = true"
+          @click="showDiscount = true; discountVoucherOnly = true"
           class="px-3 py-2 text-xs font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-100">
           Review
         </button>
@@ -83,7 +83,7 @@
         </button>
         <div v-if="showCreateMenu"
           class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-32">
-          <button @click="showDiscount = true; showCreateMenu = false"
+          <button @click="showDiscount = true; discountVoucherOnly = false; showCreateMenu = false"
             class="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50">Discount</button>
           <button @click="showRefund = true; showCreateMenu = false"
             class="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50">Refund</button>
@@ -469,7 +469,7 @@
     <RefundRequestModal v-if="showRefund" :checkIn="checkIn" @close="showRefund = false" @done="onActionDone" />
     <BillTransferModal v-if="showBillTransfer" :checkIn="checkIn" @close="showBillTransfer = false" @done="onActionDone" />
     <ReceivePaymentModal v-if="showPayment" :checkIn="checkIn" @close="showPayment = false" @done="() => { showPayment = false; onActionDone() }" />
-    <DiscountModal v-if="showDiscount" :checkIn="checkIn" @close="showDiscount = false" @done="onActionDone" />
+    <DiscountModal v-if="showDiscount" :checkIn="checkIn" :voucherOnly="discountVoucherOnly" @close="showDiscount = false" @done="onActionDone" />
     <InvoiceDetailModal v-if="showInvoiceDetail && selectedInvoice"
       :invoiceName="selectedInvoice.invoice"
       :invoiceType="selectedInvoice.invoice_type"
@@ -536,6 +536,7 @@ const showRefund = ref(false)
 const showBillTransfer = ref(false)
 const showPayment = ref(false)
 const showDiscount = ref(false)
+const discountVoucherOnly = ref(false)
 const showInvoiceDetail = ref(false)
 const selectedInvoice = ref(null)
 const showPaymentDetail = ref(false)

@@ -64,6 +64,7 @@ const ROLE_GROUPS = {
 
   // Complimentary management (managers only)
   complimentary: ['Front Desk Manager', 'Sales Manager'],
+  complimentaryCreate: ['Front Desk Manager', 'Sales Manager'],
 
   // Asset Management
   assetManagement: ['Maintenance Manager'],
@@ -143,6 +144,7 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/kitchen', roles: ROLE_GROUPS.kitchen },
 
   // Complimentary
+  { prefix: '/complimentary/new', roles: ROLE_GROUPS.complimentaryCreate },
   { prefix: '/complimentary', roles: ROLE_GROUPS.complimentary },
 
   // Asset Management

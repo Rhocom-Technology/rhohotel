@@ -255,9 +255,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import { useSessionStore } from '@/stores/session'
 
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
 
 const record = ref(null)
 const audit = ref([])
@@ -511,7 +513,7 @@ const consumptionStatusText = computed(() => {
 const isLoading = computed(() => fetchResource.loading)
 const canEdit = computed(() => ['Draft', 'Pending'].includes(record.value?.status))
 const canSubmit = computed(() => record.value?.status === 'Draft')
-const canApprove = computed(() => record.value?.status === 'Pending')
+const canApprove = computed(() => record.value?.status === 'Pending' && session.hasAnyRole(['System Manager', 'Hotel Manager', 'Front Desk Manager']))
 const canProgress = computed(() => record.value?.status === 'Approved')
 const canConsume = computed(() => ['Approved', 'In Progress'].includes(record.value?.status))
 const canCancel  = computed(() => !['Consumed', 'Cancelled', 'Expired'].includes(record.value?.status))
