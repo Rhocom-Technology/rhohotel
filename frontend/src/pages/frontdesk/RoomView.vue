@@ -26,6 +26,38 @@
 			</div>
 		</div>
 
+		<!-- Room Move Tasks -->
+		<div v-if="pendingMoves.length > 0" class="space-y-2">
+			<div class="flex items-center justify-between">
+				<h3 class="text-sm font-bold text-emerald-700">Pending Room Moves</h3>
+				<p class="text-xs text-gray-400">Physically escort guest to new room and issue new key card</p>
+			</div>
+			<div v-for="move in pendingMoves" :key="move.name"
+				class="bg-white rounded-xl border-2 border-emerald-300 px-5 py-4 flex items-center justify-between gap-4"
+				style="border-left:4px solid #059669;">
+				<div class="flex items-center gap-4">
+					<div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+						<span style="font-size:18px;">🔑</span>
+					</div>
+					<div>
+						<p class="text-sm font-bold text-gray-900">{{ move.guest }}</p>
+						<p class="text-xs text-gray-600 mt-0.5">
+							Move from <span class="font-semibold text-gray-800">Room {{ move.room }}</span>
+							→ <span class="font-semibold text-emerald-700">Room {{ move.upgrade_room }}</span>
+						</p>
+						<p class="text-xs text-gray-400 mt-0.5">{{ move.name }} • Approved {{ fmtTime(move.consumed_on) }}</p>
+					</div>
+				</div>
+				<div class="flex gap-2 flex-shrink-0">
+					<button @click="ackMove(move.name)"
+						:disabled="ackingMove === move.name"
+						class="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+						{{ ackingMove === move.name ? 'Confirming…' : 'Guest Moved ✓' }}
+					</button>
+				</div>
+			</div>
+		</div>
+
 		<!-- Page Tabs -->
 
 		<!-- Filters -->
@@ -259,37 +291,6 @@
 			/>
 		</div>
 
-		<!-- Room Move Tasks -->
-		<div v-if="pendingMoves.length > 0" class="space-y-2">
-			<div class="flex items-center justify-between">
-				<h3 class="text-sm font-bold text-emerald-700">Pending Room Moves</h3>
-				<p class="text-xs text-gray-400">Physically escort guest to new room and issue new key card</p>
-			</div>
-			<div v-for="move in pendingMoves" :key="move.name"
-				class="bg-white rounded-xl border-2 border-emerald-300 px-5 py-4 flex items-center justify-between gap-4"
-				style="border-left:4px solid #059669;">
-				<div class="flex items-center gap-4">
-					<div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-						<span style="font-size:18px;">🔑</span>
-					</div>
-					<div>
-						<p class="text-sm font-bold text-gray-900">{{ move.guest }}</p>
-						<p class="text-xs text-gray-600 mt-0.5">
-							Move from <span class="font-semibold text-gray-800">Room {{ move.room }}</span>
-							→ <span class="font-semibold text-emerald-700">Room {{ move.upgrade_room }}</span>
-						</p>
-						<p class="text-xs text-gray-400 mt-0.5">{{ move.name }} • Approved {{ fmtTime(move.consumed_on) }}</p>
-					</div>
-				</div>
-				<div class="flex gap-2 flex-shrink-0">
-					<button @click="ackMove(move.name)"
-						:disabled="ackingMove === move.name"
-						class="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-						{{ ackingMove === move.name ? 'Confirming…' : 'Guest Moved ✓' }}
-					</button>
-				</div>
-			</div>
-		</div>
 	</div>
 </template>
 

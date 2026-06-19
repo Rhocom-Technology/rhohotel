@@ -101,8 +101,8 @@
             </div>
           </div>
 
-          <!-- Step 2: Discount details (shown only after invoice is selected) -->
-          <template v-if="selectedInvoice">
+          <!-- Step 2: Discount details (shown only after invoice is selected, hidden when applying a voucher) -->
+          <template v-if="selectedInvoice && !selectedVoucher">
             <div>
               <h3 class="text-sm font-bold text-gray-900 mb-3">2. Discount Details</h3>
 
@@ -171,7 +171,7 @@
           <div class="flex items-center justify-end gap-2 pt-2">
             <button class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               @click="$emit('close')">Cancel</button>
-            <button
+            <button v-if="!selectedVoucher"
               :disabled="submitting || !selectedInvoice || !(computedDiscountAmount > 0) || !reason.trim()"
               @click="submit"
               class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">

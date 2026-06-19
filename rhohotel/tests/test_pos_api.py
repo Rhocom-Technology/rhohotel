@@ -667,6 +667,60 @@ class TestPostToRoomFlow(unittest.TestCase):
 		self.assertIn((('POS Invoice', 'POS-ROOM-1', 'consolidated_invoice', 'SI-ROOM-1'), {}), set_value_calls)
 		self.assertEqual(commit_mock.call_count, 2)
 
+	def test_post_bill_to_room_uses_occupying_guest_customer_for_corporate_reservation(self):
+		sales_invoice = FakeDoc(name="SI-CORP-POS-1")
+		pos_invoice = FakeDoc(name="POS-CORP-POS-1")
+		check_in = FakeDoc(
+			name="CHK-CORP-1",
+			status="Checked In",
+			room_number="203",
+			guest="HG-OCCUPANT",
+			canonical_reservation="RES-CORP-1",
+		)
+		guest = FakeDoc(name="HG-OCCUPANT", customer="Occupant Customer")
+		profile = DotDict(
+			company="Rho Hotel",
+			payments=[DotDict(mode_of_payment="Cash"), DotDict(mode_of_payment="Room Charge")],
+		)
+		items = [{"item_code": "ITEM-1", "qty": 1, "price": 2500}]
+
+		def fake_exists(doctype, name):
+			if doctype == "Hotel Room Check In" and name == "CHK-CORP-1":
+				return True
+			if doctype == "Customer" and name == "Occupant Customer":
+				return True
+			return False
+
+		def fake_get_doc(doctype, name):
+			if doctype == "Hotel Room Check In" and name == "CHK-CORP-1":
+				return check_in
+			if doctype == "Hotel Guest" and name == "HG-OCCUPANT":
+				return guest
+			raise AssertionError(f"Unexpected get_doc({doctype!r}, {name!r})")
+
+		with (
+			patch.object(pos_api.frappe.db, "exists", side_effect=fake_exists),
+			patch.object(pos_api.frappe, "get_doc", side_effect=fake_get_doc),
+			patch.object(pos_api.frappe, "new_doc", side_effect=[sales_invoice, pos_invoice]),
+			patch.object(pos_api.frappe.db, "get_single_value", return_value="Rho Hotel"),
+			patch.object(pos_api.frappe.db, "get_value", return_value=None),
+			patch.object(pos_api.frappe.db, "set_value"),
+			patch.object(pos_api.frappe.db, "commit"),
+			patch.object(pos_api, "_get_user_pos_profile", return_value="Restaurant POS"),
+			patch.object(pos_api, "_get_open_pos_entry", return_value=DotDict(name="OPEN-1", pos_profile="Restaurant POS")),
+			patch.object(pos_api.frappe, "get_cached_doc", return_value=profile),
+			patch.object(pos_api, "_has_pos_opening_entry_on_invoice", return_value=True),
+			patch.object(pos_api, "_get_complimentary_discount", return_value=0),
+			patch.object(pos_api, "_redeem_complimentary", return_value=None),
+		):
+			result = pos_api.post_bill_to_room(items, "CHK-CORP-1")
+
+		self.assertEqual(result["sales_invoice"], "SI-CORP-POS-1")
+		self.assertEqual(sales_invoice.customer, "Occupant Customer")
+		self.assertEqual(pos_invoice.customer, "Occupant Customer")
+		self.assertEqual(sales_invoice.custom_hotel_room_check_in, "CHK-CORP-1")
+		self.assertEqual(pos_invoice.custom_hotel_room_check_in, "CHK-CORP-1")
+
 	def test_post_bill_to_room_rejects_inactive_checkin(self):
 		check_in = FakeDoc(name="CHK-OUT", status="Checked Out", room_number="101", guest="HG-1")
 

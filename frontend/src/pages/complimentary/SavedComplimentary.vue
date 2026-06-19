@@ -42,7 +42,7 @@
         <h3 class="text-sm font-bold text-gray-900">Edit Complimentary</h3>
         <button class="text-xs text-gray-500 hover:text-gray-700" @click="showEdit = false">Close</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+      <div class="grid grid-cols-2 gap-3">
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Guest</p>
           <input v-model="editForm.guest" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg" />
@@ -62,6 +62,17 @@
           <select v-model="editForm.department" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg">
             <option>Restaurant</option><option>Front Desk</option><option>Housekeeping</option><option>Laundry</option><option>GM Office</option><option>Operations</option>
           </select>
+        </div>
+        <div v-if="editForm.complimentary_type === 'Room Upgrade'" class="col-span-2">
+          <p class="text-xs text-gray-500 mb-1.5">Upgrade To Room <span class="text-red-500">*</span></p>
+          <div v-if="loadingEditRooms" class="px-3 py-2.5 text-xs text-gray-400 border border-gray-200 rounded-lg bg-gray-50">Loading vacant rooms…</div>
+          <select v-else v-model="editForm.upgrade_room" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+            <option value="">-- Select upgrade room --</option>
+            <option v-for="r in editUpgradeRooms" :key="r.name" :value="r.name">
+              Room {{ r.room_number || r.name }} — {{ r.room_type }}
+            </option>
+          </select>
+          <p v-if="!editForm.upgrade_room" class="text-xs text-red-500 mt-1">Required: select the room to upgrade the guest into before approving.</p>
         </div>
         <div>
           <p class="text-xs text-gray-500 mb-1.5">Value</p>
@@ -254,6 +265,24 @@ const errorMsg = ref('')
 const actionMsg = ref('')
 const showEdit = ref(false)
 const editForm = ref({})
+const editUpgradeRooms = ref([])
+const loadingEditRooms = ref(false)
+
+async function loadEditUpgradeRooms() {
+  const checkIn = editForm.value?.check_in
+  const currentRoom = editForm.value?.room || ''
+  if (!checkIn) { editUpgradeRooms.value = []; return }
+  loadingEditRooms.value = true
+  try {
+    const res = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.get_rooms_for_transfer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frappe-CSRF-Token': window.csrf_token || '' },
+      body: new URLSearchParams({ current_room: currentRoom, check_in_dt: '', check_out_dt: '', exclude_reservation: '' }),
+    })
+    const data = await res.json()
+    editUpgradeRooms.value = data.message || []
+  } catch { editUpgradeRooms.value = [] } finally { loadingEditRooms.value = false }
+}
 
 // ── Fetch record ──────────────────────────────────────────────────────────────
 const fetchResource = createResource({
@@ -404,7 +433,10 @@ function startEdit() {
     note: record.value.note || '',
     approval_level: record.value.approval_level || 'General Manager',
     source_category: record.value.source_category || 'Service Recovery',
+    upgrade_room: record.value.upgrade_room || '',
+    late_checkout_time: record.value.late_checkout_time || '',
   }
+  if (record.value.complimentary_type === 'Room Upgrade') loadEditUpgradeRooms()
   showEdit.value = true
 }
 

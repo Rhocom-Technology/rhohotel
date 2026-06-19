@@ -269,6 +269,35 @@ def _resolve_pos_customer(explicit_customer=None, profile_doc=None, allow_guest_
     return None
 
 
+def _resolve_check_in_occupant_customer(check_in_doc):
+    """Return the ERPNext Customer for the guest occupying a check-in."""
+    guest_ref = cstr(getattr(check_in_doc, "guest", "") or "").strip()
+    if not guest_ref:
+        return None
+
+    try:
+        guest_doc = frappe.get_doc("Hotel Guest", guest_ref)
+        guest_customer = cstr(getattr(guest_doc, "customer", "") or "").strip()
+        if guest_customer:
+            return guest_customer
+    except Exception:
+        pass
+
+    try:
+        if frappe.db.exists("Customer", guest_ref):
+            return guest_ref
+    except Exception:
+        pass
+
+    try:
+        from rhohotel.rhocom_hotel.utils.billing_routing import resolve_or_create_customer
+        return resolve_or_create_customer("", hotel_guest=guest_ref)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Could not resolve check-in occupant customer")
+
+    return guest_ref
+
+
 def _get_complimentary_discount(complimentary_name, bill_total, manual_discount=0, department=None):
     if not complimentary_name:
         return 0
@@ -310,7 +339,11 @@ def _resolve_pos_department(department=None, pos_profile=None):
     if resolved_profile and frappe.db.has_column("POS Profile", "hotel_department"):
         profile_department = cstr(frappe.db.get_value("POS Profile", resolved_profile, "hotel_department") or "").strip()
 
-    return profile_department or cstr(department or "").strip() or "Restaurant"
+    inferred_department = _derive_invoice_source(resolved_profile) if resolved_profile else None
+    if inferred_department not in {"Restaurant", "Laundry", "Front Desk", "Housekeeping", "GM Office", "Operations"}:
+        inferred_department = None
+
+    return profile_department or cstr(department or "").strip() or inferred_department or "Restaurant"
 
 
 def _get_sent_to_kitchen_map(pos_invoice):
@@ -1007,30 +1040,10 @@ def post_bill_to_room(items, check_in, service_charge=0, discount_amount=0, narr
 
     company = frappe.db.get_single_value("Global Defaults", "default_company") or ""
 
-    # Resolve customer via billing routing engine if canonical reservation is linked
-    customer = None
-    canonical_res_name = getattr(ci, "canonical_reservation", None)
-
-    if canonical_res_name and frappe.db.exists("Hotel Reservation", canonical_res_name):
-        try:
-            from rhohotel.rhocom_hotel.utils.billing_routing import resolve_payer
-            # Determine charge category from items (use first item's group or default)
-            charge_category = "Restaurant"  # POS bills are typically F&B
-            payer_info = resolve_payer(canonical_res_name, charge_category=charge_category)
-            payer_type = payer_info.get("payer_type", "Guest")
-            if payer_type != "Internal (Cost Centre)":
-                customer = payer_info.get("customer")
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "Billing routing failed in post_bill_to_room")
-
-    # Fallback: resolve from guest record
-    if not customer:
-        if ci.guest:
-            try:
-                guest_doc = frappe.get_doc("Hotel Guest", ci.guest)
-                customer = guest_doc.customer
-            except Exception:
-                pass
+    # Post-to-room is an occupant folio charge. Room-rate routing can still bill
+    # a corporate reservation to the corporate account, but POS charges posted
+    # to a room should land on the guest occupying that room.
+    customer = _resolve_check_in_occupant_customer(ci)
     if not customer:
         customer = ci.guest or "Guest"
 
@@ -2113,7 +2126,7 @@ def get_pos_shift_stats(pos_opening_entry=None):
         "difference": 0,
         "cashier": frappe.db.get_value("User", entry_doc.user, "full_name") or entry_doc.user,
         "pos_profile": entry_doc.pos_profile,
-        "hotel_department": frappe.db.get_value("POS Profile", entry_doc.pos_profile, "hotel_department") or "Restaurant",
+        "hotel_department": _resolve_pos_department(pos_profile=entry_doc.pos_profile),
         "allow_discount_change": bool(frappe.db.get_value("POS Profile", entry_doc.pos_profile, "allow_discount_change")),
         "shift_date": cstr(entry_doc.period_start_date),
         "opening_time": cstr(entry_doc.period_start_date),
