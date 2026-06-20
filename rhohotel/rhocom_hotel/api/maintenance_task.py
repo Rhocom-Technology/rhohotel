@@ -707,7 +707,7 @@ import frappe
 import json
 from frappe.utils import nowdate, add_days, get_first_day_of_week
 
-MANAGER_ROLES = ("Maintenance Manager", "System Manager", "Hotel Manager")
+MANAGER_ROLES = ("Maintenance Manager", "Facility Manager", "System Manager", "Hotel Manager")
 
 
 def _is_maintenance_manager():

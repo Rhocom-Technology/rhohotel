@@ -108,11 +108,11 @@ export const ROUTE_PERMISSIONS = [
 
   // Maintenance — specific paths before general
   { prefix: '/maintenance/dashboard', roles: ROLE_GROUPS.maintenanceFull },
-  { prefix: '/maintenance/request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
-  { prefix: '/maintenance/new-request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk] },
+  { prefix: '/maintenance/request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk, 'Technician'] },
+  { prefix: '/maintenance/new-request', roles: [...ROLE_GROUPS.maintenanceFull, ...ROLE_GROUPS.frontDesk, 'Technician'] },
   { prefix: '/maintenance/technicians', roles: ROLE_GROUPS.maintenanceFull },
   { prefix: '/maintenance/new-technician', roles: ROLE_GROUPS.maintenanceFull },
-  { prefix: '/maintenance/new-task', roles: ROLE_GROUPS.maintenanceFull },
+  { prefix: '/maintenance/new-task', roles: [...ROLE_GROUPS.maintenanceFull, 'Technician'] },
   { prefix: '/maintenance/list', roles: ROLE_GROUPS.maintenanceList },
   { prefix: '/maintenance/task', roles: ROLE_GROUPS.maintenanceList },
 

@@ -887,7 +887,7 @@ function validateTransitionFields(action) {
 
   if (action === 'Send to Store') {
     // Keep client checks aligned with workflow transition condition:
-    // doc.parts_used and doc.start_time and doc.work_performed
+    // doc.parts_used and doc.start_time (work_performed not required here — task is still in progress)
     const hasParts = partsUsed.value.some(p => p.item_code)
     if (!hasParts) errors.push('At least one part is required for Send to Store.')
     if (!form.value.start_time) errors.push('Start Time is required.')
@@ -895,7 +895,6 @@ function validateTransitionFields(action) {
         new Date(form.value.end_time) <= new Date(form.value.start_time)) {
       errors.push('End Time must be after Start Time.')
     }
-    if (!(form.value.work_performed || '').trim()) errors.push('Work Performed is required.')
     return errors
   }
 
@@ -931,20 +930,25 @@ async function applyWorkflow(action) {
   saving.value = true
 
   try {
-    // Persist the latest form edits first — task.value can be stale (last loaded
-    // snapshot), and the workflow transition is applied against whatever's
-    // currently saved on the server, not what's sitting unsaved in the form.
-    const saveRes = await saveResource.fetch({
-      task_name: taskId,
-      task_data: form.value,
-      parts_used: partsUsed.value.filter(p => p.item_code),
-      parts_returned: partsReturned.value.filter(p => p.item_code),
-    })
-    if (!saveRes?.success) {
-      showToast('Failed to save before transition: ' + (saveRes?.error || 'Unknown error'))
-      return
+    // Only persist unsaved form edits when the task is actually editable (i.e.
+    // the technician is working on it in "In Progress" state). For approval
+    // actions (Approve Store Items, Approve, Verify Work, Reject, etc.) the
+    // form is read-only and there is nothing to save. Saving anyway is risky
+    // because it re-writes parts_used from client state, potentially clearing
+    // them if the component loaded with empty parts.
+    if (isEditable.value) {
+      const saveRes = await saveResource.fetch({
+        task_name: taskId,
+        task_data: form.value,
+        parts_used: partsUsed.value.filter(p => p.item_code),
+        parts_returned: partsReturned.value.filter(p => p.item_code),
+      })
+      if (!saveRes?.success) {
+        showToast('Failed to save before transition: ' + (saveRes?.error || 'Unknown error'))
+        return
+      }
+      await loadTask()
     }
-    await loadTask()
 
     const workflowDoc = {
       ...task.value,

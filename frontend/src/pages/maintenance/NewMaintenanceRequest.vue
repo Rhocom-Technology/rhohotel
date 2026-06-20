@@ -169,7 +169,7 @@
               </select>
             </div>
 
-            <!-- Asset Location — dropdown from ERPNext Location -->
+            <!-- Asset Location — dropdown from Location doctype -->
             <div v-else-if="form.location_type === 'Asset Location'">
               <p class="text-xs text-gray-500 mb-1.5">Asset Location <span class="text-red-400">*</span></p>
               <select v-model="form.asset_location"

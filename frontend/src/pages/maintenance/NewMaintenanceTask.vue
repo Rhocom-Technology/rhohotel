@@ -155,7 +155,7 @@
                 {{ a.asset_name || a.name }}{{ a.asset_category ? ` · ${a.asset_category}` : '' }}
               </option>
             </select>
-            <p class="text-xs text-gray-400 mt-1">Link to a specific ERPNext asset if this task relates to one.</p>
+            <p class="text-xs text-gray-400 mt-1">Link to a specific asset if this task relates to one.</p>
           </div>
         </div>
 
@@ -408,7 +408,7 @@
         <!-- Note about workflow -->
         <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
           <p class="text-xs text-gray-500 font-medium mb-1">ℹ️ Note</p>
-          <p class="text-xs text-gray-400">Tasks created here start in <strong>Draft</strong> state. The technician must use the Frappe desk workflow to move through Store Approval → Witness → Hotel Manager before the task can be completed.</p>
+          <p class="text-xs text-gray-400">Tasks created here start in <strong>Draft</strong> state. The technician moves through Store Approval → Facility Manager → Witness before the task can be completed.</p>
         </div>
 
       </div>

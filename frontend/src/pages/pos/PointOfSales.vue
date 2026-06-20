@@ -68,7 +68,7 @@
 
         <!-- Menu loading / error -->
         <div v-if="menuResource.loading" class="py-12 text-center text-xs text-gray-400">Loading menu items…</div>
-        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check ERPNext Item configuration.</div>
+        <div v-else-if="menuResource.error" class="py-12 text-center text-xs text-red-400">Failed to load menu. Check Item configuration.</div>
 
         <!-- Menu grid -->
         <div v-else class="grid grid-cols-2 lg:grid-cols-4 gap-3">

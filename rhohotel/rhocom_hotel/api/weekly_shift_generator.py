@@ -941,26 +941,99 @@ def _get_default_company():
     )
 
 
+def _is_global_roster_admin():
+    """System Manager, Hotel Manager, and Administrator can manage any department."""
+    if frappe.session.user == "Administrator":
+        return True
+    return bool(set(frappe.get_roles(frappe.session.user)).intersection(
+        {"System Manager", "Hotel Manager"}
+    ))
+
+
+def _get_manager_department():
+    """Return the department of the logged-in user's Employee record, or None."""
+    return frappe.db.get_value(
+        "Employee",
+        {"user_id": frappe.session.user, "status": "Active"},
+        "department",
+    )
+
+
+def _assert_department_access(department):
+    """Throw PermissionError if the current user is not allowed to manage
+    the given department. Global admins are always allowed. Department managers
+    can only access their own department."""
+    if _is_global_roster_admin():
+        return
+    manager_dept = _get_manager_department()
+    if not manager_dept:
+        frappe.throw(
+            "Your Employee record has no department. Contact your administrator.",
+            frappe.PermissionError,
+        )
+    if _normalize_department(department) != _normalize_department(manager_dept):
+        frappe.throw(
+            "You can only manage shifts for your own department.",
+            frappe.PermissionError,
+        )
+
+
 @frappe.whitelist()
 def get_departments():
     """Return distinct active department names for the department dropdown,
     scoped to the default company only -- matches the Shift List page and
     avoids leaking departments from other companies (e.g. _Test Company)
-    into the dropdown."""
+    into the dropdown.
+
+    Global admins (System Manager, Hotel Manager, Administrator) see ALL
+    departments. Department-level managers only see their own department.
+    """
+    # Global admins see everything
+    global_admin_roles = {"System Manager", "Hotel Manager"}
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    is_global_admin = (
+        frappe.session.user == "Administrator"
+        or bool(user_roles.intersection(global_admin_roles))
+    )
+
     default_company = _get_default_company()
 
-    rows = frappe.db.sql(
-        """
-        SELECT DISTINCT department AS value
-        FROM `tabEmployee`
-        WHERE status = 'Active'
-          AND IFNULL(department, '') != ''
-          AND (%(company)s = '' OR company = %(company)s)
-        ORDER BY department
-        """,
-        {"company": default_company or ""},
-        as_dict=1,
-    )
+    if is_global_admin:
+        rows = frappe.db.sql(
+            """
+            SELECT DISTINCT department AS value
+            FROM `tabEmployee`
+            WHERE status = 'Active'
+              AND IFNULL(department, '') != ''
+              AND (%(company)s = '' OR company = %(company)s)
+            ORDER BY department
+            """,
+            {"company": default_company or ""},
+            as_dict=1,
+        )
+    else:
+        # Scope to the manager's own department only
+        employee_dept = frappe.db.get_value(
+            "Employee",
+            {"user_id": frappe.session.user, "status": "Active"},
+            "department",
+        )
+        if not employee_dept:
+            return []
+
+        rows = frappe.db.sql(
+            """
+            SELECT DISTINCT department AS value
+            FROM `tabEmployee`
+            WHERE status = 'Active'
+              AND IFNULL(department, '') != ''
+              AND (%(company)s = '' OR company = %(company)s)
+              AND department = %(department)s
+            ORDER BY department
+            """,
+            {"company": default_company or "", "department": employee_dept},
+            as_dict=1,
+        )
 
     departments = []
     for row in rows:
@@ -1003,6 +1076,7 @@ def get_weekly_roster(department=None, week_start=None):
     week_dates = _week_dates(week_start)
     week_start_dt, week_end_dt = week_dates[0], week_dates[-1]
     department = _normalize_department(department)
+    _assert_department_access(department)
     default_company = _get_default_company()
 
     employees = frappe.db.sql(
@@ -1130,6 +1204,7 @@ def get_weekly_draft(department=None, week_start=None):
     week_dates = _week_dates(week_start)
     week_start_dt, week_end_dt = week_dates[0], week_dates[-1]
     department = _normalize_department(department)
+    _assert_department_access(department)
     default_company = _get_default_company()
 
     employees = frappe.db.sql(
@@ -1409,6 +1484,7 @@ def _resize_assignment(existing, new_start, new_end):
 def _apply_draft_assignments(department, week_start, assignments, publish=False, allowed_dates=None):
     if frappe.session.user == "Guest":
         frappe.throw(_("Please log in to update the roster."))
+    _assert_department_access(department)
 
     assignments = _parse_assignments(assignments)
     if allowed_dates is not None:

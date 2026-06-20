@@ -1155,10 +1155,16 @@ class MaintenanceTask(Document):
         # approves the parts request -- not days later when the Facility
         # Manager finally completes the task. "Approve Store Items" moves
         # workflow_state to "Pending Facility Manager Approval", so that's the
-        # trigger point. _create_stock_entries() independently guards each
-        # entry type against duplicate creation, so it's safe to call on
-        # every save once this state is reached.
-        if self.workflow_state == "Pending Facility Manager Approval":
+        # primary trigger point. We also fire on any post-approval state so
+        # that stock entries are not missed if the workflow state name ever
+        # changes or the doc is advanced manually.
+        # _create_stock_entries() independently guards against duplicate creation.
+        post_approval_states = {
+            "Pending Facility Manager Approval",
+            "Pending Witness Approval",
+            "Completed",
+        }
+        if self.workflow_state in post_approval_states:
             self._create_stock_entries()
 
     def on_submit(self):
@@ -1463,12 +1469,12 @@ class MaintenanceTask(Document):
 
 @frappe.whitelist()
 def approve_parts(task_name):
-    allowed_roles = set(["System Manager", "Hotel Manager"])
+    allowed_roles = set(["System Manager", "Facility Manager"])
     user_roles = set(frappe.get_roles(frappe.session.user))
 
     if not allowed_roles.intersection(user_roles):
         frappe.throw(
-            "Only a Hotel Manager or System Manager can approve parts.",
+            "Only a Facility Manager or System Manager can approve parts.",
             frappe.PermissionError
         )
 
