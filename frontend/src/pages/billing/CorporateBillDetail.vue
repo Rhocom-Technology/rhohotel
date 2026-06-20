@@ -63,6 +63,15 @@
       </div>
     </div>
 
+    <!-- AI Corporate Bill Summary -->
+    <AIInsightPanel
+      title="AI Bill Summary"
+      context-type="corporate_bill_summary"
+      :context-data="billAiContext"
+      :auto-load="false"
+      panel-id="corporate-bill-detail"
+    />
+
     <!-- Details + Payment History -->
     <div style="display:grid;grid-template-columns:1fr 340px;gap:12px;">
 
@@ -249,9 +258,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { callMethodForm } from '@/lib/api'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const route = useRoute()
 
@@ -262,6 +272,23 @@ const bill = ref({
 })
 const loading = ref(false)
 const error = ref('')
+
+const billAiContext = computed(() => {
+  if (!bill.value.billNo) return null
+  return {
+    bill_no: bill.value.billNo,
+    client: bill.value.client,
+    status: bill.value.status,
+    amount: bill.value.amount,
+    balance: bill.value.balance,
+    due_date: bill.value.dueDate,
+    issue_date: bill.value.issueDate,
+    payment_count: bill.value.payments?.length || 0,
+    recent_payments: (bill.value.payments || []).slice(0, 5).map(
+      p => ({ date: p.date, amount: p.amount, method: p.method })
+    ),
+  }
+})
 
 async function fetchBill() {
   loading.value = true

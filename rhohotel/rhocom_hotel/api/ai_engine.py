@@ -185,6 +185,70 @@ _ALL_TOOLS = {
 			"required": ["guest_query"],
 		},
 	},
+	"get_billing_dashboard_summary": {
+		"fn": ai_tools.get_billing_dashboard_summary,
+		"description": "Get a hotel-wide billing snapshot: total outstanding invoices, overdue balance, and unallocated payments.",
+		"parameters": {"type": "object", "properties": {}, "required": []},
+	},
+	"get_corporate_overdue_accounts": {
+		"fn": ai_tools.get_corporate_overdue_accounts,
+		"description": "List corporate customers with the highest overdue invoice balances, ranked by amount.",
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"limit": {"type": "integer", "description": "Max accounts to return. Default 10."}
+			},
+			"required": [],
+		},
+	},
+	"get_today_arrivals": {
+		"fn": ai_tools.get_today_arrivals,
+		"description": "List hotel reservations expected to arrive today.",
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"limit": {"type": "integer", "description": "Max results. Default 20."}
+			},
+			"required": [],
+		},
+	},
+	"get_today_departures": {
+		"fn": ai_tools.get_today_departures,
+		"description": "List hotel reservations expected to depart today.",
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"limit": {"type": "integer", "description": "Max results. Default 20."}
+			},
+			"required": [],
+		},
+	},
+	"get_dirty_vacant_rooms": {
+		"fn": ai_tools.get_dirty_vacant_rooms,
+		"description": "List vacant rooms with an open housekeeping task — rooms currently blocking revenue.",
+		"parameters": {"type": "object", "properties": {}, "required": []},
+	},
+	"get_maintenance_blocked_rooms": {
+		"fn": ai_tools.get_maintenance_blocked_rooms,
+		"description": "List rooms with occupancy status Maintenance — currently out of service.",
+		"parameters": {"type": "object", "properties": {}, "required": []},
+	},
+	"get_hall_events_today": {
+		"fn": ai_tools.get_hall_events_today,
+		"description": "List hall bookings that are active or starting today.",
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"limit": {"type": "integer", "description": "Max events to return. Default 10."}
+			},
+			"required": [],
+		},
+	},
+	"get_shift_coverage_summary": {
+		"fn": ai_tools.get_shift_coverage_summary,
+		"description": "Get the count of active shift assignments for today, grouped by department.",
+		"parameters": {"type": "object", "properties": {}, "required": []},
+	},
 }
 
 # Role → allowed tool names (cascading: higher roles inherit all lower-role tools)
@@ -197,13 +261,19 @@ _ROLE_TOOLS = {
 		"get_outstanding_invoices", "get_housekeeping_summary",
 		"get_maintenance_summary", "get_pos_summary", "get_payment_summary",
 		"search_guests", "get_guest_payment_total",
+		"get_billing_dashboard_summary", "get_corporate_overdue_accounts",
+		"get_today_arrivals", "get_today_departures",
+		"get_dirty_vacant_rooms", "get_maintenance_blocked_rooms",
+		"get_hall_events_today", "get_shift_coverage_summary",
 	],
 	"Hotel Receptionist": [
 		"get_occupancy_summary", "get_inhouse_guests", "get_reservations",
 		"get_overdue_checkouts", "get_guest_profile", "search_guests", "get_guest_payment_total",
+		"get_today_arrivals", "get_today_departures", "get_dirty_vacant_rooms",
+		"get_hall_events_today",
 	],
 	"Housekeeping Supervisor": [
-		"get_occupancy_summary", "get_housekeeping_summary",
+		"get_occupancy_summary", "get_housekeeping_summary", "get_dirty_vacant_rooms",
 	],
 	"POS User": [
 		"get_pos_summary", "get_payment_summary", "get_occupancy_summary",
@@ -445,6 +515,61 @@ _INSIGHT_PROMPTS = {
 		"professional insight covering: their value to the hotel, loyalty/visit patterns, and one "
 		"personalised recommendation for the front desk team.\n\n"
 		"Guest Profile:\n{context}\n\nInsight:"
+	),
+	"billing_risk_summary": (
+		"You are a hotel finance AI. Based on this billing data, write a 2-3 sentence actionable "
+		"collection priority summary for the billing team. Flag the most urgent risk, name amounts "
+		"precisely, and end with one specific next action. Use \u20a6 for currency.\n\n"
+		"Billing Data:\n{context}\n\nSummary:"
+	),
+	"corporate_bill_summary": (
+		"You are a hotel finance AI. Based on this corporate invoice, write a 2-sentence status "
+		"summary: state the payment position, flag any overdue risk, and recommend the single most "
+		"important next step. Use \u20a6 for currency.\n\n"
+		"Invoice Data:\n{context}\n\nSummary:"
+	),
+	"housekeeping_dispatch_summary": (
+		"You are a hotel housekeeping AI. Based on these task counts and room status figures, write a "
+		"2-3 sentence dispatch priority plan for the housekeeping supervisor. "
+		"Lead with revenue-blocking dirty-vacant rooms, then arrivals needing a clean, then in-progress tasks.\n\n"
+		"Housekeeping Status:\n{context}\n\nDispatch Plan:"
+	),
+	"maintenance_triage_summary": (
+		"You are a hotel maintenance AI. Based on these figures, write a 2-sentence triage summary: "
+		"rank the most urgent items, flag any revenue-blocking room faults, and suggest the first action. "
+		"Be specific with numbers.\n\n"
+		"Maintenance Data:\n{context}\n\nTriage:"
+	),
+	"daily_manager_briefing": (
+		"You are a hotel operations AI. Based on this end-of-day snapshot, write a 3-4 sentence "
+		"shift handover briefing for the duty manager. Cover: (1) occupancy and overdue checkouts, "
+		"(2) financial watchpoints, (3) housekeeping and maintenance risks, "
+		"(4) one priority action for the next shift. Use \u20a6 for currency. Be specific.\n\n"
+		"Operations Snapshot:\n{context}\n\nBriefing:"
+	),
+	"reservation_quality_review": (
+		"You are a hotel reservations AI. Review this reservation for completeness and risk. "
+		"Write 2-3 sentences covering missing or unusual details, billing concerns, and one "
+		"recommended action before check-in. If everything looks correct, say so clearly.\n\n"
+		"Reservation:\n{context}\n\nReview:"
+	),
+	"pos_shift_close_summary": (
+		"You are a hotel POS AI. Based on this shift-close data, write a 2-sentence summary: "
+		"explain any cash/card variance, flag unusual patterns, and state whether the close appears "
+		"normal or needs follow-up. Use \u20a6 for currency.\n\n"
+		"POS Shift Data:\n{context}\n\nSummary:"
+	),
+	"hall_event_summary": (
+		"You are a hotel events AI. Based on this hall booking or event dashboard data, write a "
+		"2-3 sentence operational summary: highlight today's active events, revenue and payment status, "
+		"and one item that needs attention. Use \u20a6 for currency.\n\n"
+		"Event Data:\n{context}\n\nSummary:"
+	),
+	"report_narrative": (
+		"You are a hotel reporting AI. Based on this report data, write a 2-3 sentence management "
+		"narrative: describe what changed, what matters most, and one forward-looking action. "
+		"Use \u20a6 for currency. Be specific with numbers.\n\n"
+		"Report Data:\n{context}\n\nNarrative:"
 	),
 }
 

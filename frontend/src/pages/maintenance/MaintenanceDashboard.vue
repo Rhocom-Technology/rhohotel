@@ -99,6 +99,16 @@
       </div>
     </div>
 
+    <!-- AI Maintenance Triage -->
+    <AIInsightPanel
+      v-if="data"
+      title="AI Maintenance Triage"
+      context-type="maintenance_triage_summary"
+      :context-data="maintenanceAiContext"
+      :auto-load="false"
+      panel-id="maintenance-dashboard"
+    />
+
     <!-- Analytics Row -->
     <div v-if="data" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
 
@@ -242,6 +252,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const router = useRouter()
 const loading = ref(true)
@@ -308,6 +319,25 @@ function statusBadge(s) {
     'Cancelled':   'bg-red-50 text-red-500',
   }[s] || 'bg-gray-100 text-gray-500'
 }
+
+// ── AI context ────────────────────────────────────────────────────────
+const maintenanceAiContext = computed(() => {
+  if (!data.value?.stats) return null
+  const s = data.value.stats
+  return {
+    pending_requests: s.pending_requests,
+    urgent_pending_requests: s.urgent_pending_requests,
+    open_tasks: s.open,
+    in_progress: s.in_progress,
+    urgent_open: s.urgent_open,
+    done_this_week: s.done_this_week,
+    avg_resolution_hrs: s.avg_resolution_hrs,
+    on_hold: s.hold,
+    top_locations: (data.value.top_locations || []).slice(0, 5).map(
+      l => ({ location: l.location || l.name, open_tasks: l.open_tasks })
+    ),
+  }
+})
 
 onMounted(loadDashboard)
 </script>

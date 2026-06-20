@@ -44,12 +44,12 @@
 
       <template v-else-if="data">
 
-        <!-- AI Night Audit Narrative -->
+        <!-- AI Audit Insight (manager briefing for hotel managers, night audit narrative for front desk) -->
         <AIInsightPanel
           v-if="session.isHotelManager || session.isFrontDeskManager"
-          title="AI Night Audit Narrative"
-          context-type="night_audit_summary"
-          :context-data="nightAuditContext"
+          :title="session.isHotelManager ? 'AI Manager Shift Briefing' : 'AI Night Audit Narrative'"
+          :context-type="session.isHotelManager ? 'daily_manager_briefing' : 'night_audit_summary'"
+          :context-data="session.isHotelManager ? managerBriefingContext : nightAuditContext"
           :auto-load="false"
           panel-id="night-audit"
           style="margin-bottom:2px;"
@@ -622,6 +622,35 @@ const nightAuditContext = computed(() => {
     noshows: data.value.occupancy?.noshows ?? 0,
     outstanding_total: data.value.outstanding?.total_outstanding,
     outstanding_count: data.value.outstanding?.open_invoice_count ?? data.value.outstanding?.guest_count,
+    critical_items_count: criticalItems.value.length,
+  }
+})
+
+const managerBriefingContext = computed(() => {
+  if (!data.value) return null
+  const rooms = data.value.room_status || []
+  const dirtyVacant = rooms.filter(r => r.status === 'Vacant' && r.hk_status === 'Dirty').length
+  const maintenanceBlocked = rooms.filter(r => r.status === 'Maintenance').length
+  const topPayments = (data.value.payments?.by_method || []).slice(0, 4).map(
+    m => ({ method: m.method, amount: m.amount })
+  )
+  return {
+    date: auditDate.value,
+    occupancy_pct: data.value.occupancy?.occupancy_pct,
+    occupied_rooms: data.value.occupancy?.occupied,
+    total_rooms: data.value.occupancy?.total_rooms,
+    arrivals_today: data.value.occupancy?.arrivals,
+    departures_today: data.value.occupancy?.departures,
+    noshows: data.value.occupancy?.noshows ?? 0,
+    total_revenue: data.value.revenue?.total_revenue,
+    room_revenue: data.value.revenue?.room_revenue,
+    fnb_revenue: data.value.revenue?.fnb_revenue,
+    total_collected_today: data.value.payments?.total_collected,
+    outstanding_total: data.value.outstanding?.total_outstanding,
+    open_invoices: data.value.outstanding?.open_invoice_count ?? data.value.outstanding?.guest_count,
+    dirty_vacant_rooms: dirtyVacant,
+    maintenance_blocked_rooms: maintenanceBlocked,
+    payment_method_mix: topPayments,
     critical_items_count: criticalItems.value.length,
   }
 })

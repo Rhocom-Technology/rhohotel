@@ -22,9 +22,9 @@ const ROLE_GROUPS = {
   // Maintenance - list only (staff level)
   maintenanceList: ['Technician', 'Maintenance Manager','Employee','Facility Manager'],
   // Maintenance - front desk access (request view only)
-  maintenanceFrontDesk: ['Hotel Receptionist', 'Front Desk Manager', 'Technician', 'Maintenance Manager'],
+  maintenanceFrontDesk: ['Hotel Receptionist', 'Front Desk Manager', 'Technician', 'Maintenance Manager', 'Facility Manager'],
   // Maintenance - full module (dashboard, requests, technicians)
-  maintenanceFull: ['Maintenance Manager'],
+  maintenanceFull: ['Maintenance Manager', 'Facility Manager'],
 
   // Billing
   billing: ['Hotel Receptionist', 'Front Desk Manager'],
@@ -46,7 +46,7 @@ const ROLE_GROUPS = {
     'Hotel Receptionist', 'Front Desk Manager',
     'Sales User', 'Sales Manager',
     'House keeper', 'Housekeeping Manager',
-    'Technician', 'Maintenance Manager',
+    'Technician', 'Maintenance Manager', 'Facility Manager',
     'Kitchen Staff', 'Employee',
   ],
   // Staff Roaster - full module (managers only, filtered to department)
@@ -54,7 +54,7 @@ const ROLE_GROUPS = {
     'Front Desk Manager',
     'Sales Manager',
     'Housekeeping Manager',
-    'Maintenance Manager',
+    'Maintenance Manager', 'Facility Manager',
   ],
 
   // Kitchen Terminal - view access
@@ -67,7 +67,7 @@ const ROLE_GROUPS = {
   complimentaryCreate: ['Front Desk Manager', 'Sales Manager'],
 
   // Asset Management
-  assetManagement: ['Maintenance Manager'],
+  assetManagement: ['Maintenance Manager', 'Facility Manager'],
 }
 
 /**

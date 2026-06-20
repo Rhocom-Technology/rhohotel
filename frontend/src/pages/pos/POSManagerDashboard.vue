@@ -51,6 +51,16 @@
       </div>
     </div>
 
+    <!-- AI POS Operations Summary -->
+    <AIInsightPanel
+      v-if="dashResource.data"
+      title="AI POS Operations Summary"
+      context-type="pos_shift_close_summary"
+      :context-data="posDashAiContext"
+      :auto-load="false"
+      panel-id="pos-manager-dashboard"
+    />
+
     <!-- Terminal Performance + Manager Watchlist -->
     <div style="display:grid;grid-template-columns:1fr 320px;gap:12px;">
 
@@ -379,6 +389,7 @@ import OpenTablesModal from '@/components/pos/OpenTablesModal.vue'
 import ClosePOSTerminalModal from '@/components/pos/ClosePOSTerminalModal.vue'
 import GenerateDailySummaryModal from '@/components/pos/GenerateDailySummaryModal.vue'
 import ReviewDifferenceModal from '@/components/pos/ReviewDifferenceModal.vue'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const router = useRouter()
 
@@ -446,6 +457,21 @@ const closedShifts = computed(() =>
     file_url: s.file_url || null,
   }))
 )
+
+const posDashAiContext = computed(() => {
+  if (!dashResource.data) return null
+  return {
+    gross_sales: dashStats.value.gross_sales,
+    open_drafts: dashStats.value.open_drafts,
+    shift_differences: dashStats.value.shift_differences,
+    active_terminals: terminals.value.slice(0, 5).map(t => ({
+      name: t.name, cashier: t.cashier, bills: t.bills, sales: t.sales,
+    })),
+    outlet_revenue: outlets.value.slice(0, 5).map(o => ({
+      outlet: o.name, amount: o.amount, pct: o.pct,
+    })),
+  }
+})
 
 function fetchClosedShifts() {
   const f = shiftFilter.value

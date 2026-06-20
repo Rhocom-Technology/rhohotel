@@ -45,6 +45,15 @@
       </div>
     </div>
 
+    <!-- AI Corporate Billing Summary -->
+    <AIInsightPanel
+      title="AI Corporate Billing Analysis"
+      context-type="billing_risk_summary"
+      :context-data="corporateBillsAiContext"
+      :auto-load="false"
+      panel-id="corporate-bill-list"
+    />
+
     <!-- Filters -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
@@ -202,6 +211,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { callMethodForm } from '@/lib/api'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const search = ref('')
 const filterClient = ref('')
@@ -217,6 +227,20 @@ const bills = ref([])
 const summary = ref({ activeBills: 0, outstandingValue: '₦0', paidThisMonth: '₦0', overdueCount: 0 })
 const loading = ref(false)
 const error = ref('')
+
+const corporateBillsAiContext = computed(() => {
+  if (!bills.value.length && !summary.value.activeBills) return null
+  const overdueBills = bills.value.filter(b => b.status === 'Overdue').slice(0, 5)
+  return {
+    active_bills: summary.value.activeBills,
+    outstanding_value: summary.value.outstandingValue,
+    paid_this_month: summary.value.paidThisMonth,
+    overdue_count: summary.value.overdueCount,
+    top_overdue_bills: overdueBills.map(b => ({
+      client: b.client, balance: b.balance, due: b.dueDate,
+    })),
+  }
+})
 
 
 function handleClickOutside(event) {

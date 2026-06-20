@@ -61,6 +61,15 @@
       </div>
     </div>
 
+    <!-- AI Dispatch Priority Plan -->
+    <AIInsightPanel
+      title="AI Dispatch Priority Plan"
+      context-type="housekeeping_dispatch_summary"
+      :context-data="housekeepingAiContext"
+      :auto-load="false"
+      panel-id="housekeeping-dashboard"
+    />
+
     <!-- Main Grid -->
     <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;" v-if="dashboardData.data">
       <!-- Left Column -->
@@ -246,6 +255,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const router = useRouter()
 const dashboardError = ref('')
@@ -297,6 +307,26 @@ const truncate = (text, length) => {
 const getAttendantSummary = (attendant) => {
   return `${attendant.total_tasks} rooms assigned • ${attendant.completed} completed • ${attendant.in_progress} in progress • ${attendant.pending} pending`
 }
+
+// ── AI context ────────────────────────────────────────────────────────
+const housekeepingAiContext = computed(() => {
+  const d = dashboardData.data
+  if (!d?.statistics) return null
+  const s = d.statistics
+  return {
+    total_tasks: s.total_tasks,
+    active_tasks: s.active_tasks,
+    completion_rate_pct: s.completion_rate,
+    pending: s.by_status?.Pending || 0,
+    assigned: s.by_status?.Assigned || 0,
+    in_progress: s.by_status?.['In Progress'] || 0,
+    completed: s.by_status?.Completed || 0,
+    on_hold: s.by_status?.['On Hold'] || 0,
+    high_priority_tasks: (d.priority_tasks || []).slice(0, 5).map(
+      t => ({ room: t.room, type: t.task_type, status: t.status, priority: t.priority })
+    ),
+  }
+})
 
 // Helper functions for Recent Tasks
 const getTaskDisplayName = (task) => {

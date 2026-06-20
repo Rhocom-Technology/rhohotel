@@ -51,6 +51,15 @@
 
     <template v-else>
 
+      <!-- AI Billing Risk Summary -->
+      <AIInsightPanel
+        title="AI Billing Risk Summary"
+        context-type="billing_risk_summary"
+        :context-data="billingAiContext"
+        :auto-load="false"
+        panel-id="billing-dashboard"
+      />
+
       <!-- ── Row 1: Headline KPIs ── -->
       <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr;gap:12px;">
 
@@ -294,6 +303,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { callMethod } from '@/lib/api'
 import { useSessionStore } from '@/stores/session'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const session = useSessionStore()
 const isFrontDeskManager = computed(() => session.hasAnyRole(['Front Desk Manager']))
@@ -375,6 +385,24 @@ const corpAgingBuckets = computed(() => {
 const indAgingBuckets = computed(() => {
   const aging = insights.value.ind_aging || {}
   return agingDefs.map(d => ({ ...d, value: aging[d.key] || 0 }))
+})
+
+// ── AI context ────────────────────────────────────────────────────────────────
+const billingAiContext = computed(() => {
+  if (!stats.value.total_invoiced && !stats.value.total_outstanding) return null
+  return {
+    date_range: `${fromDate.value} to ${toDate.value}`,
+    total_outstanding: stats.value.total_outstanding,
+    total_overdue: stats.value.total_overdue,
+    collection_rate_pct: stats.value.collection_rate,
+    unallocated_payments: stats.value.unallocated_payments,
+    corporate_outstanding: stats.value.corp_outstanding,
+    individual_outstanding: stats.value.ind_outstanding,
+    corporate_followup_due: insights.value.corporate_followup_count,
+    checkout_risk_folios: insights.value.checkout_risk_count,
+    corporate_aging_60_plus: insights.value.corp_aging?.days_60_plus || 0,
+    individual_aging_60_plus: insights.value.ind_aging?.days_60_plus || 0,
+  }
 })
 
 // ── Feed pagination ───────────────────────────────────────────────────────────

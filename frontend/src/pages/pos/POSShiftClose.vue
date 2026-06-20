@@ -55,6 +55,16 @@
       </div>
     </div>
 
+    <!-- AI Shift Close Summary -->
+    <AIInsightPanel
+      v-if="shiftStats.has_open_shift"
+      title="AI Shift Close Analysis"
+      context-type="pos_shift_close_summary"
+      :context-data="posShiftAiContext"
+      :auto-load="false"
+      panel-id="pos-shift-close"
+    />
+
     <!-- Body grid -->
     <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
 
@@ -231,6 +241,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { createResource } from 'frappe-ui'
 import DraftOrdersModal from '@/components/pos/DraftOrdersModal.vue'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 const router = useRouter()
 const showDraftOrders = ref(false)
@@ -340,6 +351,24 @@ const closingStatusText = computed(() => {
   if (liveDifference.value === 0) return 'All counted amounts match the system values.'
   const direction = liveDifference.value > 0 ? 'over' : 'short'
   return `Counted tenders are ${direction} by ₦${Math.abs(liveDifference.value).toLocaleString()}.`
+})
+
+const posShiftAiContext = computed(() => {
+  if (!shiftStats.value.has_open_shift) return null
+  return {
+    terminal: shiftStats.value.pos_profile,
+    cashier: shiftStats.value.cashier,
+    shift_date: shiftStats.value.shift_date,
+    gross_sales: shiftStats.value.gross_sales,
+    net_collections: shiftStats.value.net_collections,
+    bills_processed: shiftStats.value.bills_processed,
+    voided_count: shiftStats.value.voided_count,
+    open_drafts: shiftStats.value.open_drafts,
+    live_difference: liveDifference.value,
+    tender_breakdown: tenderRows.value.slice(0, 6).map(r => ({
+      type: r.type, system: r.system, counted: parseFloat(r.counted) || 0,
+    })),
+  }
 })
 
 // ── API: Close Shift ───────────────────────────────────────────────

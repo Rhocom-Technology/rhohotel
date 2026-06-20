@@ -1,6 +1,16 @@
 <template>
-  <SavedReservationDetails
-    :reservation="reservation"
+  <div class="space-y-0">
+    <AIInsightPanel
+      v-if="reservation?.name"
+      title="AI Reservation Review"
+      context-type="reservation_quality_review"
+      :context-data="reservationAiContext"
+      :auto-load="false"
+      panel-id="saved-reservation-review"
+      style="margin-bottom:8px;"
+    />
+    <SavedReservationDetails
+      :reservation="reservation"
     :loading="loading"
     :error="errorMessage"
     :action-loading="actionLoading"
@@ -16,14 +26,16 @@
     @create-invoice="createInvoice"
     @submit-reservation="submitReservation"
     @edit-draft="editDraft"
-  />
+    />
+  </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SavedReservationDetails from '@/components/reservations/SavedReservation.vue'
 import { callMethod } from '@/lib/api'
+import AIInsightPanel from '@/components/ai/AIInsightPanel.vue'
 
 // Utility: Check if a guest exists by name or id
 async function ensureGroupMasterPayerExists(payerName, payerDetails = {}) {

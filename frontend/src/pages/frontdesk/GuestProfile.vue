@@ -417,6 +417,7 @@ function loyaltyClass(loyalty) {
 
 const aiContext = computed(() => {
   if (!guest.value) return null
+  const recentActivity = (guest.value.timeline || []).slice(0, 5).map(t => ({ date: t.date, event: t.desc }))
   return {
     guest_name: guest.value.hotel_guest_name,
     guest_type: guest.value.guest_type,
@@ -427,6 +428,8 @@ const aiContext = computed(() => {
     current_status: guest.value.current_status,
     current_room: guest.value.active_checkin?.room_number || null,
     outstanding_balance: guest.value.active_checkin?.total_outstanding_amount || 0,
+    preferences: guest.value.preference || null,
+    recent_activity: recentActivity,
   }
 })
 </script>

@@ -420,3 +420,235 @@ def search_guests(query, limit=10):
 	except Exception as e:
 		frappe.log_error(f"AI tool search_guests: {e}", "AI Tool Error")
 		return {"error": str(e), "guests": [], "count": 0}
+
+
+# ── Billing Dashboard Summary ─────────────────────────────────────────────────
+
+def get_billing_dashboard_summary():
+	"""Total outstanding invoices, overdue balance, and unallocated payments."""
+	try:
+		outstanding = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(outstanding_amount), 0) AS total_outstanding,
+				   COUNT(*) AS invoice_count
+			FROM `tabSales Invoice`
+			WHERE docstatus = 1 AND outstanding_amount > 0
+			""",
+			as_dict=True,
+		)[0]
+		overdue = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(outstanding_amount), 0) AS total_overdue
+			FROM `tabSales Invoice`
+			WHERE docstatus = 1 AND outstanding_amount > 0 AND due_date < CURDATE()
+			""",
+			as_dict=True,
+		)[0]
+		unallocated = frappe.db.sql(
+			"""
+			SELECT COUNT(*) AS cnt
+			FROM `tabPayment Entry`
+			WHERE docstatus = 1 AND unallocated_amount > 0
+			""",
+			as_dict=True,
+		)[0]
+		return {
+			"total_outstanding": flt(outstanding.total_outstanding),
+			"outstanding_invoices": outstanding.invoice_count,
+			"total_overdue": flt(overdue.total_overdue),
+			"unallocated_payments": unallocated.cnt,
+		}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_billing_dashboard_summary: {e}", "AI Tool Error")
+		return {"error": str(e)}
+
+
+# ── Corporate Overdue Accounts ────────────────────────────────────────────────
+
+def get_corporate_overdue_accounts(limit=10):
+	"""List corporate customers with the highest overdue invoice balances."""
+	try:
+		results = frappe.db.sql(
+			"""
+			SELECT si.customer,
+				   COALESCE(SUM(si.outstanding_amount), 0) AS total_overdue,
+				   COUNT(*) AS invoice_count,
+				   MIN(si.due_date) AS oldest_due
+			FROM `tabSales Invoice` si
+			INNER JOIN `tabCustomer` c ON c.name = si.customer
+			WHERE si.docstatus = 1
+			  AND si.outstanding_amount > 0
+			  AND si.due_date < CURDATE()
+			  AND c.customer_group = 'Corporate'
+			GROUP BY si.customer
+			ORDER BY total_overdue DESC
+			LIMIT %s
+			""",
+			(int(limit),),
+			as_dict=True,
+		)
+		return {"accounts": [dict(r) for r in results], "count": len(results)}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_corporate_overdue_accounts: {e}", "AI Tool Error")
+		return {"error": str(e), "accounts": [], "count": 0}
+
+
+# ── Today's Arrivals ─────────────────────────────────────────────────────────
+
+def get_today_arrivals(limit=20):
+	"""List reservations expected to arrive today."""
+	try:
+		target_date = today()
+		arrivals = frappe.get_all(
+			"Hotel Reservation",
+			filters=[
+				["from_date", "=", target_date],
+				["reservation_status", "in", ["Hold", "Confirmed"]],
+			],
+			fields=["name", "primary_guest_name", "reservation_type", "from_date", "to_date"],
+			limit_page_length=int(limit),
+			order_by="from_date asc",
+		)
+		return {"arrivals": [dict(a) for a in arrivals], "count": len(arrivals), "date": target_date}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_today_arrivals: {e}", "AI Tool Error")
+		return {"error": str(e), "arrivals": [], "count": 0}
+
+
+# ── Today's Departures ────────────────────────────────────────────────────────
+
+def get_today_departures(limit=20):
+	"""List reservations expected to depart today."""
+	try:
+		target_date = today()
+		departures = frappe.get_all(
+			"Hotel Reservation",
+			filters=[
+				["to_date", "=", target_date],
+				["reservation_status", "in", ["Confirmed", "Checked In"]],
+			],
+			fields=["name", "primary_guest_name", "reservation_type", "from_date", "to_date"],
+			limit_page_length=int(limit),
+			order_by="to_date asc",
+		)
+		return {"departures": [dict(d) for d in departures], "count": len(departures), "date": target_date}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_today_departures: {e}", "AI Tool Error")
+		return {"error": str(e), "departures": [], "count": 0}
+
+
+# ── Dirty Vacant Rooms ────────────────────────────────────────────────────────
+
+def get_dirty_vacant_rooms():
+	"""Rooms that are vacant but have an open housekeeping task — blocking revenue."""
+	try:
+		vacant_rooms = frappe.get_all(
+			"Hotel Room",
+			filters={"occupancy_status": "Vacant"},
+			fields=["name", "room_type", "floor"],
+			limit_page_length=0,
+		)
+		if not vacant_rooms:
+			return {"dirty_vacant_rooms": [], "count": 0}
+
+		vacant_names = [r.name for r in vacant_rooms]
+		room_index = {r.name: r for r in vacant_rooms}
+
+		blocked = frappe.db.sql(
+			"""
+			SELECT room, status
+			FROM `tabHousekeeping Task`
+			WHERE room IN %(rooms)s
+			  AND status NOT IN ('Completed', 'Approved')
+			  AND docstatus != 2
+			GROUP BY room
+			""",
+			{"rooms": vacant_names},
+			as_dict=True,
+		)
+
+		result = [
+			{
+				"room": r.room,
+				"room_type": room_index.get(r.room, {}).get("room_type", ""),
+				"hk_status": r.status,
+			}
+			for r in blocked
+		]
+		return {"dirty_vacant_rooms": result, "count": len(result)}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_dirty_vacant_rooms: {e}", "AI Tool Error")
+		return {"error": str(e), "dirty_vacant_rooms": [], "count": 0}
+
+
+# ── Maintenance Blocked Rooms ─────────────────────────────────────────────────
+
+def get_maintenance_blocked_rooms():
+	"""Rooms with occupancy_status 'Maintenance' — currently out of service."""
+	try:
+		blocked = frappe.get_all(
+			"Hotel Room",
+			filters={"occupancy_status": ["in", ["Maintenance", "Unavailable", "Out of Service"]]},
+			fields=["name", "room_type", "floor"],
+			limit_page_length=0,
+		)
+		return {"maintenance_blocked_rooms": [dict(r) for r in blocked], "count": len(blocked)}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_maintenance_blocked_rooms: {e}", "AI Tool Error")
+		return {"error": str(e), "maintenance_blocked_rooms": [], "count": 0}
+
+
+# ── Hall Events Today ─────────────────────────────────────────────────────────
+
+def get_hall_events_today(limit=10):
+	"""List hall bookings active or starting today."""
+	try:
+		target_date = today()
+		events = frappe.db.sql(
+			"""
+			SELECT name, customer_name, hall, event_type,
+				   start_datetime, end_datetime, net_total, docstatus
+			FROM `tabHall Booking`
+			WHERE DATE(start_datetime) = %(d)s
+			   OR DATE(end_datetime) = %(d)s
+			   OR (DATE(start_datetime) <= %(d)s AND DATE(end_datetime) >= %(d)s)
+			ORDER BY start_datetime ASC
+			LIMIT %(lim)s
+			""",
+			{"d": target_date, "lim": int(limit)},
+			as_dict=True,
+		)
+		return {"events": [dict(e) for e in events], "count": len(events), "date": target_date}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_hall_events_today: {e}", "AI Tool Error")
+		return {"error": str(e), "events": [], "count": 0}
+
+
+# ── Shift Coverage Summary ────────────────────────────────────────────────────
+
+def get_shift_coverage_summary():
+	"""Count of active shift assignments for today grouped by department."""
+	try:
+		target_date = today()
+		rows = frappe.db.sql(
+			"""
+			SELECT e.department, COUNT(sa.name) AS assigned_staff
+			FROM `tabShift Assignment` sa
+			INNER JOIN `tabEmployee` e ON e.name = sa.employee
+			WHERE sa.start_date <= %(d)s
+			  AND (sa.end_date IS NULL OR sa.end_date >= %(d)s)
+			  AND sa.docstatus = 1
+			GROUP BY e.department
+			ORDER BY assigned_staff DESC
+			""",
+			{"d": target_date},
+			as_dict=True,
+		)
+		return {
+			"coverage": [dict(r) for r in rows],
+			"total_assigned": sum(r.assigned_staff for r in rows),
+			"date": target_date,
+		}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_shift_coverage_summary: {e}", "AI Tool Error")
+		return {"error": str(e), "coverage": [], "total_assigned": 0}
