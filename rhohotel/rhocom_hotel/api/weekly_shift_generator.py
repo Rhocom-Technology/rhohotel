@@ -2147,6 +2147,7 @@ def _ai_get_previous_shifts(employee_names, week_start_dt, lookback_weeks=4):
             result.setdefault(row.employee, []).append({
                 "shift_type": row.shift_type,
                 "day_of_week": day.weekday(),
+                "date": cstr(day),   # used for last-week detection
             })
             day = add_days(day, 1)
 
@@ -2154,122 +2155,275 @@ def _ai_get_previous_shifts(employee_names, week_start_dt, lookback_weeks=4):
 
 
 def _ai_fallback_suggestions(employees, week_dates, current_cells, preferences, prev_shifts, valid_shift_names):
-    """Rule-based shift suggestions used when AI is disabled or unavailable."""
+    """
+    Holistic week-level shift scheduler.
+
+    Guarantees (preference-respecting, best-effort):
+    - 2 days OFF per employee per week (preference unavailability honoured first;
+      remaining off days chosen deterministically so reruns give the same result).
+    - At least one employee on each configured shift type per working day (coverage).
+    - No day where all working staff share a single shift type (conflict prevention).
+    - Submitted staff preferences and unavailability are the highest priority.
+    - Last week's published shifts and 4-week patterns are used for continuity.
+    """
+    import hashlib as _hashlib
+    import random   as _random
     from collections import Counter as _Counter
 
-    DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    suggestions = []
+    DAY_NAMES  = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    shift_list = sorted(s for s in valid_shift_names if s not in ("OFF", "Leave"))
+
+    if not employees:
+        return []
+
+    week_date_strs = [cstr(d) for d in week_dates]
+    week_start_dt  = week_dates[0]
+
+    # ── Build per-employee data maps ──────────────────────────────────────────
+    emp_prefs = {emp.employee: preferences.get(emp.employee, {}) for emp in employees}
+
+    lw_start = getdate(add_days(week_start_dt, -7))
+    lw_end   = getdate(add_days(week_start_dt, -1))
+
+    emp_patterns  = {}   # {emp: {dow: most_common_shift}}  — 4-week history
+    emp_last_week = {}   # {emp: {dow: shift_type}}         — previous week only
 
     for emp in employees:
-        for day in week_dates:
-            date_str = cstr(day)
+        prev      = prev_shifts.get(emp.employee, [])
+        by_dow    = {}
+        lw_by_dow = {}
+        for entry in prev:
+            st  = entry.get("shift_type", "")
+            dow = entry.get("day_of_week", 0)
+            if st not in valid_shift_names:
+                continue
+            by_dow.setdefault(dow, []).append(st)
+            d = entry.get("date")
+            if d:
+                try:
+                    if lw_start <= getdate(d) <= lw_end:
+                        lw_by_dow[dow] = st   # most recent wins
+                except Exception:
+                    pass
+        emp_patterns[emp.employee]  = {
+            dow: _Counter(shifts).most_common(1)[0][0]
+            for dow, shifts in by_dow.items()
+        }
+        emp_last_week[emp.employee] = lw_by_dow
+
+    # ── Phase 1: Locked cells (published, not draft) ──────────────────────────
+    locked = {}   # {(emp, date): shift_type}
+    for emp in employees:
+        for date_str in week_date_strs:
             cell = current_cells.get(emp.employee, {}).get(date_str, {})
             if _ai_is_locked(cell):
+                locked[(emp.employee, date_str)] = cell.get("value", "OFF")
+
+    # ── Phase 2: Assign 2 days off per employee ───────────────────────────────
+    emp_off_days = {}   # {emp: set of date_strs}
+
+    for emp in employees:
+        forced_off        = set()   # preference: unavailable
+        preferred_working = set()   # preference: has a shift — avoid making off
+
+        for date_str in week_date_strs:
+            if (emp.employee, date_str) in locked:
                 continue
-
-            pref = preferences.get(emp.employee, {}).get(date_str, {})
-            dow = day.weekday()
-            day_name = DAY_NAMES[dow]
-            base = {
-                "employee": emp.employee,
-                "date": date_str,
-                "previous_shift_note": "",
-                "source": "fallback",
-            }
-
-            # Rule 1: Unavailable → OFF
+            pref = emp_prefs[emp.employee].get(date_str, {})
             if pref.get("availability") == "Unavailable":
-                suggestions.append({
-                    **base,
-                    "shift_type": "OFF",
-                    "confidence": "high",
-                    "reason": f"Staff marked unavailable on {day_name}.",
-                    "preference_match": True,
-                })
+                forced_off.add(date_str)
+            elif pref.get("preferred_shift") or pref.get("alternative_shift"):
+                preferred_working.add(date_str)
+
+        locked_off_count = sum(
+            1 for d in week_date_strs if locked.get((emp.employee, d)) == "OFF"
+        )
+        needed_off = max(0, 2 - locked_off_count - len(forced_off))
+
+        # Primary candidates: not forced-off, not locked, not strongly preferred
+        free_cands = [
+            d for d in week_date_strs
+            if d not in forced_off
+            and (emp.employee, d) not in locked
+            and d not in preferred_working
+        ]
+        # Fallback pool: also includes preferred-working days (last resort)
+        all_cands = [
+            d for d in week_date_strs
+            if d not in forced_off and (emp.employee, d) not in locked
+        ]
+
+        # Deterministic shuffle: same employee + week always yields same off days
+        _seed = int(_hashlib.md5(
+            f"{emp.employee}|{week_date_strs[0]}".encode()
+        ).hexdigest(), 16) % (2 ** 32)
+        rng = _random.Random(_seed)
+        rng.shuffle(free_cands)
+        rng.shuffle(all_cands)
+
+        off_days = set(forced_off)
+        pool = free_cands if len(free_cands) >= needed_off else all_cands
+        for d in pool:
+            if d not in off_days:
+                off_days.add(d)
+                if len(off_days) - len(forced_off) >= needed_off:
+                    break
+
+        emp_off_days[emp.employee] = off_days
+
+    # ── Phase 3: Initial per-cell shift assignment ────────────────────────────
+    assignment = {emp.employee: {} for emp in employees}
+    reason_map = {}   # {(emp, date): (reason_str, confidence, preference_match)}
+
+    for emp in employees:
+        default = cstr(emp.get("default_shift") or "")
+        for i, day in enumerate(week_dates):
+            date_str = week_date_strs[i]
+            dow      = day.weekday()
+            day_name = DAY_NAMES[dow]
+            key      = (emp.employee, date_str)
+
+            if key in locked:
+                assignment[emp.employee][date_str] = locked[key]
                 continue
 
-            # Rule 2: Preferred shift (valid)
-            pref_shift = pref.get("preferred_shift", "")
-            if pref_shift and pref_shift in valid_shift_names:
-                suggestions.append({
-                    **base,
-                    "shift_type": pref_shift,
-                    "confidence": "high",
-                    "reason": f"Matches {day_name} preference.",
-                    "preference_match": True,
-                })
+            if date_str in emp_off_days.get(emp.employee, set()):
+                pref = emp_prefs[emp.employee].get(date_str, {})
+                if pref.get("availability") == "Unavailable":
+                    reason_map[key] = (f"Staff marked unavailable on {day_name}.", "high", True)
+                else:
+                    reason_map[key] = (f"Scheduled rest day on {day_name}.", "medium", False)
+                assignment[emp.employee][date_str] = "OFF"
                 continue
 
-            # Rule 3: Alternative shift (valid)
-            alt_shift = pref.get("alternative_shift", "")
-            if alt_shift and alt_shift in valid_shift_names and alt_shift != pref_shift:
-                suggestions.append({
-                    **base,
-                    "shift_type": alt_shift,
-                    "confidence": "medium",
-                    "reason": f"Matches {day_name} alternative preference.",
-                    "preference_match": True,
-                })
-                continue
+            pref    = emp_prefs[emp.employee].get(date_str, {})
+            pref_sh = pref.get("preferred_shift", "")
+            alt_sh  = pref.get("alternative_shift", "")
+            last_wk = emp_last_week[emp.employee].get(dow)
+            pattern = emp_patterns[emp.employee].get(dow)
 
-            # Rule 4: Historical day-of-week pattern
-            prev = prev_shifts.get(emp.employee, [])
-            same_dow = [
-                p["shift_type"] for p in prev
-                if p.get("day_of_week") == dow and p.get("shift_type") in valid_shift_names
+            if pref_sh and pref_sh in valid_shift_names:
+                assignment[emp.employee][date_str] = pref_sh
+                reason_map[key] = (f"Matches {day_name} preference.", "high", True)
+            elif alt_sh and alt_sh in valid_shift_names and alt_sh != pref_sh:
+                assignment[emp.employee][date_str] = alt_sh
+                reason_map[key] = (f"Matches {day_name} alternative preference.", "medium", True)
+            elif last_wk and last_wk in valid_shift_names:
+                assignment[emp.employee][date_str] = last_wk
+                reason_map[key] = (f"Continuing last week\u2019s {day_name} shift.", "medium", False)
+            elif pattern and pattern in valid_shift_names:
+                assignment[emp.employee][date_str] = pattern
+                reason_map[key] = (f"Historical {day_name} pattern.", "medium", False)
+            elif default and default in valid_shift_names:
+                assignment[emp.employee][date_str] = default
+                reason_map[key] = ("Employee\u2019s configured default shift.", "low", False)
+            elif shift_list:
+                assignment[emp.employee][date_str] = shift_list[0]
+                reason_map[key] = ("No prior data; first available shift assigned.", "low", False)
+            else:
+                assignment[emp.employee][date_str] = "OFF"
+                reason_map[key] = ("No shift types configured.", "low", False)
+
+    # ── Phase 4: Coverage & conflict correction (day-level) ──────────────────
+    if shift_list:
+        for i, day in enumerate(week_dates):
+            date_str = week_date_strs[i]
+            day_name = DAY_NAMES[day.weekday()]
+
+            # Only consider employees who can be reassigned (not locked)
+            working = [
+                emp for emp in employees
+                if assignment[emp.employee].get(date_str) != "OFF"
+                and (emp.employee, date_str) not in locked
             ]
-            if same_dow:
-                top, cnt = _Counter(same_dow).most_common(1)[0]
-                total = len(same_dow)
-                conf = "high" if cnt / total >= 0.7 else "medium"
-                note = f"{top} on {cnt}/{total} recent {day_name}s"
-                suggestions.append({
-                    **base,
-                    "shift_type": top,
-                    "confidence": conf,
-                    "reason": f"Historical pattern: {note}.",
-                    "preference_match": False,
-                    "previous_shift_note": note,
-                })
+            if not working:
                 continue
 
-            # Rule 5: Employee default shift
-            default = cstr(emp.get("default_shift") or "")
-            if default and default in valid_shift_names:
-                suggestions.append({
-                    **base,
-                    "shift_type": default,
-                    "confidence": "low",
-                    "reason": "Employee's configured default shift.",
-                    "preference_match": False,
-                })
+            # Can't cover more shift types than we have working employees
+            target_shifts = shift_list[:min(len(shift_list), len(working))]
+
+            def _no_hard_pref(e):
+                return not emp_prefs[e.employee].get(date_str, {}).get("preferred_shift")
+
+            counts = _Counter(assignment[e.employee][date_str] for e in working)
+
+            # (a) Conflict prevention: if everyone is on the same shift, redistribute
+            if len(counts) == 1 and len(working) > 1:
+                ordered = sorted(working, key=lambda e: 0 if _no_hard_pref(e) else 1)
+                for idx, emp in enumerate(ordered):
+                    new_sh = target_shifts[idx % len(target_shifts)]
+                    assignment[emp.employee][date_str] = new_sh
+                    old_r = reason_map.get((emp.employee, date_str), ("", "low", False))
+                    reason_map[(emp.employee, date_str)] = (
+                        f"Redistributed to prevent single-shift conflict on {day_name}.",
+                        "low",
+                        old_r[2],
+                    )
+                counts = _Counter(assignment[e.employee][date_str] for e in working)
+
+            # (b) Coverage: ensure each target shift type has at least 1 person
+            uncovered = [s for s in target_shifts if counts.get(s, 0) == 0]
+            if uncovered:
+                by_shift = {}
+                for e in working:
+                    sh = assignment[e.employee][date_str]
+                    by_shift.setdefault(sh, []).append(e)
+
+                # Build reassignment pool: excess employees (no hard preference)
+                # from the most over-represented shifts
+                pool = []
+                for sh, sh_emps in sorted(by_shift.items(), key=lambda kv: -len(kv[1])):
+                    excess = sh_emps[1:]   # keep 1 per shift, offer the rest
+                    pool.extend(e for e in excess if _no_hard_pref(e))
+
+                for j, needed_sh in enumerate(uncovered):
+                    if j < len(pool):
+                        emp = pool[j]
+                        assignment[emp.employee][date_str] = needed_sh
+                        reason_map[(emp.employee, date_str)] = (
+                            f"Assigned {needed_sh} to ensure shift coverage on {day_name}.",
+                            "low",
+                            False,
+                        )
+
+    # ── Phase 5: Build final suggestions list ─────────────────────────────────
+    suggestions = []
+    for emp in employees:
+        for i, day in enumerate(week_dates):
+            date_str = week_date_strs[i]
+            if (emp.employee, date_str) in locked:
                 continue
 
-            # Rule 6: Retain existing draft value
-            curr_val = cell.get("value", "OFF")
-            if curr_val != "OFF" and curr_val in valid_shift_names:
-                suggestions.append({
-                    **base,
-                    "shift_type": curr_val,
-                    "confidence": "low",
-                    "reason": "Retaining existing draft assignment.",
-                    "preference_match": False,
-                })
-                continue
+            shift_type = assignment[emp.employee].get(date_str, "OFF")
+            dow        = day.weekday()
+            day_name   = DAY_NAMES[dow]
+            key        = (emp.employee, date_str)
 
-            # Rule 7 (catch-all): no data available — pick the first valid shift type
-            # alphabetically so that fully unallocated weeks always get suggestions.
-            ordered = sorted(s for s in valid_shift_names if s not in ("OFF", "Leave"))
-            if ordered:
-                suggestions.append({
-                    **base,
-                    "shift_type": ordered[0],
-                    "confidence": "low",
-                    "reason": "No preference, history, or default shift found; first available shift suggested.",
-                    "preference_match": False,
-                })
-            # If there are genuinely no shift types configured we emit nothing
-            # for this cell (manager should set up Shift Types first).
+            reason, confidence, pref_match = reason_map.get(
+                key, ("Assigned based on available data.", "low", False)
+            )
+
+            prev_note = ""
+            if shift_type != "OFF":
+                same_dow = [
+                    p["shift_type"] for p in prev_shifts.get(emp.employee, [])
+                    if p.get("day_of_week") == dow and p.get("shift_type") in valid_shift_names
+                ]
+                if same_dow:
+                    cnt = same_dow.count(shift_type)
+                    if cnt:
+                        prev_note = f"{shift_type} on {cnt}/{len(same_dow)} recent {day_name}s"
+
+            suggestions.append({
+                "employee":            emp.employee,
+                "date":                date_str,
+                "shift_type":          shift_type,
+                "confidence":          confidence,
+                "reason":              reason,
+                "preference_match":    pref_match,
+                "previous_shift_note": prev_note,
+                "source":              "fallback",
+            })
 
     return suggestions
 
@@ -2329,12 +2483,15 @@ def _ai_call_provider(
     prompt = (
         "You are a hotel shift scheduling assistant.\n"
         "Return ONLY a valid JSON array — no prose, no markdown fences, nothing else.\n\n"
-        "RULES (in priority order):\n"
+        "RULES (strict priority):\n"
         "1. UNAVAILABLE employee on a date → shift_type MUST be \"OFF\".\n"
-        "2. Use prefer= shift when listed, else alt= shift.\n"
-        "3. Use historical day pattern when available.\n"
+        "2. Respect prefer= shift, then alt= shift.\n"
+        "3. Use historical day-of-week pattern when available.\n"
         "4. Use employee default_shift, else first from valid_shifts.\n"
-        "5. Cover all employees for all dates. Aim for fair distribution.\n\n"
+        "5. Each employee must have exactly 2 days OFF per week (UNAVAILABLE days count as OFF).\n"
+        "6. Every configured shift type must appear at least once per working day (coverage).\n"
+        "7. Never assign ALL working employees to a single shift type on the same day (no conflict).\n"
+        "8. Produce a suggestion for every employee for every date.\n\n"
         f"Week dates (YYYY-MM-DD): {', '.join(week_list)}\n"
         f"Valid shifts: {', '.join(valid_list)}\n\n"
         "Employees (id|name|default_shift):\n"
@@ -2387,7 +2544,9 @@ def _ai_call_provider(
 
 
 def _ai_merge(ai_raw, fallback_sug, current_cells, valid_shift_names, week_dates, employee_names):
-    """Validate AI suggestions and fill gaps with deterministic fallback."""
+    """Validate AI suggestions, fill gaps with deterministic fallback, and enforce business rules."""
+    from collections import Counter as _Counter
+
     warnings = []
     valid_dates = {cstr(d) for d in week_dates}
     emp_set = set(employee_names)
@@ -2420,6 +2579,39 @@ def _ai_merge(ai_raw, fallback_sug, current_cells, valid_shift_names, week_dates
     for s in fallback_sug:
         if (s["employee"], s["date"]) not in covered:
             merged.append(s)
+
+    # ── Business-rule enforcement on merged output ────────────────────────────
+    # Rule: each employee should have at most 2 OFF days per week.
+    # If the AI hallucinated and assigned more OFFs, replace the excess with
+    # the corresponding fallback suggestion (which obeys the 2-days-off rule).
+    fallback_index = {(s["employee"], s["date"]): s for s in fallback_sug}
+
+    emp_off_count = _Counter(
+        s["employee"] for s in merged if s.get("shift_type") == "OFF"
+    )
+    over_rested = {emp for emp, cnt in emp_off_count.items() if cnt > 2}
+
+    if over_rested:
+        corrected_count = 0
+        emp_off_used = _Counter()
+        result = []
+        for s in merged:
+            if s["employee"] in over_rested and s.get("shift_type") == "OFF":
+                emp_off_used[s["employee"]] += 1
+                if emp_off_used[s["employee"]] > 2:
+                    # Replace with fallback (which correctly scheduled this cell)
+                    fb = fallback_index.get((s["employee"], s["date"]))
+                    if fb:
+                        result.append(fb)
+                        corrected_count += 1
+                        continue
+            result.append(s)
+        merged = result
+        if corrected_count:
+            warnings.append(
+                f"AI assigned too many OFF days for {len(over_rested)} employee(s); "
+                f"{corrected_count} cell(s) replaced with rule-based suggestions."
+            )
 
     return merged, warnings
 
