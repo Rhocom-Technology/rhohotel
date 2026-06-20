@@ -1891,7 +1891,7 @@ def ai_auto_assign(department=None, week_start=None):
 
     try:
         from rhohotel.rhocom_hotel.api import ai_engine as _engine
-        settings = _engine._get_settings()
+        settings = _engine.get_settings()
         if settings.get("enabled"):
             ai_raw, ai_warns = _ai_call_provider(
                 employees, week_dates, current_cells, preferences, prev_shifts,
@@ -2505,11 +2505,11 @@ def _ai_call_provider(
     )
 
     try:
-        if not _engine._is_safe(prompt):
+        if not _engine.is_safe(prompt):
             return [], ["AI scheduling prompt was blocked by safety filter."]
 
         messages = [{"role": "user", "content": prompt}]
-        raw = _engine._call_simple(messages, effective_settings)
+        raw = _engine.call_simple(messages, effective_settings)
         if not raw:
             return [], ["AI returned an empty response."]
 

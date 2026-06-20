@@ -16,6 +16,7 @@ Security:
 import frappe
 import json
 import re
+import time
 
 import requests as _http
 
@@ -249,16 +250,17 @@ def _execute_tool(name: str, args: dict, allowed_tools: dict):
 # ── Settings ───────────────────────────────────────────────────────────────────
 
 def _get_settings() -> dict:
-	"""Read AI Settings from DB without requiring document-level read permission."""
+	"""Read AI Settings using Frappe's document cache (1 query per request instead of 7)."""
 	from frappe.utils.password import get_decrypted_password
 
-	provider = frappe.db.get_single_value("AI Settings", "provider") or "Ollama"
-	enabled = bool(frappe.db.get_single_value("AI Settings", "enabled"))
-	temperature = float(frappe.db.get_single_value("AI Settings", "temperature") or 0.3)
-	max_tokens = int(frappe.db.get_single_value("AI Settings", "max_tokens") or 600)
-	ollama_base_url = (frappe.db.get_single_value("AI Settings", "ollama_base_url") or "http://localhost:11434").rstrip("/")
-	ollama_model = frappe.db.get_single_value("AI Settings", "ollama_model") or "llama3.1:8b"
-	openai_model = frappe.db.get_single_value("AI Settings", "openai_model") or "gpt-4o-mini"
+	doc = frappe.get_cached_doc("AI Settings")
+	provider = doc.provider or "Ollama"
+	enabled = bool(doc.enabled)
+	temperature = float(doc.temperature or 0.3)
+	max_tokens = int(doc.max_tokens or 600)
+	ollama_base_url = (doc.ollama_base_url or "http://localhost:11434").rstrip("/")
+	ollama_model = doc.ollama_model or "llama3.1:8b"
+	openai_model = doc.openai_model or "gpt-4o-mini"
 
 	openai_api_key = ""
 	if provider == "OpenAI":
@@ -305,7 +307,7 @@ def _call_openai(messages: list, tools, settings: dict):
 	except ImportError:
 		frappe.throw("OpenAI library not installed. Run: bench pip install openai")
 
-	client = openai.OpenAI(api_key=settings["openai_api_key"])
+	client = openai.OpenAI(api_key=settings["openai_api_key"], timeout=60.0)
 	kwargs = {
 		"model": settings["openai_model"],
 		"messages": messages,
@@ -389,6 +391,12 @@ def _call_simple(messages: list, settings: dict) -> str:
 		return (raw.choices[0].message.content or "").strip()
 
 
+# ── Public module aliases (stable API for cross-module use) ────────────────────
+get_settings = _get_settings
+call_simple = _call_simple
+is_safe = _is_safe
+
+
 # ── System prompt ──────────────────────────────────────────────────────────────
 
 def _build_system_prompt(user: str, roles: list, allowed_tools: dict) -> str:
@@ -441,6 +449,21 @@ _INSIGHT_PROMPTS = {
 }
 
 
+# ── Rate limiting ──────────────────────────────────────────────────────────────
+
+_CHAT_RATE_LIMIT = 20  # max chat requests per user per minute
+
+
+def _check_rate_limit(user: str) -> bool:
+	"""Returns True if the request is allowed; False if the user exceeded 20 req/min."""
+	key = f"ai_chat_rate:{user}:{int(time.time()) // 60}"
+	count = frappe.cache().get_value(key) or 0
+	if count >= _CHAT_RATE_LIMIT:
+		return False
+	frappe.cache().set_value(key, count + 1, expires_in_sec=120)
+	return True
+
+
 # ── Public API methods ─────────────────────────────────────────────────────────
 
 @frappe.whitelist()
@@ -475,6 +498,10 @@ def chat(message: str, history: str = "[]"):
 		return {"answer": "Please provide a message."}
 
 	message = message.strip()[:500]
+
+	# Rate limit — 20 requests per user per minute
+	if not _check_rate_limit(frappe.session.user):
+		return {"answer": "You're sending messages too quickly. Please wait a moment and try again."}
 
 	# Safety check — runs before any LLM call
 	if not _is_safe(message):
@@ -560,7 +587,8 @@ def generate_insight(context_type: str, context_data: str = "{}"):
 	messages = [{"role": "user", "content": prompt}]
 
 	try:
-		summary = _call_simple(messages, settings)
+		insight_settings = {**settings, "max_tokens": max(settings["max_tokens"], 400)}
+		summary = _call_simple(messages, insight_settings)
 		return {"summary": summary or "No insight generated."}
 	except _http.exceptions.ConnectionError:
 		return {"summary": "Unable to reach the Ollama service. Check AI Settings in Hotel Setup."}
