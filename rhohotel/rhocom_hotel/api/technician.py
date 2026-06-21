@@ -57,7 +57,7 @@ def create_technician(technician_data):
         tech.supported_categories = technician_data.get("supported_categories", "")
         tech.certification = technician_data.get("certification", "")
 
-        tech.insert()
+        tech.insert(ignore_permissions=True)
         frappe.db.commit()
         return {"success": True, "technician_name": tech.name}
 

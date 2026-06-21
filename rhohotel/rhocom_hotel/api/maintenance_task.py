@@ -708,6 +708,7 @@ import json
 from frappe.utils import nowdate, add_days, get_first_day_of_week
 
 MANAGER_ROLES = ("Maintenance Manager", "Facility Manager", "System Manager", "Hotel Manager")
+STOCK_ROLES = ("Stock Manager", "Stock User")
 
 
 def _is_maintenance_manager():
@@ -742,12 +743,17 @@ def _get_logged_in_technician_name(employee_name=None):
 def _can_view_task(task, employee_name=None, technician_name=None):
     """A user can view a Maintenance Task's detail if they are:
     - A Maintenance Manager, System Manager, or Hotel Manager (sees everything)
+    - A Stock Manager / Stock User (for approving parts requests)
     - The assigned technician on the task
     - The supervisor/witness on the task
     - The employee who originally reported/created the request (reported_by)
     Anyone else gets a PermissionError regardless of role.
     """
     if _is_maintenance_manager():
+        return True
+
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    if user_roles.intersection(STOCK_ROLES):
         return True
 
     if employee_name is None:
@@ -951,6 +957,86 @@ def _build_filter_clause(filters):
         clauses.append(f"AND `{safe_field}` = '{safe_value}'")
     return " ".join(clauses)
 
+
+# ── Workflow actions ─────────────────────────────────────────────────────────────
+
+@frappe.whitelist()
+def apply_maintenance_workflow(task_name, action):
+    """Apply a workflow action on a Maintenance Task.
+
+    Uses a role-based gate rather than Frappe's doctype-level permissions, so
+    that roles with domain access (e.g. Stock Manager) can trigger transitions
+    even though they don't hold a full doctype permission on Maintenance Task.
+
+    All role / transition validation is done as the requesting user. The actual
+    doc.save() runs as Administrator because Frappe's validate_workflow() calls
+    get_transitions() on _doc_before_save (an internally-created copy), which
+    re-runs doc.check_permission("read") -- domain roles like Stock Manager
+    don't pass that check. Setting doc.flags.ignore_permissions only covers the
+    outer doc instance, not the internal copy.
+    """
+    MAINTENANCE_ROLES = {
+        "Maintenance Manager", "Facility Manager", "System Manager",
+        "Hotel Manager", "Stock Manager", "Stock User",
+        "Maintenance Technician", "Employee",
+    }
+    requesting_user = frappe.session.user
+    user_roles = set(frappe.get_roles(requesting_user))
+    if requesting_user != "Administrator" and not user_roles.intersection(MAINTENANCE_ROLES):
+        frappe.throw("Not permitted to perform workflow actions on Maintenance Tasks.", frappe.PermissionError)
+
+    try:
+        from frappe.model.workflow import get_workflow, has_approval_access, is_transition_condition_satisfied
+
+        # Validate with the real requesting user
+        task = frappe.get_doc("Maintenance Task", task_name)
+        workflow = get_workflow("Maintenance Task")
+        current_state = task.get(workflow.workflow_state_field)
+
+        possible = [
+            t for t in workflow.transitions
+            if t.state == current_state and is_transition_condition_satisfied(t, task)
+        ]
+        transition = next((t for t in possible if t.action == action), None)
+        if not transition:
+            return {"success": False, "error": '"{}" is not a valid action from state "{}".'.format(action, current_state)}
+
+        allowed_role = transition.get("allowed") or ""
+        if allowed_role and allowed_role != "All" and requesting_user != "Administrator":
+            if allowed_role not in user_roles:
+                return {"success": False, "error": 'This action requires the "{}" role.'.format(allowed_role)}
+
+        if not has_approval_access(requesting_user, task, transition):
+            return {"success": False, "error": "Self approval is not allowed."}
+
+        # Run the save as Administrator so Frappe's internal doctype-level
+        # permission checks inside validate_workflow pass cleanly.
+        frappe.set_user("Administrator")
+
+        task = frappe.get_doc("Maintenance Task", task_name)
+        task.set(workflow.workflow_state_field, transition.next_state)
+
+        next_state_def = next((s for s in workflow.states if s.state == transition.next_state), None)
+        if next_state_def and next_state_def.update_field:
+            task.set(next_state_def.update_field, next_state_def.update_value)
+
+        from frappe.model.document import DocStatus
+        new_docstatus = DocStatus(int(next_state_def.doc_status or 0) if next_state_def else 0)
+
+        if new_docstatus.is_submitted():
+            task.submit()
+        else:
+            task.save()
+
+        frappe.db.commit()
+        return {"success": True, "workflow_state": task.workflow_state}
+
+    except Exception as e:
+        frappe.db.rollback()
+        frappe.log_error(frappe.get_traceback(), "apply_maintenance_workflow: {} / {}".format(task_name, action))
+        return {"success": False, "error": str(e)}
+    finally:
+        frappe.set_user(requesting_user)
 
 # ── Task detail ────────────────────────────────────────────────────────────────
 

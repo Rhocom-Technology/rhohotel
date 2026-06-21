@@ -1165,7 +1165,13 @@ class MaintenanceTask(Document):
             "Completed",
         }
         if self.workflow_state in post_approval_states:
-            self._create_stock_entries()
+            try:
+                self._create_stock_entries()
+            except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Maintenance Task {self.name}: stock entry creation failed"
+                )
 
     def on_submit(self):
         # self.db_set("status", "Done")

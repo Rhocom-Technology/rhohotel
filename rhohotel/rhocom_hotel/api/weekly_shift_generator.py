@@ -971,7 +971,7 @@ def _assert_department_access(department):
             "Your Employee record has no department. Contact your administrator.",
             frappe.PermissionError,
         )
-    if _normalize_department(department) != _normalize_department(manager_dept):
+    if _short_department(department) != _short_department(manager_dept):
         frappe.throw(
             "You can only manage shifts for your own department.",
             frappe.PermissionError,

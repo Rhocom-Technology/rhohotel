@@ -716,10 +716,11 @@ const form = ref({
   test_run_passed: false,
 })
 
-// Task is editable only when docstatus=0 AND workflow_state is Draft or In Progress
+// Task is editable only when docstatus=0 AND workflow_state is Draft, In Progress,
+// or Pending Facility Manager Approval (technician fills work details after parts arrive)
 const isEditable = computed(() =>
   task.value?.docstatus === 0 &&
-  ['Draft', 'In Progress'].includes(task.value?.workflow_state) &&
+  ['Draft', 'In Progress', 'Pending Facility Manager Approval'].includes(task.value?.workflow_state) &&
   Boolean(task.value?.can_edit)
 )
 const isReadOnly = computed(() => !isEditable.value)
@@ -757,7 +758,7 @@ const itemsResource = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenan
 const whResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_warehouses_for_parts', auto: false })
 const qtyResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_item_available_qty', auto: false })
 const workflowResource = createResource({
-  url: 'frappe.model.workflow.apply_workflow',
+  url: 'rhohotel.rhocom_hotel.api.maintenance_task.apply_maintenance_workflow',
   auto: false
 })
 
@@ -950,20 +951,25 @@ async function applyWorkflow(action) {
       await loadTask()
     }
 
-    const workflowDoc = {
-      ...task.value,
-      doctype: 'Maintenance Task'
-    }
-
     await workflowResource.fetch({
-      doc: JSON.stringify(workflowDoc),
+      task_name: taskId,
       action: action
     })
 
     showToast(`${action} successful`, 'success')
     await loadTask()
   } catch (e) {
-    showToast(e?.messages?.[0] || e?.message || String(e), 'error')
+    // Parse the most specific message from Frappe's error response
+    let msg = e?.messages?.[0] || e?.message || String(e)
+    // Strip HTML tags (Frappe sometimes wraps messages in <b> etc.)
+    if (typeof msg === 'string') {
+      msg = msg.replace(/<[^>]*>/g, '').trim()
+    }
+    // Map generic Frappe workflow error to a more helpful message
+    if (!msg || msg === 'Not a valid Workflow Action' || e?.exc_type === 'WorkflowTransitionError') {
+      msg = `Cannot perform "${action}" at this stage. Ensure all required fields are filled and you have the correct role.`
+    }
+    showToast(msg, 'error')
   } finally {
     saving.value = false
   }
