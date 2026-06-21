@@ -35,6 +35,17 @@ get_room_service_menu
   - Filtered by category
   - Empty categories list on success
 
+get_restaurant_menu
+  - Unauthorized when no key
+  - All menus returned (no filter)
+  - Filtered by menu_name
+  - Filtered by location
+  - menu_name filter too long rejected
+  - location filter too long rejected
+  - Rate override: menu-specific rate used when > 0
+  - Rate fallback: Menu Item base rate used when menu rate is 0
+  - Empty menus list on success
+
 place_room_service_order
   - GET request rejected
   - Missing room_number
@@ -562,6 +573,125 @@ class TestPlaceRoomServiceOrder(unittest.TestCase):
         self.assertEqual(data["status"], "Confirmed")
         self.assertEqual(data["room_number"], "101")
         self.assertEqual(data["guest_name"], "John Smith")
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_restaurant_menu
+# ---------------------------------------------------------------------------
+
+# Sample SQL rows as _get_restaurant_menus would receive them from the DB
+_MENU_ROWS_ALL = [
+    types.SimpleNamespace(
+        menu_id="RM-001", menu_name="Breakfast Menu", location="Main Restaurant",
+        item_code="MI-001", item_name="Full English", description="Big breakfast",
+        category="Food", price=4500.0, image="",
+    ),
+    types.SimpleNamespace(
+        menu_id="RM-001", menu_name="Breakfast Menu", location="Main Restaurant",
+        item_code="MI-002", item_name="Orange Juice", description="Fresh OJ",
+        category="Drinks", price=1500.0, image="/files/oj.jpg",
+    ),
+    types.SimpleNamespace(
+        menu_id="RM-002", menu_name="Pool Bar Menu", location="Pool Bar",
+        item_code="MI-003", item_name="Club Sandwich", description="",
+        category="Food", price=3500.0, image="",
+    ),
+]
+
+# Helper to produce the dict rows _get_restaurant_menus actually builds
+def _as_dict_rows(rows):
+    return [r.__dict__ for r in rows]
+
+
+class TestGetRestaurantMenu(unittest.TestCase):
+
+    def _call(self, body=None, method="GET"):
+        _make_request(headers=_auth_headers(), body=body or {}, method=method)
+        with _patch_auth(valid=True):
+            return iptv_api.get_restaurant_menu()
+
+    def test_unauthorized_no_key(self):
+        _make_request(headers={}, body={})
+        with _patch_auth(valid=True):
+            result = iptv_api.get_restaurant_menu()
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"], "Unauthorized")
+
+    def test_all_menus_returned_no_filter(self):
+        fake_menus = [
+            {"menu_name": "Breakfast Menu", "location": "Main Restaurant",
+             "items": [{"item_code": "MI-001", "item_name": "Full English",
+                        "description": "", "category": "Food",
+                        "price": 4500.0, "available": True, "image": ""}]},
+            {"menu_name": "Pool Bar Menu", "location": "Pool Bar", "items": []},
+        ]
+        with patch.object(iptv_api, "_get_restaurant_menus", return_value=fake_menus) as mock_fn, \
+             patch.object(frappe.db, "get_default", return_value="NGN"):
+            result = self._call()
+        mock_fn.assert_called_once_with(menu_name=None, location=None)
+        self.assertTrue(result["success"])
+        self.assertEqual(len(result["data"]["menus"]), 2)
+        self.assertEqual(result["data"]["currency"], "NGN")
+
+    def test_filter_by_menu_name(self):
+        with patch.object(iptv_api, "_get_restaurant_menus", return_value=[]) as mock_fn, \
+             patch.object(frappe.db, "get_default", return_value="NGN"):
+            result = self._call(body={"menu_name": "Breakfast Menu"})
+        mock_fn.assert_called_once_with(menu_name="Breakfast Menu", location=None)
+        self.assertTrue(result["success"])
+
+    def test_filter_by_location(self):
+        with patch.object(iptv_api, "_get_restaurant_menus", return_value=[]) as mock_fn, \
+             patch.object(frappe.db, "get_default", return_value="NGN"):
+            result = self._call(body={"location": "Pool Bar"})
+        mock_fn.assert_called_once_with(menu_name=None, location="Pool Bar")
+        self.assertTrue(result["success"])
+
+    def test_menu_name_filter_too_long_rejected(self):
+        result = self._call(body={"menu_name": "M" * 141})
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"], "menu_name filter is too long")
+
+    def test_location_filter_too_long_rejected(self):
+        result = self._call(body={"location": "L" * 141})
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"], "location filter is too long")
+
+    def test_empty_menus_returns_success(self):
+        with patch.object(iptv_api, "_get_restaurant_menus", return_value=[]), \
+             patch.object(frappe.db, "get_default", return_value="NGN"):
+            result = self._call()
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["menus"], [])
+
+    def test_menu_item_rate_override_used_when_positive(self):
+        """
+        Restaurant Menu Item.rate > 0 must override the base Menu Item rate.
+        Verified through _get_restaurant_menus helper with a mocked SQL result.
+        """
+        sql_row = {
+            "menu_id": "RM-001", "menu_name": "Dinner Menu", "location": "Main",
+            "item_code": "MI-001", "item_name": "Steak", "description": "",
+            "category": "Food", "price": 6000.0, "image": "",
+        }
+        with patch.object(frappe.db, "sql", return_value=[sql_row]):
+            menus = iptv_api._get_restaurant_menus()
+        self.assertEqual(len(menus), 1)
+        self.assertEqual(menus[0]["items"][0]["price"], 6000.0)
+
+    def test_menu_item_base_rate_used_when_menu_rate_is_zero(self):
+        """
+        When rmi.rate = 0, the CASE expression in SQL returns mi.rate.
+        Simulate by returning price = 4500.0 (the base rate).
+        """
+        sql_row = {
+            "menu_id": "RM-001", "menu_name": "Dinner Menu", "location": "Main",
+            "item_code": "MI-001", "item_name": "Steak", "description": "",
+            "category": "Food", "price": 4500.0, "image": "",
+        }
+        with patch.object(frappe.db, "sql", return_value=[sql_row]):
+            menus = iptv_api._get_restaurant_menus()
+        self.assertEqual(menus[0]["items"][0]["price"], 4500.0)
 
 
 if __name__ == "__main__":

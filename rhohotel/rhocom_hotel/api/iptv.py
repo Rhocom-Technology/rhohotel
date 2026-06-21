@@ -148,8 +148,7 @@ def _get_active_booking_by_room(room_number):
                 ci.expected_check_out_datetime,
                 ci.canonical_reservation,
                 ci.total_charges,
-                ci.total_outstanding_amount,
-                ci.customer
+                ci.total_outstanding_amount
             FROM `tabHotel Room Check In` ci
             WHERE ci.room_number = %(room)s
               AND ci.status = 'Checked In'
@@ -561,7 +560,12 @@ def place_room_service_order():
 
     guest_link = active.get("guest")
     checkin_name = active.get("name")
-    customer_link = active.get("customer") or None
+    # customer lives on Hotel Guest, not on Hotel Room Check In.
+    # Fetch it here so Restaurant Order can be linked to the ERPNext Customer.
+    customer_link = (
+        frappe.db.get_value("Hotel Guest", guest_link, "customer")
+        if guest_link else None
+    ) or None
     guest_name = _get_guest_name(guest_link)
 
     # --- Validate and resolve items from Menu Item DocType ---
@@ -679,4 +683,146 @@ def get_room_service_menu():
     return _success({
         "currency": currency,
         "categories": categories,
+    })
+
+
+def _get_restaurant_menus(menu_name=None, location=None):
+    """
+    Return Restaurant Menu records with their items.
+
+    Data model
+    ----------
+    Restaurant Menu  1──* Restaurant Menu Item ──> Menu Item ──> Item
+
+    Rate precedence (per item):
+      1. Restaurant Menu Item.rate  (location/menu-specific override; used when > 0)
+      2. Menu Item.rate             (global base rate fallback)
+
+    Filters
+    -------
+    menu_name : exact match on Restaurant Menu.menu_name (case-sensitive)
+    location  : exact match on Restaurant Menu.restaurant_location (case-insensitive)
+
+    Only items whose linked ERPNext Item is enabled (disabled = 0) are included.
+    Items where Menu Item has no linked ERPNext Item are excluded.
+    """
+    try:
+        # Build the WHERE clause using only parameterised conditions so no
+        # user-supplied string is ever interpolated into the SQL text.
+        conditions = ["COALESCE(i.disabled, 0) = 0", "mi.item_code IS NOT NULL"]
+        params: dict = {}
+
+        if menu_name:
+            conditions.append("rm.menu_name = %(menu_name)s")
+            params["menu_name"] = menu_name
+
+        if location:
+            conditions.append("LOWER(rm.restaurant_location) = LOWER(%(location)s)")
+            params["location"] = location
+
+        where_clause = " AND ".join(conditions)
+
+        rows = frappe.db.sql(
+            f"""
+            SELECT
+                rm.name                                    AS menu_id,
+                rm.menu_name                               AS menu_name,
+                rm.restaurant_location                     AS location,
+                mi.name                                    AS item_code,
+                mi.item_name                               AS item_name,
+                mi.description                             AS description,
+                mi.image                                   AS image,
+                COALESCE(i.item_group, 'General')          AS category,
+                CASE
+                    WHEN rmi.rate > 0 THEN rmi.rate
+                    ELSE mi.rate
+                END                                        AS price
+            FROM `tabRestaurant Menu` rm
+            INNER JOIN `tabRestaurant Menu Item` rmi ON rmi.parent = rm.name
+            INNER JOIN `tabMenu Item` mi             ON mi.name    = rmi.menu_item
+            INNER JOIN `tabItem` i                   ON i.name     = mi.item_code
+            WHERE {where_clause}
+            ORDER BY rm.menu_name, i.item_group, mi.item_name
+            """,
+            params,
+            as_dict=True,
+        ) or []
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "IPTV: _get_restaurant_menus")
+        return []
+
+    # Group rows → menus → items
+    menus: dict = {}
+    for row in rows:
+        mid = cstr(row.get("menu_id"))
+        if mid not in menus:
+            menus[mid] = {
+                "menu_name": cstr(row.get("menu_name")),
+                "location": cstr(row.get("location") or ""),
+                "items": [],
+            }
+        menus[mid]["items"].append({
+            "item_code": cstr(row.get("item_code")),
+            "item_name": cstr(row.get("item_name")),
+            "description": cstr(row.get("description") or ""),
+            "category": cstr(row.get("category") or "General"),
+            "price": flt(row.get("price"), 2),
+            "available": True,
+            "image": cstr(row.get("image") or ""),
+        })
+
+    return list(menus.values())
+
+
+@frappe.whitelist(allow_guest=True)
+def get_restaurant_menu():
+    """
+    Endpoint 5 — Retrieve restaurant menus with items.
+
+    URL: /api/method/rhohotel.rhocom_hotel.api.iptv.get_restaurant_menu
+    Auth: X-IPTV-API-Key header required.
+    HTTP methods: GET, POST.
+
+    Optional input (all filters may be combined or omitted):
+        {
+            "menu_name": "Breakfast Menu",
+            "location":  "Main Restaurant"
+        }
+
+    Behaviour
+    ---------
+    - Returns all Restaurant Menu records when no filters are supplied.
+    - Filters by exact menu_name when provided.
+    - Filters by location (case-insensitive) when provided.
+    - Each item shows the menu-specific rate override when set (> 0),
+      otherwise falls back to the global Menu Item rate.
+    - Only items whose linked ERPNext Item is enabled are returned.
+    - Items with no linked ERPNext Item are excluded.
+
+    Difference from get_room_service_menu
+    --------------------------------------
+    get_room_service_menu reads directly from Menu Item and groups by
+    item_group.  This endpoint reads from the Restaurant Menu DocType,
+    which lets the hotel maintain separate named menus per location
+    (e.g. "Pool Bar Menu", "Breakfast Menu") with location-specific prices.
+    """
+    if not _validate_iptv_api_key():
+        return _error("Unauthorized")
+
+    data = _get_request_data()
+    menu_name = cstr(data.get("menu_name") or "").strip() or None
+    location   = cstr(data.get("location")  or "").strip() or None
+
+    # Enforce reasonable length limits on filter strings
+    if menu_name and len(menu_name) > 140:
+        return _error("menu_name filter is too long")
+    if location and len(location) > 140:
+        return _error("location filter is too long")
+
+    menus = _get_restaurant_menus(menu_name=menu_name, location=location)
+    currency = frappe.db.get_default("currency") or "NGN"
+
+    return _success({
+        "currency": currency,
+        "menus": menus,
     })

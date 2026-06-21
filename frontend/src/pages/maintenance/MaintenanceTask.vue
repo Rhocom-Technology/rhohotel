@@ -298,47 +298,58 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                  <tr v-for="(part, idx) in partsUsed" :key="idx">
+                  <tr v-for="(part, idx) in partsUsed" :key="idx"
+                    :class="part.stock_entry ? 'bg-green-50' : ''">
                     <td class="py-2.5 pr-2">
-                      <select v-model="part.item_code" :disabled="isReadOnly"
-                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}"
-                        @change="onPartSelect(part, stockItems)">
-                        <option value="">— select item —</option>
-                        <option v-for="item in stockItems" :key="item.name" :value="item.name">
-                          {{ item.item_name || item.name }}
-                        </option>
-                      </select>
+                      <template v-if="part.stock_entry">
+                        <div class="px-2 py-1.5 text-xs text-gray-700 font-medium">{{ part.item_name || part.item_code }}</div>
+                      </template>
+                      <template v-else>
+                        <select v-model="part.item_code" :disabled="isReadOnly"
+                          class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                          :class="{'bg-gray-100': isReadOnly}"
+                          @change="onPartSelect(part, stockItems)">
+                          <option value="">— select item —</option>
+                          <option v-for="item in stockItems" :key="item.name" :value="item.name">
+                            {{ item.item_name || item.name }}
+                          </option>
+                        </select>
+                      </template>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="1" step="1"
+                      <input v-if="!part.stock_entry" v-model.number="part.qty" :disabled="isReadOnly" type="number" min="1" step="1"
                         @input="normalizeQty(part)"
                         class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
                         :class="{'bg-gray-100': isReadOnly}" />
+                      <div v-else class="px-2 py-1.5 text-xs text-gray-700">{{ part.qty }}</div>
                     </td>
                     <td class="py-2.5 pr-2">
                       <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <select v-model="part.warehouse" :disabled="isReadOnly"
-                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}"
-                        @change="onWarehouseSelect(part)">
-                        <option value="">— select warehouse —</option>
-                        <option v-for="w in warehouses" :key="w.name" :value="w.name">
-                          {{ w.warehouse_name || w.name }}
-                        </option>
-                      </select>
+                      <template v-if="part.stock_entry">
+                        <div class="px-2 py-1.5 text-xs text-gray-700">{{ part.warehouse }}</div>
+                      </template>
+                      <template v-else>
+                        <select v-model="part.warehouse" :disabled="isReadOnly"
+                          class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                          :class="{'bg-gray-100': isReadOnly}"
+                          @change="onWarehouseSelect(part)">
+                          <option value="">— select warehouse —</option>
+                          <option v-for="w in warehouses" :key="w.name" :value="w.name">
+                            {{ w.warehouse_name || w.name }}
+                          </option>
+                        </select>
+                      </template>
                     </td>
-                    
-                     <td class="py-2.5 pr-2">
+                    <td class="py-2.5 pr-2">
                       <div class="px-2 py-1.5 text-xs text-gray-500">
                         {{ part.available_qty || 0 }}
                       </div>
                     </td>
-                   
                     <td v-if="isEditable" class="py-2.5">
-                      <button @click="partsUsed.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
+                      <span v-if="part.stock_entry" class="text-xs text-green-600" title="Issued">✓</span>
+                      <button v-else @click="partsUsed.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
                     </td>
                   </tr>
                   <tr v-if="partsUsed.length === 0">
@@ -388,37 +399,49 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                  <tr v-for="(part, idx) in partsReturned" :key="idx">
+                  <tr v-for="(part, idx) in partsReturned" :key="idx"
+                    :class="part.stock_entry ? 'bg-green-50' : ''">
                     <td class="py-2.5 pr-2">
-                      <select v-model="part.item_code" :disabled="isReadOnly"
-                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}"
-                        @change="onPartSelect(part, stockItems)">
-                        <option value="">— select item —</option>
-                        <option v-for="item in stockItems" :key="item.name" :value="item.name">
-                          {{ item.item_name || item.name }}
-                        </option>
-                      </select>
+                      <template v-if="part.stock_entry">
+                        <div class="px-2 py-1.5 text-xs text-gray-700 font-medium">{{ part.item_name || part.item_code }}</div>
+                      </template>
+                      <template v-else>
+                        <select v-model="part.item_code" :disabled="isReadOnly"
+                          class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                          :class="{'bg-gray-100': isReadOnly}"
+                          @change="onPartSelect(part, stockItems)">
+                          <option value="">— select item —</option>
+                          <option v-for="item in stockItems" :key="item.name" :value="item.name">
+                            {{ item.item_name || item.name }}
+                          </option>
+                        </select>
+                      </template>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <input v-model.number="part.qty" :disabled="isReadOnly" type="number" min="1" step="1"
+                      <input v-if="!part.stock_entry" v-model.number="part.qty" :disabled="isReadOnly" type="number" min="1" step="1"
                         @input="normalizeQty(part)"
                         class="w-16 px-2 py-1.5 text-xs border border-gray-200 rounded text-center"
                         :class="{'bg-gray-100': isReadOnly}" />
+                      <div v-else class="px-2 py-1.5 text-xs text-gray-700">{{ part.qty }}</div>
                     </td>
                     <td class="py-2.5 pr-2">
                       <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
                     </td>
                     <td class="py-2.5 pr-2">
-                      <select v-model="part.warehouse" :disabled="isReadOnly"
-                        class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
-                        :class="{'bg-gray-100': isReadOnly}"
-                        @change="onWarehouseSelect(part)">
-                        <option value="">— select warehouse —</option>
-                        <option v-for="w in warehouses" :key="w.name" :value="w.name">
-                          {{ w.warehouse_name || w.name }}
-                        </option>
-                      </select>
+                      <template v-if="part.stock_entry">
+                        <div class="px-2 py-1.5 text-xs text-gray-700">{{ part.warehouse }}</div>
+                      </template>
+                      <template v-else>
+                        <select v-model="part.warehouse" :disabled="isReadOnly"
+                          class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded"
+                          :class="{'bg-gray-100': isReadOnly}"
+                          @change="onWarehouseSelect(part)">
+                          <option value="">— select warehouse —</option>
+                          <option v-for="w in warehouses" :key="w.name" :value="w.name">
+                            {{ w.warehouse_name || w.name }}
+                          </option>
+                        </select>
+                      </template>
                     </td>
                     <td class="py-2.5 pr-2">
                       <div class="px-2 py-1.5 text-xs text-gray-500">
@@ -426,7 +449,8 @@
                       </div>
                     </td>
                     <td v-if="isEditable" class="py-2.5">
-                      <button @click="partsReturned.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
+                      <span v-if="part.stock_entry" class="text-xs text-green-600" title="Returned">✓</span>
+                      <button v-else @click="partsReturned.splice(idx, 1)" class="text-red-400 hover:text-red-600">✕</button>
                     </td>
                   </tr>
                   <tr v-if="partsReturned.length === 0">
@@ -561,7 +585,7 @@
 
   <!-- Draft -> In Progress -->
   <button
-    v-if="task.workflow_state === 'Draft'"
+    v-if="task.workflow_state === 'Draft' && allowedActions.has('start task')"
     @click="applyWorkflow('Start Task')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700">
     Start Task
@@ -569,23 +593,23 @@
 
   <!-- In Progress -> Store -->
   <button
-    v-if="task.workflow_state === 'In Progress' && partsUsed.length > 0"
+    v-if="task.workflow_state === 'In Progress' && partsUsed.length > 0 && allowedActions.has('send to store')"
     @click="applyWorkflow('Send to Store')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-orange-600 rounded-xl hover:bg-orange-700">
     Send to Store
   </button>
 
-  <!-- In Progress -> Facility Manager -->
+  <!-- In Progress -> Facility Manager (work done) -->
   <button
-    v-if="task.workflow_state === 'In Progress' && partsUsed.length === 0"
-    @click="applyWorkflow('Send for approval')"
+    v-if="task.workflow_state === 'In Progress' && allowedActions.has('mark complete')"
+    @click="applyWorkflow('Mark Complete')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700">
-    Send for approval
+    Mark Complete
   </button>
 
   <!-- Store Approval -->
   <button
-    v-if="task.workflow_state === 'Pending Store Approval'"
+    v-if="task.workflow_state === 'Pending Store Approval' && allowedActions.has('approve store items')"
     @click="applyWorkflow('Approve Store Items')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700">
     Approve Store Items
@@ -593,7 +617,7 @@
 
   <!-- Witness Approval -->
   <button
-    v-if="task.workflow_state === 'Pending Witness Approval'"
+    v-if="task.workflow_state === 'Pending Witness Approval' && allowedActions.has('verify work')"
     @click="applyWorkflow('Verify Work')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700">
     Verify Work
@@ -601,7 +625,7 @@
 
   <!-- Facility Manager Approval -->
   <button
-    v-if="task.workflow_state === 'Pending Facility Manager Approval'"
+    v-if="task.workflow_state === 'Pending Facility Manager Approval' && allowedActions.has('approve')"
     @click="applyWorkflow('Approve')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-green-700 rounded-xl hover:bg-green-800">
     Approve
@@ -609,11 +633,7 @@
 
   <!-- Reject -->
   <button
-    v-if="[
-      'Pending Store Approval',
-      'Pending Facility Manager Approval',
-      'Pending Witness Approval'
-    ].includes(task.workflow_state)"
+    v-if="allowedActions.has('reject')"
     @click="applyWorkflow('Reject')"
     class="w-full py-2.5 text-xs font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700">
     Reject
@@ -716,14 +736,22 @@ const form = ref({
   test_run_passed: false,
 })
 
-// Task is editable only when docstatus=0 AND workflow_state is Draft, In Progress,
-// or Pending Facility Manager Approval (technician fills work details after parts arrive)
+// Task is editable only when docstatus=0 AND workflow_state is Draft or In Progress
+// (technician works on the task). After Mark Complete the task waits for FM
+// and the form becomes read-only.
 const isEditable = computed(() =>
   task.value?.docstatus === 0 &&
-  ['Draft', 'In Progress', 'Pending Facility Manager Approval'].includes(task.value?.workflow_state) &&
+  ['Draft', 'In Progress'].includes(task.value?.workflow_state) &&
   Boolean(task.value?.can_edit)
 )
 const isReadOnly = computed(() => !isEditable.value)
+
+// Set of workflow action names (lower-cased) the current user is permitted to
+// trigger. Computed from the `allowed_actions` list returned by the API so the
+// frontend never has to duplicate role logic.
+const allowedActions = computed(() =>
+  new Set((task.value?.allowed_actions || []).map(a => a.toLowerCase()))
+)
 
 // Photos uploaded on the originating Maintenance Request -- read-only here,
 // shown so the technician can see what was reported without navigating away.
@@ -899,12 +927,9 @@ function validateTransitionFields(action) {
     return errors
   }
 
-  if (action === 'Send for approval' || action === 'Send for Approval' || action === 'Send to Witness') {
-    // This is the final handoff once the work is actually done, so the full
-    // completion details are required.
-    const hasParts = partsUsed.value.some(p => p.item_code)
-    if (hasParts) errors.push('Remove parts before sending for approval without store flow.')
+  if (action === 'Mark Complete') {
     if (!form.value.start_time) errors.push('Start Time is required.')
+    if (!form.value.end_time) errors.push('End Time is required.')
     if (form.value.start_time && form.value.end_time &&
         new Date(form.value.end_time) <= new Date(form.value.start_time)) {
       errors.push('End Time must be after Start Time.')
@@ -951,24 +976,26 @@ async function applyWorkflow(action) {
       await loadTask()
     }
 
-    await workflowResource.fetch({
+    const wfResult = await workflowResource.fetch({
       task_name: taskId,
       action: action
     })
 
+    if (wfResult && wfResult.success === false) {
+      const errMsg = wfResult.error || 'Workflow action failed.'
+      showToast(errMsg, 'error')
+      await loadTask()
+      return
+    }
+
     showToast(`${action} successful`, 'success')
     await loadTask()
   } catch (e) {
-    // Parse the most specific message from Frappe's error response
     let msg = e?.messages?.[0] || e?.message || String(e)
-    // Strip HTML tags (Frappe sometimes wraps messages in <b> etc.)
     if (typeof msg === 'string') {
       msg = msg.replace(/<[^>]*>/g, '').trim()
     }
-    // Map generic Frappe workflow error to a more helpful message
-    if (!msg || msg === 'Not a valid Workflow Action' || e?.exc_type === 'WorkflowTransitionError') {
-      msg = `Cannot perform "${action}" at this stage. Ensure all required fields are filled and you have the correct role.`
-    }
+    if (!msg) msg = `"${action}" failed. Please try again.`
     showToast(msg, 'error')
   } finally {
     saving.value = false

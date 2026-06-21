@@ -500,8 +500,11 @@ def _build_system_prompt(user: str, roles: list, allowed_tools: dict) -> str:
 
 _INSIGHT_PROMPTS = {
 	"room_view_briefing": (
-		"You are a hotel front desk AI. Based on this hotel status data, write a concise 2-sentence "
-		"operational briefing for the front desk team. Be specific with numbers. Lead with the most urgent items.\n\n"
+		"You are a hotel front desk AI. Based on this hotel status data, write a concise 2-3 sentence "
+		"operational briefing for the front desk team. Be specific with numbers. "
+		"Lead with overdue checkouts or urgent issues first. "
+		"Then mention any VIP, Gold, or Platinum guests by name — both in-house and arriving — "
+		"and note their room number and tier. If there are no VIP guests, skip that.\n\n"
 		"Hotel Status:\n{context}\n\nBriefing:"
 	),
 	"night_audit_summary": (
@@ -709,7 +712,26 @@ def generate_insight(context_type: str, context_data: str = "{}"):
 		ctx = {}
 
 	prompt = prompt_template.format(context=json.dumps(ctx, indent=2, default=str))
-	messages = [{"role": "user", "content": prompt}]
+
+	# Resolve the hotel's default currency symbol so the LLM never falls back to $.
+	try:
+		currency_code = frappe.get_cached_doc("System Settings").default_currency or "NGN"
+		currency_symbol = (
+			frappe.get_cached_doc("Currency", currency_code).symbol or currency_code
+		)
+	except Exception:
+		currency_symbol = "\u20a6"  # fallback: ₦
+
+	messages = [
+		{
+			"role": "system",
+			"content": (
+				f"You are a hotel operations AI assistant. "
+				f"Always use {currency_symbol} (never $ or USD) for all monetary amounts."
+			),
+		},
+		{"role": "user", "content": prompt},
+	]
 
 	try:
 		insight_settings = {**settings, "max_tokens": max(settings["max_tokens"], 400)}

@@ -73,6 +73,11 @@
             "label": "Stock Entry",
             "options": "Stock Entry",
             "read_only": 1
+        },
+        {
+            "fieldname": "cost",
+            "fieldtype": "Currency",
+            "label": "Cost"
         }
     ],
     "grid_page_length": 50,

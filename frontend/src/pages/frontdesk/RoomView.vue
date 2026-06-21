@@ -350,17 +350,33 @@ const stats = computed(() => {
 	return { ...fallback, ...(roomViewPayload.value.stats || {}) };
 });
 
-const aiContext = computed(() => ({
-	vacant: stats.value.vacant,
-	occupied: stats.value.occupied,
-	reserved: stats.value.reserved,
-	dirty_rooms: stats.value.dirty,
-	maintenance: stats.value.maintenance,
-	overdue_checkouts: stats.value.overdue,
-	unpaid_folios: stats.value.unpaid,
-	vip_arrivals: stats.value.vip,
-	total_rooms: stats.value.vacant + stats.value.occupied + stats.value.reserved + stats.value.maintenance,
-}));
+const aiContext = computed(() => {
+	const VIP_TIERS = ['VIP', 'Gold', 'Platinum']
+	const vipRooms = roomRows.value.filter(r => VIP_TIERS.includes(r.loyalty_tier))
+	const vipInHouse = vipRooms
+		.filter(r => r.status === 'Occupied')
+		.map(r => ({ room: r.room_number, guest: r.current_guest, tier: r.loyalty_tier, info: r.subtitle }))
+	const vipArriving = vipRooms
+		.filter(r => r.status === 'Reserved')
+		.map(r => ({ room: r.room_number, guest: r.current_guest, tier: r.loyalty_tier, info: r.subtitle }))
+	const vipOverdue = vipRooms
+		.filter(r => r.overdue)
+		.map(r => ({ room: r.room_number, guest: r.current_guest, tier: r.loyalty_tier }))
+	return {
+		vacant: stats.value.vacant,
+		occupied: stats.value.occupied,
+		reserved: stats.value.reserved,
+		dirty_rooms: stats.value.dirty,
+		maintenance: stats.value.maintenance,
+		overdue_checkouts: stats.value.overdue,
+		unpaid_folios: stats.value.unpaid,
+		vip_count: stats.value.vip,
+		total_rooms: stats.value.vacant + stats.value.occupied + stats.value.reserved + stats.value.maintenance,
+		vip_in_house: vipInHouse,
+		vip_arriving: vipArriving,
+		vip_overdue: vipOverdue,
+	}
+});
 
 // const statCards = computed(() => [
 //   { label: 'Vacant Rooms', value: stats.value.vacant, subtitle: 'Ready for sale', hexColor: '#22c55e' },

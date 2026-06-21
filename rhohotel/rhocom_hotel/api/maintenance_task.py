@@ -793,6 +793,33 @@ def _can_edit_task(task, employee_name=None, technician_name=None):
     return False
 
 
+def _get_allowed_actions(task):
+    """Return the list of workflow action names the current user may take on
+    *task* right now, based on role and transition conditions.
+    Used by get_maintenance_task so the frontend can hide unauthorised buttons.
+    """
+    try:
+        from frappe.model.workflow import get_workflow
+        workflow = get_workflow("Maintenance Task")
+        current_state = task.get(workflow.workflow_state_field)
+        user = frappe.session.user
+        user_roles = set(frappe.get_roles(user))
+        actions = []
+        for t in workflow.transitions:
+            if t.state != current_state:
+                continue
+            allowed_role = t.get("allowed") or ""
+            if allowed_role and allowed_role != "All" and user != "Administrator":
+                if allowed_role not in user_roles:
+                    continue
+            if not _is_maintenance_transition_allowed(t, task, user):
+                continue
+            actions.append(t.action)
+        return actions
+    except Exception:
+        return []
+
+
 @frappe.whitelist()
 def get_maintenance_dashboard():
     today = nowdate()
@@ -960,6 +987,62 @@ def _build_filter_clause(filters):
 
 # ── Workflow actions ─────────────────────────────────────────────────────────────
 
+def _is_maintenance_transition_allowed(transition, task, user):
+    """Evaluate a Maintenance Task workflow transition condition.
+
+    Strategy:
+    1. Try Frappe's native is_transition_condition_satisfied() first.
+       This handles simple doc-field conditions like
+       ``doc.parts_used and doc.start_time`` without issue.
+    2. If that raises (because the condition uses ``bool()``, ``set()``, or
+       ``frappe.get_roles()`` which are absent from safe_eval's restricted
+       globals), fall back to plain-Python role/supervisor evaluation.
+
+    Fallback patterns handled:
+
+    Pattern A (set-intersection style):
+        bool(set(frappe.get_roles(user)).intersection({'Role A', 'Role B'}))
+
+    Pattern B (Has-Role query style):
+        frappe.db.get_value('Has Role', {'parent': user, 'role': 'Role A'}, 'role')
+
+    Both are handled by extracting role names from the condition string and
+    checking them against the requesting user's actual roles.
+    """
+    import re
+
+    if not transition.condition:
+        return True
+
+    # --- Step 1: try native safe_eval (works for simple doc-field conditions) ---
+    try:
+        from frappe.model.workflow import is_transition_condition_satisfied
+        return is_transition_condition_satisfied(transition, task)
+    except Exception:
+        pass  # fall through to role-based evaluation for bool()/set()/get_roles() conditions
+
+    cond = transition.condition
+
+    # --- Step 2a: supervisor user match ---
+    if "doc.supervisor" in cond and task.get("supervisor"):
+        supervisor_user = frappe.db.get_value("Employee", task.get("supervisor"), "user_id")
+        if supervisor_user and supervisor_user == user:
+            return True
+
+    # --- Step 2b: role-based match ---
+    user_roles = set(frappe.get_roles(user))
+    role_names = set()
+
+    # Pattern A: intersection({...}) — extract from the set literal
+    for set_content in re.findall(r"intersection\(\{([^}]+)\}\)", cond):
+        role_names.update(re.findall(r"'([^']+)'", set_content))
+
+    # Pattern B: 'role': 'RoleName' — extract from dict-style filter
+    role_names.update(re.findall(r"'role':\s*'([^']+)'", cond))
+
+    return bool(user_roles.intersection(role_names))
+
+
 @frappe.whitelist()
 def apply_maintenance_workflow(task_name, action):
     """Apply a workflow action on a Maintenance Task.
@@ -974,6 +1057,12 @@ def apply_maintenance_workflow(task_name, action):
     re-runs doc.check_permission("read") -- domain roles like Stock Manager
     don't pass that check. Setting doc.flags.ignore_permissions only covers the
     outer doc instance, not the internal copy.
+
+    NOTE: We intentionally bypass frappe's is_transition_condition_satisfied()
+    here because it calls frappe.safe_eval() which raises
+    ``NameError: name 'bool' is not defined`` for workflow conditions that use
+    frappe.session.user comparisons on certain Frappe/Python versions.  The
+    equivalent logic is implemented in _is_maintenance_transition_allowed().
     """
     MAINTENANCE_ROLES = {
         "Maintenance Manager", "Facility Manager", "System Manager",
@@ -986,16 +1075,18 @@ def apply_maintenance_workflow(task_name, action):
         frappe.throw("Not permitted to perform workflow actions on Maintenance Tasks.", frappe.PermissionError)
 
     try:
-        from frappe.model.workflow import get_workflow, has_approval_access, is_transition_condition_satisfied
+        from frappe.model.workflow import get_workflow, has_approval_access
 
         # Validate with the real requesting user
         task = frappe.get_doc("Maintenance Task", task_name)
         workflow = get_workflow("Maintenance Task")
         current_state = task.get(workflow.workflow_state_field)
 
+        # Use _is_maintenance_transition_allowed instead of is_transition_condition_satisfied
+        # to avoid the safe_eval 'bool' NameError bug in Frappe.
         possible = [
             t for t in workflow.transitions
-            if t.state == current_state and is_transition_condition_satisfied(t, task)
+            if t.state == current_state and _is_maintenance_transition_allowed(t, task, requesting_user)
         ]
         transition = next((t for t in possible if t.action == action), None)
         if not transition:
@@ -1023,10 +1114,36 @@ def apply_maintenance_workflow(task_name, action):
         from frappe.model.document import DocStatus
         new_docstatus = DocStatus(int(next_state_def.doc_status or 0) if next_state_def else 0)
 
-        if new_docstatus.is_submitted():
-            task.submit()
-        else:
-            task.save()
+        # Override validate_workflow on this specific instance to bypass the
+        # broken frappe.safe_eval call (NameError 'bool' is not defined).
+        # We have already validated the transition above, so this is safe.
+        # All other validations (mandatory, dates, custom validate/before_submit,
+        # etc.) still run as normal.
+        task.validate_workflow = lambda: None
+
+        try:
+            if new_docstatus.is_submitted():
+                task.submit()
+            else:
+                task.save()
+        finally:
+            # Restore the class method on this instance
+            try:
+                del task.validate_workflow
+            except AttributeError:
+                pass
+
+        # "Approve Store Items" now transitions to "In Progress" (not Pending FM
+        # Approval), so on_update's post_approval_states trigger won't fire.
+        # Create stock entries explicitly here while still running as Administrator.
+        if action == "Approve Store Items":
+            try:
+                task._create_stock_entries()
+            except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    "apply_maintenance_workflow: stock entry creation failed for {}".format(task_name)
+                )
 
         frappe.db.commit()
         return {"success": True, "workflow_state": task.workflow_state}
@@ -1215,6 +1332,10 @@ def get_maintenance_task(task_name):
         # Supervisors, reporters, and other viewers can see the task
         # but not write to it.
         "can_edit": _can_edit_task(task),
+
+        # List of workflow action names the current user may trigger right now.
+        # The frontend uses this to show/hide action buttons.
+        "allowed_actions": _get_allowed_actions(task),
     }
 
 
@@ -1249,9 +1370,25 @@ def save_maintenance_task(task_name, task_data, parts_used=None, parts_returned=
 
         # Parts used
         if parts_used is not None:
+            # Rows already linked to a stock entry are locked — preserve them
+            # from the DB and only allow adding/modifying un-issued rows.
+            locked = [
+                p for p in (task.parts_used or [])
+                if p.get("stock_entry")
+            ]
             task.set("parts_used", [])
+            for p in locked:
+                task.append("parts_used", {
+                    "item_code": p.item_code,
+                    "item_name": p.item_name or "",
+                    "quantity": p.quantity,
+                    "uom": p.uom or "",
+                    "warehouse": p.warehouse or "",
+                    "cost": p.cost or 0,
+                    "stock_entry": p.stock_entry,
+                })
             for p in parts_used:
-                if p.get("item_code"):
+                if p.get("item_code") and not p.get("stock_entry"):
                     task.append("parts_used", {
                         "item_code": p["item_code"],
                         "item_name": p.get("item_name") or frappe.db.get_value("Item", p["item_code"], "item_name") or "",
@@ -1263,9 +1400,25 @@ def save_maintenance_task(task_name, task_data, parts_used=None, parts_returned=
 
         # Parts returned
         if parts_returned is not None:
+            # Rows already linked to a stock entry are locked — preserve them
+            # from the DB and only allow adding/modifying un-returned rows.
+            locked_returned = [
+                p for p in (task.parts_returned or [])
+                if p.get("stock_entry")
+            ]
             task.set("parts_returned", [])
+            for p in locked_returned:
+                task.append("parts_returned", {
+                    "item_code": p.item_code,
+                    "item_name": p.item_name or "",
+                    "quantity": p.quantity,
+                    "uom": p.uom or "",
+                    "warehouse": p.warehouse or "",
+                    "cost": p.cost or 0,
+                    "stock_entry": p.stock_entry,
+                })
             for p in parts_returned:
-                if p.get("item_code"):
+                if p.get("item_code") and not p.get("stock_entry"):
                     task.append("parts_returned", {
                         "item_code": p["item_code"],
                         "item_name": p.get("item_name") or frappe.db.get_value("Item", p["item_code"], "item_name") or "",

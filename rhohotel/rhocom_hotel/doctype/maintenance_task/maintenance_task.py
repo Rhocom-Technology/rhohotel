@@ -1292,21 +1292,19 @@ class MaintenanceTask(Document):
         return errors
 
     def _create_stock_entries(self):
-        if self.parts_used and not self.material_issue_stock_entry:
-            issue_entry = self._create_stock_entry(
-                self.parts_used,
-                "Material Issue"
-            )
-
+        # Only process parts rows that haven't been linked to a stock entry yet.
+        # This allows multiple "Send to Store → Approve" cycles on the same task
+        # (e.g. the technician needs additional parts) without skipping new rows
+        # because material_issue_stock_entry was already set by a prior cycle.
+        new_parts = [p for p in (self.parts_used or []) if not p.get("stock_entry")]
+        if new_parts:
+            issue_entry = self._create_stock_entry(new_parts, "Material Issue")
             if issue_entry:
                 self.db_set("material_issue_stock_entry", issue_entry)
 
-        if self.parts_returned and not self.material_return_stock_entry:
-            return_entry = self._create_stock_entry(
-                self.parts_returned,
-                "Material Receipt"
-            )
-
+        new_returns = [p for p in (self.parts_returned or []) if not p.get("stock_entry")]
+        if new_returns:
+            return_entry = self._create_stock_entry(new_returns, "Material Receipt")
             if return_entry:
                 self.db_set("material_return_stock_entry", return_entry)
 
@@ -1353,7 +1351,7 @@ class MaintenanceTask(Document):
 
         for part in parts:
             frappe.db.set_value(
-                "Maintenance Parts Used",
+                part.doctype,
                 part.name,
                 "stock_entry",
                 stock_entry.name

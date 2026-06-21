@@ -7,6 +7,7 @@ The IPTV Integration API allows in-room IPTV systems to:
 - Display a personalised welcome message with guest name and stay dates.
 - Show the guest's current bill (folio) broken down by charge category.
 - Present an interactive room service menu grouped by category.
+- Browse named restaurant menus with location-specific pricing.
 - Accept and submit room service orders chargeable to the guest folio.
 
 All endpoints are Frappe whitelisted methods exposed over HTTP.  
@@ -372,6 +373,117 @@ curl -X POST "https://hotel.example.com/api/method/rhohotel.rhocom_hotel.api.ipt
 
 ---
 
+### 5. Get Restaurant Menus
+
+Retrieve named restaurant menus with their items and location-specific prices.
+
+| Property | Value |
+|---|---|
+| Method name | `get_restaurant_menu` |
+| HTTP methods | GET, POST |
+| URL | `/api/method/rhohotel.rhocom_hotel.api.iptv.get_restaurant_menu` |
+
+#### Difference from `get_room_service_menu`
+
+| | `get_room_service_menu` | `get_restaurant_menu` |
+|---|---|---|
+| Source DocType | `Menu Item` | `Restaurant Menu` → `Restaurant Menu Item` → `Menu Item` |
+| Structure | Flat items grouped by item_group | Named menus per location |
+| Pricing | Global `Menu Item.rate` | Per-menu rate override; falls back to `Menu Item.rate` |
+| Use case | Room service ordering from IPTV | Restaurant / bar / pool menu browsing |
+
+#### Request Parameters (all optional)
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `menu_name` | string | max 140 characters | Filter to a single named menu (exact match). |
+| `location` | string | max 140 characters | Filter by restaurant location (case-insensitive). |
+
+Omit both parameters to return all menus.
+
+#### Successful Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "currency": "NGN",
+    "menus": [
+      {
+        "menu_name": "Breakfast Menu",
+        "location": "Main Restaurant",
+        "items": [
+          {
+            "item_code": "MENU-ITEM-00001",
+            "item_name": "Full English Breakfast",
+            "description": "Eggs, bacon, toast, and beans",
+            "category": "Food",
+            "price": 4500.00,
+            "available": true,
+            "image": "/files/full-english.jpg"
+          }
+        ]
+      },
+      {
+        "menu_name": "Pool Bar Menu",
+        "location": "Pool Bar",
+        "items": [
+          {
+            "item_code": "MENU-ITEM-00007",
+            "item_name": "Club Sandwich",
+            "description": "",
+            "category": "Food",
+            "price": 3500.00,
+            "available": true,
+            "image": ""
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Rate Precedence
+
+Each item's `price` is resolved as follows:
+
+1. **`Restaurant Menu Item.rate`** — if this is greater than `0`, it is used (allows the Pool Bar to charge a different price from the Main Restaurant for the same item).
+2. **`Menu Item.rate`** — global base rate used as a fallback when the menu-specific rate is `0` or unset.
+
+#### Notes
+
+- Only items whose linked ERPNext `Item` is enabled (`disabled = 0`) are returned.
+- Items where the `Menu Item` has no linked ERPNext `Item` are excluded.
+- `item_code` values are `Menu Item` document names — use them as `item_code` in `place_room_service_order`.
+- `image` is a relative path; prepend `https://<your-site>` for the full URL.
+
+#### curl Examples
+
+**All menus:**
+```bash
+curl -X GET "https://hotel.example.com/api/method/rhohotel.rhocom_hotel.api.iptv.get_restaurant_menu" \
+  -H "X-IPTV-API-Key: YOUR_API_KEY_HERE"
+```
+
+**Filter by menu name:**
+```bash
+curl -X POST "https://hotel.example.com/api/method/rhohotel.rhocom_hotel.api.iptv.get_restaurant_menu" \
+  -H "Content-Type: application/json" \
+  -H "X-IPTV-API-Key: YOUR_API_KEY_HERE" \
+  -d '{"menu_name": "Breakfast Menu"}'
+```
+
+**Filter by location:**
+```bash
+curl -X POST "https://hotel.example.com/api/method/rhohotel.rhocom_hotel.api.iptv.get_restaurant_menu" \
+  -H "Content-Type: application/json" \
+  -H "X-IPTV-API-Key: YOUR_API_KEY_HERE" \
+  -d '{"location": "Pool Bar"}'
+```
+
+---
+
 ## Recommended IPTV Integration Flow
 
 ```
@@ -380,13 +492,21 @@ curl -X POST "https://hotel.example.com/api/method/rhohotel.rhocom_hotel.api.ipt
 
 2. Show interactive main menu:
    ├── "Room Service" button:
-   │   └── GET /get_room_service_menu  →  Display category grid
-   │       └── Guest selects items, confirms order
-   │           └── POST /place_room_service_order  →  Show order confirmation
+   │   ├── GET /get_room_service_menu   →  Display all items grouped by category
+   │   │   OR
+   │   ├── GET /get_restaurant_menu    →  Display named menus (e.g. "Breakfast Menu")
+   │   └── Guest selects items, confirms order
+   │       └── POST /place_room_service_order  →  Show order confirmation
    │
    └── "My Bill" button:
        └── GET /get_guest_folio  →  Display itemised bill
 ```
+
+**Which menu endpoint to use?**
+
+- Use `get_room_service_menu` for a simple flat item list grouped by category (item group).
+- Use `get_restaurant_menu` when the hotel runs separate named menus per outlet
+  (e.g. Breakfast Menu, Pool Bar Menu, Room Service Menu) with potentially different prices per location.
 
 ---
 
@@ -406,6 +526,8 @@ curl -X POST "https://hotel.example.com/api/method/rhohotel.rhocom_hotel.api.ipt
 | `"Menu item '...' not found or unavailable"` | 3 | `item_code` does not match any `Menu Item` record |
 | `"Failed to create order. Please try again."` | 3 | Database error during order creation (see Frappe error log) |
 | `"This endpoint requires POST"` | 3 | GET request sent to `place_room_service_order` |
+| `"menu_name filter is too long"` | 5 | `menu_name` filter exceeds 140 characters |
+| `"location filter is too long"` | 5 | `location` filter exceeds 140 characters |
 
 ---
 
