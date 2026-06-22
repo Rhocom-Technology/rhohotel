@@ -12,7 +12,7 @@
     </div>
 
     <!-- Control Bar -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Invoice Register</h3>
         <p class="text-xs text-gray-400 mt-0.5">
@@ -20,17 +20,17 @@
           invoice{{ invoices.length === 1 ? '' : 's' }} • {{ unpaidCount }} unpaid • {{ overdueCount }} overdue
         </p>
       </div>
-      <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="$router.push('/billing')">Billing Dashboard</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="$router.push('/billing/payments')">Payment List</button>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">New Invoice</button>
+        <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors sm:w-auto">New Invoice</button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Invoices</p>
@@ -63,25 +63,25 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex-1" style="min-width:180px;">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div class="w-full sm:min-w-[180px] sm:flex-1">
           <input v-model="search" type="text" placeholder="Search invoice no., guest, room..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <!-- Date range (issue date) -->
-        <div class="flex items-center gap-1.5">
+        <div class="flex w-full items-center gap-1.5 sm:w-auto">
           <label class="text-xs text-gray-500 font-medium">From</label>
           <input v-model="fromDate" type="date"
-            class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700" />
+            class="min-w-0 flex-1 px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 sm:flex-none" />
         </div>
-        <div class="flex items-center gap-1.5">
+        <div class="flex w-full items-center gap-1.5 sm:w-auto">
           <label class="text-xs text-gray-500 font-medium">To</label>
           <input v-model="toDate" type="date"
-            class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700" />
+            class="min-w-0 flex-1 px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 sm:flex-none" />
         </div>
-        <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterStatus" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Statuses</option>
           <option>Unpaid</option>
           <option>Part Paid</option>
@@ -89,7 +89,7 @@
           <option>Overdue</option>
           <option>Credit Note</option>
         </select>
-        <select v-model="filterType" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Types</option>
           <option>Room</option>
           <option>Restaurant</option>
@@ -99,9 +99,9 @@
           <option>Credit Note</option>
         </select>
         <button @click="resetFilters"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
+          class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Reset</button>
         <button
-          class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
+          class="w-full px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors sm:w-auto"
           :class="showOverdueOnly ? 'text-white bg-red-500 hover:bg-red-600' : 'text-white bg-blue-600 hover:bg-blue-700'"
           @click="showOverdueOnly = !showOverdueOnly; currentPage = 1">
           {{ showOverdueOnly ? 'Show All' : 'Overdue Only' }}
@@ -119,11 +119,12 @@
 
     <!-- Invoice Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-4 border-b border-gray-100 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">Invoice Records</h3>
         <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} invoices</p>
       </div>
-      <table class="w-full">
+      <div class="overflow-x-auto">
+      <table class="w-full min-w-[1040px]">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50">
             <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Invoice No.</th>
@@ -184,9 +185,10 @@
           </tr>
         </tbody>
       </table>
-      <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+      </div>
+      <div class="px-4 py-4 border-t border-gray-100 flex flex-col gap-3 bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: 25</p>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button v-for="p in totalPages" :key="p" @click="currentPage = p"
             class="w-7 h-7 flex items-center justify-center text-xs rounded-lg transition-colors"
             :class="currentPage === p ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-white border border-gray-200'">
@@ -221,7 +223,7 @@
         <div class="px-8 py-6 space-y-4">
           <div v-if="paymentError" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-600">{{ paymentError }}</div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Mode of Payment <span class="text-red-400">*</span></p>
               <select v-model="paymentForm.mode_of_payment"

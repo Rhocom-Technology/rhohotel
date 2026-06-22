@@ -277,11 +277,13 @@ class TTHotelProvider(LockProvider):
 
         err_code = data.get("errcode") or data.get("errCode")
         if err_code is not None and int(err_code) != 0:
+            errmsg_raw = data.get("errmsg") or data.get("errMsg") or "Unknown error"
+            if isinstance(errmsg_raw, list):
+                errmsg = ", ".join(str(m) for m in errmsg_raw) or "Unknown error"
+            else:
+                errmsg = str(errmsg_raw)
             raise LockProviderRequestError(
-                _("TTLock error {0}: {1}").format(
-                    err_code,
-                    data.get("errmsg") or data.get("errMsg") or "Unknown error",
-                )
+                _("TTLock error {0}: {1}").format(err_code, errmsg)
             )
         return data
 
@@ -331,15 +333,25 @@ class TTHotelProvider(LockProvider):
 
     def _issue_ic_card(self, context: KeyContext) -> ProviderResult:
         """
-        POST /v3/ic/add — physical RFID card via card encoder.
+        POST /v3/ic/add — physical RFID card.
 
-        Requires a card encoder connected to the same local network as the
-        TTLock gateway.  The encoder reads the card UID during programming.
+        Requires the card's UID (cardNumber) which must be read beforehand
+        by a card reader (USB RFID reader at the front desk, or a TTLock
+        card encoder on-site) and passed as context.extra["card_number"].
         """
+        card_number = str(context.extra.get("card_number") or "").strip()
+        if not card_number:
+            raise LockProviderRequestError(
+                _(
+                    "IC Card issuance requires the card UID. "
+                    "Scan the card with the card reader then enter the number in the Issue Key form."
+                )
+            )
         url = f"{self._base_url}/v3/ic/add"
         data = {
             **self._common_params(),
             "lockId": self._coerce_id(context.external_lock_id),
+            "cardNumber": card_number,
             "keyName": self._key_name(context),
             "startDate": _iso_to_ms(context.valid_from),
             "endDate": _iso_to_ms(context.valid_until),

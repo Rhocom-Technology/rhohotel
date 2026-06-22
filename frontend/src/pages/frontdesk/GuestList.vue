@@ -11,7 +11,7 @@
     </div>
 
     <!-- Stats Row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-500">Total Guests</p>
@@ -43,15 +43,15 @@
     </div>
 
     <!-- Filters & Search -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
-      <div class="flex items-end gap-3 flex-wrap">
-        <div class="flex-1 min-w-48">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-48 sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Search guest</p>
           <input v-model="search" @input="onSearchInput" @keyup.enter="fetchGuests" type="text" placeholder="Guest name, phone, email, ID no..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div class="min-w-36">
+        <div class="w-full sm:min-w-36">
           <p class="text-xs text-gray-500 mb-1.5">Guest Type</p>
           <select v-model="filterType" @change="fetchGuests"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700 focus:ring-2 focus:ring-blue-500">
@@ -61,7 +61,7 @@
             <option value="Walk-in">Walk-in</option>
           </select>
         </div>
-        <div class="min-w-36">
+        <div class="w-full sm:min-w-36">
           <p class="text-xs text-gray-500 mb-1.5">Loyalty</p>
           <select v-model="filterLoyalty" @change="fetchGuests"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700 focus:ring-2 focus:ring-blue-500">
@@ -74,7 +74,7 @@
             <option value="Corporate">Corporate</option>
           </select>
         </div>
-        <div class="min-w-36">
+        <div class="w-full sm:min-w-36">
           <p class="text-xs text-gray-500 mb-1.5">Current Status</p>
           <select v-model="filterStatus" @change="fetchGuests"
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-700 focus:ring-2 focus:ring-blue-500">
@@ -84,13 +84,13 @@
           </select>
         </div>
         <button @click="resetFilters"
-          class="px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+          class="w-full px-4 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 sm:w-auto">
           Reset
         </button>
-        <button @click="fetchGuests" class="px-4 py-2.5 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800">
+        <button @click="fetchGuests" class="w-full px-4 py-2.5 text-xs font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 sm:w-auto">
           Search
         </button>
-        <button @click="$router.push('/guests/new')" class="px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <button @click="$router.push('/guests/new')" class="w-full px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 sm:w-auto">
           New Guest
         </button>
       </div>
@@ -98,7 +98,7 @@
 
     <!-- Guest Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-4 border-b border-gray-100 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">All Guests</h3>
         <p class="text-xs text-gray-400">
           {{ loading ? 'Loading…' : `Showing ${Math.min(startIdx + 1, totalCount)}–${endIdx} of ${totalCount} guests` }}
@@ -122,7 +122,8 @@
         <button @click="$router.push('/guests/new')" class="mt-3 px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">New Guest</button>
       </div>
 
-      <table v-else class="w-full">
+      <div v-else class="overflow-x-auto">
+      <table class="w-full min-w-[860px]">
         <thead>
           <tr class="border-b border-gray-100">
             <th class="text-left text-xs font-medium text-gray-500 px-6 py-3">Guest ID</th>
@@ -190,11 +191,12 @@
           </tr>
         </tbody>
       </table>
+      </div>
 
       <!-- Pagination -->
-      <div v-if="!loading && !error && guests.length" class="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+      <div v-if="!loading && !error && guests.length" class="px-4 py-4 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: {{ perPage }}</p>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button v-for="p in visiblePages" :key="p"
             @click="typeof p === 'number' && (currentPage = p)"
             class="w-7 h-7 flex items-center justify-center text-xs rounded"

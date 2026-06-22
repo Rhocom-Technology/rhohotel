@@ -1,17 +1,27 @@
 <template>
-  <header class="h-14 flex-shrink-0 flex items-center justify-between px-6 border-b border-white/10" style="background-color: #1a1f2e;">
-    <div>
-      <h1 class="text-white font-bold text-lg leading-tight">{{ pageTitle }}</h1>
-      <p class="text-gray-400 text-xs">{{ pageSubtitle }}</p>
+  <header class="min-h-14 flex-shrink-0 flex items-center justify-between gap-3 px-3 py-2 sm:px-4 lg:px-6 border-b border-white/10" style="background-color: #1a1f2e;">
+    <div class="flex min-w-0 items-center gap-3">
+      <button
+        type="button"
+        class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10 hover:text-white md:hidden"
+        aria-label="Open navigation menu"
+        @click="openSidebar"
+      >
+        <Menu class="h-5 w-5" />
+      </button>
+      <div class="min-w-0">
+        <h1 class="truncate text-white font-bold text-base leading-tight sm:text-lg">{{ pageTitle }}</h1>
+        <p class="hidden truncate text-gray-400 text-xs sm:block">{{ pageSubtitle }}</p>
+      </div>
     </div>
-    <div class="flex items-center gap-3">
-      <div class="text-white text-sm font-medium italic">
+    <div class="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+      <div class="hidden text-white text-sm font-medium italic lg:block">
         {{ greeting }}, {{ session.displayName }}
       </div>
-      <div class="bg-blue-600 text-white text-xs font-medium px-3 py-1.5 rounded-full">
+      <div class="hidden bg-blue-600 text-white text-xs font-medium px-3 py-1.5 rounded-full xl:block">
         {{ currentDateTime }}
       </div>
-      <button @click="logout" class="text-gray-400 hover:text-white text-xs transition-colors ml-2">
+      <button @click="logout" class="text-gray-300 hover:text-white text-xs transition-colors sm:ml-1">
         Logout
       </button>
     </div>
@@ -22,6 +32,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
+import { Menu } from 'lucide-vue-next'
+
+const emit = defineEmits(['open-sidebar'])
 
 const route = useRoute()
 const session = useSessionStore()
@@ -151,6 +164,10 @@ const currentDateTime = computed(() => {
     second: '2-digit',
   })
 })
+
+function openSidebar() {
+  emit('open-sidebar')
+}
 
 function logout() {
   session.logout()

@@ -7,17 +7,17 @@
     </div>
 
     <!-- Kitchen Control -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Kitchen Control</h3>
         <p class="text-xs text-gray-400 mt-0.5">Live kitchen board for restaurant dining, room service, takeaway, and bar snack preparation.</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button v-if="canEditKitchen" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <button v-if="canEditKitchen" class="w-full px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors sm:w-auto"
           @click="showSettings = true">Kitchen Settings</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="manualRefresh">Refresh</button>
-        <button class="px-4 py-2 text-xs font-semibold rounded-lg transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-semibold rounded-lg transition-colors sm:w-auto"
           :class="autoRefresh ? 'text-white bg-blue-600 hover:bg-blue-700' : 'text-gray-700 border border-gray-300 hover:bg-gray-50'"
           @click="autoRefresh = !autoRefresh">
           {{ autoRefresh ? 'Auto Refresh On' : 'Auto Refresh Off' }}
@@ -26,7 +26,7 @@
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">New Tickets</p>
@@ -58,29 +58,29 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Kitchen Board Filters</h3>
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex-1" style="min-width:180px;">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div class="w-full sm:min-w-[180px] sm:flex-1">
           <input v-model="search" type="text" placeholder="Search ticket, room, table..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <select v-model="filterStation" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterStation" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Stations</option>
           <option>Hot Kitchen</option>
           <option>Cold Kitchen</option>
           <option>Bar Snacks</option>
         </select>
-        <select v-model="filterSource" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterSource" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Sources</option>
           <option>Restaurant Dining</option>
           <option>Room Service</option>
           <option>Takeaway</option>
         </select>
         <button @click="search='';filterStation='';filterSource='';showDelayedOnly=false"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
+          class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Reset</button>
         <button
-          class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
+          class="w-full px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors sm:w-auto"
           :class="showDelayedOnly ? 'text-white bg-red-500 hover:bg-red-600' : 'text-white bg-blue-600 hover:bg-blue-700'"
           @click="showDelayedOnly = !showDelayedOnly">
           {{ showDelayedOnly ? 'Show All Tickets' : 'Show Delayed Tickets Only' }}
@@ -89,7 +89,7 @@
     </div>
 
     <!-- Kanban Board -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start;">
+    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4 items-start">
 
       <div v-if="ticketsResource.loading" class="col-span-4 bg-white rounded-xl border border-gray-200 p-8 text-center text-xs text-gray-400">
         Loading kitchen tickets...

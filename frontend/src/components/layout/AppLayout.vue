@@ -1,9 +1,9 @@
 <template>
-  <div class="flex h-screen overflow-hidden" style="background-color: #f1f5f9;">
-    <Sidebar v-if="showChrome" />
-    <div class="flex flex-col flex-1 overflow-hidden">
-      <TopHeader v-if="showChrome" />
-      <main :class="['flex-1 overflow-y-auto', showChrome ? 'p-6' : 'p-0']">
+  <div class="flex h-screen min-w-0 overflow-hidden" style="background-color: #f1f5f9;">
+    <Sidebar v-if="showChrome" :open="sidebarOpen" @close="closeSidebar" />
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <TopHeader v-if="showChrome" @open-sidebar="openSidebar" />
+      <main :class="['min-w-0 flex-1 overflow-y-auto', showChrome ? 'p-3 sm:p-4 lg:p-6' : 'p-0']">
         <router-view />
       </main>
     </div>
@@ -12,8 +12,7 @@
     <!-- Room Upgrade Toast Notification -->
     <Transition name="toast-slide">
       <div v-if="upgradeToast.show"
-        class="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-emerald-200 overflow-hidden"
-        style="min-width:320px;">
+        class="fixed bottom-4 left-3 right-3 z-50 w-auto max-w-sm bg-white rounded-2xl shadow-2xl border border-emerald-200 overflow-hidden sm:bottom-6 sm:left-auto sm:right-6 sm:w-full">
         <div class="bg-emerald-600 px-4 py-2 flex items-center justify-between">
           <p class="text-xs font-bold text-white tracking-wide">ROOM UPGRADE — ACTION REQUIRED</p>
           <button @click="dismissToast" class="text-emerald-100 hover:text-white text-sm leading-none">✕</button>
@@ -42,7 +41,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import TopHeader from './TopHeader.vue'
@@ -54,6 +53,22 @@ const router = useRouter()
 
 const showChrome = computed(() => {
   return !(route.name === 'PointOfSales' && route.query.fullscreen === '1')
+})
+
+const sidebarOpen = ref(false)
+
+function openSidebar() {
+  sidebarOpen.value = true
+}
+
+function closeSidebar() {
+  sidebarOpen.value = false
+}
+
+watch(() => route.fullPath, closeSidebar)
+
+watch(sidebarOpen, (isOpen) => {
+  document.body.style.overflow = isOpen ? 'hidden' : ''
 })
 
 // ── Room Upgrade Toast ───────────────────────────────────────────────────────
@@ -89,6 +104,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (socket) socket.off('rhohotel_room_upgrade', showUpgradeToast)
   if (toastTimer) clearTimeout(toastTimer)
+  document.body.style.overflow = ''
 })
 </script>
 

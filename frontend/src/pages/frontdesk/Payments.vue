@@ -9,7 +9,7 @@
     </div>
 
     <!-- Stats Row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Payments Today</p>
@@ -41,10 +41,10 @@
     </div>
 
     <!-- Filters & Search -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-3">Filters & Search</h3>
-      <div class="flex items-end gap-4 flex-wrap">
-        <div style="flex:2;min-width:180px;">
+      <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[180px] sm:flex-[2]">
           <p class="text-xs text-gray-500 mb-1.5">Search payment</p>
           <input
             v-model="search"
@@ -53,7 +53,7 @@
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Method</p>
           <select v-model="filterMethod" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Methods</option>
@@ -63,7 +63,7 @@
             <option value="Bank Transfer">Bank Transfer</option>
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Posting Status</p>
           <select v-model="filterStatus" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Statuses</option>
@@ -72,21 +72,21 @@
             <option value="Reversed">Reversed</option>
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Payment Date</p>
           <input v-model="filterDate" type="date" placeholder="Today"
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600" />
         </div>
-        <div class="flex items-center gap-2 pb-0.5">
-          <button @click="clearFilters" class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Reset</button>
-          <button @click="openReceivePayment" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Receive Payment</button>
+        <div class="flex w-full flex-col gap-2 pb-0.5 sm:w-auto sm:flex-row sm:items-center">
+          <button @click="clearFilters" class="w-full px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 sm:w-auto">Reset</button>
+          <button @click="openReceivePayment" class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 sm:w-auto">Receive Payment</button>
         </div>
       </div>
     </div>
 
     <!-- Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 flex items-center justify-between border-b border-gray-100">
+      <div class="px-4 py-4 flex flex-col gap-1 border-b border-gray-100 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">All Payments</h3>
         <p class="text-xs text-gray-400">Showing 1–{{ Math.min(pageSize, filteredList.length) }} of {{ filteredList.length.toLocaleString() }} payments</p>
       </div>
@@ -100,7 +100,7 @@
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full">
+        <table class="w-full min-w-[780px]">
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left text-xs font-semibold text-gray-400 px-6 py-3">Receipt</th>
@@ -145,10 +145,10 @@
       </div>
 
       <!-- Pagination -->
-      <div class="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-3 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: {{ pageSize }}</p>
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-1">
             <button
               v-for="p in Math.min(totalPages, 5)"
               :key="p"
@@ -172,7 +172,7 @@
       <div v-if="selectedPayment" class="fixed inset-0 z-50 flex items-center justify-center p-4"
         style="background:rgba(15,23,42,0.6);" @click.self="closePaymentDetails">
         <div class="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full overflow-hidden" style="max-width:640px;">
-          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div class="px-4 py-4 border-b border-gray-100 flex items-center justify-between sm:px-6">
             <div>
               <p class="text-xs text-gray-400 mb-1">Payment Receipt</p>
               <h3 class="text-sm font-bold text-gray-900">{{ selectedPayment.id }}</h3>
@@ -180,8 +180,8 @@
             <button @click="closePaymentDetails" class="w-7 h-7 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">✕</button>
           </div>
 
-          <div class="px-6 py-5 space-y-5">
-            <div class="flex items-start justify-between gap-4">
+          <div class="px-4 py-5 space-y-5 sm:px-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div>
                 <p class="text-xs text-gray-400 mb-1">Amount Received</p>
                 <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(selectedPayment.amount) }}</p>
@@ -191,7 +191,7 @@
               </span>
             </div>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div class="border border-gray-100 rounded-xl px-4 py-3 bg-gray-50">
                 <p class="text-xs text-gray-400 mb-1">Guest / Party</p>
                 <p class="text-sm font-semibold text-gray-900">{{ selectedPayment.guest }}</p>
@@ -222,8 +222,8 @@
             </div>
           </div>
 
-          <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end">
-            <button @click="closePaymentDetails" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>
+          <div class="px-4 py-4 border-t border-gray-100 flex items-center justify-end sm:px-6">
+            <button @click="closePaymentDetails" class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 sm:w-auto">Close</button>
           </div>
         </div>
       </div>
@@ -234,12 +234,12 @@
       <div v-if="showReceiveModal" class="fixed inset-0 z-50 flex items-center justify-center p-4"
         style="background:rgba(15,23,42,0.6);" @click.self="closeReceivePaymentModal">
         <div class="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full" style="max-width:560px;">
-          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div class="px-4 py-4 border-b border-gray-100 flex items-center justify-between sm:px-6">
             <h3 class="text-sm font-bold text-gray-900">Receive Payment</h3>
             <button @click="closeReceivePaymentModal" class="w-7 h-7 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">✕</button>
           </div>
 
-          <div class="px-6 py-5 space-y-4">
+          <div class="px-4 py-5 space-y-4 sm:px-6">
             <div v-if="receiveError" class="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               <p class="text-xs text-red-600 font-medium">{{ receiveError }}</p>
             </div>
@@ -254,7 +254,7 @@
               </select>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Amount <span class="text-red-500">*</span></p>
                 <input v-model.number="receiveForm.paid_amount" type="number" min="0" step="0.01"
@@ -272,7 +272,7 @@
               </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <p class="text-xs text-gray-500 mb-1.5">Reference No.</p>
                 <input v-model="receiveForm.reference_no" type="text"
@@ -293,10 +293,10 @@
             </div>
           </div>
 
-          <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
-            <button @click="closeReceivePaymentModal" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+          <div class="px-4 py-4 border-t border-gray-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:px-6">
+            <button @click="closeReceivePaymentModal" class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 sm:w-auto">Cancel</button>
             <button @click="submitReceivePayment" :disabled="receivingPayment"
-              class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 sm:w-auto">
               {{ receivingPayment ? 'Processing...' : 'Submit Payment' }}
             </button>
           </div>

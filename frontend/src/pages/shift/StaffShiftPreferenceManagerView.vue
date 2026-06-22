@@ -6,14 +6,14 @@
       </p>
     </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900">Preference Review Control</h3>
       <p class="text-xs text-gray-400 mt-0.5 mb-4">
         Review submitted preferences for the selected department and week. Managers cannot edit staff submissions.
       </p>
 
-      <div class="flex items-end gap-3 flex-wrap">
-        <div style="min-width:170px;">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[170px]">
           <p class="text-xs text-gray-500 mb-1.5">Department</p>
           <select
             v-model="department"
@@ -26,7 +26,7 @@
           </select>
         </div>
 
-        <div style="min-width:220px;">
+        <div class="w-full sm:min-w-[220px]">
           <p class="text-xs text-gray-500 mb-1.5">Week Starting</p>
           <div class="flex items-center gap-2">
             <button
@@ -51,7 +51,7 @@
           </div>
         </div>
 
-        <div style="min-width:170px;">
+        <div class="w-full sm:min-w-[170px]">
           <p class="text-xs text-gray-500 mb-1.5">Submission Status</p>
           <select
             v-model="submissionStatus"
@@ -63,7 +63,7 @@
           </select>
         </div>
 
-        <div class="flex-1" style="min-width:200px;">
+        <div class="w-full sm:min-w-[200px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">&nbsp;</p>
           <input
             v-model="searchText"
@@ -73,17 +73,17 @@
           />
         </div>
 
-        <div class="flex-1"></div>
+        <div class="hidden flex-1 sm:block"></div>
 
         <button
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="resetFilters"
         >
           Reset
         </button>
 
         <button
-          class="px-5 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          class="w-full px-5 py-2.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors sm:w-auto"
           @click="printSummary"
         >
           Print
@@ -93,7 +93,7 @@
       <p v-if="error" class="text-xs text-red-500 mt-3">{{ error }}</p>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Department Staff</p>

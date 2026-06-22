@@ -9,7 +9,7 @@
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Reservations</p>
@@ -41,15 +41,15 @@
     </div>
 
     <!-- Filters & Search -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-3">Filters & Search</h3>
-      <div class="flex items-end gap-4 flex-wrap">
-        <div style="flex:2;min-width:180px;">
+      <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[180px] sm:flex-[2]">
           <p class="text-xs text-gray-500 mb-1.5">Search reservation / guest</p>
           <input v-model="search" type="text" placeholder="Reservation no., guest, company..."
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Status</p>
           <select v-model="filterStatus" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Statuses</option>
@@ -64,12 +64,12 @@
             <option value="Draft">Draft</option>
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Arrival Date</p>
           <input v-model="filterArrival" type="date" placeholder="Today"
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600" />
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Reservation Type</p>
           <select v-model="filterSource" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Types</option>
@@ -81,9 +81,9 @@
             <option value="OTA">OTA</option>
           </select>
         </div>
-        <div class="flex items-center gap-2 pb-0.5">
-          <button @click="clearFilters" class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Reset</button>
-          <button @click="showNewReservation = true" class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <div class="flex w-full flex-col gap-2 pb-0.5 sm:w-auto sm:flex-row sm:items-center">
+          <button @click="clearFilters" class="w-full px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 sm:w-auto">Reset</button>
+          <button @click="showNewReservation = true" class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 sm:w-auto">
             New Reservation
           </button>
         </div>
@@ -92,7 +92,7 @@
 
     <!-- Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 flex items-center justify-between border-b border-gray-100">
+      <div class="px-4 py-4 flex flex-col gap-1 border-b border-gray-100 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">All Reservations</h3>
         <p class="text-xs text-gray-400">Showing 1–{{ Math.min(pageSize, filteredList.length) }} of {{ filteredList.length.toLocaleString() }} reservations</p>
       </div>
@@ -106,7 +106,7 @@
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full">
+        <table class="w-full min-w-[760px]">
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left text-xs font-semibold text-gray-400 px-6 py-3">Reservation</th>
@@ -162,10 +162,10 @@
       </div>
 
       <!-- Pagination -->
-      <div class="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-3 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: {{ pageSize }}</p>
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-1">
             <button
               v-for="p in Math.min(totalPages, 5)"
               :key="p"
@@ -187,10 +187,10 @@
     <!-- New Reservation Type Selector Modal -->
     <Teleport to="body">
       <div v-if="showNewReservation" class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.55);" @click.self="showNewReservation = false">
-        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full mx-4" style="max-width:680px;">
+        <div class="bg-white rounded-2xl shadow-2xl p-4 w-full mx-4 sm:p-8" style="max-width:680px;">
           <h2 class="text-lg font-bold text-gray-900 mb-2">New Reservation</h2>
           <p class="text-xs text-gray-400 mb-6">Select the reservation type to continue.</p>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <button
               @click="startNewReservation('Individual')"
               class="flex flex-col items-center gap-3 p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"

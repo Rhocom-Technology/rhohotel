@@ -8,25 +8,25 @@
     </div>
 
     <!-- Overview Card -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h2 class="text-sm font-bold text-gray-900">Check-out Record Overview</h2>
         <p class="text-xs text-gray-400 mt-0.5">
           {{ stats.total }} checked-out stays • {{ stats.thisWeek }} this week • {{ stats.thisMonth }} this month • {{ stats.balanceFollowUp }} with balance follow-up
         </p>
       </div>
-      <div class="flex items-center gap-2">
-        <button @click="refreshData" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <button @click="refreshData" class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">
           Refresh
         </button>
-        <button @click="exportCheckOuts" class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+        <button @click="exportCheckOuts" class="w-full px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors sm:w-auto">
           Export List
         </button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Checked Out</p>
@@ -58,10 +58,10 @@
     </div>
 
     <!-- Filters & Search -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-3">Filters & Search</h3>
-      <div class="flex items-end gap-4 flex-wrap">
-        <div style="flex:2;min-width:180px;">
+      <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[180px] sm:flex-[2]">
           <p class="text-xs text-gray-500 mb-1.5">Search guest / folio</p>
           <input
             v-model="search"
@@ -70,7 +70,7 @@
             class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Date Range</p>
           <select v-model="filterDateRange" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="month">This Month</option>
@@ -79,7 +79,7 @@
             <option value="all">All Time</option>
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Payment Status</p>
           <select v-model="filterPayment" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Payments</option>
@@ -87,7 +87,7 @@
             <option value="balance">Balance Due</option>
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
+        <div class="w-full sm:min-w-[120px] sm:flex-1">
           <p class="text-xs text-gray-500 mb-1.5">Source</p>
           <select v-model="filterSource" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Sources</option>
@@ -97,16 +97,16 @@
             <option value="Corporate">Corporate</option>
           </select>
         </div>
-        <div class="flex items-center gap-2 pb-0.5">
-          <button @click="clearFilters" class="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Reset</button>
-          <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Apply Filter</button>
+        <div class="flex w-full flex-col gap-2 pb-0.5 sm:w-auto sm:flex-row sm:items-center">
+          <button @click="clearFilters" class="w-full px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 sm:w-auto">Reset</button>
+          <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 sm:w-auto">Apply Filter</button>
         </div>
       </div>
     </div>
 
     <!-- Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 flex items-center justify-between border-b border-gray-100">
+      <div class="px-4 py-4 flex flex-col gap-1 border-b border-gray-100 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">Checked-out Records</h3>
         <p class="text-xs text-gray-400">Showing 1–{{ Math.min(pageSize, filteredList.length) }} of {{ filteredList.length }} records</p>
       </div>
@@ -127,7 +127,7 @@
 
       <!-- Table -->
       <div v-else class="overflow-x-auto">
-        <table class="w-full">
+        <table class="w-full min-w-[820px]">
           <thead>
             <tr class="border-b border-gray-100">
               <th class="text-left text-xs font-semibold text-gray-400 px-6 py-3">Folio No.</th>
@@ -168,10 +168,10 @@
       </div>
 
       <!-- Pagination -->
-      <div v-if="filteredList.length > 0" class="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
+      <div v-if="filteredList.length > 0" class="px-4 py-3 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: {{ pageSize }}</p>
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-1">
             <button v-for="p in Math.min(totalPages, 5)" :key="p" @click="page = p"
               class="w-6 h-6 text-xs rounded flex items-center justify-center transition-colors"
               :class="page === p ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'">{{ p }}</button>

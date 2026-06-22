@@ -1,11 +1,34 @@
 <template>
-  <aside class="w-56 flex-shrink-0 flex flex-col h-full" style="background-color: #1a1f2e;">
+  <Transition name="sidebar-backdrop">
+    <button
+      v-if="open"
+      type="button"
+      class="fixed inset-0 z-40 bg-slate-950/50 md:hidden"
+      aria-label="Close navigation menu"
+      @click="emitClose"
+    ></button>
+  </Transition>
+
+  <aside
+    class="fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[85vw] flex-shrink-0 flex-col transition-transform duration-200 ease-out md:static md:z-auto md:w-56 md:max-w-none md:translate-x-0"
+    :class="open ? 'translate-x-0' : '-translate-x-full'"
+    style="background-color: #1a1f2e;"
+    aria-label="Main navigation"
+  >
     <!-- Logo -->
-    <div class="flex-shrink-0 px-4 flex items-center border-b border-white/10" style="height: 56px;">
+    <div class="flex-shrink-0 px-4 flex items-center justify-between border-b border-white/10" style="height: 56px;">
       <div>
         <div class="text-white font-bold text-lg leading-tight">rhoHMS</div>
         <div class="text-gray-400 text-xs">Front Desk Operations</div>
       </div>
+      <button
+        type="button"
+        class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-white/10 hover:text-white md:hidden"
+        aria-label="Close navigation menu"
+        @click="emitClose"
+      >
+        <X class="h-4 w-4" />
+      </button>
     </div>
 
     <!-- Nav -->
@@ -33,6 +56,7 @@
             :to="child.to"
             class="flex items-center px-3 py-2 ml-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
             active-class="bg-blue-600 text-white hover:bg-blue-600"
+            @click="emitClose"
           >
             {{ child.label }}
           </router-link>
@@ -43,6 +67,7 @@
           :to="group.to"
           class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-white/10 transition-colors"
           active-class="bg-blue-600"
+          @click="emitClose"
         >
           <component :is="group.icon" class="w-4 h-4 text-gray-400" />
           {{ group.label }}
@@ -55,7 +80,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import {
-  ChevronDown, LayoutGrid, Sparkles, Wrench,
+  ChevronDown, LayoutGrid, Sparkles, Wrench, X,
   CreditCard, BarChart2, ShoppingCart, UtensilsCrossed,
   Gift, Settings
 } from 'lucide-vue-next'
@@ -63,6 +88,19 @@ import { useSessionStore } from '@/stores/session'
 import { ROLE_GROUPS } from '@/lib/permissions'
 
 const session = useSessionStore()
+
+defineProps({
+  open: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits(['close'])
+
+function emitClose() {
+  emit('close')
+}
 
 const openGroups = ref(['Front Desk'])
 
@@ -210,3 +248,15 @@ function visibleChildren(children) {
   return children.filter((child) => !child.allowedRoles || session.hasAnyRole(child.allowedRoles))
 }
 </script>
+
+<style scoped>
+.sidebar-backdrop-enter-active,
+.sidebar-backdrop-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-backdrop-enter-from,
+.sidebar-backdrop-leave-to {
+  opacity: 0;
+}
+</style>

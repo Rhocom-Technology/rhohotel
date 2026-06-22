@@ -58,6 +58,28 @@
         </div>
       </div>
 
+      <!-- Card number input (IC Card mode) -->
+      <div v-if="ctx.requires_card_number" class="space-y-1">
+        <label class="block text-xs font-medium text-gray-700">Card UID <span class="text-red-500">*</span></label>
+        <div class="flex gap-2">
+          <input
+            v-model="cardNumber"
+            type="text"
+            placeholder="Scan or type card number…"
+            :disabled="busy"
+            class="flex-1 px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono disabled:bg-gray-50"
+            @keydown.enter.prevent
+          />
+          <button
+            type="button"
+            @click="cardNumber = ''"
+            :disabled="busy || !cardNumber"
+            class="px-2 py-1 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40"
+          >Clear</button>
+        </div>
+        <p class="text-xs text-gray-400">Place the card on the USB reader — it will type the UID automatically, or enter it manually.</p>
+      </div>
+
       <!-- Error / result banner -->
       <div v-if="actionError" class="bg-red-50 rounded-lg border border-red-200 px-4 py-3">
         <p class="text-xs font-bold text-red-600 mb-0.5">Operation Failed</p>
@@ -154,12 +176,14 @@ const loadingLogs = ref(false)
 const showLogs = ref(false)
 const actionError = ref('')
 const actionSuccess = ref('')
+const cardNumber = ref('')
 const logs = ref([])
 
 const ctx = ref({
   enabled: false,
   has_mapping: false,
   provider: null,
+  requires_card_number: false,
   active_key: null,
   recent_logs: [],
 })
@@ -227,18 +251,28 @@ async function _doAction(fn) {
 }
 
 function issueKey() {
+  if (ctx.value.requires_card_number && !cardNumber.value.trim()) {
+    actionError.value = 'Please scan or enter the card UID before issuing.'
+    return
+  }
   _doAction(() =>
     callMethodForm('rhohotel.rhocom_hotel.api.lock_api.issue_key', {
       check_in_name: props.checkIn.name,
+      card_number: cardNumber.value.trim() || undefined,
     })
   )
 }
 
 function reissueKey() {
   if (!ctx.value.active_key?.name) return
+  if (ctx.value.requires_card_number && !cardNumber.value.trim()) {
+    actionError.value = 'Please scan or enter the card UID before reissuing.'
+    return
+  }
   _doAction(() =>
     callMethodForm('rhohotel.rhocom_hotel.api.lock_api.reissue_key', {
       guest_key_name: ctx.value.active_key.name,
+      card_number: cardNumber.value.trim() || undefined,
     })
   )
 }

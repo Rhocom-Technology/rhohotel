@@ -3,13 +3,13 @@
 
     <!-- Header -->
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
-      <div class="flex items-start justify-between mb-4">
+      <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 class="text-base font-bold text-gray-900">Maintenance Control Center</h2>
           <p class="text-xs text-gray-400 mt-0.5">Monitor corrective and preventive tasks, assign technicians, review due work, and access maintenance history quickly.</p>
         </div>
         <button @click="loadDashboard"
-          class="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5">
+          class="w-full px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-1.5 sm:w-auto">
           <svg :class="loading ? 'animate-spin' : ''" class="w-3 h-3" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -17,24 +17,24 @@
           Refresh
         </button>
       </div>
-      <div class="flex items-center gap-3 flex-wrap">
+      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
         <router-link to="/maintenance/list">
-          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">
             Maintenance List
           </button>
         </router-link>
         <router-link to="/maintenance/technicians">
-          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">
             Technicians
           </button>
         </router-link>
         <router-link to="/maintenance/request">
-          <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+          <button class="w-full px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors sm:w-auto">
             Request List
           </button>
         </router-link>
         <router-link to="/maintenance/new-request">
-          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">
             New Request
           </button>
         </router-link>
@@ -47,7 +47,7 @@
     </div>
 
     <!-- Stats skeleton -->
-    <div v-if="loading" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+    <div v-if="loading" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
       <div v-for="n in 5" :key="n" class="bg-white rounded-xl border border-gray-200 px-5 py-4 animate-pulse">
         <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
         <div class="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
@@ -56,7 +56,7 @@
     </div>
 
     <!-- Stats -->
-    <div v-else-if="data" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+    <div v-else-if="data" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-400">Pending Requests</p>
@@ -110,7 +110,7 @@
     />
 
     <!-- Analytics Row -->
-    <div v-if="data" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+    <div v-if="data" class="grid grid-cols-1 gap-3 lg:grid-cols-3">
 
       <!-- Task Status Chart -->
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-5">
@@ -175,7 +175,7 @@
     </div>
 
     <!-- Bottom Row -->
-    <div v-if="data" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div v-if="data" class="grid grid-cols-1 gap-3 xl:grid-cols-2">
 
       <!-- Recent Activity -->
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">

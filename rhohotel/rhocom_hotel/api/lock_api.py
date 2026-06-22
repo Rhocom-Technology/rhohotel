@@ -75,6 +75,15 @@ def get_lock_context(check_in_name: str) -> dict:
         order_by="issued_at desc",
     )
 
+    # Whether this provider/config requires a physical card UID input
+    requires_card_number = False
+    if mapping and mapping.get("provider") == "tt_hotel":
+        try:
+            key_type = frappe.db.get_single_value("TT Hotel Settings", "key_type") or "eKey"
+            requires_card_number = key_type == "IC Card"
+        except Exception:
+            pass
+
     # Recent logs (last 5)
     recent_logs = frappe.db.get_all(
         "Lock Operation Log",
@@ -88,6 +97,7 @@ def get_lock_context(check_in_name: str) -> dict:
         "enabled": True,
         "has_mapping": has_mapping,
         "provider": provider_label,
+        "requires_card_number": requires_card_number,
         "active_key": active_key,
         "recent_logs": recent_logs,
     }
@@ -98,20 +108,28 @@ def get_lock_context(check_in_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def issue_key(check_in_name: str) -> dict:
+def issue_key(check_in_name: str, card_number: Optional[str] = None) -> dict:
     """Issue a new key for an active check-in."""
     _check_role()
     from rhohotel.integrations.locks.service import issue_guest_key
-    result = issue_guest_key(check_in_name, requested_by=frappe.session.user)
+    result = issue_guest_key(
+        check_in_name,
+        requested_by=frappe.session.user,
+        card_number=card_number or None,
+    )
     return _sanitise(result)
 
 
 @frappe.whitelist()
-def reissue_key(guest_key_name: str) -> dict:
+def reissue_key(guest_key_name: str, card_number: Optional[str] = None) -> dict:
     """Reissue (replace) a key for an active check-in."""
     _check_role()
     from rhohotel.integrations.locks.service import reissue_guest_key
-    result = reissue_guest_key(guest_key_name, requested_by=frappe.session.user)
+    result = reissue_guest_key(
+        guest_key_name,
+        requested_by=frappe.session.user,
+        card_number=card_number or None,
+    )
     return _sanitise(result)
 
 

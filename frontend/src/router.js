@@ -96,7 +96,7 @@ const router = createRouter({
 
     // Hall Management
     { path: '/hall',                  name: 'HallList',         component: () => import('@/pages/hall/HallList.vue') },
-    { path: '/hall-dashboard',                  name: 'Hall Dashboard',         component: () => import('@/pages/hall/HallDashboard.vue') },
+    { path: '/hall-dashboard',                  name: 'HallDashboard',         component: () => import('@/pages/hall/HallDashboard.vue') },
     { path: '/hall/new',              name: 'NewHall',          component: () => import('@/pages/hall/NewHall.vue') },
     { path: '/hall/booking',          name: 'HallBookingList',  component: () => import('@/pages/hall/HallBookingList.vue') },
     { path: '/hall/booking/new',      name: 'NewHallBooking',   component: () => import('@/pages/hall/NewHallBooking.vue') },

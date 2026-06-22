@@ -12,21 +12,21 @@
     </div>
 
     <!-- Control Bar -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Complimentary Register Overview</h3>
         <p class="text-xs text-gray-400 mt-0.5">{{ total }} total records • {{ stats.active_count }} active • {{ stats.pending_approval }} pending approval</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <button class="w-full px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors sm:w-auto"
           @click="$router.push('/complimentary')">Complimentary Dashboard</button>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors sm:w-auto"
           @click="$router.push('/complimentary/new')">New Complimentary</button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Records</p>
@@ -58,14 +58,14 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
-      <div class="flex items-end gap-3 flex-wrap">
-        <div class="flex-1" style="min-width:180px;">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[180px] sm:flex-1">
           <input v-model="search" type="text" placeholder="Search guest, code, benefit..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <select v-model="filterType" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Types</option>
           <option>Food Voucher</option>
           <option>Room Voucher</option>
@@ -74,7 +74,7 @@
           <option>Amenity Basket</option>
           <option>Laundry / Amenity</option>
         </select>
-        <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterStatus" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Statuses</option>
           <option>Draft</option>
           <option>Pending</option>
@@ -84,14 +84,14 @@
           <option>Expired</option>
           <option>Cancelled</option>
         </select>
-        <select v-model="filterApprover" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterApprover" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Approvers</option>
           <option>General Manager</option>
           <option>Duty Manager</option>
           <option>Front Desk Supervisor</option>
           <option>Operations Lead</option>
         </select>
-        <select v-model="filterDepartment" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
+        <select v-model="filterDepartment" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
           <option value="">All Departments</option>
           <option>Restaurant</option>
           <option>Front Desk</option>
@@ -101,9 +101,9 @@
           <option>Operations</option>
         </select>
         <button @click="resetFilters()"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
+          class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Reset</button>
         <button
-          class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
+          class="w-full px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors sm:w-auto"
           :class="showConsumedOnly ? 'text-white bg-green-600 hover:bg-green-700' : 'text-white bg-blue-600 hover:bg-blue-700'"
           @click="showConsumedOnly = !showConsumedOnly">
           {{ showConsumedOnly ? 'Show All Records' : 'Show Consumed Benefits Only' }}
@@ -113,11 +113,12 @@
 
     <!-- Records Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-4 border-b border-gray-100 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">Complimentary Records</h3>
         <p class="text-xs text-gray-400">{{ showingText }}</p>
       </div>
-      <table class="w-full">
+      <div class="overflow-x-auto">
+      <table class="w-full min-w-[980px]">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50">
             <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Code</th>
@@ -162,10 +163,11 @@
           </tr>
         </tbody>
       </table>
+      </div>
       <!-- Pagination -->
-      <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+      <div class="px-4 py-4 border-t border-gray-100 flex flex-col gap-3 bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: 25</p>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button v-for="p in pageNumbers" :key="p" @click="currentPage = p"
             class="w-7 h-7 flex items-center justify-center text-xs rounded-lg transition-colors"
             :class="currentPage === p ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-white border border-gray-200'">

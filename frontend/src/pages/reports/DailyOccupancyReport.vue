@@ -27,7 +27,7 @@
     </div>
 
     <!-- Row 1: Occupancy cards -->
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-500">
         <p class="text-xs text-gray-400 mb-1">Occupancy Rate</p>
         <p class="text-3xl font-bold text-gray-900">{{ stats.occupancyRate }}%</p>
@@ -66,7 +66,7 @@
     </div>
 
     <!-- Row 2: Revenue cards -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-600">
         <p class="text-xs text-gray-400 mb-1">Total Revenue</p>
         <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.totalRevenue) }}</p>
@@ -92,9 +92,9 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
-      <div class="flex items-end gap-3 flex-wrap">
-        <div style="min-width:140px;">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[140px]">
           <p class="text-xs text-gray-500 mb-1.5">From Date</p>
           <input
             v-model="filters.dateFrom"
@@ -103,7 +103,7 @@
           />
         </div>
 
-        <div style="min-width:140px;">
+        <div class="w-full sm:min-w-[140px]">
           <p class="text-xs text-gray-500 mb-1.5">To Date</p>
           <input
             v-model="filters.dateTo"
@@ -112,7 +112,7 @@
           />
         </div>
 
-        <div style="min-width:150px;">
+        <div class="w-full sm:min-w-[150px]">
           <p class="text-xs text-gray-500 mb-1.5">Room</p>
           <select
             v-model="filters.room"
@@ -123,7 +123,7 @@
           </select>
         </div>
 
-        <div style="min-width:150px;">
+        <div class="w-full sm:min-w-[150px]">
           <p class="text-xs text-gray-500 mb-1.5">Floor</p>
           <select
             v-model="filters.floor"

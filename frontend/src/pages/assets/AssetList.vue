@@ -6,23 +6,23 @@
     </div>
 
     <!-- Control Bar -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Asset Register</h3>
         <p class="text-xs text-gray-400 mt-0.5">Search assets, track assignments, review service status, and access asset details.</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="$router.push('/assets-mgmt')">Dashboard</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="$router.push('/assets-mgmt/repair')">Asset Repair</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto"
           @click="$router.push('/assets-mgmt/maintenance')">Asset Maintenance</button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Assets</p>
@@ -54,37 +54,37 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex-1" style="min-width:180px;">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div class="w-full sm:min-w-[180px] sm:flex-1">
           <input v-model="search" type="text" placeholder="Search asset ID, name, item, location..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             @input="debouncedFetch" />
         </div>
-        <select v-model="filterStatus" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        <select v-model="filterStatus" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto"
           @change="fetchAssets">
           <option value="">All Statuses</option>
           <option v-for="s in statusOptions" :key="s" :value="s">{{ s }}</option>
         </select>
-        <select v-model="filterCategory" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        <select v-model="filterCategory" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto"
           @change="fetchAssets">
           <option value="">All Categories</option>
           <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
         </select>
-        <select v-model="filterLocation" class="px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        <select v-model="filterLocation" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto"
           @change="fetchAssets">
           <option value="">All Locations</option>
           <option v-for="l in locationOptions" :key="l" :value="l">{{ l }}</option>
         </select>
         <button @click="resetFilters"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
+          class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Reset</button>
       </div>
     </div>
 
     <!-- Asset Records Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-4 border-b border-gray-100 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">Asset Records</h3>
         <p class="text-xs text-gray-400">Showing {{ assets.length }} of {{ totalAssets }} assets</p>
       </div>
@@ -100,7 +100,8 @@
       </div>
 
       <!-- Table -->
-      <table v-else class="w-full">
+      <div v-else class="overflow-x-auto">
+      <table class="w-full min-w-[900px]">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50">
             <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Asset ID</th>
@@ -133,11 +134,12 @@
           </tr>
         </tbody>
       </table>
+      </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+      <div v-if="totalPages > 1" class="px-4 py-4 border-t border-gray-100 flex flex-col gap-3 bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Page {{ currentPage }} of {{ totalPages }}</p>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button @click="goToPage(currentPage - 1)" :disabled="currentPage <= 1"
             class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white transition-colors disabled:opacity-40">Prev</button>
           <button v-for="p in displayPages" :key="p" @click="goToPage(p)"

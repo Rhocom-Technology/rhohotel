@@ -10,7 +10,7 @@
 		/>
 
 		<!-- Stats Row -->
-		<div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
 			<div
 				v-for="stat in statCards"
 				:key="stat.label"
@@ -28,14 +28,14 @@
 
 		<!-- Room Move Tasks -->
 		<div v-if="pendingMoves.length > 0" class="space-y-2">
-			<div class="flex items-center justify-between">
+			<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
 				<h3 class="text-sm font-bold text-emerald-700">Pending Room Moves</h3>
 				<p class="text-xs text-gray-400">Physically escort guest to new room and issue new key card</p>
 			</div>
 			<div v-for="move in pendingMoves" :key="move.name"
-				class="bg-white rounded-xl border-2 border-emerald-300 px-5 py-4 flex items-center justify-between gap-4"
+				class="bg-white rounded-xl border-2 border-emerald-300 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
 				style="border-left:4px solid #059669;">
-				<div class="flex items-center gap-4">
+				<div class="flex min-w-0 items-center gap-4">
 					<div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
 						<span style="font-size:18px;">🔑</span>
 					</div>
@@ -48,10 +48,10 @@
 						<p class="text-xs text-gray-400 mt-0.5">{{ move.name }} • Approved {{ fmtTime(move.consumed_on) }}</p>
 					</div>
 				</div>
-				<div class="flex gap-2 flex-shrink-0">
+				<div class="flex w-full gap-2 flex-shrink-0 sm:w-auto">
 					<button @click="ackMove(move.name)"
 						:disabled="ackingMove === move.name"
-						class="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+						class="w-full px-4 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 sm:w-auto">
 						{{ ackingMove === move.name ? 'Confirming…' : 'Guest Moved ✓' }}
 					</button>
 				</div>
@@ -62,9 +62,9 @@
 
 		<!-- Filters -->
 		<div
-			class="bg-white rounded-xl border border-gray-200 px-5 py-3 flex items-center gap-3 flex-wrap"
+			class="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5"
 		>
-			<div class="relative" style="flex: 1; min-width: 160px">
+			<div class="relative w-full sm:min-w-[160px] sm:flex-1">
 				<Search
 					class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
 				/>
@@ -77,21 +77,21 @@
 			</div>
 			<select
 				v-model="filterFloor"
-				class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none"
+				class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none sm:w-auto"
 			>
 				<option value="">Floor</option>
 				<option v-for="f in floors" :key="f" :value="f">Floor {{ f }}</option>
 			</select>
 			<select
 				v-model="filterType"
-				class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none"
+				class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none sm:w-auto"
 			>
 				<option value="">Room Type</option>
 				<option v-for="t in roomTypes" :key="t" :value="t">{{ t }}</option>
 			</select>
 			<select
 				v-model="filterStatus"
-				class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none"
+				class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none sm:w-auto"
 			>
 				<option value="">Status</option>
 				<option value="Vacant">Vacant</option>
@@ -101,7 +101,7 @@
 			</select>
 			<select
 				v-model="filterHK"
-				class="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none"
+				class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:outline-none sm:w-auto"
 			>
 				<option value="">Housekeeping</option>
 				<option value="Clean">Clean</option>
@@ -111,7 +111,7 @@
 			</select>
 			<button
 				@click="filterOverdue = !filterOverdue"
-				class="px-3 py-2 text-xs font-medium rounded-lg border transition-colors"
+				class="w-full px-3 py-2 text-xs font-medium rounded-lg border transition-colors sm:w-auto"
 				:style="
 					filterOverdue
 						? 'background:#fef2f2;color:#ef4444;border-color:#fecaca'
@@ -122,7 +122,7 @@
 			</button>
 			<button
 				@click="filterVIP = !filterVIP"
-				class="px-3 py-2 text-xs font-medium rounded-lg border transition-colors"
+				class="w-full px-3 py-2 text-xs font-medium rounded-lg border transition-colors sm:w-auto"
 				:style="
 					filterVIP
 						? 'background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe'
@@ -133,7 +133,7 @@
 			</button>
 			<button
 				@click="filterDirty = !filterDirty"
-				class="px-3 py-2 text-xs font-medium rounded-lg border transition-colors"
+				class="w-full px-3 py-2 text-xs font-medium rounded-lg border transition-colors sm:w-auto"
 				:style="
 					filterDirty
 						? 'background:#fffbeb;color:#d97706;border-color:#fde68a'
@@ -145,7 +145,7 @@
 			<button
 				@click="refreshRooms"
 				style="background: #2563eb; color: white"
-				class="px-4 py-2 text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity"
+				class="w-full px-4 py-2 text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity sm:w-auto"
 			>
 				Refresh Grid
 			</button>
@@ -167,17 +167,17 @@
 				<p class="text-sm font-medium text-gray-400">No rooms match your filters</p>
 			</div>
 
-			<div v-else style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px">
+			<div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
 				<div
 					v-for="room in filteredRooms"
 					:key="room.name"
-					class="rounded-xl p-4 border cursor-pointer hover:shadow-md transition-shadow"
+					class="min-w-0 rounded-xl p-4 border cursor-pointer hover:shadow-md transition-shadow"
 					:style="roomCardStyle(room)"
 					@click="selectedRoom = room"
 				>
 					<!-- Header -->
-					<div class="flex items-start justify-between mb-2">
-						<div>
+					<div class="flex items-start justify-between gap-2 mb-2">
+						<div class="min-w-0">
 							<p class="text-sm font-bold" :style="{ color: roomTextColor(room) }">
 								{{ room.room_number }}
 							</p>

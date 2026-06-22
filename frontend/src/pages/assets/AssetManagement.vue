@@ -11,13 +11,13 @@
       <p class="text-xs text-gray-400 mb-4">Manage all physical assets, track maintenance history, monitor asset conditions, and access related operational records quickly.</p>
       <div class="flex items-center justify-end gap-2">
       
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+        <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors sm:w-auto"
           @click="$router.push('/assets-mgmt/list')">Asset List</button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Assets</p>
@@ -49,7 +49,7 @@
     </div>
 
     <!-- Analytics Row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+    <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
 
       <!-- Asset Category Analytics -->
       <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
@@ -107,7 +107,7 @@
     </div>
 
     <!-- Recent Activity + Insights -->
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:12px;">
+    <div class="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_300px]">
 
       <!-- Recent Asset Activity -->
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -116,13 +116,13 @@
         </div>
         <div v-if="dashboard.recent_activities && dashboard.recent_activities.length" class="divide-y divide-gray-50">
           <div v-for="(a, idx) in dashboard.recent_activities" :key="idx"
-            class="px-6 py-4 flex items-start justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+            class="px-4 py-4 flex flex-col gap-2 cursor-pointer hover:bg-gray-50 transition-colors sm:flex-row sm:items-start sm:justify-between sm:px-6"
             @click="$router.push(`/assets-mgmt/asset/${a.asset}`)">
             <div class="flex-1 min-w-0">
               <p class="text-xs font-semibold text-gray-900 mb-0.5 truncate">{{ a.asset_name }} ({{ a.asset }})</p>
               <p class="text-xs text-gray-400 truncate">{{ a.subject }}</p>
             </div>
-            <div class="flex-shrink-0 ml-4 text-right">
+            <div class="flex-shrink-0 text-left sm:ml-4 sm:text-right">
               <p class="text-xs text-gray-500">{{ formatDate(a.date) }}</p>
               <p class="text-xs text-gray-400">{{ a.user }}</p>
             </div>

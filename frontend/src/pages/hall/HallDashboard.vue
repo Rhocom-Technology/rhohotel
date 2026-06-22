@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-4">
 
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h2 class="text-sm font-bold text-gray-900">Hall Booking Dashboard</h2>
         <p class="text-xs text-gray-400 mt-0.5">
@@ -9,28 +9,28 @@
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
         <router-link to="/hall/booking">
-          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 sm:w-auto">
             Hall Booking List
           </button>
         </router-link>
 
         <router-link to="/hall">
-          <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 sm:w-auto">
             Hall List
           </button>
         </router-link>
 
         <router-link to="/hall/booking/new">
-          <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+          <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 sm:w-auto">
             New Hall Booking
           </button>
         </router-link>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400">Total Bookings</p>
         <p class="text-2xl font-bold text-gray-900 mt-2">{{ stats.total_bookings }}</p>
@@ -60,31 +60,31 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-3">Filters</h3>
 
-      <div class="flex items-end gap-3">
-        <div>
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:w-auto">
           <label class="text-xs text-gray-500 mb-1 block">From Date</label>
-          <input v-model="filters.from_date" type="date" class="text-xs border border-gray-200 rounded-lg px-3 py-2" />
+          <input v-model="filters.from_date" type="date" class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 sm:w-auto" />
         </div>
 
-        <div>
+        <div class="w-full sm:w-auto">
           <label class="text-xs text-gray-500 mb-1 block">To Date</label>
-          <input v-model="filters.to_date" type="date" class="text-xs border border-gray-200 rounded-lg px-3 py-2" />
+          <input v-model="filters.to_date" type="date" class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 sm:w-auto" />
         </div>
 
-        <div>
+        <div class="w-full sm:w-auto">
           <label class="text-xs text-gray-500 mb-1 block">Hall</label>
-          <select v-model="filters.hall" class="text-xs border border-gray-200 rounded-lg px-3 py-2 min-w-[150px]">
+          <select v-model="filters.hall" class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 sm:w-auto sm:min-w-[150px]">
             <option value="">All Halls</option>
             <option v-for="h in halls" :key="h.name" :value="h.name">{{ h.hall_name }}</option>
           </select>
         </div>
 
-        <div>
+        <div class="w-full sm:w-auto">
           <label class="text-xs text-gray-500 mb-1 block">Status</label>
-          <select v-model="filters.status" class="text-xs border border-gray-200 rounded-lg px-3 py-2 min-w-[150px]">
+          <select v-model="filters.status" class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 sm:w-auto sm:min-w-[150px]">
             <option value="">All Status</option>
             <option>Draft</option>
             <option>Confirmed</option>
@@ -92,11 +92,11 @@
           </select>
         </div>
 
-        <button @click="resetFilters" class="px-5 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+        <button @click="resetFilters" class="w-full px-5 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 sm:w-auto">
           Reset
         </button>
 
-        <button @click="load" class="px-5 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+        <button @click="load" class="w-full px-5 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 sm:w-auto">
           Apply
         </button>
       </div>
@@ -107,12 +107,12 @@
     </div>
 
     <template v-else>
-      <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;">
+      <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
           <h3 class="text-sm font-bold text-gray-900">Revenue Trend</h3>
           <p class="text-xs text-gray-400 mt-0.5 mb-4">Hall booking revenue over the selected period.</p>
 
-          <div class="h-48 flex items-end gap-10 border-b border-gray-200 px-2">
+          <div class="h-48 flex items-end gap-4 overflow-x-auto border-b border-gray-200 px-2 sm:gap-10">
             <div v-for="w in revenueTrend" :key="w.label" class="flex flex-col items-center flex-1">
               <div class="w-10 bg-blue-600 rounded-t-lg" :style="{ height: w.bar + 'px' }"></div>
               <p class="text-xs text-gray-400 mt-2">{{ w.label }}</p>
@@ -125,7 +125,7 @@
           <h3 class="text-sm font-bold text-gray-900">Booking Status</h3>
           <p class="text-xs text-gray-400 mt-0.5 mb-5">Distribution of hall bookings by status.</p>
 
-          <div class="flex items-center justify-between">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div class="w-36 h-36 rounded-full border-[18px] border-blue-600 flex items-center justify-center">
               <div class="text-center">
                 <p class="text-2xl font-bold text-gray-900">{{ stats.total_bookings }}</p>
@@ -144,7 +144,7 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;">
+      <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
           <h3 class="text-sm font-bold text-gray-900">Hall Occupancy</h3>
           <p class="text-xs text-gray-400 mt-0.5 mb-4">Booked days divided by total days in selected period.</p>
@@ -168,7 +168,8 @@
           <h3 class="text-sm font-bold text-gray-900">Upcoming Events</h3>
           <p class="text-xs text-gray-400 mt-0.5 mb-4">Next scheduled hall bookings.</p>
 
-          <table class="w-full">
+          <div class="overflow-x-auto">
+          <table class="w-full min-w-[560px]">
             <thead>
               <tr class="bg-gray-50 border border-gray-100">
                 <th class="text-left px-3 py-2 text-xs text-gray-500 font-semibold rounded-l-lg">Client</th>
@@ -191,10 +192,11 @@
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:0.8fr 1.2fr;gap:16px;">
+      <div class="grid grid-cols-1 gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
           <h3 class="text-sm font-bold text-gray-900">Payment Summary</h3>
           <p class="text-xs text-gray-400 mt-0.5 mb-4">Hall payment performance in selected period.</p>

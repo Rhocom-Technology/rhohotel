@@ -2,18 +2,18 @@
   <div class="space-y-4">
 
     <!-- Header -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h2 class="text-sm font-bold text-gray-900">Hall Bookings</h2>
         <p class="text-xs text-gray-400 mt-0.5">All event hall bookings — confirmed, draft, and past.</p>
       </div>
       <router-link to="/hall/booking/new">
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">New Booking</button>
+        <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors sm:w-auto">New Booking</button>
       </router-link>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-2">Total Bookings</p>
         <p class="text-3xl font-bold text-gray-900">{{ bookings.length }}</p>
@@ -33,42 +33,42 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-end gap-3">
-      <div class="flex-1">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:px-6">
+      <div class="w-full sm:flex-1">
         <label class="text-xs text-gray-500 mb-1 block">Search</label>
         <input v-model="search" type="text" placeholder="Customer, hall, event…"
           class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
-      <div>
+      <div class="w-full sm:w-auto">
         <label class="text-xs text-gray-500 mb-1 block">Status</label>
-        <select v-model="filterStatus" class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select v-model="filterStatus" class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto">
           <option value="">All</option>
           <option value="0">Draft</option>
           <option value="1">Confirmed</option>
         </select>
       </div>
 
-   <div>
+  <div class="w-full sm:w-auto">
     <label class="text-xs text-gray-500 mb-1 block">Start Date</label>
     <input
       v-model="filterStartDate"
       type="date"
-      class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto"
     />
   </div>
 
-  <div>
+  <div class="w-full sm:w-auto">
     <label class="text-xs text-gray-500 mb-1 block">End Date</label>
     <input
       v-model="filterEndDate"
       type="date"
-      class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto"
     />
   </div>
 
-      <div>
+      <div class="w-full sm:w-auto">
         <label class="text-xs text-gray-500 mb-1 block">Payment</label>
-        <select v-model="filterPayment" class="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select v-model="filterPayment" class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto">
           <option value="">All</option>
           <option value="Paid">Paid</option>
           <option value="Unpaid">Unpaid</option>
@@ -77,16 +77,17 @@
       </div>
      <button
   @click="search='';filterStatus='';filterPayment='';filterStartDate='';filterEndDate='';activeTodayOnly=false"
-  class="px-4 py-2 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+  class="w-full px-4 py-2 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 sm:w-auto"
 >
   Reset
 </button>
     </div>
 
     <!-- Table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div v-if="loading" class="px-6 py-8 text-center text-xs text-gray-400">Loading bookings…</div>
-      <table v-else class="w-full">
+      <div v-else class="overflow-x-auto">
+      <table class="w-full min-w-[1180px]">
         <thead>
           <tr class="border-b border-gray-100">
             <th class="text-left px-6 py-3 text-xs font-semibold text-gray-500">Booking ID</th>
@@ -133,10 +134,11 @@
           </tr>
         </tbody>
       </table>
+      </div>
 
-      <div v-if="totalPages > 1" class="px-6 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+      <div v-if="totalPages > 1" class="px-4 py-3 border-t border-gray-100 flex flex-col gap-3 bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }}</p>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button @click="page > 1 ? page-- : null" :disabled="page === 1"
             class="px-3 py-1.5 text-xs border rounded-lg transition-colors"
             :class="page === 1 ? 'text-gray-300 border-gray-100 cursor-not-allowed' : 'text-gray-600 border-gray-200 hover:bg-white'">Prev</button>

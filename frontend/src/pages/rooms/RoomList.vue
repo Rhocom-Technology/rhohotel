@@ -18,23 +18,23 @@
     </div>
 
     <!-- Control Bar -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <h3 class="text-sm font-bold text-gray-900">Room Inventory Overview</h3>
         <p class="text-xs text-gray-400 mt-0.5">
           {{ rooms.length }} rooms • {{ occupiedCount }} occupied • {{ vacantCount }} vacant • {{ unavailableCount }} out of service
         </p>
       </div>
-      <div class="flex items-center gap-2">
-        <button @click="loadRooms" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Refresh</button>
-        <button class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">Export List</button>
-        <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+      <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <button @click="loadRooms" class="w-full px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Refresh</button>
+        <button class="w-full px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors sm:w-auto">Export List</button>
+        <button class="w-full px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors sm:w-auto"
           @click="$router.push('/rooms/new')">Add New Room</button>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-3">
           <p class="text-xs text-gray-400">Total Rooms</p>
@@ -66,22 +66,22 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
       <h3 class="text-sm font-bold text-gray-900 mb-4">Filters & Search</h3>
-      <div class="flex items-end gap-3 flex-wrap">
-        <div style="min-width:180px;">
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div class="w-full sm:min-w-[180px]">
           <p class="text-xs text-gray-500 mb-1.5">Search room</p>
           <input v-model="search" type="text" placeholder="Room no., type, floor..."
             class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div style="min-width:140px;">
+        <div class="w-full sm:min-w-[140px]">
           <p class="text-xs text-gray-500 mb-1.5">Room Type</p>
           <select v-model="filterType" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Types</option>
             <option v-for="rt in roomTypeOptions" :key="rt" :value="rt">{{ rt }}</option>
           </select>
         </div>
-        <div style="min-width:140px;">
+        <div class="w-full sm:min-w-[140px]">
           <p class="text-xs text-gray-500 mb-1.5">Occupancy</p>
           <select v-model="filterOccupancy" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Rooms</option>
@@ -90,7 +90,7 @@
             <option>Unavailable</option>
           </select>
         </div>
-        <div style="min-width:140px;">
+        <div class="w-full sm:min-w-[140px]">
           <p class="text-xs text-gray-500 mb-1.5">Floor</p>
           <select v-model="filterFloor" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Floors</option>
@@ -98,18 +98,19 @@
           </select>
         </div>
         <button @click="search='';filterType='';filterOccupancy='';filterFloor='';currentPage=1"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Reset</button>
-        <button class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Apply Filter</button>
+          class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Reset</button>
+        <button class="w-full px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors sm:w-auto">Apply Filter</button>
       </div>
     </div>
 
     <!-- Room Records Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-4 border-b border-gray-100 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <h3 class="text-sm font-bold text-gray-900">Room Records</h3>
         <p class="text-xs text-gray-400">Showing {{ pageStart + 1 }}–{{ pageEnd }} of {{ filtered.length }} rooms</p>
       </div>
-      <table class="w-full">
+      <div class="overflow-x-auto">
+      <table class="w-full min-w-[820px]">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50">
             <th class="text-left text-xs font-medium text-gray-500 px-6 py-3.5">Room No.</th>
@@ -136,9 +137,10 @@
           </tr>
         </tbody>
       </table>
-      <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+      </div>
+      <div class="px-4 py-4 border-t border-gray-100 flex flex-col gap-3 bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p class="text-xs text-gray-400">Rows per page: 25</p>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button v-for="p in visiblePages" :key="p"
             @click="typeof p === 'number' && (currentPage = p)"
             class="w-7 h-7 flex items-center justify-center text-xs rounded-lg transition-colors"

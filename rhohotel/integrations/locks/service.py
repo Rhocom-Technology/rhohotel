@@ -230,7 +230,11 @@ def _get_active_key_for_check_in(check_in_name: str) -> Optional[dict]:
 # Public service functions
 # ---------------------------------------------------------------------------
 
-def issue_guest_key(check_in_name: str, requested_by: Optional[str] = None) -> dict:
+def issue_guest_key(
+    check_in_name: str,
+    requested_by: Optional[str] = None,
+    card_number: Optional[str] = None,
+) -> dict:
     """
     Issue a new key for an active check-in.
 
@@ -250,9 +254,10 @@ def issue_guest_key(check_in_name: str, requested_by: Optional[str] = None) -> d
 
     provider, mapping = get_provider_for_room(check_in_doc.room_number)
     context = _build_key_context(check_in_doc, mapping)
+    if card_number:
+        context.extra["card_number"] = str(card_number).strip()
 
     log_name = _create_log(
-        operation_type="Issue Key",
         provider_code=mapping["provider"],
         room=check_in_doc.room_number,
         check_in=check_in_name,
@@ -319,7 +324,11 @@ def issue_guest_key(check_in_name: str, requested_by: Optional[str] = None) -> d
         return {"success": False, "guest_key": None, "log": log_name, "error": "Unexpected error issuing key."}
 
 
-def reissue_guest_key(guest_key_name: str, requested_by: Optional[str] = None) -> dict:
+def reissue_guest_key(
+    guest_key_name: str,
+    requested_by: Optional[str] = None,
+    card_number: Optional[str] = None,
+) -> dict:
     """
     Reissue a key — cancel the existing one and issue a fresh card.
 
@@ -336,6 +345,8 @@ def reissue_guest_key(guest_key_name: str, requested_by: Optional[str] = None) -
 
     provider, mapping = get_provider_for_room(check_in_doc.room_number)
     context = _build_key_context(check_in_doc, mapping)
+    if card_number:
+        context.extra["card_number"] = str(card_number).strip()
 
     log_name = _create_log(
         operation_type="Reissue Key",
