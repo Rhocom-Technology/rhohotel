@@ -110,7 +110,7 @@
           <tr v-for="b in paged" :key="b.name" class="hover:bg-gray-50 transition-colors">
             <td class="px-6 py-3 text-xs font-semibold text-blue-600 min-w-[180px]">{{ b.name }}</td>
             <td class="px-6 py-3 text-xs text-gray-700 min-w-[150px]">{{ b.customer_name }}</td>
-            <td class="px-6 py-3 text-xs text-gray-600">{{ b.hall }}</td>
+            <td class="px-6 py-3 text-xs text-gray-600">{{ b.hall_name || b.hall }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ b.event_type }}</td>
             <td class="px-6 py-3 text-xs text-gray-600 ">{{ fmtDatetime(b.start_datetime) }}</td>
             <td class="px-6 py-3 text-xs text-gray-600">{{ fmtDatetime(b.end_datetime) }}</td>

@@ -137,7 +137,7 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/pos/manager-dashboard', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos/invoices', roles: ROLE_GROUPS.posManager },
   { prefix: '/pos/shift-difference-log', roles: ROLE_GROUPS.posManager },
-  { prefix: '/pos/shift-close', roles: ROLE_GROUPS.posManager },
+  { prefix: '/pos/shift-close', roles: ROLE_GROUPS.posBasic },
   { prefix: '/pos', roles: ROLE_GROUPS.posBasic },
 
   // Kitchen

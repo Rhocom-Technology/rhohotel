@@ -178,10 +178,10 @@
             <div>
               <label class="text-xs text-gray-500 mb-1 block">Rate</label>
               <input
-                  v-model="form.rate"
+                  v-model.number="form.rate"
                   type="number"
-                  readonly
-                  class="w-full text-xs border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-600 cursor-default"
+                  min="0"
+                  class="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
 

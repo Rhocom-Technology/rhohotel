@@ -77,7 +77,11 @@
           <option>Room Service</option>
           <option>Takeaway</option>
         </select>
-        <button @click="search='';filterStation='';filterSource='';showDelayedOnly=false"
+        <select v-if="posProfiles.length > 0" v-model="filterPosProfile" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600 sm:w-auto">
+          <option value="">All Service Points</option>
+          <option v-for="p in posProfiles" :key="p" :value="p">{{ p }}</option>
+        </select>
+        <button @click="search='';filterStation='';filterSource='';filterPosProfile='';showDelayedOnly=false"
           class="w-full px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors sm:w-auto">Reset</button>
         <button
           class="w-full px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors sm:w-auto"
@@ -118,6 +122,7 @@
               <span class="text-gray-400">Source: {{ t.source }}</span>
               <span class="font-semibold" :class="newTicketAgeClass(t)">{{ countdownLabel(t, kitchenSettings.newTicketMinutes) }}</span>
             </div>
+            <div v-if="t.pos_profile" class="text-xs text-gray-400 mt-0.5">Service Point: {{ t.pos_profile }}</div>
             <button v-if="canEditKitchen" class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'In Progress')">
@@ -144,6 +149,7 @@
             <div v-for="line in itemLines(t)" :key="`${t.id}-${line}`" class="text-xs font-bold text-gray-900 leading-tight">{{ line }}</div>
             <div v-for="line in noteLines(t)" :key="`${t.id}-note-${line}`" class="text-xs text-gray-500">{{ line }}</div>
             <div class="text-xs text-gray-400 mt-1">Chef Station: {{ t.chef_station || 'General' }}</div>
+            <div v-if="t.pos_profile" class="text-xs text-gray-400 mt-0.5">Service Point: {{ t.pos_profile }}</div>
             <div class="flex items-center gap-2 mt-2.5">
               <span class="px-2.5 py-1 text-xs font-semibold rounded-full"
                 :class="preparingBadgeClass(t)">
@@ -178,6 +184,7 @@
                 {{ countdownLabel(t, kitchenSettings.readyPickupMinutes) }}
               </span>
             </div>
+            <div v-if="t.pos_profile" class="text-xs text-gray-400 mt-0.5">Service Point: {{ t.pos_profile }}</div>
             <button v-if="canEditKitchen" class="mt-2.5 w-full px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'Served')">Dispatch</button>
@@ -206,6 +213,7 @@
                 :disabled="updating === t.id"
                 @click="setStatus(t.id, 'In Progress')">Escalate Chef</button>
             </div>
+            <div v-if="t.pos_profile" class="text-xs text-gray-400 mt-0.5">Service Point: {{ t.pos_profile }}</div>
             <button v-if="canEditKitchen" class="mt-2 w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               :disabled="updating === t.id"
               @click="setStatus(t.id, 'Ready')">Mark Ready</button>
@@ -232,6 +240,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createResource } from 'frappe-ui'
 import { useSessionStore } from '@/stores/session'
 import { ROLE_GROUPS } from '@/lib/permissions'
+import { callMethod } from '@/lib/api.js'
 import KitchenSettingsModal from '@/components/kitchen/KitchenSettingsModal.vue'
 
 const session = useSessionStore()
@@ -242,6 +251,8 @@ const showSettings = ref(false)
 const search = ref('')
 const filterStation = ref('')
 const filterSource = ref('')
+const filterPosProfile = ref('')
+const posProfiles = ref([])
 const showDelayedOnly = ref(false)
 const updating = ref(null)  // ticket name being updated
 const clockNow = ref(Date.now())
@@ -362,11 +373,16 @@ const statusResource = createResource({
   },
 })
 
-onMounted(() => {
+onMounted(async () => {
   setRefreshTimer()
   countdownInterval = setInterval(() => {
     clockNow.value = Date.now()
   }, 1000)
+  // Load POS profile options for filter
+  try {
+    const profiles = await callMethod('rhohotel.restaurant.api.kitchen.get_kitchen_pos_profiles')
+    posProfiles.value = profiles || []
+  } catch (_) {}
 })
 onUnmounted(() => {
   clearInterval(refreshInterval)
@@ -469,12 +485,14 @@ const allTickets = computed(() => {
   let list = ticketsResource.data || []
   if (filterStation.value) list = list.filter(t => t.chef_station === filterStation.value)
   if (filterSource.value)  list = list.filter(t => t.source === filterSource.value)
+  if (filterPosProfile.value) list = list.filter(t => t.pos_profile === filterPosProfile.value)
   if (search.value) {
     const q = search.value.toLowerCase()
     list = list.filter(t =>
       t.id.toLowerCase().includes(q) ||
       (t.table_or_room || '').toLowerCase().includes(q) ||
-      (t.pos_invoice || '').toLowerCase().includes(q)
+      (t.pos_invoice || '').toLowerCase().includes(q) ||
+      (t.pos_profile || '').toLowerCase().includes(q)
     )
   }
   return list

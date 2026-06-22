@@ -364,7 +364,7 @@ def assert_room_available(
     # immediate/current arrivals. Future reservations should not be rejected
     # solely from a transient occupied status snapshot.
     room_status = frappe.db.get_value("Hotel Room", room_number, "status")
-    if room_status == "Occupied" and check_in_dt <= datetime.now():
+    if room_status == "Occupied" and check_in_dt <= datetime.now() and not exclude_checkin:
         frappe.throw(
             _(
                 "{0} is currently occupied. Please check out the current guest "

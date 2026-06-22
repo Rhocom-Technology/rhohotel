@@ -25,6 +25,19 @@ def get_departments():
     if not company:
         return []
 
+    # System Manager and Hotel Manager can see all departments.
+    # All other roles see only their own department.
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    if not user_roles.intersection({"System Manager", "Hotel Manager"}) and frappe.session.user != "Administrator":
+        emp = frappe.db.get_value(
+            "Employee",
+            {"user_id": frappe.session.user, "status": "Active"},
+            "department",
+        )
+        if emp:
+            return [emp]
+        return []
+
     rows = frappe.db.sql("""
         select distinct department
         from `tabEmployee`

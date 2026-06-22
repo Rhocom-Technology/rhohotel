@@ -413,7 +413,8 @@ def get_task_details(task_name=None, status=None, employee=None, priority=None):
         ],
         filters=filters,
         order_by="modified desc",
-        limit_page_length=100
+        limit_page_length=100,
+        ignore_permissions=True,
     )
 
     for task in tasks:

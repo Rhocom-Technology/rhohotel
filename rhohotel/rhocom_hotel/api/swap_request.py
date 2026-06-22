@@ -9,7 +9,7 @@ from rhohotel.rhocom_hotel.api.weekly_shift_generator import (
     _get_default_company,
 )
 
-MANAGER_ROLES = ("System Manager", "Hotel Manager", "Front Desk Manager")
+MANAGER_ROLES = ("System Manager", "Hotel Manager", "Front Desk Manager", "Sales Manager", "Housekeeping Manager", "Maintenance Manager", "Facility Manager")
 SWAP_REQUEST_DOCTYPE = "Shift Swap Request"
 
 
@@ -498,6 +498,14 @@ def get_swap_requests(department=None, date=None, status=None, search=None, limi
         department = cstr(department or "").strip()
         status = cstr(status or "").strip()
         search = cstr(search or "").strip()
+
+        # Restrict department managers to their own department unless they are
+        # System Manager or Hotel Manager (who can see all departments).
+        if not set(frappe.get_roles(frappe.session.user)).intersection({"System Manager", "Hotel Manager"}):
+            mgr_employee = _get_logged_in_employee()
+            if mgr_employee and mgr_employee.department:
+                if not department or department == "All Departments":
+                    department = mgr_employee.department
 
     if department and department != "All Departments":
         conditions.append("department = %(department)s")

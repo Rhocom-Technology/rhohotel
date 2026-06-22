@@ -810,34 +810,12 @@ async function startCheckout() {
     return
   }
 
-  checkingOut.value = true
-  try {
-    const result = await callMethodForm('rhohotel.rhocom_hotel.api.checkin.process_checkout', {
-      check_in_name: checkIn.value.name || route.params.id,
-      charge_late_checkout: lateCheckoutDecision.value ? 1 : 0,
-    })
-    if (result?.name) {
-      await router.push('/check-outs/' + (result.check_in || checkIn.value.name || route.params.id))
-      return
-    }
-    if (result?.status === 'Payment Required') {
-      checkoutError.value = result.message || 'Please collect payment before completing checkout.'
-      lateCheckoutDecision.value = null
-      await loadCheckIn(true)
-      return
-    }
-    checkoutError.value = 'Unexpected response from server.'
-  } catch (e) {
-    checkoutError.value = String(e?.message || 'Network error — please try again.')
-    console.error('Failed to check out guest', e)
-  } finally {
-    checkingOut.value = false
-  }
+  await router.push('/check-outs/' + (checkIn.value?.name || route.params.id))
 }
 function continueCheckout(chargeLateCheckout) {
   lateCheckoutDecision.value = !!chargeLateCheckout
   showLateCheckoutPrompt.value = false
-  startCheckout()
+  router.push('/check-outs/' + (checkIn.value?.name || route.params.id))
 }
 function formatCurrency(amount) {
   if (!amount && amount !== 0) return '₦ 0.00'

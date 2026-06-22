@@ -208,6 +208,7 @@ def get_daily_occupancy_report(
 			"creation",
 		],
 		order_by="room_number asc",
+		ignore_permissions=True,
 	)
 
 	# Fetch all check-ins that were active at any point within the date range.

@@ -97,13 +97,14 @@ def get_booking_list():
             "start_datetime", "end_datetime", "total_days",
             "net_total", "docstatus", "sales_invoice", "mobile_number",
         ],
-        order_by="start_datetime desc",
+        order_by="creation desc",
         limit=100,
     )
 
     for b in bookings:
         b["payment_status"] = _get_invoice_payment_status(b.get("sales_invoice"))
         b["status_label"] = _docstatus_label(b["docstatus"])
+        b["hall_name"] = frappe.db.get_value("Hall", b.get("hall"), "hall_name") or b.get("hall") or ""
 
     return bookings
 

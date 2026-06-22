@@ -347,9 +347,21 @@ function shiftClass(value) {
   if (lowered.includes('morning')) return 'bg-blue-100 text-blue-700'
   if (lowered.includes('afternoon') || lowered.includes('evening')) return 'bg-amber-100 text-amber-700'
   if (lowered.includes('night')) return 'bg-indigo-100 text-indigo-700'
-  if (lowered.includes('day')) return 'bg-gray-100 text-gray-700'
+  if (lowered.includes('day')) return 'bg-green-100 text-green-700'
 
-  return 'bg-gray-100 text-gray-600'
+  // Deterministic color for other shift names
+  const colors = [
+    'bg-purple-100 text-purple-700',
+    'bg-teal-100 text-teal-700',
+    'bg-orange-100 text-orange-700',
+    'bg-pink-100 text-pink-700',
+    'bg-cyan-100 text-cyan-700',
+    'bg-lime-100 text-lime-700',
+  ]
+  let hash = 0
+  const str = String(value || '')
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) & 0xffff
+  return colors[hash % colors.length]
 }
 
 function changeWeek(deltaWeeks) {

@@ -219,6 +219,7 @@ def get_kitchen_tickets(search=None, station=None, source=None, status=None,
             kt.notes,
             kt.sent_at,
             kt.modified,
+            COALESCE(pi.pos_profile, '') AS pos_profile,
             GREATEST(0, TIMESTAMPDIFF(MINUTE, kt.sent_at, NOW())) AS age_minutes,
             GREATEST(
                 0,
@@ -232,6 +233,7 @@ def get_kitchen_tickets(search=None, station=None, source=None, status=None,
                 )
             ) AS stage_age_minutes
         FROM `tabKitchen Order Ticket` kt
+        LEFT JOIN `tabPOS Invoice` pi ON pi.name = kt.pos_invoice
         WHERE {where}
         ORDER BY kt.sent_at ASC
         LIMIT 150
@@ -287,6 +289,25 @@ def get_kitchen_stats(pending_delay_minutes=25, preparing_delay_minutes=35):
         "delayed": stats.get("Delayed", 0),
         "served": stats.get("Served", 0),
     }
+
+
+@frappe.whitelist()
+def get_kitchen_pos_profiles():
+    """Return distinct POS profiles currently referenced by active kitchen tickets."""
+    rows = frappe.db.sql(
+        """
+        SELECT DISTINCT pi.pos_profile
+        FROM `tabKitchen Order Ticket` kt
+        INNER JOIN `tabPOS Invoice` pi ON pi.name = kt.pos_invoice
+        WHERE kt.docstatus = 0
+          AND kt.status != 'Served'
+          AND pi.pos_profile IS NOT NULL
+          AND pi.pos_profile != ''
+        ORDER BY pi.pos_profile ASC
+        """,
+        as_dict=1,
+    )
+    return [r["pos_profile"] for r in rows]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@
         <p class="text-xs text-gray-400 mt-0.5">Track room servicing task, assign staff, confirm replenishment, and update final room readiness.</p>
       </div>
       <div class="flex items-center gap-2">
-        <button @click="router.push('/housekeeping')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+        <button @click="router.push('/housekeeping')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Back</button>
 
         <template v-if="!isSubmitted && isHousekeepingManager">
           <button @click="saveTask" :disabled="saving" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
@@ -50,7 +50,7 @@
 
         <template v-else-if="isHousekeepingManager">
           <button @click="cancelTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Cancel Task</button>
-          <button @click="deleteTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Delete Task</button>
+          <button v-if="formData.status !== 'Completed'" @click="deleteTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Delete Task</button>
         </template>
       </div>
     </div>
@@ -126,7 +126,7 @@
         </div>
 
         <!-- Room Details -->
-        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager || isHousekeeper" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Room Details</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;" class="mb-4">
             <div>
@@ -159,12 +159,12 @@
         </div>
 
         <!-- Assignment -->
-        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager || isHousekeeper" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Assignment Section</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Assigned Staff <span class="text-red-400">*</span></p>
-              <select v-model="formData.employee" :disabled="isSubmitted" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600" :class="{'bg-gray-100': isSubmitted, 'border-red-300': submitAttempted && !formData.employee}">
+              <select v-model="formData.employee" :disabled="isSubmitted || !isHousekeepingManager" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600" :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager, 'border-red-300': submitAttempted && !formData.employee}">
                 <option value="">Select room attendant</option>
                 <option v-for="emp in employees.data" :key="emp.name" :value="emp.name">
                   {{ emp.employee_name || emp.name }}
@@ -173,15 +173,15 @@
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Start Time <span class="text-red-400">*</span></p>
-              <input v-model="formData.start_time" :disabled="isSubmitted" type="datetime-local"
+              <input v-model="formData.start_time" :disabled="isSubmitted || !isHousekeepingManager" type="datetime-local"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                :class="{'bg-gray-100': isSubmitted, 'border-red-300': submitAttempted && !formData.start_time}" />
+                :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager, 'border-red-300': submitAttempted && !formData.start_time}" />
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">End Time <span class="text-red-400">*</span></p>
-              <input v-model="formData.end_time" :disabled="isSubmitted" type="datetime-local"
+              <input v-model="formData.end_time" :disabled="isSubmitted || !isHousekeepingManager" type="datetime-local"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                :class="{'bg-gray-100': isSubmitted, 'border-red-300': submitAttempted && !formData.end_time}" />
+                :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager, 'border-red-300': submitAttempted && !formData.end_time}" />
             </div>
           </div>
         </div>
@@ -264,7 +264,7 @@
 
          <!-- Inventory Update -->
         <!-- Inventory Update -->
-<div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
+<div v-if="isHousekeepingManager || isHousekeeper" class="bg-white rounded-xl border border-gray-200 p-5">
 
   <!-- Read-only room inventory -->
   <div class="mb-6">
@@ -425,7 +425,7 @@
 </div>
 
         <!-- Housekeeping Checklist -->
-        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager || isHousekeeper" class="bg-white rounded-xl border border-gray-200 p-5">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-bold text-gray-900">Housekeeping Checklist</h3>
             <div class="flex items-center gap-2">
@@ -538,11 +538,11 @@
 
       <!-- Right Column -->
       <div class="space-y-4">
-        <div v-if="isHousekeepingManager" class="bg-white rounded-xl border border-gray-200 p-5">
+        <div v-if="isHousekeepingManager || isHousekeeper" class="bg-white rounded-xl border border-gray-200 p-5">
           <h3 class="text-sm font-bold text-gray-900 mb-4">Status Update Section</h3>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Current Task Status</p>
-            <select v-model="formData.status" :disabled="isSubmitted" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted}">
+            <select v-model="formData.status" :disabled="isSubmitted || !isHousekeepingManager" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager}">
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
               <option value="Assigned">Assigned</option>
@@ -575,7 +575,7 @@
         </div>
 
         <!-- Quick Summary -->
-        <div v-if="isHousekeepingManager" class="bg-blue-50 rounded-xl border border-blue-100 p-4">
+        <div v-if="isHousekeepingManager || isHousekeeper" class="bg-blue-50 rounded-xl border border-blue-100 p-4">
           <h4 class="text-xs font-bold text-blue-700 mb-3">Task Summary</h4>
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
@@ -629,6 +629,7 @@ import { useSessionStore } from '@/stores/session'
 
 const session = useSessionStore()
 const isHousekeepingManager = computed(() => session.hasAnyRole(['Housekeeping Manager']))
+const isHousekeeper = computed(() => session.hasAnyRole(['House keeper']))
 
 const router = useRouter()
 const route = useRoute()

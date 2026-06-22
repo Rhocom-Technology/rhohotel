@@ -41,9 +41,9 @@
 
         <!-- Guest selector from active check-ins -->
         <div class="mb-4">
-          <p class="text-xs text-gray-500 mb-1.5">Select Active Guest</p>
+          <p class="text-xs text-gray-500 mb-1.5">Quick Fill: Select Active Guest <span class="text-gray-400 font-normal">(optional — or type guest name below)</span></p>
           <select v-model="selectedCheckIn" @change="onCheckinSelect" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-            <option value="">-- Select checked-in guest --</option>
+            <option value="">-- Select a checked-in guest to auto-fill --</option>
             <option v-for="c in checkins" :key="c.check_in" :value="c.check_in">
               {{ c.guest }} — Room {{ c.room_number }}
             </option>

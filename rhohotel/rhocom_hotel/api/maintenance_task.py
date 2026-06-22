@@ -1135,8 +1135,17 @@ def apply_maintenance_workflow(task_name, action):
 
         # "Approve Store Items" now transitions to "In Progress" (not Pending FM
         # Approval), so on_update's post_approval_states trigger won't fire.
-        # Create stock entries explicitly here while still running as Administrator.
+        # Validate stock availability BEFORE creating stock entries.
         if action == "Approve Store Items":
+            if task.parts_used:
+                stock_errors = task._validate_parts_stock()
+                if stock_errors:
+                    frappe.db.rollback()
+                    frappe.set_user(requesting_user)
+                    return {
+                        "success": False,
+                        "error": "Cannot approve: insufficient stock or missing warehouse.<br><br>" + "<br>".join(stock_errors)
+                    }
             try:
                 task._create_stock_entries()
             except Exception:
