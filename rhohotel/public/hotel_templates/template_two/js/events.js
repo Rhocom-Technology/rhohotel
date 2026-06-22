@@ -191,7 +191,7 @@ document.getElementById("eventBookingForm")?.addEventListener("submit", async fu
 					event_type: eventType,
 					start_datetime: start,
 					end_datetime: end,
-					submit: true,
+					submit: false,
 				},
 			}
 		);
