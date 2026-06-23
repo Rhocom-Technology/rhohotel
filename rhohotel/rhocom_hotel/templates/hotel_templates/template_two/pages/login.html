@@ -149,7 +149,7 @@
                     <div class="glass-card">
 
                         <h3 class="text-center mb-4 glass-title">
-                            Welcome Back
+                             Welcome Back
                         </h3>
 
                         <p class="text-center mb-4" style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">
@@ -280,27 +280,34 @@
                     throw new Error("Login failed");
                 }
 
-                // 2. GET ROLES (MOST RELIABLE IN V15)
-                const roleRes = await fetch("/api/method/frappe.auth.get_roles", {
-                    method: "GET",
-                    credentials: "same-origin"
-                });
+            // 2. GET ROLES
+            const roleRes = await fetch("/api/method/rhohotel.api.get_current_user_info", {
+                method: "GET",
+                credentials: "include",
+                headers: {
+                    "Accept": "application/json",
+                    "X-Frappe-Site-Name": window.location.hostname,
+                }
+            });
 
-                const roleData = await roleRes.json();
-                const userRoles = roleData.message || [];
+            const roleData = await roleRes.json();
+            const userRoles = roleData.message?.roles || [];
 
-                // 3. CHECK ROLES
+
+
+               // 3. CHECK ROLES
                 const redirectToFrontDesk = userRoles.some(role =>
                     frontDeskRoles.includes(role)
                 );
 
                 btn.innerHTML = `
-            <i class="bi bi-check-circle me-2"></i>
-            Login Successful
-        `;
+                    <i class="bi bi-check-circle me-2"></i>
+                    Login Successful
+                `;
 
                 // 4. REDIRECT
                 setTimeout(() => {
+                    console.log("Redirecting to:", redirectToFrontDesk ? "/frontdesk" : "/app")
                     window.location.href = redirectToFrontDesk
                         ? "/frontdesk"
                         : "/app";
