@@ -88,6 +88,16 @@ export default defineConfig(({ command }) => {
           changeOrigin: true,
           headers: { 'X-Frappe-Site-Name': 'hotel.local' },
         },
+        '/login': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+          headers: { 'X-Frappe-Site-Name': 'hotel.local' },
+        },
+        '/frontdesk': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+          headers: { 'X-Frappe-Site-Name': 'hotel.local' },
+        },
       },
     },
     resolve: {

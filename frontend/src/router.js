@@ -7,7 +7,7 @@ const router = createRouter({
   history: createWebHistory('/frontdesk/'),
   routes: [
     { path: '/', redirect: '/room-view' },
-    { path: '/login', name: 'Login', component: () => import('@/pages/Login.vue') },
+    // { path: '/login', name: 'Login', component: () => import('@/pages/Login.vue') },
 
     // Front Desk
     { path: '/room-view', name: 'RoomView', component: () => import('@/pages/frontdesk/RoomView.vue') },
@@ -125,22 +125,19 @@ router.beforeEach(async (to) => {
   const session = useSessionStore()
   await session.initialize()
 
-  if (to.name !== 'Login' && !session.isLoggedIn) {
-    return { name: 'Login' }
-  }
-
-  if (to.name === 'Login' && session.isLoggedIn) {
-    const landing = getFirstAllowedRoute(session.roles)
-    return { path: landing }
-  }
+  if (!session.isLoggedIn) {
+  const returnUrl = '/frontdesk' + to.fullPath
+  window.location.href = '/login?redirect_to=' + encodeURIComponent(returnUrl)
+  return false
+}
 
   // Role-based authorization check
-  if (session.isLoggedIn && to.name !== 'Login') {
+if (session.isLoggedIn) {
     const requiredRoles = getRequiredRoles(to.path)
     if (requiredRoles && !session.hasAnyRole(requiredRoles)) {
       const fallback = getFirstAllowedRoute(session.roles)
       if (fallback === to.path) return true
-      return fallback === '/login' ? { name: 'Login' } : { path: fallback }
+      return { path: fallback }
     }
   }
 

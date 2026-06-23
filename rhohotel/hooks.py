@@ -412,6 +412,6 @@ website_route_rules = [
 ]
 
 home_page = "index"
-
+login_page = "login"
 
 
