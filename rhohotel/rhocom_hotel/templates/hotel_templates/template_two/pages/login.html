@@ -167,7 +167,8 @@
                                 <label class="form-label text-white">Password</label>
 
                                 <div class="input-group">
-                                    <input type="password" id="pwd" class="form-control" placeholder="Enter password" required>
+                                    <input type="password" id="pwd" class="form-control" placeholder="Enter password"
+                                        required>
 
                                     <span class="input-group-text" id="togglePassword"
                                         style="cursor:pointer; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.15); color:white;">
@@ -210,7 +211,6 @@
     {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/footer.html" %}
 
     {% include "rhocom_hotel/templates/hotel_templates/template_two/includes/scripts.html" %}
-
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const pwd = document.getElementById("pwd");
@@ -221,7 +221,6 @@
 
                 pwd.type = isHidden ? "text" : "password";
 
-                // stable icon (no flicker swap)
                 toggle.innerHTML = isHidden
                     ? '<i class="bi bi-eye-slash"></i>'
                     : '<i class="bi bi-eye"></i>';
@@ -237,6 +236,27 @@
 
             const originalText = btn.innerHTML;
 
+            const frontDeskRoles = [
+                "Facility Manager",
+                "Front Desk",
+                "Front Desk Manager",
+                "Front Desk User",
+                "Hotel Receptionist",
+                "Hotel Reservation User",
+                "Housekeeper",
+                "Housekeeping Manager",
+                "Kitchen Staff",
+                "Maintenance Manager",
+                "Maintenance Technician",
+                "Maintenance User",
+                "Restaurant Cashier",
+                "Restaurant Manager",
+                "Restaurant Waiter",
+                "Sales User",
+                "Sales Manager",
+                "Technician"
+            ];
+
             btn.disabled = true;
             btn.innerHTML = `
         <span class="spinner-border spinner-border-sm me-2"></span>
@@ -244,48 +264,61 @@
     `;
 
             try {
+                // 1. LOGIN
                 const response = await fetch("/api/method/login", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
                     },
                     credentials: "same-origin",
-                    body: JSON.stringify({
-                        usr,
-                        pwd
-                    })
+                    body: JSON.stringify({ usr, pwd })
                 });
 
                 const data = await response.json();
 
                 if (!response.ok || data.exc) {
-                    throw new Error();
+                    throw new Error("Login failed");
                 }
+
+                // 2. GET ROLES (MOST RELIABLE IN V15)
+                const roleRes = await fetch("/api/method/frappe.auth.get_roles", {
+                    method: "GET",
+                    credentials: "same-origin"
+                });
+
+                const roleData = await roleRes.json();
+                const userRoles = roleData.message || [];
+
+                // 3. CHECK ROLES
+                const redirectToFrontDesk = userRoles.some(role =>
+                    frontDeskRoles.includes(role)
+                );
 
                 btn.innerHTML = `
             <i class="bi bi-check-circle me-2"></i>
             Login Successful
         `;
 
+                // 4. REDIRECT
                 setTimeout(() => {
-                    window.location.href = "/app";
+                    window.location.href = redirectToFrontDesk
+                        ? "/frontdesk"
+                        : "/app";
                 }, 800);
 
             } catch (err) {
+                console.error("Login error:", err);
 
                 btn.disabled = false;
                 btn.innerHTML = originalText;
 
                 document.getElementById("loginError").innerHTML = `
-    <div class="alert alert-danger mb-0">
-        Invalid email or password.
-    </div>
-`;
+            <div class="alert alert-danger mb-0">
+                Invalid email or password.
+            </div>
+        `;
             }
         });
-
-
-
     </script>
 
 
