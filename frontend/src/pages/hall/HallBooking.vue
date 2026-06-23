@@ -40,7 +40,7 @@
   </span>
 
 </div>
-          <p class="text-xs text-gray-400 mt-0.5">{{ booking.customer_name }} • {{ booking.hall }} • {{ booking.event_type }}</p>
+          <p class="text-xs text-gray-400 mt-0.5">{{ booking.customer_name }} • {{ booking.hall_name || booking.hall }} • {{ booking.event_type }}</p>
         </div>
           <div class="flex items-center gap-2">
 
@@ -177,7 +177,7 @@
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
               <div><p class="text-xs text-gray-400 mb-0.5">Customer</p><p class="text-xs font-semibold text-gray-900">{{ booking.customer_name }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Mobile</p><p class="text-xs font-semibold text-gray-900">{{ booking.mobile_number || '–' }}</p></div>
-              <div><p class="text-xs text-gray-400 mb-0.5">Hall</p><p class="text-xs font-semibold text-gray-900">{{ booking.hall }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-0.5">Hall</p><p class="text-xs font-semibold text-gray-900">{{ booking.hall_name || booking.hall }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Event Type</p><p class="text-xs font-semibold text-gray-900">{{ booking.event_type }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Start</p><p class="text-xs font-semibold text-gray-900">{{ fmtDatetime(booking.start_datetime) }}</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">End</p><p class="text-xs font-semibold text-gray-900">{{ fmtDatetime(booking.end_datetime) }}</p></div>

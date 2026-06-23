@@ -304,11 +304,12 @@
 
                 <td class="py-1.5 pr-2 w-24">
                   <input
-                      v-model="row.rate"
-                      type="number"
-                      readonly
-                      class="w-full text-xs border border-gray-100 rounded px-2 py-1.5 bg-gray-50 text-gray-600 cursor-default"
-                    />
+                    v-model.number="row.rate"
+                    type="number"
+                    min="0"
+                    @input="updateServiceRow(row)"
+                    class="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
                 </td>
 
                 <td class="py-1.5 pr-2">

@@ -131,8 +131,8 @@
                 </span>
               </td>
               <td class="px-4 py-4">
-                <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(task.status)">
-                  {{ task.status || 'Pending' }}
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full" :class="statusClass(effectiveStatus(task))">
+                  {{ effectiveStatus(task) }}
                 </span>
               </td>
               <td class="px-4 py-4 text-xs text-gray-500">{{ formatDate(task.start_time) }}</td>
@@ -252,7 +252,7 @@ const filteredList = computed(() => {
     )
   }
   if (filterType.value) list = list.filter(t => t.task_type === filterType.value)
-  if (filterStatus.value) list = list.filter(t => t.status === filterStatus.value)
+  if (filterStatus.value) list = list.filter(t => effectiveStatus(t) === filterStatus.value)
   if (filterPriority.value) list = list.filter(t => t.priority === filterPriority.value)
   if (filterAttendant.value) list = list.filter(t => t.employee === filterAttendant.value)
   
@@ -319,5 +319,10 @@ function statusClass(status) {
     'Cancelled': 'bg-red-100 text-red-500'
   }
   return classes[status] || 'bg-gray-100 text-gray-500'
+}
+
+function effectiveStatus(task) {
+  if (Number(task?.docstatus || 0) === 2) return 'Cancelled'
+  return task?.status || 'Pending'
 }
 </script>

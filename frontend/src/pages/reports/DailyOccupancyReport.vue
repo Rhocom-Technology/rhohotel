@@ -92,108 +92,95 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 px-4 py-5 sm:px-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <div class="w-full sm:min-w-[140px]">
-          <p class="text-xs text-gray-500 mb-1.5">From Date</p>
+    <div class="bg-white rounded-xl border border-gray-200 px-3 py-3 sm:px-4">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+        <input
+          v-model="filters.dateFrom"
+          type="date"
+          title="From Date"
+          class="w-full h-9 px-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+        />
+
+        <input
+          v-model="filters.dateTo"
+          type="date"
+          title="To Date"
+          class="w-full h-9 px-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+        />
+
+        <select
+          v-model="filters.room"
+          title="Room"
+          class="w-full h-9 px-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        >
+          <option value="">All Rooms</option>
+          <option v-for="r in uniqueRooms" :key="r" :value="r">{{ r }}</option>
+        </select>
+
+        <select
+          v-model="filters.floor"
+          title="Floor"
+          class="w-full h-9 px-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        >
+          <option value="">All Floors</option>
+          <option v-for="f in floorOptions" :key="f" :value="f">{{ f }}</option>
+        </select>
+
+        <select
+          v-model="filters.status"
+          title="Room Status"
+          class="w-full h-9 px-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        >
+          <option value="">All Status</option>
+          <option>Occupied</option>
+          <option>Vacant Clean</option>
+          <option>Vacant Dirty</option>
+          <option>Overdue Check-Out</option>
+          <option>Maintenance</option>
+        </select>
+
+        <select
+          v-model="filters.payment"
+          title="Payment"
+          class="w-full h-9 px-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
+        >
+          <option value="">All Payment</option>
+          <option>Paid</option>
+          <option>Part Payment</option>
+          <option>Unpaid</option>
+        </select>
+
+        <div class="relative xl:col-span-2">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
           <input
-            v-model="filters.dateFrom"
-            type="date"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search guest, room, check-in ID..."
+            class="w-full h-9 pl-9 pr-3 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+      </div>
 
-        <div class="w-full sm:min-w-[140px]">
-          <p class="text-xs text-gray-500 mb-1.5">To Date</p>
-          <input
-            v-model="filters.dateTo"
-            type="date"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
-          />
-        </div>
-
-        <div class="w-full sm:min-w-[150px]">
-          <p class="text-xs text-gray-500 mb-1.5">Room</p>
-          <select
-            v-model="filters.room"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
-          >
-            <option value="">All Rooms</option>
-            <option v-for="r in uniqueRooms" :key="r" :value="r">{{ r }}</option>
-          </select>
-        </div>
-
-        <div class="w-full sm:min-w-[150px]">
-          <p class="text-xs text-gray-500 mb-1.5">Floor</p>
-          <select
-            v-model="filters.floor"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
-          >
-            <option value="">All Floors</option>
-            <option v-for="f in floorOptions" :key="f" :value="f">{{ f }}</option>
-          </select>
-        </div>
-
-        <div style="min-width:150px;">
-          <p class="text-xs text-gray-500 mb-1.5">Room Status</p>
-          <select
-            v-model="filters.status"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
-          >
-            <option value="">All Status</option>
-            <option>Occupied</option>
-            <option>Vacant Clean</option>
-            <option>Vacant Dirty</option>
-            <option>Overdue Check-Out</option>
-            <option>Maintenance</option>
-          </select>
-        </div>
-
-        <div style="min-width:150px;">
-          <p class="text-xs text-gray-500 mb-1.5">Payment</p>
-          <select
-            v-model="filters.payment"
-            class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600"
-          >
-            <option value="">All Payment</option>
-            <option>Paid</option>
-            <option>Part Payment</option>
-            <option>Unpaid</option>
-          </select>
-        </div>
-
-        <div class="flex-1 min-w-[220px]">
-          <p class="text-xs text-gray-500 mb-1.5">Search</p>
-          <div class="relative">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search guest, room, check-in ID..."
-              class="w-full pl-9 pr-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
+      <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
           @click="fetchReport"
           :disabled="loading"
-          class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          class="px-4 h-9 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
           {{ loading ? 'Loading...' : 'Apply' }}
         </button>
 
         <button
           @click="resetFilters"
-          class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          class="px-4 h-9 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         >
           Reset
         </button>
 
         <button
-          class="px-5 py-2.5 text-xs font-semibold rounded-lg transition-colors"
+          class="px-4 h-9 text-xs font-semibold rounded-lg transition-colors"
           :class="showOverdueOnly ? 'text-white bg-red-500 hover:bg-red-600' : 'text-white bg-blue-600 hover:bg-blue-700'"
           @click="toggleOverdueOnly"
         >

@@ -31,7 +31,7 @@
       <div class="flex items-center gap-2">
         <button @click="router.push('/housekeeping')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Back</button>
 
-        <template v-if="!isSubmitted && isHousekeepingManager">
+        <template v-if="canWorkOnTask">
           <button @click="saveTask" :disabled="saving" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
             <span v-if="saving" class="flex items-center gap-1.5">
               <svg class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
@@ -48,7 +48,7 @@
           </button>
         </template>
 
-        <template v-else-if="isHousekeepingManager">
+        <template v-else-if="isHousekeepingManager && !isCancelled">
           <button @click="cancelTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Cancel Task</button>
           <button v-if="formData.status !== 'Completed'" @click="deleteTask" class="px-4 py-2 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Delete Task</button>
         </template>
@@ -173,15 +173,15 @@
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">Start Time <span class="text-red-400">*</span></p>
-              <input v-model="formData.start_time" :disabled="isSubmitted || !isHousekeepingManager" type="datetime-local"
+              <input v-model="formData.start_time" :disabled="isSubmitted || isCancelled || !(isHousekeepingManager || isHousekeeper)" type="datetime-local"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager, 'border-red-300': submitAttempted && !formData.start_time}" />
+                :class="{'bg-gray-100': isSubmitted || isCancelled || !(isHousekeepingManager || isHousekeeper), 'border-red-300': submitAttempted && !formData.start_time}" />
             </div>
             <div>
               <p class="text-xs text-gray-500 mb-1.5">End Time <span class="text-red-400">*</span></p>
-              <input v-model="formData.end_time" :disabled="isSubmitted || !isHousekeepingManager" type="datetime-local"
+              <input v-model="formData.end_time" :disabled="isSubmitted || isCancelled || !(isHousekeepingManager || isHousekeeper)" type="datetime-local"
                 class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
-                :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager, 'border-red-300': submitAttempted && !formData.end_time}" />
+                :class="{'bg-gray-100': isSubmitted || isCancelled || !(isHousekeepingManager || isHousekeeper), 'border-red-300': submitAttempted && !formData.end_time}" />
             </div>
           </div>
         </div>
@@ -542,7 +542,7 @@
           <h3 class="text-sm font-bold text-gray-900 mb-4">Status Update Section</h3>
           <div class="mb-3">
             <p class="text-xs text-gray-500 mb-1.5">Current Task Status</p>
-            <select v-model="formData.status" :disabled="isSubmitted || !isHousekeepingManager" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted || !isHousekeepingManager}">
+            <select v-model="formData.status" :disabled="isSubmitted || isCancelled || !(isHousekeepingManager || isHousekeeper)" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700" :class="{'bg-gray-100': isSubmitted || isCancelled || !(isHousekeepingManager || isHousekeeper)}">
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
               <option value="Assigned">Assigned</option>
@@ -662,6 +662,8 @@ function removeToast(id) {
 
 // ─── Computed ──────────────────────────────────────────────────────────────────
 const isSubmitted = computed(() => taskData.value?.docstatus === 1)
+const isCancelled = computed(() => taskData.value?.docstatus === 2)
+const canWorkOnTask = computed(() => !isSubmitted.value && !isCancelled.value && (isHousekeepingManager.value || isHousekeeper.value))
 const completedChecklistCount = computed(() => checklistItems.value.filter(i => i.is_completed).length)
 const checklistProgress = computed(() => {
   if (!checklistItems.value.length) return 0

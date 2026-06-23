@@ -24,8 +24,8 @@
       <div class="bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-start justify-between mb-3">
           <div>
-            <div class="flex items-center gap-2 mb-2 flex-wrap">
-              <h2 class="text-xl font-bold text-gray-900">{{ reservation.name }}</h2>
+            <h2 class="text-xl font-bold text-gray-900">{{ reservation.name }}</h2>
+            <div class="mt-1 flex items-center gap-2 flex-wrap">
               <span class="px-2.5 py-1 text-xs font-semibold rounded-full border" :class="statusClass">{{ reservation.status || 'Draft' }}</span>
               <span class="px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-500 rounded-full border border-blue-200">{{ reservation.reservation_type || 'Individual' }}</span>
             </div>
@@ -74,6 +74,12 @@
             @click="openBulkCheckInPicker"
             class="px-4 py-2 text-xs font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-40"
           >Bulk Check In</button>
+          <button
+            v-else-if="showTopInvoiceRequiredCheckIn"
+            disabled
+            class="px-4 py-2 text-xs font-semibold text-gray-500 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed"
+            title="Invoice is required before check-in"
+          >Check In (Invoice Required)</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
           <button v-if="!isCancelled && !hasAnyCheckedIn" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
           <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
@@ -246,7 +252,8 @@
                         class="px-2 py-1 text-xs font-semibold text-green-600 bg-green-50 border border-green-100 rounded hover:bg-green-100"
                       >View Check In</button>
                     </template>
-                    <button v-else-if="canCheckInReservation" @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
+                    <button v-else-if="canCheckInRow(row)" @click="checkIn(row)" class="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded hover:bg-green-600">Check In</button>
+                    <button v-else-if="showInvoiceRequiredForRow(row)" disabled class="px-2 py-1 text-xs font-semibold text-gray-500 bg-gray-100 border border-gray-200 rounded cursor-not-allowed" title="Invoice is required before check-in">Check In</button>
                     <!-- Per-room invoice for Group Split billing -->
                     <template v-if="canModifyReservation && isSplitGroup">
                       <span
@@ -526,7 +533,7 @@
 
           <div class="px-6 py-4 max-h-[320px] overflow-y-auto space-y-2">
             <label
-              v-for="room in pendingRooms"
+              v-for="room in eligiblePendingRooms"
               :key="room.name || room.idx"
               class="flex items-start gap-3 rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50"
             >
@@ -544,7 +551,7 @@
           </div>
 
           <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
-            <p class="text-xs text-gray-500">Selected: {{ selectedBulkRoomNames.length }} / {{ pendingRooms.length }}</p>
+            <p class="text-xs text-gray-500">Selected: {{ selectedBulkRoomNames.length }} / {{ eligiblePendingRooms.length }}</p>
             <div class="flex items-center gap-2">
               <button @click="closeBulkCheckInPicker" class="px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
               <button
@@ -656,13 +663,10 @@ const pendingRooms = computed(() => rooms.value.filter((row) => !isRoomCheckedIn
 const hasAnyCheckedIn = computed(() => rooms.value.some((row) => isRoomCheckedIn(row)))
 const isCancelled = computed(() => Number(props.reservation?.docstatus || 0) === 2 || String(props.reservation?.status || props.reservation?.reservation_status || '').toLowerCase() === 'cancelled')
 const canModifyReservation = computed(() => !isCancelled.value)
-const canCheckInReservation = computed(() => canModifyReservation.value && Number(props.reservation?.docstatus || 0) === 1 && pendingRooms.value.length > 0)
-const canSingleTopCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length === 1)
-const canTopBulkCheckIn = computed(() => canCheckInReservation.value && pendingRooms.value.length > 1)
-const singleTopCheckInRoom = computed(() => (canSingleTopCheckIn.value ? pendingRooms.value[0] : null))
 const reservationType = computed(() => String(props.reservation?.reservation_type || '').trim().toLowerCase())
 const groupBillingMode = computed(() => String(props.reservation?.group_billing_mode || '').trim().toLowerCase())
 const isSplitGroup = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('split'))
+const isCentralGroup = computed(() => reservationType.value === 'group' && !isSplitGroup.value)
 const splitRoomDiscountTotal = computed(() =>
   rooms.value.reduce((sum, row) => sum + Number(row?.discount || 0), 0)
 )
@@ -758,6 +762,58 @@ function isRowInvoiced(row) {
 const discountEditableRooms = computed(() => (isSplitGroup.value ? rooms.value.filter((row) => !isRowInvoiced(row)) : []))
 const hasDiscountEditableRows = computed(() => discountEditableRooms.value.length > 0)
 const splitInvoicePendingRooms = computed(() => (isSplitGroup.value ? rooms.value.filter((row) => !isRowInvoiced(row)) : []))
+const postedInvoices = computed(() => invoiceLedger.value.filter((invoice) => Number(invoice?.is_return || 0) === 0))
+const hasPostedInvoice = computed(() => Boolean(props.reservation?.sales_invoice) || postedInvoices.value.length > 0)
+
+const baseCanCheckIn = computed(() => canModifyReservation.value && Number(props.reservation?.docstatus || 0) === 1)
+
+function canCheckInByInvoiceRuleForReservation() {
+  // Individual / Corporate: require reservation invoice
+  if (reservationType.value === 'individual' || reservationType.value === 'corporate') {
+    return hasPostedInvoice.value
+  }
+  // Group central biller: require reservation invoice
+  if (isCentralGroup.value) {
+    return hasPostedInvoice.value
+  }
+  // Group split: handled per row
+  return true
+}
+
+const eligiblePendingRooms = computed(() => {
+  if (!baseCanCheckIn.value) return []
+  if (isSplitGroup.value) {
+    return pendingRooms.value.filter((row) => isRowInvoiced(row))
+  }
+  if (!canCheckInByInvoiceRuleForReservation()) return []
+  return pendingRooms.value
+})
+
+const canCheckInReservation = computed(() => eligiblePendingRooms.value.length > 0)
+const canSingleTopCheckIn = computed(() => canCheckInReservation.value && eligiblePendingRooms.value.length === 1)
+const canTopBulkCheckIn = computed(() => canCheckInReservation.value && eligiblePendingRooms.value.length > 1)
+const singleTopCheckInRoom = computed(() => (canSingleTopCheckIn.value ? eligiblePendingRooms.value[0] : null))
+const showTopInvoiceRequiredCheckIn = computed(() => {
+  if (!baseCanCheckIn.value) return false
+  if (pendingRooms.value.length === 0) return false
+  if (isSplitGroup.value) return false
+  return !canCheckInByInvoiceRuleForReservation()
+})
+
+function canCheckInRow(row) {
+  if (!baseCanCheckIn.value || !row || !row.name || isRoomCheckedIn(row)) return false
+  if (isSplitGroup.value) return isRowInvoiced(row)
+  return canCheckInByInvoiceRuleForReservation()
+}
+
+function showInvoiceRequiredForRow(row) {
+  if (!baseCanCheckIn.value || !row || isRoomCheckedIn(row) || isCancelled.value) return false
+  if (isSplitGroup.value) return !isRowInvoiced(row)
+  if (reservationType.value === 'individual' || reservationType.value === 'corporate' || isCentralGroup.value) {
+    return !hasPostedInvoice.value
+  }
+  return false
+}
 const showTopCreateInvoice = computed(() => canModifyReservation.value && !isSplitGroup.value && !props.reservation?.sales_invoice && Number(props.reservation?.docstatus || 0) === 1)
 const showTopSplitBulkInvoice = computed(() => canModifyReservation.value && isSplitGroup.value && Number(props.reservation?.docstatus || 0) === 1 && splitInvoicePendingRooms.value.length > 0)
 
@@ -930,7 +986,7 @@ function goCheckInDetail(row) {
 }
 
 async function checkIn(row) {
-  if (!canModifyReservation.value || !row || !row.name || isRoomCheckedIn(row)) return
+  if (!canModifyReservation.value || !row || !row.name || isRoomCheckedIn(row) || !canCheckInRow(row)) return
   if (typeof window !== 'undefined') {
     const confirmed = window.confirm(`Check in ${row?.occupant_name || row?.guest_name || row?.room_number || 'this guest'} now?`)
     if (!confirmed) return
@@ -959,7 +1015,7 @@ async function checkIn(row) {
 
 function openBulkCheckInPicker() {
   if (!canTopBulkCheckIn.value) return
-  selectedBulkRoomNames.value = pendingRooms.value
+  selectedBulkRoomNames.value = eligiblePendingRooms.value
     .map((row) => row?.name)
     .filter(Boolean)
   showBulkCheckInPicker.value = true
@@ -989,7 +1045,7 @@ async function bulkCheckInSelected() {
   showCheckInToast.value = true
   checkInToastMessage.value = 'Processing selected room check-ins...'
   try {
-    const rowsToCheckIn = pendingRooms.value.filter((row) => selectedBulkRoomNames.value.includes(row.name))
+    const rowsToCheckIn = eligiblePendingRooms.value.filter((row) => selectedBulkRoomNames.value.includes(row.name))
     const results = await Promise.allSettled(
       rowsToCheckIn.map((row) => callMethod(
         'rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation.check_in_reservation_room',

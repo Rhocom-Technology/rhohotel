@@ -456,7 +456,7 @@
           </div>
 
           <div
-            v-if="activeRequest.status === 'Pending' && myContext.is_manager"
+            v-if="canActOnActiveRequest"
             class="px-8 py-5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3"
           >
             <button
@@ -568,8 +568,16 @@ const canCreateRequest = computed(() => {
 // The Manager Review Note is only ever editable by a manager, and only
 // while the request is still Pending -- a requester or target employee
 // viewing their own request should never be able to write into it.
+function normalizeStatus(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+const canActOnActiveRequest = computed(() => {
+  return Boolean(myContext.is_manager && normalizeStatus(activeRequest.value?.status) === 'pending')
+})
+
 const canEditReviewNote = computed(() => {
-  return Boolean(myContext.is_manager && activeRequest.value?.status === 'Pending')
+  return canActOnActiveRequest.value
 })
 
 function toast(message, type = 'success') {
@@ -764,7 +772,10 @@ async function viewRequest(name) {
 }
 
 async function approveRequest() {
-  if (!activeRequest.value) return
+  if (!activeRequest.value || !canActOnActiveRequest.value) {
+    toast('Only pending requests can be approved.', 'warning')
+    return
+  }
 
   try {
     await callMethod('rhohotel.rhocom_hotel.api.swap_request.approve_swap_request', {
@@ -781,7 +792,10 @@ async function approveRequest() {
 }
 
 async function rejectRequest() {
-  if (!activeRequest.value) return
+  if (!activeRequest.value || !canActOnActiveRequest.value) {
+    toast('Only pending requests can be rejected.', 'warning')
+    return
+  }
 
   try {
     await callMethod('rhohotel.rhocom_hotel.api.swap_request.reject_swap_request', {

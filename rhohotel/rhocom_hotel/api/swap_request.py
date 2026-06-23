@@ -25,6 +25,13 @@ def _is_manager():
     return bool(roles.intersection(MANAGER_ROLES))
 
 
+def _is_super_manager():
+    if frappe.session.user == "Administrator":
+        return True
+    roles = set(frappe.get_roles(frappe.session.user))
+    return bool(roles.intersection({"System Manager", "Hotel Manager"}))
+
+
 def _require_manager():
     _require_logged_in()
 
@@ -501,11 +508,10 @@ def get_swap_requests(department=None, date=None, status=None, search=None, limi
 
         # Restrict department managers to their own department unless they are
         # System Manager or Hotel Manager (who can see all departments).
-        if not set(frappe.get_roles(frappe.session.user)).intersection({"System Manager", "Hotel Manager"}):
+        if not _is_super_manager():
             mgr_employee = _get_logged_in_employee()
             if mgr_employee and mgr_employee.department:
-                if not department or department == "All Departments":
-                    department = mgr_employee.department
+                department = mgr_employee.department
 
     if department and department != "All Departments":
         conditions.append("department = %(department)s")
@@ -599,6 +605,27 @@ def approve_swap_request(name, manager_note=None):
 
     doc = frappe.get_doc(SWAP_REQUEST_DOCTYPE, name)
 
+    # Department managers can only approve requests in their own department.
+    # System/Hotel managers can approve across all departments.
+    if not _is_super_manager():
+        mgr_employee = _get_logged_in_employee()
+        if (mgr_employee.department or "") != (doc.department or ""):
+            frappe.throw(
+                _("You can only approve swap requests in your department ({0}).").format(
+                    mgr_employee.department
+                ),
+                frappe.PermissionError,
+            )
+
+    # Idempotent approve: if already approved, return success payload instead
+    # of raising an error when users click approve again.
+    if doc.status == "Approved":
+        return {
+            "ok": True,
+            "message": _("Swap request is already approved."),
+            "request": _serialize_request(doc),
+        }
+
     if doc.status != "Pending":
         frappe.throw(_("Only pending swap requests can be approved."))
 
@@ -668,6 +695,23 @@ def reject_swap_request(name, manager_note=None):
 
     doc = frappe.get_doc(SWAP_REQUEST_DOCTYPE, name)
 
+    if not _is_super_manager():
+        mgr_employee = _get_logged_in_employee()
+        if (mgr_employee.department or "") != (doc.department or ""):
+            frappe.throw(
+                _("You can only reject swap requests in your department ({0}).").format(
+                    mgr_employee.department
+                ),
+                frappe.PermissionError,
+            )
+
+    if doc.status == "Rejected":
+        return {
+            "ok": True,
+            "message": _("Swap request is already rejected."),
+            "request": _serialize_request(doc),
+        }
+
     if doc.status != "Pending":
         frappe.throw(_("Only pending swap requests can be rejected."))
 
@@ -692,6 +736,10 @@ def get_swap_request_stats(department=None, date=None):
     values = {}
 
     department = cstr(department or "").strip()
+
+    if not _is_super_manager():
+        mgr_employee = _get_logged_in_employee()
+        department = mgr_employee.department or ""
 
     if department and department != "All Departments":
         conditions.append("department = %(department)s")
@@ -737,6 +785,10 @@ def get_swap_request_stats(department=None, date=None):
 @frappe.whitelist()
 def get_departments():
     _require_manager()
+
+    if not _is_super_manager():
+        mgr_employee = _get_logged_in_employee()
+        return [mgr_employee.department] if mgr_employee.department else []
 
     default_company = _get_default_company()
 

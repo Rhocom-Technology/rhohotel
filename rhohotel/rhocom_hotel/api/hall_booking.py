@@ -7,6 +7,7 @@ import json
 def get_booking(name):
     doc = frappe.get_doc("Hall Booking", name)
     data = doc.as_dict()
+    data["hall_name"] = frappe.db.get_value("Hall", doc.hall, "hall_name") or doc.hall
 
     data["payment_status"] = _payment_status(doc)
     data["invoice_grand_total"] = 0.0
