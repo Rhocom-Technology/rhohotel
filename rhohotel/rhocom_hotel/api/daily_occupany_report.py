@@ -259,6 +259,8 @@ def get_daily_occupancy_report(
 	rows = []
 	for r in rooms:
 		ci  = checkin_by_room.get(r.name) or checkin_by_room.get(r.room_number)
+		if not ci:
+			continue
 		inv = invoice_totals.get(ci.name, {}) if ci else {}
 
 		amount      = _money(inv.get("amount")      or (ci.get("total_charges")           if ci else 0))
