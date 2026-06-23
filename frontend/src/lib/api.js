@@ -85,9 +85,6 @@ export async function requestApi(url, options = {}) {
   const method = String(config.method || 'GET').toUpperCase()
   const token = getCsrfToken()
 
-  console.log('CSRF token being sent:', token, 'for', url) // temporary debug
-
-  
   if (token && token !== 'Guest' && method !== 'GET') {
     config.headers['X-Frappe-CSRF-Token'] = token
   }
