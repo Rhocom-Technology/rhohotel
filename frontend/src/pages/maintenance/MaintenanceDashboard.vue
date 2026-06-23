@@ -47,7 +47,7 @@
     </div>
 
     <!-- Stats skeleton -->
-    <div v-if="loading" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+    <div v-if="loading" class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
       <div v-for="n in 5" :key="n" class="bg-white rounded-xl border border-gray-200 px-5 py-4 animate-pulse">
         <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
         <div class="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
@@ -56,7 +56,7 @@
     </div>
 
     <!-- Stats -->
-    <div v-else-if="data" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+    <div v-else-if="data" class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs text-gray-400">Pending Requests</p>

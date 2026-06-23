@@ -140,6 +140,8 @@ const pageMeta = {
   'CorporateBillingStatementReport':              { title: 'Corporate Billing Statement', subtitle: 'Corporate account ledger with running balance, payments, outstanding exposure, and date filter controls' },
   'ComplimentaryHouseUseReport':              { title: 'Complimentary & House Use Report', subtitle: 'Internal stays, authorisation, room nights, and theoretical revenue' },
   'PosSalesReport':              { title: 'POS Sales Report', subtitle: 'Point of Sales performance and sales overview' },
+  'KitchenOrderReport':              { title: 'Kitchen Order Report', subtitle: 'Kitchen ticket volume, preparation flow, delays, and completion analytics' },
+  'GuestLedgerReport':              { title: 'Guest Ledger Report', subtitle: 'Guest folio balances, collections, and settlement status by check-in' },
   'HousekeepingProductivityReport':              { title: 'Housekeeping Productivity Report', subtitle: 'Housekeeping performance and productivity overview' },
 }
 

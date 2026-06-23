@@ -310,6 +310,129 @@ def get_kitchen_pos_profiles():
     return [r["pos_profile"] for r in rows]
 
 
+@frappe.whitelist()
+def get_kitchen_order_report(
+    date_from=None,
+    date_to=None,
+    status=None,
+    source=None,
+    station=None,
+    pos_profile=None,
+    search=None,
+    limit=500,
+):
+    """Return kitchen order report rows and summary metrics."""
+    row_limit = max(1, min(int(flt(limit) or 500), 2000))
+
+    conditions = ["kt.docstatus = 0"]
+    args = []
+
+    if date_from:
+        conditions.append("DATE(kt.sent_at) >= %s")
+        args.append(date_from)
+    if date_to:
+        conditions.append("DATE(kt.sent_at) <= %s")
+        args.append(date_to)
+    if status and status != "All":
+        conditions.append("kt.status = %s")
+        args.append(status)
+    if source:
+        conditions.append("kt.source = %s")
+        args.append(source)
+    if station:
+        conditions.append("kt.chef_station = %s")
+        args.append(station)
+    if pos_profile:
+        conditions.append("COALESCE(pi.pos_profile, '') = %s")
+        args.append(pos_profile)
+    if search:
+        q = f"%{cstr(search).strip()}%"
+        conditions.append(
+            "(" 
+            "kt.name LIKE %s OR "
+            "kt.table_or_room LIKE %s OR "
+            "kt.pos_invoice LIKE %s OR "
+            "kt.notes LIKE %s"
+            ")"
+        )
+        args.extend([q, q, q, q])
+
+    where = " AND ".join(conditions)
+
+    rows = frappe.db.sql(
+        f"""
+        SELECT
+            kt.name AS ticket_name,
+            kt.pos_invoice,
+            COALESCE(pi.pos_profile, '') AS pos_profile,
+            kt.table_or_room,
+            kt.source,
+            COALESCE(kt.chef_station, '') AS chef_station,
+            kt.status,
+            kt.notes,
+            kt.sent_at,
+            kt.modified,
+            COALESCE(COUNT(kti.name), 0) AS item_count,
+            COALESCE(SUM(kti.quantity), 0) AS total_qty,
+            GREATEST(0, TIMESTAMPDIFF(MINUTE, kt.sent_at, NOW())) AS age_minutes,
+            GREATEST(
+                0,
+                TIMESTAMPDIFF(
+                    MINUTE,
+                    CASE
+                        WHEN kt.status IN ('In Progress', 'Ready', 'Delayed', 'Served') THEN kt.modified
+                        ELSE kt.sent_at
+                    END,
+                    NOW()
+                )
+            ) AS stage_age_minutes
+        FROM `tabKitchen Order Ticket` kt
+        LEFT JOIN `tabPOS Invoice` pi ON pi.name = kt.pos_invoice
+        LEFT JOIN `tabKitchen Order Ticket Item` kti ON kti.parent = kt.name
+        WHERE {where}
+        GROUP BY kt.name
+        ORDER BY kt.sent_at DESC
+        LIMIT {row_limit}
+        """,
+        tuple(args),
+        as_dict=1,
+    )
+
+    status_counts = {
+        "Pending": 0,
+        "In Progress": 0,
+        "Ready": 0,
+        "Delayed": 0,
+        "Served": 0,
+    }
+    total_items = 0
+    total_stage_minutes = 0
+
+    for row in rows:
+        st = cstr(row.get("status"))
+        if st in status_counts:
+            status_counts[st] += 1
+        total_items += int(flt(row.get("total_qty") or 0))
+        total_stage_minutes += int(flt(row.get("stage_age_minutes") or 0))
+
+    total_tickets = len(rows)
+    avg_stage_minutes = (total_stage_minutes / total_tickets) if total_tickets else 0
+
+    return {
+        "summary": {
+            "total_tickets": total_tickets,
+            "pending_count": status_counts["Pending"],
+            "in_progress_count": status_counts["In Progress"],
+            "ready_count": status_counts["Ready"],
+            "delayed_count": status_counts["Delayed"],
+            "served_count": status_counts["Served"],
+            "total_items": total_items,
+            "avg_stage_minutes": round(avg_stage_minutes, 1),
+        },
+        "rows": rows,
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Ticket Status Updates
 # ─────────────────────────────────────────────────────────────────────────────

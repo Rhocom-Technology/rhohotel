@@ -15,7 +15,7 @@
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
         <p class="text-xs text-gray-400 mb-2">Total Halls</p>
         <p class="text-3xl font-bold text-gray-900">{{ halls.length }}</p>

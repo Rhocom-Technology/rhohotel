@@ -33,6 +33,10 @@ const ROLE_GROUPS = {
   reportsFrontDesk: ['Hotel Receptionist', 'Front Desk Manager'],
   // Reports - POS related (manager only)
   reportsPos: ['Sales Manager'],
+  // Reports - kitchen related
+  reportsKitchen: ['Sales Manager', 'Kitchen Staff'],
+  // Reports - guest ledger related
+  reportsGuestLedger: ['Hotel Receptionist', 'Front Desk Manager'],
   // Reports - housekeeping related
   reportsHousekeeping: ['Housekeeping Manager'],
 
@@ -128,9 +132,11 @@ export const ROUTE_PERMISSIONS = [
   { prefix: '/reports/complimentary-house-use-report', roles: ROLE_GROUPS.reportsFrontDesk },
   { prefix: '/reports/guest-stay-history-report', roles: ROLE_GROUPS.reportsFrontDesk },
   { prefix: '/reports/pos-sales-report', roles: ROLE_GROUPS.reportsPos },
+  { prefix: '/reports/kitchen-order-report', roles: ROLE_GROUPS.reportsKitchen },
+  { prefix: '/reports/guest-ledger-report', roles: ROLE_GROUPS.reportsGuestLedger },
   { prefix: '/reports/house-keeping-productivity-report', roles: ROLE_GROUPS.reportsHousekeeping },
   // Report list page — anyone with access to any report
-  { prefix: '/reports', roles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsHousekeeping] },
+  { prefix: '/reports', roles: [...ROLE_GROUPS.reportsFrontDesk, ...ROLE_GROUPS.reportsPos, ...ROLE_GROUPS.reportsKitchen, ...ROLE_GROUPS.reportsGuestLedger, ...ROLE_GROUPS.reportsHousekeeping] },
 
   // POS — specific paths before general
   { prefix: '/pos/staff-roaster', roles: ROLE_GROUPS.staffRoasterFull },

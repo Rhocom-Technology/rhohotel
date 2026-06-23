@@ -27,7 +27,7 @@
     </div>
 
     <!-- Row 1: Occupancy cards -->
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-500">
         <p class="text-xs text-gray-400 mb-1">Occupancy Rate</p>
         <p class="text-3xl font-bold text-gray-900">{{ stats.occupancyRate }}%</p>
@@ -66,7 +66,7 @@
     </div>
 
     <!-- Row 2: Revenue cards -->
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 border-l-4 border-l-blue-600">
         <p class="text-xs text-gray-400 mb-1">Total Revenue</p>
         <p class="text-2xl font-bold text-gray-900">₦{{ formatNumber(stats.totalRevenue) }}</p>

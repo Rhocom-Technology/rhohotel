@@ -265,9 +265,6 @@ def adjust_booking_datetime(
 	if booking.docstatus != 1:
 		frappe.throw("Only submitted bookings can be adjusted.")
 
-	if not booking.sales_invoice:
-		frappe.throw("Please create the main invoice before adjusting this booking.")
-
 	start_dt = get_datetime(start_datetime)
 	end_dt = get_datetime(end_datetime)
 

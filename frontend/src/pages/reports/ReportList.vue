@@ -177,6 +177,7 @@ const CATEGORY_ROLES = {
   'Guest Management': ROLE_GROUPS.reportsFrontDesk,
   'Billing': ROLE_GROUPS.reportsFrontDesk,
   'Point of Sale': ROLE_GROUPS.reportsPos,
+  'Kitchen': ROLE_GROUPS.reportsKitchen,
   'Housekeeping': ROLE_GROUPS.reportsHousekeeping,
   'Asset Management': ROLE_GROUPS.assetManagement,
 }
@@ -187,6 +188,7 @@ const categories = computed(() => {
     'Guest Management',
     'Billing',
     'Point of Sale',
+    'Kitchen',
     'Housekeeping',
     'Asset Management',
   ].filter(cat => session.hasAnyRole(CATEGORY_ROLES[cat] || []))
@@ -210,6 +212,14 @@ const reports = ref([
     route: '/reports/guest-stay-history-report',
   },
   {
+    name: 'Guest Ledger Report',
+    subtitle: 'Guest folio charges, collections, balances, and settlement classification',
+    category: 'Guest Management',
+    description: 'Provides guest-level ledger visibility for front desk and billing follow-up across active and completed stays.',
+    exportNote: 'Export: CSV',
+    route: '/reports/guest-ledger-report',
+  },
+  {
     name: 'Night Audit Summary',
     subtitle: 'Audit closure, revenue checks, shift balance summary, and daily financial validation',
     category: 'Billing',
@@ -224,6 +234,14 @@ const reports = ref([
     description: 'Tracks restaurant, bar, room-posted sales, and helps management evaluate sales performance.',
     exportNote: 'Export: Excel',
     route: '/reports/pos-sales-report',
+  },
+  {
+    name: 'Kitchen Order Report',
+    subtitle: 'Kitchen ticket lifecycle, source distribution, preparation stage, and delay tracking',
+    category: 'Kitchen',
+    description: 'Monitors ticket throughput from order sent to served, including bottlenecks and pending workload.',
+    exportNote: 'Export: CSV',
+    route: '/reports/kitchen-order-report',
   },
   {
     name: 'Housekeeping Productivity Report',
