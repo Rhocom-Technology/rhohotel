@@ -10,6 +10,27 @@ from frappe.model.document import Document
 from frappe.utils import flt, get_datetime, getdate, nowdate, date_diff
 import math
 
+
+def _line_discount_percentage(gross_amount, discount_value):
+	gross_amount = flt(gross_amount or 0)
+	discount_value = flt(discount_value or 0)
+	if gross_amount <= 0 or discount_value <= 0:
+		return 0
+	return flt((discount_value / gross_amount) * 100, 6)
+
+
+def _discount_value(gross_amount, discount_type, discount_amount):
+	gross_amount = flt(gross_amount or 0)
+	discount_amount = flt(discount_amount or 0)
+	if gross_amount <= 0 or discount_amount <= 0:
+		return 0
+
+	if (discount_type or "Fixed Amount") == "Percentage":
+		discount_amount = min(discount_amount, 100)
+		return gross_amount * (discount_amount / 100)
+
+	return min(discount_amount, gross_amount)
+
 class HallBooking(Document):
 	def validate(self):
 		self.validate_booking_overlap()
@@ -181,21 +202,28 @@ class HallBooking(Document):
 		hall_qty = flt(self.total_days or 1)
 		hall_gross = flt(self.total_amount or 0)
 		hall_net = hall_gross
+		hall_discount_value = 0
 
 		if flt(self.discount_amount or 0) > 0:
 			if self.discount_type == "Percentage":
 				if flt(self.discount_amount) > 100:
 					frappe.throw("Hall discount percentage cannot be greater than 100%.")
 
-				hall_net = hall_gross - (hall_gross * flt(self.discount_amount) / 100)
+				hall_discount_value = hall_gross * flt(self.discount_amount) / 100
+				hall_net = hall_gross - hall_discount_value
 
 			else:
 				if flt(self.discount_amount) > hall_gross:
 					frappe.throw("Hall discount cannot be greater than hall amount.")
 
-				hall_net = hall_gross - flt(self.discount_amount)
+				hall_discount_value = flt(self.discount_amount)
+				hall_net = hall_gross - hall_discount_value
 
 		hall_net = max(0, hall_net)
+		hall_discount_percentage = _line_discount_percentage(hall_gross, hall_discount_value)
+		hall_rate = (hall_gross / hall_qty) if hall_qty else 0
+		hall_net_rate = (hall_net / hall_qty) if hall_qty else 0
+		hall_discount_amount_per_unit = max(0, hall_rate - hall_net_rate)
 
 		invoice = frappe.get_doc({
 			"doctype": "Sales Invoice",
@@ -210,19 +238,38 @@ class HallBooking(Document):
 		invoice.append("items", {
 			"item_code": hall.item_name or self.hall,
 			"qty": hall_qty,
-			"rate": hall_net / hall_qty,
+			"price_list_rate": hall_rate,
+			"rate": hall_net_rate,
+			"discount_percentage": hall_discount_percentage,
+			"discount_amount": hall_discount_amount_per_unit,
 			"income_account": default_income,
 			"cost_center": cost_center,
 		})
 
 		for billing in self.get("additional_billings", []):
 			qty = flt(billing.qty or 1)
-			net_amount = flt(billing.amount or 0)
+			rate = flt(billing.rate or 0)
+			gross_amount = qty * rate
+			discount_type = billing.discount_type or "Fixed Amount"
+			discount_amount = flt(billing.discount_amount or 0)
+
+			if discount_type == "Percentage":
+				line_discount = gross_amount * (discount_amount / 100)
+			else:
+				line_discount = min(discount_amount, gross_amount)
+
+			line_net = max(0, gross_amount - line_discount)
+			net_rate = (line_net / qty) if qty else 0
+			line_discount_amount_per_unit = max(0, rate - net_rate)
+			line_discount_percentage = _line_discount_percentage(gross_amount, line_discount)
 
 			invoice.append("items", {
 				"item_code": billing.service,
 				"qty": qty,
-				"rate": net_amount / qty,
+				"price_list_rate": rate,
+				"rate": net_rate,
+				"discount_percentage": line_discount_percentage,
+				"discount_amount": line_discount_amount_per_unit,
 				"income_account": default_income,
 				"cost_center": cost_center,
 			})
@@ -368,7 +415,9 @@ def adjust_booking_datetime(
 			adjustment_discount = discount_amount
 
 		net_adjustment = max(0, gross_adjustment - adjustment_discount)
-		net_rate = net_adjustment / diff_days if diff_days else 0
+		adjustment_discount_percentage = _line_discount_percentage(gross_adjustment, adjustment_discount)
+		net_rate = (net_adjustment / diff_days) if diff_days else 0
+		adjustment_discount_amount_per_unit = max(0, rate_per_day - net_rate)
 
 		invoice_data = {
 			"doctype": "Sales Invoice",
@@ -378,8 +427,11 @@ def adjust_booking_datetime(
 			"items": [
 				{
 					"item_code": hall.item_name or booking.hall,
+					"price_list_rate": rate_per_day,
 					"rate": net_rate,
 					"qty": qty,
+					"discount_percentage": adjustment_discount_percentage,
+					"discount_amount": adjustment_discount_amount_per_unit,
 					"income_account": income_account,
 					"cost_center": cost_center,
 				}
@@ -553,4 +605,125 @@ def create_invoice_for_booking(booking_name):
 	return {
 		"name": booking.name,
 		"sales_invoice": booking.sales_invoice
+	}
+
+
+def _reprice_hall_invoice(invoice_name, hall_item_code, qty, day_rate, discount_type, discount_amount):
+	invoice = frappe.get_doc("Sales Invoice", invoice_name)
+
+	if invoice.docstatus != 1:
+		frappe.throw("Invoice {0} is not submitted.".format(invoice_name))
+
+	if flt(invoice.outstanding_amount or 0) != flt(invoice.grand_total or 0):
+		frappe.throw(
+			"Invoice {0} already has payment. Reverse payment before repair.".format(invoice_name)
+		)
+
+	hall_row = None
+	for row in invoice.get("items", []):
+		if row.item_code == hall_item_code:
+			hall_row = row
+			break
+
+	if not hall_row and invoice.get("items"):
+		hall_row = invoice.items[0]
+
+	if not hall_row:
+		frappe.throw("Invoice {0} has no items to repair.".format(invoice_name))
+
+	qty = flt(qty or 0)
+	day_rate = flt(day_rate or 0)
+	gross_total = abs(qty) * day_rate
+	discount_value = _discount_value(gross_total, discount_type, discount_amount)
+	net_total = max(0, gross_total - discount_value)
+	net_rate = (net_total / abs(qty)) if qty else 0
+
+	hall_row.qty = qty
+	hall_row.price_list_rate = day_rate
+	hall_row.rate = net_rate
+	hall_row.discount_percentage = _line_discount_percentage(gross_total, discount_value)
+	hall_row.discount_amount = max(0, day_rate - net_rate)
+
+	invoice.flags.ignore_validate_update_after_submit = True
+	invoice.set_missing_values()
+	invoice.calculate_taxes_and_totals()
+	invoice.save(ignore_permissions=True)
+	invoice.reload()
+
+	return {
+		"invoice": invoice.name,
+		"grand_total": flt(invoice.grand_total or 0),
+		"outstanding_amount": flt(invoice.outstanding_amount or 0),
+	}
+
+
+@frappe.whitelist()
+def repair_booking_invoice_discounts(booking_name):
+	booking = frappe.get_doc("Hall Booking", booking_name)
+	hall = frappe.get_doc("Hall", booking.hall)
+	hall_item_code = hall.item_name or booking.hall
+	day_rate = flt(hall.rate or booking.rate or 0)
+
+	history_rows = sorted(
+		list(booking.get("adjustment_history", [])),
+		key=lambda r: flt(r.idx or 0),
+	)
+
+	if history_rows:
+		original_days = flt(history_rows[0].previous_days or 0)
+	else:
+		original_days = flt(booking.total_days or 0)
+
+	if original_days <= 0:
+		original_days = 1
+
+	repaired = []
+	total_grand = 0
+	total_outstanding = 0
+
+	if booking.sales_invoice:
+		result = _reprice_hall_invoice(
+			booking.sales_invoice,
+			hall_item_code,
+			original_days,
+			day_rate,
+			booking.discount_type,
+			booking.discount_amount,
+		)
+		repaired.append(result)
+		total_grand += flt(result.get("grand_total") or 0)
+		total_outstanding += flt(result.get("outstanding_amount") or 0)
+
+	for row in history_rows:
+		if not row.adjustment_invoice:
+			continue
+
+		diff_days = abs(flt(row.new_days or 0) - flt(row.previous_days or 0))
+		if diff_days <= 0:
+			continue
+
+		qty = diff_days if flt(row.new_days or 0) > flt(row.previous_days or 0) else -diff_days
+		result = _reprice_hall_invoice(
+			row.adjustment_invoice,
+			hall_item_code,
+			qty,
+			day_rate,
+			row.discount_type,
+			row.discount_amount,
+		)
+		repaired.append(result)
+		total_grand += flt(result.get("grand_total") or 0)
+		total_outstanding += flt(result.get("outstanding_amount") or 0)
+
+	booking.flags.ignore_validate_update_after_submit = True
+	booking.net_total = flt(max(0, total_grand), 2)
+	booking.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {
+		"booking": booking.name,
+		"booking_net_total": flt(booking.net_total or 0),
+		"total_invoice_amount": flt(total_grand or 0),
+		"total_outstanding": flt(total_outstanding or 0),
+		"repaired_invoices": repaired,
 	}

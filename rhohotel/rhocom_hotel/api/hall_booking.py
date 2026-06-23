@@ -4,8 +4,21 @@ import math
 import json
 
 
+def _original_hall_gross(doc):
+    adjustment_rows = sorted(
+        list(doc.get("adjustment_history", [])),
+        key=lambda row: flt(getattr(row, "idx", 0) or 0),
+    )
+    if adjustment_rows:
+        original_days = flt(getattr(adjustment_rows[0], "previous_days", 0) or 0)
+        if original_days > 0:
+            return flt(doc.rate or 0) * original_days
+
+    return flt(doc.total_amount or 0)
+
+
 def _compute_financial_summary(doc):
-    hall_gross = flt(doc.total_amount or 0)
+    hall_gross = _original_hall_gross(doc)
     discount_type = (doc.discount_type or "Fixed Amount").strip()
     discount_amount = flt(doc.discount_amount or 0)
 
@@ -59,7 +72,9 @@ def get_booking(name):
     data = doc.as_dict()
     data["hall_name"] = frappe.db.get_value("Hall", doc.hall, "hall_name") or doc.hall
     data.update(_compute_financial_summary(doc))
-    data["net_total"] = flt(data.get("net_total_computed") or doc.net_total or 0)
+    # Keep the stored net_total as source of truth because it includes
+    # adjustment invoice impacts that the static summary recompute does not.
+    data["net_total"] = flt(doc.net_total or 0)
 
     data["payment_status"] = _payment_status(doc)
     data["invoice_grand_total"] = 0.0
@@ -95,6 +110,7 @@ def get_booking(name):
             data["outstanding_amount"] += invoice_outstanding_amount
 
         data["adjustment_history"].append({
+            "idx": r.idx,
             "previous_start": str(r.previous_start),
             "previous_end": str(r.previous_end),
             "previous_days": r.previous_days,
