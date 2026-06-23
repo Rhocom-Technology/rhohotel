@@ -77,12 +77,23 @@ def get_lock_context(check_in_name: str) -> dict:
 
     # Whether this provider/config requires a physical card UID input
     requires_card_number = False
-    if mapping and mapping.get("provider") == "tt_hotel":
-        try:
-            key_type = frappe.db.get_single_value("TT Hotel Settings", "key_type") or "eKey"
-            requires_card_number = key_type == "IC Card"
-        except Exception:
-            pass
+    # Whether this provider requires a guest email for key delivery (Salto mobile)
+    requires_guest_email = False
+
+    if mapping:
+        prov = mapping.get("provider") or ""
+        if prov == "tt_hotel":
+            try:
+                key_type = frappe.db.get_single_value("TT Hotel Settings", "key_type") or "eKey"
+                requires_card_number = key_type == "IC Card"
+            except Exception:
+                pass
+        elif prov == "salto":
+            try:
+                key_type = frappe.db.get_single_value("Salto Settings", "key_type") or "code"
+                requires_guest_email = key_type == "mobile"
+            except Exception:
+                pass
 
     # Recent logs (last 5)
     recent_logs = frappe.db.get_all(
@@ -98,6 +109,7 @@ def get_lock_context(check_in_name: str) -> dict:
         "has_mapping": has_mapping,
         "provider": provider_label,
         "requires_card_number": requires_card_number,
+        "requires_guest_email": requires_guest_email,
         "active_key": active_key,
         "recent_logs": recent_logs,
     }
@@ -108,7 +120,7 @@ def get_lock_context(check_in_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def issue_key(check_in_name: str, card_number: Optional[str] = None) -> dict:
+def issue_key(check_in_name: str, card_number: Optional[str] = None, guest_email: Optional[str] = None) -> dict:
     """Issue a new key for an active check-in."""
     _check_role()
     from rhohotel.integrations.locks.service import issue_guest_key
@@ -116,12 +128,13 @@ def issue_key(check_in_name: str, card_number: Optional[str] = None) -> dict:
         check_in_name,
         requested_by=frappe.session.user,
         card_number=card_number or None,
+        guest_email=guest_email or None,
     )
     return _sanitise(result)
 
 
 @frappe.whitelist()
-def reissue_key(guest_key_name: str, card_number: Optional[str] = None) -> dict:
+def reissue_key(guest_key_name: str, card_number: Optional[str] = None, guest_email: Optional[str] = None) -> dict:
     """Reissue (replace) a key for an active check-in."""
     _check_role()
     from rhohotel.integrations.locks.service import reissue_guest_key
@@ -129,6 +142,7 @@ def reissue_key(guest_key_name: str, card_number: Optional[str] = None) -> dict:
         guest_key_name,
         requested_by=frappe.session.user,
         card_number=card_number or None,
+        guest_email=guest_email or None,
     )
     return _sanitise(result)
 
@@ -205,5 +219,5 @@ def get_lock_status(check_in_name: str) -> dict:
 
 def _sanitise(result: dict) -> dict:
     """Strip any fields that should not be returned to the browser."""
-    safe_keys = {"success", "guest_key", "log", "error", "updated", "cancelled", "failed", "errors"}
+    safe_keys = {"success", "guest_key", "log", "error", "updated", "cancelled", "failed", "errors", "pin_code"}
     return {k: v for k, v in (result or {}).items() if k in safe_keys}

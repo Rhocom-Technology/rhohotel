@@ -1,0 +1,147 @@
+{
+ "actions": [],
+ "creation": "2026-06-23 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "sb_auth",
+  "auth_method",
+  "cb_auth1",
+  "site_id",
+  "sb_token",
+  "api_token",
+  "sb_oauth",
+  "client_id",
+  "cb_oauth1",
+  "client_secret",
+  "sb_config",
+  "base_url",
+  "key_type",
+  "cb_config1",
+  "key_name_prefix"
+ ],
+ "fields": [
+  {
+   "fieldname": "sb_auth",
+   "fieldtype": "Section Break",
+   "label": "Authentication"
+  },
+  {
+   "fieldname": "auth_method",
+   "fieldtype": "Select",
+   "label": "Authentication Method",
+   "options": "api_token\noauth2",
+   "default": "api_token",
+   "reqd": 1,
+   "description": "api_token — long-lived API token from the Salto KS dashboard. oauth2 — client credentials flow (Client ID + Secret required)."
+  },
+  {
+   "fieldname": "cb_auth1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "site_id",
+   "fieldtype": "Data",
+   "label": "Site ID",
+   "description": "Salto KS site UUID. If provided, all API calls are scoped to /sites/{site_id}/. Leave blank if your API token already scopes to a single site."
+  },
+  {
+   "fieldname": "sb_token",
+   "fieldtype": "Section Break",
+   "label": "API Token",
+   "depends_on": "eval:doc.auth_method === 'api_token'"
+  },
+  {
+   "fieldname": "api_token",
+   "fieldtype": "Password",
+   "label": "API Token",
+   "description": "Long-lived API token from the Salto KS developer dashboard. Stored encrypted. Never logged or returned to the browser.",
+   "depends_on": "eval:doc.auth_method === 'api_token'"
+  },
+  {
+   "fieldname": "sb_oauth",
+   "fieldtype": "Section Break",
+   "label": "OAuth2 Credentials",
+   "depends_on": "eval:doc.auth_method === 'oauth2'"
+  },
+  {
+   "fieldname": "client_id",
+   "fieldtype": "Data",
+   "label": "Client ID",
+   "description": "OAuth2 Client ID from the Salto KS developer portal.",
+   "depends_on": "eval:doc.auth_method === 'oauth2'"
+  },
+  {
+   "fieldname": "cb_oauth1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "client_secret",
+   "fieldtype": "Password",
+   "label": "Client Secret",
+   "description": "OAuth2 Client Secret. Stored encrypted. Never logged or returned to the browser.",
+   "depends_on": "eval:doc.auth_method === 'oauth2'"
+  },
+  {
+   "fieldname": "sb_config",
+   "fieldtype": "Section Break",
+   "label": "Configuration"
+  },
+  {
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "API Base URL",
+   "default": "https://api.saltoks.com",
+   "description": "Salto KS API endpoint. Change only if using a region-specific or self-hosted endpoint."
+  },
+  {
+   "fieldname": "key_type",
+   "fieldtype": "Select",
+   "label": "Key Type",
+   "options": "code\nmobile\ncard",
+   "default": "code",
+   "description": "code = 4-8 digit PIN code (no hardware needed). mobile = key delivered to guest via Salto JustIN mobile app (requires guest email). card = RFID card programmed via a Salto online enrollment reader."
+  },
+  {
+   "fieldname": "cb_config1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "key_name_prefix",
+   "fieldtype": "Data",
+   "label": "Key Name Prefix",
+   "default": "Guest",
+   "description": "Prepended to the guest name when naming keys in Salto KS."
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-06-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rhocom Hotel",
+ "name": "Salto Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Hotel Manager"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

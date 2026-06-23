@@ -249,6 +249,11 @@ _ALL_TOOLS = {
 		"description": "Get the count of active shift assignments for today, grouped by department.",
 		"parameters": {"type": "object", "properties": {}, "required": []},
 	},
+	"get_vip_guests": {
+		"fn": ai_tools.get_vip_guests,
+		"description": "List VIP and Gold loyalty-tier guests currently in-house, including who is checking out today. Use this whenever the user asks about VIP, Gold, Platinum, or premium guests.",
+		"parameters": {"type": "object", "properties": {}, "required": []},
+	},
 }
 
 # Role → allowed tool names (cascading: higher roles inherit all lower-role tools)
@@ -265,12 +270,13 @@ _ROLE_TOOLS = {
 		"get_today_arrivals", "get_today_departures",
 		"get_dirty_vacant_rooms", "get_maintenance_blocked_rooms",
 		"get_hall_events_today", "get_shift_coverage_summary",
+		"get_vip_guests",
 	],
 	"Hotel Receptionist": [
 		"get_occupancy_summary", "get_inhouse_guests", "get_reservations",
 		"get_overdue_checkouts", "get_guest_profile", "search_guests", "get_guest_payment_total",
 		"get_today_arrivals", "get_today_departures", "get_dirty_vacant_rooms",
-		"get_hall_events_today",
+		"get_hall_events_today", "get_vip_guests",
 	],
 	"Housekeeping Supervisor": [
 		"get_occupancy_summary", "get_housekeeping_summary", "get_dirty_vacant_rooms",

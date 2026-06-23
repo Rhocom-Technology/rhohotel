@@ -80,6 +80,19 @@
         <p class="text-xs text-gray-400">Place the card on the USB reader — it will type the UID automatically, or enter it manually.</p>
       </div>
 
+      <!-- Guest email input (Salto mobile key mode) -->
+      <div v-if="ctx.requires_guest_email" class="space-y-1">
+        <label class="block text-xs font-medium text-gray-700">Guest Email <span class="text-red-500">*</span></label>
+        <input
+          v-model="guestEmail"
+          type="email"
+          placeholder="guest@example.com"
+          :disabled="busy"
+          class="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+        />
+        <p class="text-xs text-gray-400">The mobile key will be delivered to this email via the Salto JustIN app.</p>
+      </div>
+
       <!-- Error / result banner -->
       <div v-if="actionError" class="bg-red-50 rounded-lg border border-red-200 px-4 py-3">
         <p class="text-xs font-bold text-red-600 mb-0.5">Operation Failed</p>
@@ -87,6 +100,11 @@
       </div>
       <div v-if="actionSuccess" class="bg-green-50 rounded-lg border border-green-200 px-4 py-3">
         <p class="text-xs font-bold text-green-700">{{ actionSuccess }}</p>
+        <div v-if="pinCode" class="mt-2 p-2 bg-white rounded border border-green-300 text-center">
+          <p class="text-xs text-gray-500 mb-0.5">Room Access PIN — give to guest</p>
+          <p class="text-2xl font-mono font-bold tracking-widest text-gray-900">{{ pinCode }}</p>
+          <p class="text-xs text-gray-400 mt-0.5">This code is only shown once.</p>
+        </div>
       </div>
 
       <!-- Action buttons -->
@@ -177,6 +195,8 @@ const showLogs = ref(false)
 const actionError = ref('')
 const actionSuccess = ref('')
 const cardNumber = ref('')
+const guestEmail = ref('')
+const pinCode = ref('')
 const logs = ref([])
 
 const ctx = ref({
@@ -184,6 +204,7 @@ const ctx = ref({
   has_mapping: false,
   provider: null,
   requires_card_number: false,
+  requires_guest_email: false,
   active_key: null,
   recent_logs: [],
 })
@@ -235,12 +256,14 @@ async function _doAction(fn) {
   busy.value = true
   actionError.value = ''
   actionSuccess.value = ''
+  pinCode.value = ''
   try {
     const result = await fn()
     if (result?.success === false) {
       actionError.value = result.error || 'Operation failed.'
     } else {
       actionSuccess.value = 'Operation completed successfully.'
+      if (result?.pin_code) pinCode.value = String(result.pin_code)
       await refresh()
     }
   } catch (err) {
@@ -255,10 +278,15 @@ function issueKey() {
     actionError.value = 'Please scan or enter the card UID before issuing.'
     return
   }
+  if (ctx.value.requires_guest_email && !guestEmail.value.trim()) {
+    actionError.value = 'Please enter the guest email before issuing a mobile key.'
+    return
+  }
   _doAction(() =>
     callMethodForm('rhohotel.rhocom_hotel.api.lock_api.issue_key', {
       check_in_name: props.checkIn.name,
       card_number: cardNumber.value.trim() || undefined,
+      guest_email: guestEmail.value.trim() || undefined,
     })
   )
 }
@@ -269,10 +297,15 @@ function reissueKey() {
     actionError.value = 'Please scan or enter the card UID before reissuing.'
     return
   }
+  if (ctx.value.requires_guest_email && !guestEmail.value.trim()) {
+    actionError.value = 'Please enter the guest email before reissuing a mobile key.'
+    return
+  }
   _doAction(() =>
     callMethodForm('rhohotel.rhocom_hotel.api.lock_api.reissue_key', {
       guest_key_name: ctx.value.active_key.name,
       card_number: cardNumber.value.trim() || undefined,
+      guest_email: guestEmail.value.trim() || undefined,
     })
   )
 }

@@ -30,5 +30,21 @@
   "provider_label": "TT Hotel / TTLock",
   "retry_count": 2,
   "timeout_seconds": 30
+ },
+ {
+  "connection_config": "{\"base_url\": \"https://api.saltoks.com\", \"key_type\": \"code\"}",
+  "docstatus": 0,
+  "doctype": "Lock Provider",
+  "environment": "Production",
+  "is_default": 0,
+  "is_enabled": 0,
+  "modified": "2026-06-23 00:00:00.000000",
+  "name": "salto",
+  "note": "Salto KS cloud access management. Configure API token (or OAuth2 credentials) and Site ID in Salto Settings before enabling.",
+  "provider_class_path": "rhohotel.integrations.locks.salto_provider.SaltoProvider",
+  "provider_code": "salto",
+  "provider_label": "Salto KS",
+  "retry_count": 2,
+  "timeout_seconds": 30
  }
 ]

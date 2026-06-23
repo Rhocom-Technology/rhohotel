@@ -652,3 +652,47 @@ def get_shift_coverage_summary():
 	except Exception as e:
 		frappe.log_error(f"AI tool get_shift_coverage_summary: {e}", "AI Tool Error")
 		return {"error": str(e), "coverage": [], "total_assigned": 0}
+
+
+# ── VIP Guests ────────────────────────────────────────────────────────────────
+
+def get_vip_guests():
+	"""VIP and Gold tier guests currently in-house, including those checking out today."""
+	try:
+		target_date = today()
+		rows = frappe.db.sql(
+			"""
+			SELECT
+				ci.name          AS checkin,
+				ci.guest,
+				hg.hotel_guest_name,
+				hg.loyalty_tier,
+				hg.guest_type,
+				ci.room_number,
+				ci.check_in_datetime,
+				ci.expected_check_out_datetime,
+				ci.total_outstanding_amount,
+				(DATE(ci.expected_check_out_datetime) = %(today)s) AS checking_out_today
+			FROM `tabHotel Room Check In` ci
+			INNER JOIN `tabHotel Guest` hg ON hg.name = ci.guest
+			WHERE ci.docstatus = 1
+			  AND hg.loyalty_tier IN ('VIP', 'Gold', 'Platinum')
+			ORDER BY
+				FIELD(hg.loyalty_tier, 'VIP', 'Platinum', 'Gold') ASC,
+				ci.check_in_datetime ASC
+			""",
+			{"today": target_date},
+			as_dict=True,
+		)
+		all_vip = [dict(r) for r in rows]
+		checking_out = [r for r in all_vip if r.get("checking_out_today")]
+		return {
+			"vip_in_house": all_vip,
+			"vip_count": len(all_vip),
+			"checking_out_today": checking_out,
+			"checkout_count_today": len(checking_out),
+			"date": target_date,
+		}
+	except Exception as e:
+		frappe.log_error(f"AI tool get_vip_guests: {e}", "AI Tool Error")
+		return {"error": str(e), "vip_in_house": [], "vip_count": 0, "checking_out_today": [], "checkout_count_today": 0}

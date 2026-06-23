@@ -234,6 +234,7 @@ def issue_guest_key(
     check_in_name: str,
     requested_by: Optional[str] = None,
     card_number: Optional[str] = None,
+    guest_email: Optional[str] = None,
 ) -> dict:
     """
     Issue a new key for an active check-in.
@@ -296,7 +297,12 @@ def issue_guest_key(
                 response_payload=result.raw_response,
                 guest_key=gk_name,
             )
-            return {"success": True, "guest_key": gk_name, "log": log_name, "error": None}
+            ret = {"success": True, "guest_key": gk_name, "log": log_name, "error": None}
+            # Surface PIN code to the UI so front desk can relay it to the guest.
+            # The code is only visible once at issuance time.
+            if result.provider_data and result.provider_data.get("code"):
+                ret["pin_code"] = str(result.provider_data["code"])
+            return ret
 
         # Provider returned success=False (business rule rejection)
         _update_log(
@@ -328,6 +334,7 @@ def reissue_guest_key(
     guest_key_name: str,
     requested_by: Optional[str] = None,
     card_number: Optional[str] = None,
+    guest_email: Optional[str] = None,
 ) -> dict:
     """
     Reissue a key — cancel the existing one and issue a fresh card.
@@ -347,6 +354,8 @@ def reissue_guest_key(
     context = _build_key_context(check_in_doc, mapping)
     if card_number:
         context.extra["card_number"] = str(card_number).strip()
+    if guest_email:
+        context.extra["guest_email"] = str(guest_email).strip()
 
     log_name = _create_log(
         operation_type="Reissue Key",
@@ -383,7 +392,10 @@ def reissue_guest_key(
                 response_payload=result.raw_response,
                 guest_key=new_gk_name,
             )
-            return {"success": True, "guest_key": new_gk_name, "log": log_name, "error": None}
+            ret = {"success": True, "guest_key": new_gk_name, "log": log_name, "error": None}
+            if result.provider_data and result.provider_data.get("code"):
+                ret["pin_code"] = str(result.provider_data["code"])
+            return ret
 
         _update_log(log_name, status="Failed", duration_ms=duration,
                     response_payload=result.raw_response, error_message=result.error)

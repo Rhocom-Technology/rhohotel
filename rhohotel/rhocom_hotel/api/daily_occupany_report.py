@@ -186,6 +186,8 @@ def get_daily_occupancy_report(
 	search=None,
 	overdue_only=0,
 ):
+	overdue_only = cint(overdue_only or 0)
+
 	# Default: show today's snapshot when no date range is supplied.
 	# When date_from is provided without date_to, make it a single-day view.
 	date_from = _date_or_default(date_from, nowdate())
@@ -194,21 +196,24 @@ def get_daily_occupancy_report(
 	from_dt = get_datetime(str(date_from) + " 00:00:00")
 	to_dt   = get_datetime(str(date_to)   + " 23:59:59")
 
-	rooms = frappe.get_all(
-		"Hotel Room",
-		fields=[
-			"name",
-			"room_number",
-			"room_type",
-			"floor",
-			"status",
-			"housekeeping_status",
-			"base_rate",
-			"owner",
-			"creation",
-		],
-		order_by="room_number asc",
-		ignore_permissions=True,
+	# Use raw SQL for a full room inventory snapshot to avoid any implicit
+	# list limits or permission-side truncation.
+	rooms = frappe.db.sql(
+		"""
+		SELECT
+			name,
+			room_number,
+			room_type,
+			floor,
+			status,
+			housekeeping_status,
+			base_rate,
+			owner,
+			creation
+		FROM `tabHotel Room`
+		ORDER BY room_number ASC
+		""",
+		as_dict=True,
 	)
 
 	# Fetch all check-ins that were active at any point within the date range.
