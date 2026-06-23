@@ -80,42 +80,35 @@ def _aging_bucket(days):
 	return "90+"
 
 
-def _billing_status(outstanding, due_date):
+def _billing_status(outstanding, due_date, as_of_date=None):
 	outstanding = flt(outstanding)
 
 	if outstanding <= 0:
 		return "Paid"
 
-	if due_date and getdate(due_date) < getdate(nowdate()):
+	compare_date = getdate(as_of_date) if as_of_date else getdate(nowdate())
+
+	if due_date and getdate(due_date) < compare_date:
 		return "Overdue"
 
 	return "Unpaid"
 
 
-def _get_payment_amount(invoice_name):
-	if not invoice_name:
-		return 0
+def _get_customer_name_map(customers):
+	if not customers:
+		return {}
 
-	try:
-		if _has_doctype("Payment Entry Reference"):
-			paid = (
-				frappe.db.sql(
-					"""
-				SELECT SUM(allocated_amount)
-				FROM `tabPayment Entry Reference`
-				WHERE reference_doctype = 'Sales Invoice'
-				  AND reference_name = %s
-				""",
-					(invoice_name,),
-				)[0][0]
-				or 0
-			)
+	rows = frappe.db.sql(
+		"""
+		SELECT name, customer_name
+		FROM `tabCustomer`
+		WHERE name IN %(customers)s
+		""",
+		{"customers": tuple(customers)},
+		as_dict=True,
+	)
 
-			return flt(paid)
-	except Exception:
-		pass
-
-	return 0
+	return {row.get("name"): (row.get("customer_name") or row.get("name")) for row in rows}
 
 
 @frappe.whitelist()
@@ -172,158 +165,106 @@ def get_corporate_billing_statement(
 	if not corporate_customers:
 		return empty_response()
 
-	customer_field = _get_field("Sales Invoice", ["customer"])
-	customer_name_field = _get_field("Sales Invoice", ["customer_name"])
-	posting_date_field = _get_field("Sales Invoice", ["posting_date"])
-	due_date_field = _get_field("Sales Invoice", ["due_date"])
-	grand_total_field = _get_field("Sales Invoice", ["grand_total", "rounded_total"])
-	outstanding_field = _get_field("Sales Invoice", ["outstanding_amount"])
-	paid_field = _get_field("Sales Invoice", ["paid_amount"])
-	is_return_field = _get_field("Sales Invoice", ["is_return"])
-	remarks_field = _get_field("Sales Invoice", ["remarks", "custom_reference", "po_no"])
+	customer_name_map = _get_customer_name_map(corporate_customers)
 
-	guest_field = _get_field(
-		"Sales Invoice",
-		[
-			"custom_guest",
-			"guest",
-			"guest_name",
-			"custom_guest_name",
-			"customer_name",
-		],
-	)
+	ple_conditions = [
+		"ple.docstatus = 1",
+		"ple.account_type = 'Receivable'",
+		"ple.party_type = 'Customer'",
+		"ple.delinked = 0",
+		"ple.posting_date BETWEEN %(date_from)s AND %(date_to)s",
+		"ple.party IN %(corporate_customers)s",
+	]
 
-	company_field = _get_field(
-		"Sales Invoice",
-		[
-			"custom_corporate_company",
-			"corporate_company",
-			"custom_company_name",
-			"company_name",
-			"customer",
-		],
-	)
+	params = {
+		"date_from": str(date_from),
+		"date_to": str(date_to),
+		"corporate_customers": tuple(corporate_customers),
+	}
 
-	conditions = ["docstatus = 1"]
-	params = {}
-
-	if posting_date_field:
-		conditions.append("{0} BETWEEN %(date_from)s AND %(date_to)s".format(posting_date_field))
-		params["date_from"] = date_from
-		params["date_to"] = date_to
-
-	if customer_field:
-		conditions.append("{0} IN %(corporate_customers)s".format(customer_field))
-		params["corporate_customers"] = tuple(corporate_customers)
-
-	if company and customer_field:
-		conditions.append("{0} = %(company)s".format(customer_field))
+	if company:
+		ple_conditions.append("ple.party = %(company)s")
 		params["company"] = company
 
-	if search:
-		search_fields = ["name"]
-
-		for field in [
-			customer_field,
-			customer_name_field,
-			guest_field,
-			company_field,
-			remarks_field,
-		]:
-			if field and field not in search_fields:
-				search_fields.append(field)
-
-		search_sql = []
-
-		for field in search_fields:
-			search_sql.append("{0} LIKE %(search)s".format(field))
-
-		conditions.append("(" + " OR ".join(search_sql) + ")")
-		params["search"] = "%{0}%".format(search)
-
-	select_fields = ["name"]
-
-	for field in [
-		posting_date_field,
-		due_date_field,
-		customer_field,
-		customer_name_field,
-		guest_field,
-		company_field,
-		grand_total_field,
-		paid_field,
-		outstanding_field,
-		is_return_field,
-		remarks_field,
-	]:
-		if field and field not in select_fields:
-			select_fields.append(field)
-
-	sql = """
-		SELECT {fields}
-		FROM `tabSales Invoice`
-		WHERE {conditions}
-		ORDER BY {date_field} DESC, name DESC
-	""".format(
-		fields=", ".join(select_fields),
-		conditions=" AND ".join(conditions),
-		date_field=posting_date_field or "creation",
+	voucher_rows = frappe.db.sql(
+		"""
+		SELECT
+			agg.customer,
+			agg.target_voucher AS invoice,
+			agg.posting_date,
+			agg.billed_amount,
+			agg.paid_amount,
+			agg.outstanding_amount,
+			si.customer_name,
+			si.due_date,
+			IFNULL(si.remarks, '') AS reference,
+			IFNULL(si.is_return, 0) AS is_return
+		FROM (
+			SELECT
+				ple.party AS customer,
+				CASE
+					WHEN IFNULL(ple.against_voucher_type, '') = 'Sales Invoice'
+					 AND IFNULL(ple.against_voucher_no, '') != ''
+					THEN ple.against_voucher_no
+					ELSE ple.voucher_no
+				END AS target_voucher,
+				MAX(ple.posting_date) AS posting_date,
+				SUM(CASE WHEN ple.amount > 0 THEN ple.amount ELSE 0 END) AS billed_amount,
+				SUM(CASE WHEN ple.amount < 0 THEN ABS(ple.amount) ELSE 0 END) AS paid_amount,
+				SUM(ple.amount) AS outstanding_amount
+			FROM `tabPayment Ledger Entry` ple
+			WHERE {conditions}
+			GROUP BY ple.party, target_voucher
+		) agg
+		LEFT JOIN `tabSales Invoice` si ON si.name = agg.target_voucher
+		ORDER BY agg.posting_date DESC, agg.target_voucher DESC
+		""".format(conditions=" AND ".join(ple_conditions)),
+		params,
+		as_dict=True,
 	)
 
-	invoices = frappe.db.sql(sql, params, as_dict=True)
+	search_q = (str(search).strip().lower() if search else "")
 
-	for inv in invoices:
-		invoice_name = inv.get("name")
-		invoice_date = inv.get(posting_date_field) if posting_date_field else ""
-		due_date = inv.get(due_date_field) if due_date_field else ""
+	for row in voucher_rows:
+		customer = row.get("customer") or ""
+		invoice_name = row.get("invoice") or ""
+		invoice_date = row.get("posting_date")
+		due_date = row.get("due_date")
 
-		raw_billed_amount = flt(inv.get(grand_total_field)) if grand_total_field else 0
-		is_return = bool(inv.get(is_return_field)) if is_return_field else raw_billed_amount < 0
-		billed_amount = -abs(raw_billed_amount) if is_return else raw_billed_amount
+		billed_amount = flt(row.get("billed_amount") or 0)
+		paid_amount = flt(row.get("paid_amount") or 0)
+		outstanding_amount = flt(row.get("outstanding_amount") or 0)
 
-		if is_return:
-			paid_amount = 0
-		elif paid_field:
-			paid_amount = flt(inv.get(paid_field))
-		else:
-			paid_amount = _get_payment_amount(invoice_name)
-
-		if outstanding_field:
-			raw_outstanding = flt(inv.get(outstanding_field))
-			outstanding_amount = -abs(raw_outstanding) if is_return else raw_outstanding
-		else:
-			outstanding_amount = billed_amount - paid_amount
-
-		customer = inv.get(customer_field) if customer_field else ""
-		customer_name = inv.get(customer_name_field) if customer_name_field else ""
-		raw_company = inv.get(company_field) if company_field else ""
-
-		company_name = customer_name or raw_company or customer or "Unknown"
-
-		guest = ""
-		if guest_field:
-			guest = inv.get(guest_field) or ""
-
-		if not guest:
-			guest = customer_name or customer or ""
-
-		reference = ""
-		if remarks_field:
-			reference = inv.get(remarks_field) or ""
+		customer_name = row.get("customer_name") or customer_name_map.get(customer) or customer
+		company_name = customer_name or customer or "Unknown"
+		guest = company_name
+		reference = row.get("reference") or ""
 
 		days_overdue = 0
-
 		if due_date:
-			days_overdue = date_diff(nowdate(), due_date)
+			days_overdue = date_diff(str(date_to), due_date)
 
 		bucket = _aging_bucket(days_overdue)
-		computed_status = _billing_status(outstanding_amount, due_date)
+		computed_status = _billing_status(outstanding_amount, due_date, as_of_date=date_to)
 
 		if status and computed_status != status:
 			continue
 
 		if aging_bucket and bucket != aging_bucket:
 			continue
+
+		if search_q:
+			search_blob = " ".join(
+				[
+					str(invoice_name or ""),
+					str(company_name or ""),
+					str(customer or ""),
+					str(guest or ""),
+					str(reference or ""),
+				]
+			).lower()
+			if search_q not in search_blob:
+				continue
 
 		companies.add(customer)
 
@@ -339,7 +280,7 @@ def get_corporate_billing_statement(
 				"billed_amount": billed_amount,
 				"paid_amount": paid_amount,
 				"outstanding_amount": outstanding_amount,
-				"is_return": 1 if is_return else 0,
+				"is_return": int(row.get("is_return") or 0),
 				"aging_bucket": bucket,
 				"status": computed_status,
 			}

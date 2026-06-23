@@ -134,7 +134,7 @@
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Net Total</p>
-          <p class="text-2xl font-bold text-gray-900">₦{{ Number(booking.net_total || 0).toLocaleString() }}</p>
+          <p class="text-2xl font-bold text-gray-900">₦{{ Number((booking.net_total_computed ?? booking.net_total) || 0).toLocaleString() }}</p>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <p class="text-xs text-gray-400 mb-2">Outstanding</p>
@@ -185,7 +185,7 @@
               <div><p class="text-xs text-gray-400 mb-0.5">Total Days</p><p class="text-xs font-semibold text-gray-900">{{ booking.total_days }} day(s)</p></div>
               <div><p class="text-xs text-gray-400 mb-0.5">Total Amount</p><p class="text-xs font-semibold text-gray-900">₦{{ Number(booking.total_amount || 0).toLocaleString() }}</p></div>
               <div v-if="booking.discount_amount"><p class="text-xs text-gray-400 mb-0.5">Discount</p><p class="text-xs font-semibold text-red-500">{{ booking.discount_type === 'Percentage' ? booking.discount_amount + '%' : '₦' + Number(booking.discount_amount).toLocaleString() }}</p></div>
-              <div><p class="text-xs text-gray-400 mb-0.5">Net Total</p><p class="text-xs font-bold text-gray-900">₦{{ Number(booking.net_total || 0).toLocaleString() }}</p></div>
+              <div><p class="text-xs text-gray-400 mb-0.5">Net Total</p><p class="text-xs font-bold text-gray-900">₦{{ Number((booking.net_total_computed ?? booking.net_total) || 0).toLocaleString() }}</p></div>
               <div v-if="booking.sales_invoice"><p class="text-xs text-gray-400 mb-0.5">Invoice</p><p class="text-xs font-semibold text-blue-600">{{ booking.sales_invoice }}</p></div>
             </div>
           </div>
@@ -297,49 +297,49 @@
     <div class="flex justify-between">
       <span class="text-gray-500">Hall Gross</span>
       <span class="font-medium">
-        ₦{{ Number(booking.total_amount || 0).toLocaleString() }}
+        ₦{{ Number(booking.hall_gross_total || booking.total_amount || 0).toLocaleString() }}
       </span>
     </div>
 
     <div class="flex justify-between text-red-500">
       <span>Hall Discount</span>
       <span>
-        –₦{{ Number(hallDiscountValue).toLocaleString() }}
+        –₦{{ Number(booking.hall_discount_value ?? hallDiscountValue).toLocaleString() }}
       </span>
     </div>
 
     <div class="flex justify-between">
       <span class="text-gray-500">Hall Net</span>
       <span class="font-semibold">
-        ₦{{ Number(hallNetTotal).toLocaleString() }}
+        ₦{{ Number(booking.hall_net_total ?? hallNetTotal).toLocaleString() }}
       </span>
     </div>
 
     <div class="border-t border-gray-100 pt-2 flex justify-between">
       <span class="text-gray-500">Services Gross</span>
       <span class="font-medium">
-        ₦{{ Number(servicesGrossTotal).toLocaleString() }}
+        ₦{{ Number(booking.services_gross_total ?? servicesGrossTotal).toLocaleString() }}
       </span>
     </div>
 
     <div class="flex justify-between text-red-500">
       <span>Services Discount</span>
       <span>
-        –₦{{ Number(servicesDiscountTotal).toLocaleString() }}
+        –₦{{ Number(booking.services_discount_total ?? servicesDiscountTotal).toLocaleString() }}
       </span>
     </div>
 
     <div class="flex justify-between">
       <span class="text-gray-500">Services Net</span>
       <span class="font-semibold">
-        ₦{{ Number(servicesNetTotal).toLocaleString() }}
+        ₦{{ Number(booking.services_net_total ?? servicesNetTotal).toLocaleString() }}
       </span>
     </div>
 
     <div class="border-t border-gray-100 pt-2 flex justify-between font-bold">
       <span class="text-gray-700">Net Total</span>
       <span class="text-gray-900">
-        ₦{{ Number(booking.net_total || 0).toLocaleString() }}
+        ₦{{ Number((booking.net_total_computed ?? booking.net_total) || 0).toLocaleString() }}
       </span>
     </div>
 

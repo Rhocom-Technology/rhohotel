@@ -3,11 +3,63 @@ from frappe.utils import flt, nowdate
 import math
 import json
 
+
+def _compute_financial_summary(doc):
+    hall_gross = flt(doc.total_amount or 0)
+    discount_type = (doc.discount_type or "Fixed Amount").strip()
+    discount_amount = flt(doc.discount_amount or 0)
+
+    if discount_type == "Percentage":
+        discount_amount = max(0, min(discount_amount, 100))
+        hall_discount = hall_gross * (discount_amount / 100)
+    else:
+        hall_discount = max(0, min(discount_amount, hall_gross))
+
+    hall_net = max(0, hall_gross - hall_discount)
+
+    services_gross = 0.0
+    services_discount = 0.0
+    services_net = 0.0
+
+    for row in doc.get("additional_billings", []):
+        qty = flt(getattr(row, "qty", 0) or 0)
+        rate = flt(getattr(row, "rate", 0) or 0)
+        line_gross = qty * rate
+
+        row_discount_type = (getattr(row, "discount_type", "Fixed Amount") or "Fixed Amount").strip()
+        row_discount_amount = flt(getattr(row, "discount_amount", 0) or 0)
+
+        if row_discount_type == "Percentage":
+            row_discount_amount = max(0, min(row_discount_amount, 100))
+            line_discount = line_gross * (row_discount_amount / 100)
+        else:
+            line_discount = max(0, min(row_discount_amount, line_gross))
+
+        line_net = max(0, line_gross - line_discount)
+
+        services_gross += line_gross
+        services_discount += line_discount
+        services_net += line_net
+
+    net_total = max(0, hall_net + services_net)
+
+    return {
+        "hall_gross_total": flt(hall_gross),
+        "hall_discount_value": flt(hall_discount),
+        "hall_net_total": flt(hall_net),
+        "services_gross_total": flt(services_gross),
+        "services_discount_total": flt(services_discount),
+        "services_net_total": flt(services_net),
+        "net_total_computed": flt(net_total),
+    }
+
 @frappe.whitelist()
 def get_booking(name):
     doc = frappe.get_doc("Hall Booking", name)
     data = doc.as_dict()
     data["hall_name"] = frappe.db.get_value("Hall", doc.hall, "hall_name") or doc.hall
+    data.update(_compute_financial_summary(doc))
+    data["net_total"] = flt(data.get("net_total_computed") or doc.net_total or 0)
 
     data["payment_status"] = _payment_status(doc)
     data["invoice_grand_total"] = 0.0
@@ -63,7 +115,7 @@ def get_booking(name):
     )
 
     if not has_any_invoice:
-        data["outstanding_amount"] = flt(doc.net_total or 0)
+        data["outstanding_amount"] = flt(data.get("net_total_computed") or doc.net_total or 0)
 
     data["additional_billings"] = [
         {

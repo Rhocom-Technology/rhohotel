@@ -27,14 +27,15 @@ def get_billing_dashboard_data(from_date=None, to_date=None):
     today   = getdate(nowdate())
     from_dt = getdate(from_date) if from_date else add_days(today, -7)
     to_dt   = getdate(to_date)   if to_date   else today
+    as_of_dt = to_dt if to_dt else today
 
     # Corporate customer list — fetched ONCE, passed everywhere
     corp = _get_corporate_customers()
 
     return {
-        "stats":         _build_stats(from_dt, to_dt, today, corp),
+        "stats":         _build_stats(from_dt, to_dt, as_of_dt, corp),
         "activity_feed": _build_activity_feed(from_dt, to_dt, corp),
-        "insights":      _build_insights(today, corp),
+        "insights":      _build_insights(as_of_dt, corp),
     }
 
 
@@ -70,7 +71,8 @@ def _build_stats(from_dt, to_dt, today, corp):
           AND account_type = 'Receivable'
           AND party_type = 'Customer'
           AND delinked = 0
-    """, as_dict=True)[0]
+          AND posting_date <= %(to_dt)s
+    """, {"to_dt": str(to_dt)}, as_dict=True)[0]
 
     total_invoiced    = flt(total_row.total_invoiced)
     total_collected   = flt(total_row.total_collected)
@@ -89,8 +91,9 @@ def _build_stats(from_dt, to_dt, today, corp):
               AND account_type = 'Receivable'
               AND party_type = 'Customer'
               AND delinked = 0
+              AND posting_date <= %(to_dt)s
               AND party IN %(c)s
-        """, {"c": tuple(corp)}, as_dict=True)[0]
+        """, {"c": tuple(corp), "to_dt": str(to_dt)}, as_dict=True)[0]
         corp_invoiced    = flt(corp_row.invoiced)
         corp_collected   = flt(corp_row.collected)
         corp_outstanding = flt(corp_row.outstanding)
@@ -109,8 +112,9 @@ def _build_stats(from_dt, to_dt, today, corp):
               AND account_type = 'Receivable'
               AND party_type = 'Customer'
               AND delinked = 0
+              AND posting_date <= %(to_dt)s
               AND party NOT IN %(c)s
-        """, {"c": tuple(corp)}, as_dict=True)[0]
+        """, {"c": tuple(corp), "to_dt": str(to_dt)}, as_dict=True)[0]
         ind_invoiced    = flt(ind_row.invoiced)
         ind_collected   = flt(ind_row.collected)
         ind_outstanding = flt(ind_row.outstanding)
@@ -119,17 +123,20 @@ def _build_stats(from_dt, to_dt, today, corp):
         ind_collected   = total_collected
         ind_outstanding = total_outstanding
 
-    # ── Overdue — use the stored status field so the value matches the
-    # Sales Invoice list "Overdue" filter / report view total exactly.
-    overdue_row = frappe.db.sql("""
-        SELECT COALESCE(SUM(outstanding_amount), 0) AS overdue
-        FROM `tabSales Invoice`
-        WHERE docstatus = 1
-          AND status = 'Overdue'
-    """, as_dict=True)[0]
+    # ── Overdue/current from allocation-aware aging buckets (PLE consolidated)
+    # This keeps the KPI cards on the same basis as the aging insights.
+    corp_aging = _aging(to_dt, corp, corporate=True)
+    ind_aging = _aging(to_dt, corp, corporate=False)
 
-    total_overdue = flt(overdue_row.overdue)
-    total_current = max(0, total_outstanding - total_overdue)
+    total_overdue = (
+        flt(corp_aging.get("days_1_30"))
+        + flt(corp_aging.get("days_31_60"))
+        + flt(corp_aging.get("days_60_plus"))
+        + flt(ind_aging.get("days_1_30"))
+        + flt(ind_aging.get("days_31_60"))
+        + flt(ind_aging.get("days_60_plus"))
+    )
+    total_current = flt(corp_aging.get("current")) + flt(ind_aging.get("current"))
 
     # ── Unreconciled credit notes ─────────────────────────────────────────────
     credit_row = frappe.db.sql("""
@@ -323,24 +330,46 @@ def _build_insights(today, corp):
 
 
 def _aging(today, corp, corporate=True):
-    """4-bucket aging from PLE net outstanding per voucher, joined to SI for due_date."""
+    """4-bucket aging from allocation-aware receivable balances."""
     if corporate and not corp:
         return {"current": 0.0, "days_1_30": 0.0, "days_31_60": 0.0, "days_60_plus": 0.0, "total": 0.0}
 
-    party_filter = "AND ple.party IN %(c)s" if corporate else "AND ple.party NOT IN %(c)s"
+    if corporate:
+        party_filter = "AND ple.party IN %(c)s"
+        params = {"c": tuple(corp)}
+    elif corp:
+        party_filter = "AND ple.party NOT IN %(c)s"
+        params = {"c": tuple(corp)}
+    else:
+        party_filter = ""
+        params = {}
 
     rows = frappe.db.sql(f"""
-        SELECT si.due_date, SUM(ple.amount) AS outstanding
-        FROM `tabPayment Ledger Entry` ple
-        LEFT JOIN `tabSales Invoice` si ON si.name = ple.voucher_no
-        WHERE ple.docstatus = 1
-          AND ple.account_type = 'Receivable'
-          AND ple.party_type = 'Customer'
-          AND ple.delinked = 0
-          {party_filter}
-        GROUP BY ple.voucher_no
-        HAVING SUM(ple.amount) > 0.5
-    """, {"c": tuple(corp)} if corp else {}, as_dict=True)
+        SELECT
+            t.target_voucher,
+            t.outstanding,
+            si.due_date
+        FROM (
+            SELECT
+                CASE
+                    WHEN IFNULL(ple.against_voucher_type, '') = 'Sales Invoice'
+                     AND IFNULL(ple.against_voucher_no, '') != ''
+                    THEN ple.against_voucher_no
+                    ELSE ple.voucher_no
+                END AS target_voucher,
+                SUM(ple.amount) AS outstanding
+            FROM `tabPayment Ledger Entry` ple
+            WHERE ple.docstatus = 1
+              AND ple.account_type = 'Receivable'
+              AND ple.party_type = 'Customer'
+              AND ple.delinked = 0
+                            AND ple.posting_date <= %(as_of)s
+              {party_filter}
+            GROUP BY target_voucher
+            HAVING SUM(ple.amount) > 0.5
+        ) t
+        LEFT JOIN `tabSales Invoice` si ON si.name = t.target_voucher
+        """, {**params, "as_of": str(today)}, as_dict=True)
 
     current = days_1_30 = days_31_60 = days_60_plus = 0.0
     for r in rows:

@@ -468,6 +468,217 @@ def _get_customers():
 		return []
 
 
+def _get_customer_name_map(customers):
+	if not customers or not _has_doctype("Customer"):
+		return {}
+
+	rows = frappe.db.sql(
+		"""
+		SELECT name, customer_name
+		FROM `tabCustomer`
+		WHERE name IN %(customers)s
+		""",
+		{"customers": tuple(customers)},
+		as_dict=True,
+	)
+
+	return {row.get("name"): (row.get("customer_name") or row.get("name")) for row in rows}
+
+
+def _get_corporate_ple_rows(date_from, date_to, corporate_customers, customer=None):
+	conditions = [
+		"ple.docstatus = 1",
+		"ple.account_type = 'Receivable'",
+		"ple.party_type = 'Customer'",
+		"ple.delinked = 0",
+		"ple.posting_date BETWEEN %(date_from)s AND %(date_to)s",
+		"ple.party IN %(customers)s",
+	]
+	params = {
+		"date_from": str(date_from),
+		"date_to": str(date_to),
+		"customers": tuple(corporate_customers),
+	}
+
+	if customer:
+		conditions.append("ple.party = %(customer)s")
+		params["customer"] = customer
+
+	return frappe.db.sql(
+		"""
+		SELECT
+			ple.name,
+			ple.creation,
+			ple.posting_date,
+			ple.party,
+			ple.voucher_type,
+			ple.voucher_no,
+			ple.against_voucher_type,
+			ple.against_voucher_no,
+			ple.amount,
+			ple.remarks
+		FROM `tabPayment Ledger Entry` ple
+		WHERE {conditions}
+		ORDER BY ple.posting_date ASC, ple.creation ASC, ple.name ASC
+		""".format(conditions=" AND ".join(conditions)),
+		params,
+		as_dict=True,
+	)
+
+
+def _get_corporate_opening_balance(date_from, corporate_customers, customer=None):
+	conditions = [
+		"docstatus = 1",
+		"account_type = 'Receivable'",
+		"party_type = 'Customer'",
+		"delinked = 0",
+		"posting_date < %(date_from)s",
+		"party IN %(customers)s",
+	]
+	params = {"date_from": str(date_from), "customers": tuple(corporate_customers)}
+
+	if customer:
+		conditions.append("party = %(customer)s")
+		params["customer"] = customer
+
+	return flt(
+		frappe.db.sql(
+			"""
+			SELECT SUM(amount)
+			FROM `tabPayment Ledger Entry`
+			WHERE {conditions}
+			""".format(conditions=" AND ".join(conditions)),
+			params,
+		)[0][0]
+		or 0
+	)
+
+
+def _get_voucher_meta_for_corporate_ledger(ple_rows):
+	si_names = set()
+	pe_names = set()
+	je_names = set()
+
+	for row in ple_rows:
+		voucher_type = row.get("voucher_type")
+		voucher_no = row.get("voucher_no")
+		if not voucher_no:
+			continue
+		if voucher_type == "Sales Invoice":
+			si_names.add(voucher_no)
+		elif voucher_type == "Payment Entry":
+			pe_names.add(voucher_no)
+		elif voucher_type == "Journal Entry":
+			je_names.add(voucher_no)
+
+	si_meta = {}
+	if si_names and _has_doctype("Sales Invoice"):
+		rows = frappe.db.sql(
+			"""
+			SELECT name, is_return, remarks
+			FROM `tabSales Invoice`
+			WHERE name IN %(names)s
+			""",
+			{"names": tuple(si_names)},
+			as_dict=True,
+		)
+		si_meta = {row.get("name"): row for row in rows}
+
+	pe_meta = {}
+	if pe_names and _has_doctype("Payment Entry"):
+		rows = frappe.db.sql(
+			"""
+			SELECT name, remarks, reference_no
+			FROM `tabPayment Entry`
+			WHERE name IN %(names)s
+			""",
+			{"names": tuple(pe_names)},
+			as_dict=True,
+		)
+		pe_meta = {row.get("name"): row for row in rows}
+
+	je_meta = {}
+	if je_names and _has_doctype("Journal Entry"):
+		has_user_remark = _has_column("Journal Entry", "user_remark")
+		has_remark = _has_column("Journal Entry", "remark")
+
+		if has_user_remark and has_remark:
+			remarks_field = "CONCAT_WS('\\n', NULLIF(user_remark, ''), NULLIF(remark, '')) AS remarks"
+		elif has_user_remark:
+			remarks_field = "user_remark AS remarks"
+		elif has_remark:
+			remarks_field = "remark AS remarks"
+		else:
+			remarks_field = "'' AS remarks"
+
+		rows = frappe.db.sql(
+			"""
+			SELECT name, {remarks_field}
+			FROM `tabJournal Entry`
+			WHERE name IN %(names)s
+			""".format(remarks_field=remarks_field),
+			{"names": tuple(je_names)},
+			as_dict=True,
+		)
+		je_meta = {row.get("name"): row for row in rows}
+
+	return {
+		"sales_invoice": si_meta,
+		"payment_entry": pe_meta,
+		"journal_entry": je_meta,
+	}
+
+
+def _corporate_transaction_type(ple_row, voucher_meta):
+	voucher_type = ple_row.get("voucher_type") or ""
+	amount = flt(ple_row.get("amount") or 0)
+
+	if voucher_type == "Sales Invoice":
+		si = voucher_meta.get("sales_invoice", {}).get(ple_row.get("voucher_no"), {})
+		if int(si.get("is_return") or 0) or amount < 0:
+			return "Credit Note"
+		return "Sales Invoice"
+
+	if voucher_type == "Payment Entry":
+		return "Payment Entry"
+
+	if voucher_type == "Journal Entry":
+		je = voucher_meta.get("journal_entry", {}).get(ple_row.get("voucher_no"), {})
+		text = "{0} {1}".format(ple_row.get("remarks") or "", je.get("remarks") or "").lower()
+		if "bill transfer" in text:
+			return "Bill Transfer"
+		return "Journal Entry"
+
+	return voucher_type or "Ledger Entry"
+
+
+def _corporate_description(ple_row, voucher_meta):
+	if ple_row.get("remarks"):
+		return ple_row.get("remarks")
+
+	voucher_type = ple_row.get("voucher_type") or ""
+	voucher_no = ple_row.get("voucher_no")
+
+	if voucher_type == "Sales Invoice":
+		si = voucher_meta.get("sales_invoice", {}).get(voucher_no, {})
+		if si.get("remarks"):
+			return si.get("remarks")
+
+	if voucher_type == "Payment Entry":
+		pe = voucher_meta.get("payment_entry", {}).get(voucher_no, {})
+		if pe.get("remarks"):
+			return pe.get("remarks")
+		if pe.get("reference_no"):
+			return pe.get("reference_no")
+
+	if voucher_type == "Journal Entry":
+		je = voucher_meta.get("journal_entry", {}).get(voucher_no, {})
+		if je.get("remarks"):
+			return je.get("remarks")
+
+	return "{0} {1}".format(voucher_type or "Transaction", voucher_no or "").strip()
+
+
 @frappe.whitelist()
 def get_corporate_account_statement(
 	date_from=None,
@@ -480,42 +691,93 @@ def get_corporate_account_statement(
 ):
 	date_from = _date_or_default(date_from, add_days(nowdate(), -30))
 	date_to = _date_or_default(date_to, nowdate())
- 
+
 	corporate_customers = _get_corporate_customers()
+	if not corporate_customers:
+		return {
+			"rows": [],
+			"customers": [],
+			"account_summary": [],
+			"account_summary_total": 0,
+			"account_summary_page": 1,
+			"account_summary_page_size": int(account_page_size or 10),
+			"account_summary_total_pages": 1,
+			"summary": {
+				"opening_balance": 0,
+				"total_debit": 0,
+				"total_credit": 0,
+				"closing_balance": 0,
+				"transaction_count": 0,
+				"customer_count": 0,
+			},
+		}
 
 	if customer and customer not in corporate_customers:
 		customer = "__invalid__"
- 
-	
 
-	invoice_rows = _get_sales_invoice_rows(date_from, date_to, customer, search)
-	payment_rows = _get_payment_rows(date_from, date_to, customer, search)
-	bill_transfer_rows = _get_bill_transfer_rows(date_from, date_to, customer, search)
+	ple_rows = _get_corporate_ple_rows(date_from, date_to, corporate_customers, customer=customer)
+	voucher_meta = _get_voucher_meta_for_corporate_ledger(ple_rows)
+	name_map = _get_customer_name_map(corporate_customers)
 
-	rows = invoice_rows + payment_rows + bill_transfer_rows
+	rows = []
+	for ple in ple_rows:
+		debit = flt(ple.get("amount") or 0) if flt(ple.get("amount") or 0) > 0 else 0
+		credit = abs(flt(ple.get("amount") or 0)) if flt(ple.get("amount") or 0) < 0 else 0
+		trans_type = _corporate_transaction_type(ple, voucher_meta)
+
+		row = {
+			"date": str(ple.get("posting_date") or ""),
+			"party": ple.get("party") or "",
+			"party_name": name_map.get(ple.get("party")) or _get_customer_display(ple.get("party")),
+			"transaction_type": trans_type,
+			"reference": ple.get("voucher_no") or "",
+			"description": _corporate_description(ple, voucher_meta),
+			"debit": debit,
+			"credit": credit,
+			"outstanding": 0,
+			"source": ple.get("voucher_type") or "",
+			"_creation": str(ple.get("creation") or ""),
+			"_name": ple.get("name") or "",
+		}
+		rows.append(row)
 
 	if transaction_type:
 		rows = [row for row in rows if row.get("transaction_type") == transaction_type]
 
-	rows = sorted(rows, key=lambda x: (str(x.get("date") or ""), str(x.get("reference") or "")))
+	if search:
+		q = str(search).lower().strip()
+		rows = [
+			row
+			for row in rows
+			if q in str(row.get("party") or "").lower()
+			or q in str(row.get("party_name") or "").lower()
+			or q in str(row.get("reference") or "").lower()
+			or q in str(row.get("description") or "").lower()
+			or q in str(row.get("transaction_type") or "").lower()
+		]
 
-	opening_balance = _get_opening_balance(date_from, customer)
+	rows = sorted(
+		rows,
+		key=lambda x: (str(x.get("date") or ""), str(x.get("_creation") or ""), str(x.get("reference") or ""), str(x.get("_name") or "")),
+	)
+
+	opening_balance = _get_corporate_opening_balance(date_from, corporate_customers, customer=customer)
 	running_balance = opening_balance
 
 	for row in rows:
 		running_balance += flt(row.get("debit")) - flt(row.get("credit"))
 		row["running_balance"] = running_balance
+		row.pop("_creation", None)
+		row.pop("_name", None)
 
 	total_debit = sum(flt(row.get("debit")) for row in rows)
 	total_credit = sum(flt(row.get("credit")) for row in rows)
 	closing_balance = opening_balance + total_debit - total_credit
 
 	account_map = {}
-
 	for row in rows:
 		party = row.get("party") or "Unknown"
 		party_name = row.get("party_name") or party
-
 		if party not in account_map:
 			account_map[party] = {
 				"customer": party,
@@ -532,7 +794,6 @@ def get_corporate_account_statement(
 		account_map[party]["balance"] += flt(row.get("debit")) - flt(row.get("credit"))
 
 	account_summary = sorted(account_map.values(), key=lambda x: flt(x.get("balance")), reverse=True)
-
 	account_summary_page = _paginate(account_summary, account_page, account_page_size)
 
 	return {

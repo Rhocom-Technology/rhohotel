@@ -33,12 +33,15 @@ def _to_date_str(value):
     return str(value)[:10]
 
 
-def _get_guest_profiles(guest=None):
+def _get_guest_profiles(guest=None, include_corporate=0):
     if not _has_doctype("Hotel Guest"):
         return []
 
     conditions = ["IFNULL(hg.customer, '') != ''"]
     params = {}
+
+    if not int(include_corporate or 0):
+        conditions.append("IFNULL(hg.guest_type, '') != 'Corporate'")
 
     if guest:
         conditions.append("hg.name = %(guest)s")
@@ -499,11 +502,12 @@ def get_guest_ledger_report(
     room_type=None,
     transaction_type=None,
     search=None,
+    include_corporate=0,
 ):
     date_from = _date_or_default(date_from, add_days(nowdate(), -30))
     date_to = _date_or_default(date_to, nowdate())
 
-    guest_profiles = _get_guest_profiles(guest=guest)
+    guest_profiles = _get_guest_profiles(guest=guest, include_corporate=include_corporate)
     customers, customer_to_guest, guest_options = _build_guest_scope(guest_profiles, selected_guest=guest)
 
     if not customers:

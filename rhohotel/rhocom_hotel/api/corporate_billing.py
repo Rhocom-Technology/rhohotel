@@ -87,6 +87,7 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 
 	conditions = [
 		"si.docstatus = 1",
+		"IFNULL(si.is_return, 0) = 0",
 		"si.customer IN %(corporate_customers)s",
 	]
 
@@ -145,43 +146,128 @@ def get_corporate_bills(search=None, client=None, status=None, page=1, page_size
 			"action": _bill_action(computed_status),
 		})
 
-	total_outstanding = sum(flt(inv.outstanding_amount) for inv in invoices)
-
-	overdue_count = sum(
-		1 for inv in invoices
-		if _billing_status(inv.grand_total, inv.outstanding_amount, inv.due_date) == "Overdue"
-	)
-
 	today = nowdate()
 	month_start = "{}-{}-01".format(today[:4], today[5:7])
 
-	paid_this_month_sql = """
-		SELECT COALESCE(SUM(per.allocated_amount), 0)
-		FROM `tabPayment Entry Reference` per
-		JOIN `tabPayment Entry` pe ON per.parent = pe.name
-		JOIN `tabSales Invoice` si ON per.reference_name = si.name
-		WHERE per.reference_doctype = 'Sales Invoice'
-		  AND pe.docstatus = 1
-		  AND pe.payment_type = 'Receive'
-		  AND pe.posting_date >= %(month_start)s
-		  AND si.customer IN %(corporate_customers)s
-	"""
+	# Consolidated PLE summary (GL-consistent): group by effective target voucher
+	# so invoice rows, allocations, JE adjustments, and transfers net the same
+	# way as ERP consolidated voucher views.
+	summary_customers = tuple(corporate_customers)
+	if client:
+		matched_customers = frappe.db.sql(
+			"""
+			SELECT name
+			FROM `tabCustomer`
+			WHERE name IN %(customers)s
+			  AND (name = %(client)s OR customer_name = %(client)s)
+			""",
+			{"customers": tuple(corporate_customers), "client": client},
+			as_dict=True,
+		)
+		summary_customers = tuple([row.name for row in matched_customers])
 
-	paid_this_month = flt(
-		frappe.db.sql(
-			paid_this_month_sql,
-			{
-				"month_start": month_start,
-				"corporate_customers": tuple(corporate_customers),
-			}
-		)[0][0] or 0
+	consolidated_rows = []
+	if summary_customers:
+		consolidated_rows = frappe.db.sql(
+			"""
+			SELECT
+				agg.customer,
+				agg.target_voucher,
+				agg.outstanding_amount,
+				si.customer_name,
+				si.due_date
+			FROM (
+				SELECT
+					ple.party AS customer,
+					CASE
+						WHEN IFNULL(ple.against_voucher_type, '') = 'Sales Invoice'
+						 AND IFNULL(ple.against_voucher_no, '') != ''
+						THEN ple.against_voucher_no
+						ELSE ple.voucher_no
+					END AS target_voucher,
+					SUM(ple.amount) AS outstanding_amount
+				FROM `tabPayment Ledger Entry` ple
+				WHERE ple.docstatus = 1
+				  AND ple.account_type = 'Receivable'
+				  AND ple.party_type = 'Customer'
+				  AND ple.delinked = 0
+				  AND ple.party IN %(customers)s
+				GROUP BY ple.party, target_voucher
+				HAVING SUM(ple.amount) > 0.5
+			) agg
+			LEFT JOIN `tabSales Invoice` si ON si.name = agg.target_voucher
+			""",
+			{"customers": summary_customers},
+			as_dict=True,
+		)
+
+	if status:
+		consolidated_rows = [
+			row for row in consolidated_rows
+			if _billing_status(row.get("outstanding_amount"), row.get("outstanding_amount"), row.get("due_date")) == status
+		]
+
+	if search:
+		q = str(search).lower().strip()
+		consolidated_rows = [
+			row
+			for row in consolidated_rows
+			if q in str(row.get("target_voucher") or "").lower()
+			or q in str(row.get("customer") or "").lower()
+			or q in str(row.get("customer_name") or "").lower()
+		]
+
+	consolidated_outstanding = sum(flt(row.get("outstanding_amount")) for row in consolidated_rows)
+	consolidated_overdue = sum(
+		1
+		for row in consolidated_rows
+		if _billing_status(row.get("outstanding_amount"), row.get("outstanding_amount"), row.get("due_date")) == "Overdue"
 	)
 
+	# For unfiltered summary cards, show net receivable exposure (GL-consistent)
+	# so customer credits and over-allocations offset invoice debits.
+	if summary_customers and not status and not search:
+		consolidated_outstanding = flt(
+			frappe.db.sql(
+				"""
+				SELECT COALESCE(SUM(ple.amount), 0)
+				FROM `tabPayment Ledger Entry` ple
+				WHERE ple.docstatus = 1
+				  AND ple.account_type = 'Receivable'
+				  AND ple.party_type = 'Customer'
+				  AND ple.delinked = 0
+				  AND ple.party IN %(customers)s
+				""",
+				{"customers": summary_customers},
+			)[0][0]
+			or 0
+		)
+
+	paid_this_month_gl = 0
+	if summary_customers:
+		paid_this_month_gl = flt(
+			frappe.db.sql(
+				"""
+				SELECT COALESCE(SUM(ABS(ple.amount)), 0)
+				FROM `tabPayment Ledger Entry` ple
+				WHERE ple.docstatus = 1
+				  AND ple.account_type = 'Receivable'
+				  AND ple.party_type = 'Customer'
+				  AND ple.delinked = 0
+				  AND ple.amount < 0
+				  AND ple.posting_date >= %(month_start)s
+				  AND ple.party IN %(customers)s
+				""",
+				{"month_start": month_start, "customers": summary_customers},
+			)[0][0]
+			or 0
+		)
+
 	summary = {
-		"activeBills": len([b for b in bills if b["status"] in ("Unpaid", "Part Paid", "Overdue")]),
-		"outstandingValue": _fmt_currency(total_outstanding),
-		"paidThisMonth": _fmt_currency(paid_this_month),
-		"overdueCount": overdue_count,
+		"activeBills": len(consolidated_rows),
+		"outstandingValue": _fmt_currency(consolidated_outstanding),
+		"paidThisMonth": _fmt_currency(paid_this_month_gl),
+		"overdueCount": consolidated_overdue,
 	}
 
 	total = len(bills)
