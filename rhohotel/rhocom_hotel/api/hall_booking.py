@@ -294,14 +294,30 @@ def get_hall_rate(hall_name):
 def get_services():
     return frappe.db.sql("""
         SELECT
-            item_code AS name,
-            item_name AS service,
-            standard_rate AS rate,
-            item_code AS item_name
-        FROM `tabItem`
-        WHERE disabled = 0
-          AND item_group = 'Hall Service'
-        ORDER BY item_name ASC
+            i.item_code AS name,
+            i.item_name AS service,
+            COALESCE(
+                (
+                    SELECT ip.price_list_rate
+                    FROM `tabItem Price` ip
+                    WHERE ip.item_code = i.item_code
+                      AND ip.selling = 1
+                      AND (ip.valid_from IS NULL OR ip.valid_from <= CURDATE())
+                      AND (ip.valid_upto IS NULL OR ip.valid_upto >= CURDATE())
+                    ORDER BY
+                        (ip.price_list = 'Standard Selling') DESC,
+                        ip.valid_from DESC,
+                        ip.modified DESC
+                    LIMIT 1
+                ),
+                i.standard_rate,
+                0
+            ) AS rate,
+            i.item_code AS item_name
+        FROM `tabItem` i
+        WHERE i.disabled = 0
+          AND i.item_group = 'Hall Service'
+        ORDER BY i.item_name ASC
     """, as_dict=True)
 
 
