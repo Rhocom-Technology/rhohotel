@@ -42,19 +42,45 @@
         <!-- Guest selector from active check-ins -->
         <div class="mb-4">
           <p class="text-xs text-gray-500 mb-1.5">Quick Fill: Select Active Guest <span class="text-gray-400 font-normal">(optional — or type guest name below)</span></p>
-          <select v-model="selectedCheckIn" @change="onCheckinSelect" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
-            <option value="">-- Select a checked-in guest to auto-fill --</option>
-            <option v-for="c in checkins" :key="c.check_in" :value="c.check_in">
-              {{ c.guest }} — Room {{ c.room_number }}
-            </option>
-          </select>
+          <div class="relative">
+            <input v-model="activeCheckInQuery" type="text" placeholder="Search checked-in guest, room, or check-in..."
+              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              @focus="activeCheckInOpen = true" @input="activeCheckInOpen = true" @blur="closeActiveCheckInSearch" />
+            <div v-if="activeCheckInOpen" class="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+              <div v-if="checkinsResource.loading" class="px-4 py-3 text-xs text-gray-400">Loading checked-in guests...</div>
+              <button v-else-if="selectedCheckIn" type="button" class="w-full text-left px-4 py-2.5 text-xs text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+                @mousedown.prevent="clearCheckinSelect">
+                Clear active guest selection
+              </button>
+              <button v-for="c in filteredCheckins" :key="c.check_in" type="button"
+                class="w-full text-left px-4 py-2.5 text-xs hover:bg-blue-50 border-b border-gray-50 last:border-0"
+                @mousedown.prevent="selectCheckin(c)">
+                <span class="font-semibold text-gray-800">{{ c.guest }}</span>
+                <span class="text-gray-400 ml-2">Room {{ c.room_number }} • {{ c.check_in }}</span>
+              </button>
+              <div v-if="!checkinsResource.loading && filteredCheckins.length === 0" class="px-4 py-3 text-xs text-gray-400">No active guest found.</div>
+            </div>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Guest</p>
-            <input v-model="form.guest" type="text" placeholder="Guest name"
-              class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div class="relative">
+              <input v-model="form.guest" type="text" placeholder="Search or type guest name"
+                class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                @focus="openGuestSearch" @input="onGuestSearchInput" @blur="closeGuestSearch" />
+              <div v-if="guestSearchOpen" class="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                <div v-if="guestSearching" class="px-4 py-3 text-xs text-gray-400">Searching guests...</div>
+                <button v-for="g in guestResults" :key="g.name" type="button"
+                  class="w-full text-left px-4 py-2.5 text-xs hover:bg-blue-50 border-b border-gray-50 last:border-0"
+                  @mousedown.prevent="selectGuest(g)">
+                  <span class="font-semibold text-gray-800">{{ g.hotel_guest_name || g.name }}</span>
+                  <span class="text-gray-400 ml-2">{{ g.phone_number || g.email || g.name }}</span>
+                </button>
+                <div v-if="!guestSearching && form.guest && guestResults.length === 0" class="px-4 py-3 text-xs text-gray-400">No guest found. You can keep the typed name.</div>
+              </div>
+            </div>
           </div>
           <div>
             <p class="text-xs text-gray-500 mb-1.5">Room</p>
@@ -372,6 +398,8 @@ async function onLateCheckoutTimeChange() {
 // ── Active check-ins for guest/room dropdowns ─────────────────────────────────
 const checkins = ref([])
 const selectedCheckIn = ref('')
+const activeCheckInQuery = ref('')
+const activeCheckInOpen = ref(false)
 
 const checkinsResource = createResource({
   url: 'rhohotel.rhocom_hotel.api.complimentary.get_active_checkins',
@@ -380,22 +408,84 @@ const checkinsResource = createResource({
   },
 })
 
-function onCheckinSelect() {
-  const selected = checkins.value.find(c => c.check_in === selectedCheckIn.value)
-  if (selected) {
-    form.check_in = selected.check_in
-    form.reservation = selected.reservation || ''
-    form.guest = selected.guest
-    form.room = selected.room_number
-    if (form.complimentary_type === 'Room Upgrade') loadUpgradeRooms()
-    if (form.complimentary_type === 'Late Checkout' && form.late_checkout_time) onLateCheckoutTimeChange()
-  } else {
-    form.check_in = ''
-    form.reservation = ''
-    upgradeRooms.value = []
-    upgradePreview.value = null
-    lateCheckoutPreview.value = null
+const filteredCheckins = computed(() => {
+  const q = activeCheckInQuery.value.trim().toLowerCase()
+  if (!q) return checkins.value
+  return checkins.value.filter((c) =>
+    String(c.guest || '').toLowerCase().includes(q) ||
+    String(c.room_number || '').toLowerCase().includes(q) ||
+    String(c.check_in || '').toLowerCase().includes(q)
+  )
+})
+
+function selectCheckin(selected) {
+  selectedCheckIn.value = selected.check_in
+  activeCheckInQuery.value = `${selected.guest} — Room ${selected.room_number}`
+  activeCheckInOpen.value = false
+  form.check_in = selected.check_in
+  form.reservation = selected.reservation || ''
+  form.guest = selected.guest
+  form.room = selected.room_number
+  if (form.complimentary_type === 'Room Upgrade') loadUpgradeRooms()
+  if (form.complimentary_type === 'Late Checkout' && form.late_checkout_time) onLateCheckoutTimeChange()
+}
+
+function clearCheckinSelect() {
+  selectedCheckIn.value = ''
+  activeCheckInQuery.value = ''
+  activeCheckInOpen.value = false
+  form.check_in = ''
+  form.reservation = ''
+  upgradeRooms.value = []
+  upgradePreview.value = null
+  lateCheckoutPreview.value = null
+}
+
+function closeActiveCheckInSearch() {
+  setTimeout(() => { activeCheckInOpen.value = false }, 150)
+}
+
+// ── Guest search ─────────────────────────────────────────────────────────────
+const guestSearchOpen = ref(false)
+const guestSearching = ref(false)
+const guestResults = ref([])
+let guestSearchTimer = null
+
+function openGuestSearch() {
+  guestSearchOpen.value = true
+  searchGuests()
+}
+
+function onGuestSearchInput() {
+  guestSearchOpen.value = true
+  selectedCheckIn.value = ''
+  form.check_in = ''
+  form.reservation = ''
+  clearTimeout(guestSearchTimer)
+  guestSearchTimer = setTimeout(searchGuests, 250)
+}
+
+function closeGuestSearch() {
+  setTimeout(() => { guestSearchOpen.value = false }, 150)
+}
+
+async function searchGuests() {
+  const query = form.guest.trim()
+  guestSearching.value = true
+  try {
+    const rows = await fetch('/api/method/rhohotel.rhocom_hotel.api.checkin.search_guests?' + new URLSearchParams({ query }).toString())
+    const data = await rows.json()
+    guestResults.value = Array.isArray(data.message) ? data.message : []
+  } catch {
+    guestResults.value = []
+  } finally {
+    guestSearching.value = false
   }
+}
+
+function selectGuest(guest) {
+  form.guest = guest.hotel_guest_name || guest.name || ''
+  guestSearchOpen.value = false
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────

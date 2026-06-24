@@ -240,28 +240,55 @@ def _record_response(doc, audit_trail=None):
     }
 
 
+def _guest_identity_values(guest):
+    """Return guest values that may be stored on Hotel Complimentary.guest."""
+    guest = cstr(guest).strip()
+    if not guest:
+        return []
+
+    values = [guest]
+    if frappe.db.exists("Hotel Guest", guest):
+        guest_name = frappe.db.get_value("Hotel Guest", guest, "hotel_guest_name")
+        if guest_name:
+            values.append(guest_name)
+    else:
+        for row in frappe.get_all(
+            "Hotel Guest",
+            filters={"hotel_guest_name": guest},
+            fields=["name"],
+            limit=5,
+        ):
+            if row.name:
+                values.append(row.name)
+
+    seen = set()
+    return [value for value in values if not (value in seen or seen.add(value))]
+
+
 def _identity_conditions(check_in=None, room=None, guest=None):
     """Build WHERE conditions to match a complimentary to a guest/check-in.
 
-    Priority: if a check_in name is given it takes sole precedence — we never
-    fall back to room/guest matching when we have a concrete check-in link.
-    This prevents vouchers that belonged to a previous guest in the same room
-    from surfacing on a new check-in.
+    When a check-in is known, match records linked directly to it or issued to
+    the same guest. Do not fall back to room-only matching in that case; doing
+    so can surface vouchers from a previous guest in the same room.
     """
     conditions = []
     params = {}
+    guest_values = _guest_identity_values(guest)
     if check_in:
-        # Strict: only records explicitly linked to this check-in
         conditions.append("check_in = %(check_in)s")
         params["check_in"] = check_in
+        if guest_values:
+            conditions.append("guest IN %(guest_values)s")
+            params["guest_values"] = tuple(guest_values)
     else:
         # Fallback for callers (e.g. POS) that don't have a check-in name
         if room:
             conditions.append("room = %(room)s")
             params["room"] = room
-        if guest:
-            conditions.append("guest = %(guest)s")
-            params["guest"] = guest
+        if guest_values:
+            conditions.append("guest IN %(guest_values)s")
+            params["guest_values"] = tuple(guest_values)
     return conditions, params
 
 
