@@ -199,7 +199,7 @@
                     <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
                   </td>
                   <td class="py-2.5 pr-2">
-                    <select v-model="part.warehouse"
+                    <select v-model="part.warehouse" @change="onWarehouseSelect(part)"
                       class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
                       <option value="">— select warehouse —</option>
                       <option v-for="w in warehouses" :key="w.name" :value="w.name">
@@ -272,7 +272,7 @@
                     <div class="px-2 py-1.5 text-xs text-gray-500">{{ part.uom || '—' }}</div>
                   </td>
                   <td class="py-2.5 pr-2">
-                    <select v-model="part.warehouse"
+                    <select v-model="part.warehouse" @change="onWarehouseSelect(part)"
                       class="w-full px-2 py-1.5 text-xs border border-gray-200 rounded">
                       <option value="">— select warehouse —</option>
                       <option v-for="w in warehouses" :key="w.name" :value="w.name">
@@ -479,12 +479,37 @@ const validationErrors = computed(() => {
   return errors
 })
 
-// ─── Part select: auto-fill UOM ───────────────────────────────────────────────
-function onPartSelect(part) {
+// ─── Part select: auto-fill UOM and available stock ───────────────────────────
+async function onPartSelect(part) {
   const item = stockItems.value.find(i => i.name === part.item_code)
   if (item) {
     part.item_name = item.item_name || item.name
     part.uom = item.stock_uom || ''
+    part.available_qty = Number(item.available_qty || item.actual_qty || 0)
+  } else {
+    part.item_name = ''
+    part.uom = ''
+    part.available_qty = 0
+  }
+
+  await refreshAvailableQty(part)
+}
+
+async function onWarehouseSelect(part) {
+  await refreshAvailableQty(part)
+}
+
+async function refreshAvailableQty(part) {
+  if (!part.item_code) {
+    part.available_qty = 0
+    return
+  }
+
+  try {
+    const res = await qtyResource.fetch({ item_code: part.item_code, warehouse: part.warehouse || '' })
+    part.available_qty = Number(res?.available_qty || 0)
+  } catch (_e) {
+    // Keep the current value if the lookup fails.
   }
 }
 
@@ -493,6 +518,7 @@ const techResource    = createResource({ url: 'rhohotel.rhocom_hotel.api.mainten
 const supResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_supervisors_for_task', auto: false })
 const itemsResource   = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_items_for_parts', auto: false })
 const whResource      = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_warehouses_for_parts', auto: false })
+const qtyResource     = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.get_item_available_qty', auto: false })
 const assetRes        = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_request.get_assets_for_request', auto: false })
 const createResource_ = createResource({ url: 'rhohotel.rhocom_hotel.api.maintenance_task.create_maintenance_task', auto: false })
 

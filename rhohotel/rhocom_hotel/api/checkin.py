@@ -882,6 +882,20 @@ def create_checkin(
                 f"(Check-in: {existing_row_ref.get('check_in_reference')})."
             )
 
+        if frappe.db.exists("Hotel Reservation", canonical_reservation):
+            from rhohotel.rhocom_hotel.doctype.hotel_reservation.hotel_reservation import (
+                _reservation_check_in_invoice_required_message,
+                _reservation_room_has_required_invoice,
+            )
+
+            reservation_doc = frappe.get_doc("Hotel Reservation", canonical_reservation)
+            reservation_room = next(
+                (row for row in (reservation_doc.rooms or []) if row.room_number == room_number),
+                None,
+            )
+            if reservation_room and not _reservation_room_has_required_invoice(reservation_doc, reservation_room):
+                frappe.throw(_reservation_check_in_invoice_required_message(reservation_doc, reservation_room))
+
     # Ensure the room is actually available at this time.
     assert_room_available(
         room_number,

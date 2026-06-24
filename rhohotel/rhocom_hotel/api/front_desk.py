@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, add_to_date, flt, cstr
+from frappe.utils import now_datetime, add_to_date, flt, cstr, cint
 import json
 
 
@@ -197,8 +197,19 @@ def get_room_view_data(filters=None):
 			hr.corporate_guest,
 			hr.customer,
 			hr.reservation_type,
+			hr.group_billing_mode,
+			hr.sales_invoice,
 			hr.from_date,
-			hr.to_date
+			hr.to_date,
+			rr.name AS reservation_room_row,
+			rr.split_invoice,
+			EXISTS (
+				SELECT 1
+				FROM `tabHotel Reservation Invoice` hri
+				WHERE hri.parent = hr.name
+				  AND IFNULL(hri.invoice, '') != ''
+				  AND IFNULL(hri.is_return, 0) = 0
+			) AS has_reservation_invoice
 		FROM `tabHotel Reservation Room` rr
 		INNER JOIN `tabHotel Reservation` hr ON hr.name = rr.parent
 		WHERE hr.docstatus != 2
@@ -243,6 +254,11 @@ def get_room_view_data(filters=None):
 			"check_in": checkin.get("name"),
 			"reservation": reservation.get("reservation"),
 			"reservation_type": reservation.get("reservation_type"),
+			"group_billing_mode": reservation.get("group_billing_mode"),
+			"sales_invoice": reservation.get("sales_invoice"),
+			"reservation_room_row": reservation.get("reservation_room_row"),
+			"split_invoice": reservation.get("split_invoice"),
+			"reservation_has_posted_invoice": bool(reservation.get("sales_invoice") or cint(reservation.get("has_reservation_invoice") or 0)),
 			"reservation_arrival": reservation.get("from_date"),
 			"reservation_departure": reservation.get("to_date"),
 			"reserved_for": reservation.get("primary_guest_name"),
