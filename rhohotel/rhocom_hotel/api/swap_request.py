@@ -659,7 +659,7 @@ def approve_swap_request(name, manager_note=None):
     }
 
     result = _apply_draft_assignments(
-        department=None,
+        department=doc.department,
         week_start=getdate(doc.swap_date),
         assignments=assignments,
         publish=True,
