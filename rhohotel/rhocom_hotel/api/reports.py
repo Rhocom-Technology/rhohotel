@@ -30,6 +30,35 @@ def _logo_to_data_uri(logo_path):
     except Exception:
         return ""
 
+def _get_hotel_branding(settings, company):
+    """
+    Shared helper — returns (hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email)
+    from Hotel Settings and the Frappe Company record.
+    Used by all download functions so branding is never duplicated.
+    """
+    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
+    hotel_tagline = settings.get("hotel_tagline") or ""
+    hotel_address = settings.get("hotel_address") or ""
+    hotel_phone   = ""
+    hotel_email   = ""
+    try:
+        company_doc = frappe.get_doc("Company", company)
+        hotel_phone = company_doc.get("phone_no") or ""
+        hotel_email = company_doc.get("email") or ""
+        if not hotel_address:
+            parts = [
+                company_doc.get("address_line1") or "",
+                company_doc.get("address_line2") or "",
+                company_doc.get("city") or "",
+                company_doc.get("state") or "",
+                company_doc.get("country") or "",
+            ]
+            hotel_address = ", ".join(p for p in parts if p)
+    except Exception:
+        pass
+    return hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email
+
+
 @frappe.whitelist()
 def download_daily_occupancy_report(
     date_from=None,
@@ -60,29 +89,31 @@ def download_daily_occupancy_report(
         or "Hotel"
     )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": result.get("rows", []),
-        "stats": result.get("stats", {}),
-        "totals": result.get("totals", {}),
-        "filters": result.get("filters", {}),
-        "generated_at": result.get("generated_at", ""),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "stats":         result.get("stats", {}),
+        "totals":        result.get("totals", {}),
+        "filters":       result.get("filters", {}),
+        "generated_at":  result.get("generated_at", ""),
+        "prepared_by":   frappe.session.user,
         "applied_filters": {
-            "room": room or "All Rooms",
-            "floor": floor or "All Floors",
-            "status": status or "All Status",
-            "payment": payment or "All Payment",
-            "search": search or "",
+            "room":        room or "",
+            "floor":       floor or "",
+            "status":      status or "",
+            "payment":     payment or "",
+            "search":      search or "",
             "overdue_only": "Yes" if str(overdue_only) == "1" else "No"
         }
     }
-
-    # html = frappe.render_template(
-    #     "rhohotel/rhocom_hotel/templates/reports/daily_occupancy_report.html",
-    #     context
-    # )
-    
-    settings = frappe.get_single("Hotel Settings")
 
     print_format = settings.daily_occupancy_print_format
 
@@ -103,7 +134,14 @@ def download_daily_occupancy_report(
         context
     )
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Daily-Occupancy-Report-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or date_from,
@@ -152,23 +190,31 @@ def download_guest_stay_history_report(
         or "Hotel"
     )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": result.get("rows", []),
-        "stats": result.get("stats", {}),
-        "totals": result.get("totals", {}),
-        "filters": result.get("filters", {}),
-        "generated_at": result.get("generated_at", ""),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "stats":         result.get("stats", {}),
+        "totals":        result.get("totals", {}),
+        "filters":       result.get("filters", {}),
+        "generated_at":  result.get("generated_at", ""),
+        "prepared_by":   frappe.session.user,
         "applied_filters": {
-            "guest_type": guest_type or "All Guests",
-            "room_type": room_type or "All Room Types",
-            "payment": payment or "All Payment Status",
-            "source": source or "All Channels",
-            "search": search or ""
+            "guest_type": guest_type or "",
+            "room_type":  room_type or "",
+            "payment":    payment or "",
+            "source":     source or "",
+            "search":     search or ""
         }
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.guest_stay_history_print_format
 
     if not print_format:
@@ -185,7 +231,14 @@ def download_guest_stay_history_report(
 
     html = frappe.render_template(html_template, context)
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Guest-Stay-History-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or date_from,
@@ -444,28 +497,11 @@ def download_corporate_billing_statement_report(
     # Pull hotel branding from Hotel Settings and Company record
     settings = frappe.get_single("Hotel Settings")
 
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-
-    # Try to enrich with company phone/email/website from Frappe Company doctype
-    hotel_phone = ""
-    hotel_email = ""
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, hotel_company)
     hotel_website = ""
     try:
         company_doc = frappe.get_doc("Company", hotel_company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
         hotel_website = company_doc.get("website") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
     except Exception:
         pass
 
@@ -904,27 +940,7 @@ def download_reservation_confirmation(reservation_name=None):
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     rooms = []
     for room in (doc.rooms or []):
@@ -964,7 +980,6 @@ def download_reservation_confirmation(reservation_name=None):
         "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.reservation_print_format
 
     if not print_format:
@@ -999,27 +1014,7 @@ def download_guest_folio(checkin_name=None):
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     invoices = data.get("invoices") or []
     payments = data.get("payments") or []
@@ -1097,27 +1092,7 @@ def download_corporate_bill(invoice_name=None):
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     context = {
         "company":       company,
@@ -1164,27 +1139,7 @@ def download_room_record(room_id=None):
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     context = {
         "company":       company,
@@ -1232,27 +1187,7 @@ def download_complimentary_record(complimentary_name=None):
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     context = {
         "company":       company,
@@ -1300,27 +1235,7 @@ def download_maintenance_task(task_name=None):
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     # Convert request images to base64 to avoid wkhtmltopdf network errors
     for img_key in ("request_image_1", "request_image_2", "request_image_3"):
@@ -1387,27 +1302,7 @@ def download_guest_ledger_report(
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     # Resolve guest name for display
     guest_label = guest or "All Guests"
@@ -1489,27 +1384,7 @@ def download_kitchen_order_report(
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     context = {
         "company":       company,
@@ -1573,27 +1448,7 @@ def download_complimentary_house_use_report(
     )
 
     settings = frappe.get_single("Hotel Settings")
-    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
-    hotel_tagline = settings.get("hotel_tagline") or ""
-    hotel_address = settings.get("hotel_address") or ""
-    hotel_phone   = ""
-    hotel_email   = ""
-
-    try:
-        company_doc = frappe.get_doc("Company", company)
-        hotel_phone = company_doc.get("phone_no") or ""
-        hotel_email = company_doc.get("email") or ""
-        if not hotel_address:
-            parts = [
-                company_doc.get("address_line1") or "",
-                company_doc.get("address_line2") or "",
-                company_doc.get("city") or "",
-                company_doc.get("state") or "",
-                company_doc.get("country") or "",
-            ]
-            hotel_address = ", ".join(p for p in parts if p)
-    except Exception:
-        pass
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
 
     context = {
         "company":       company,
