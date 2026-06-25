@@ -788,14 +788,25 @@ function openPaymentDetail(pmt) {
   selectedPayment.value = pmt
   showPaymentDetail.value = true
 }
+// function printFolio() {
+//   const name = checkIn.value?.name
+//   if (!name) return
+//   window.open(
+//     `/printview?doctype=Hotel%20Room%20Check%20In&name=${encodeURIComponent(name)}&format=Standard&no_letterhead=0`,
+//     '_blank'
+//   )
+// }
+
 function printFolio() {
   const name = checkIn.value?.name
   if (!name) return
   window.open(
-    `/printview?doctype=Hotel%20Room%20Check%20In&name=${encodeURIComponent(name)}&format=Standard&no_letterhead=0`,
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_guest_folio?checkin_name=${encodeURIComponent(name)}`,
     '_blank'
   )
 }
+
+
 async function startCheckout() {
   checkoutError.value = ''
   checkoutBlockedMessage.value = ''

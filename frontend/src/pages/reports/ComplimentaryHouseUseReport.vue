@@ -5,12 +5,20 @@
         <h1 class="text-2xl font-bold text-gray-900">Complimentary & House Use Report</h1>
         <p class="text-xs text-gray-400 mt-1">Internal stays, complimentary stays, authorisation, occupancy, and theoretical room revenue.</p>
       </div>
-      <button
-        @click="downloadCsv"
-        class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
-      >
-        Export CSV
-      </button>
+      <div class="flex items-center gap-3">
+          <button
+            @click="downloadCsv"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            Export CSV
+          </button>
+          <button
+            @click="downloadPdf"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            Export PDF
+          </button>
+      </div>
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
@@ -240,6 +248,17 @@ function downloadCsv() {
   link.click()
   URL.revokeObjectURL(link.href)
 }
+function downloadPdf() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    reservation_type: filters.value.reservation_type || '',
+    status: filters.value.status || '',
+    search: filters.value.search || '',
+  })
+  window.open(`/api/method/rhohotel.rhocom_hotel.api.reports.download_complimentary_house_use_report?${params}`, '_blank')
+}
+
 
 onMounted(fetchReport)
 </script>

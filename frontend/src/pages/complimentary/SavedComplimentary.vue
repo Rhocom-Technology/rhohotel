@@ -414,7 +414,12 @@ function cancelRecord() {
 }
 
 function printRecord() {
-  window.print()
+  const id = route.params.id
+  if (!id) return
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_complimentary_record?complimentary_name=${encodeURIComponent(id)}`,
+    '_blank'
+  )
 }
 
 function startEdit() {

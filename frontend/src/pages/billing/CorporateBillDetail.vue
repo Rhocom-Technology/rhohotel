@@ -20,7 +20,7 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-end gap-2">
       <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         @click="$router.push('/billing/corporate')">Back to List</button>
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print Bill</button>
+<button @click="printBill" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print Bill</button>
       <button v-if="bill.status === 'Overdue' || bill.status === 'Unpaid'"
         class="px-4 py-2 text-xs font-medium text-yellow-700 border border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors">Send Reminder</button>
       <button v-if="bill.status !== 'Paid'"
@@ -370,6 +370,15 @@ function statusBadgeClass(s) {
     'Paid':      'bg-green-100 text-green-600',
     'Overdue':   'bg-red-100 text-red-500',
   }[s] || 'bg-gray-100 text-gray-500'
+}
+
+function printBill() {
+  const id = route.params.id
+  if (!id) return
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_corporate_bill?invoice_name=${encodeURIComponent(id)}`,
+    '_blank'
+  )
 }
 
 onMounted(() => {

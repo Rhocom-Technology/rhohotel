@@ -540,6 +540,7 @@ function exportShifts() {
 }
 
 function printShifts() {
+    console.log('department:', department.value) 
   const params = new URLSearchParams({
     department: department.value || '',
     week_start: isoDate(weekStart.value),

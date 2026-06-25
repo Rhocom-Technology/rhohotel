@@ -256,8 +256,31 @@ def download_preference_review_report(
         or "Hotel"
     )
 
+    from rhohotel.rhocom_hotel.api.reports import _logo_to_data_uri
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
+    hotel_tagline = settings.get("hotel_tagline") or ""
+    hotel_address = settings.get("hotel_address") or ""
+    hotel_phone   = ""
+    hotel_email   = ""
+    try:
+        company_doc = frappe.get_doc("Company", company)
+        hotel_phone = company_doc.get("phone_no") or ""
+        hotel_email = company_doc.get("email") or ""
+        if not hotel_address:
+            parts = [company_doc.get("address_line1") or "", company_doc.get("city") or "", company_doc.get("country") or ""]
+            hotel_address = ", ".join(p for p in parts if p)
+    except Exception:
+        pass
+
     context = {
-        "company": company,
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
         "days": days,
         "staff": staff,
         "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
@@ -268,9 +291,9 @@ def download_preference_review_report(
             "week_start": formatdate(week_start_date, "dd MMM yyyy"),
             "week_end": formatdate(week_end_date, "dd MMM yyyy"),
         },
+        "shift_types": [r.name for r in frappe.get_all("Shift Type", fields=["name"], order_by="name asc")],
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.shift_preference_manager_print_format
 
     if not print_format:

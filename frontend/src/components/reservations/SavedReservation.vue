@@ -82,7 +82,8 @@
           >Check In (Invoice Required)</button>
           <button @click="emit('refresh')" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Refresh</button>
           <button v-if="!isCancelled && !hasAnyCheckedIn" :disabled="actionLoading" @click="emit('cancel-reservation')" class="px-4 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40">Cancel Reservation</button>
-          <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
+          <!-- <button @click="showPrintModal = true" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button> -->
+           <button @click="printReservationPDF" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Print</button>
         </div>
       </div>
 
@@ -1098,5 +1099,14 @@ function generateSummary() {
 
 function generateDetailed() {
   return `<p>Detailed Reservation Information for ${props.reservation.name}</p>`;
+}
+
+function printReservationPDF() {
+  const name = props.reservation?.name
+  if (!name) return
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_reservation_confirmation?reservation_name=${encodeURIComponent(name)}`,
+    '_blank'
+  )
 }
 </script>

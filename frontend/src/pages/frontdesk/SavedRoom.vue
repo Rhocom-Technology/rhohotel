@@ -26,7 +26,8 @@
       <div class="flex items-center gap-2">
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           @click="$router.push('/rooms')">Room List</button>
-        <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print</button>
+        <!-- <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print</button> -->
+         <button @click="printRoom" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print</button>
         <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Block Room</button>
         <button class="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Edit Room</button>
       </div>
@@ -233,6 +234,15 @@ async function loadRoom() {
   } finally {
     loading.value = false
   }
+}
+
+function printRoom() {
+  const id = route.params.id
+  if (!id) return
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_room_record?room_id=${encodeURIComponent(id)}`,
+    '_blank'
+  )
 }
 
 onMounted(loadRoom)

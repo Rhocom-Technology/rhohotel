@@ -3,12 +3,28 @@
     <div>
       <div class="flex justify-between items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">Guest Ledger Report</h1>
-        <button
-          @click="downloadCsv"
-          class="bg-green-600 text-white px-4 py-2 rounded-lg"
-        >
-          Download
-        </button>
+        <div class="flex items-center gap-3">
+
+          <button
+            @click="downloadCsv"
+            class="bg-green-600 text-white px-4 py-2 rounded-lg"
+          >
+            Download CSV
+          </button>
+            <button
+             @click="downloadPdf"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Download PDF
+            </button>
+
+<!--     
+            <button @click="downloadPdf"
+            class="px-4 py-2 text-xs font-semibold rounded-lg text-white bg-green-600">
+            Download  PDF
+          </button> -->
+        </div>
+
       </div>
       <p class="text-xs text-gray-400 mt-1">
         Guest folio transaction ledger in debit/credit format with running balance.
@@ -533,6 +549,22 @@ function downloadCsv() {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+function downloadPdf() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    guest: filters.value.guest || '',
+    checkin_status: filters.value.checkin_status || '',
+    room_type: filters.value.room_type || '',
+    transaction_type: filters.value.transaction_type || '',
+  })
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_guest_ledger_report?${params.toString()}`,
+    '_blank'
+  )
+}
+
 
 onMounted(() => {
   fetchReport()

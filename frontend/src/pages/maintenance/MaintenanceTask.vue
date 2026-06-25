@@ -75,6 +75,10 @@
             class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
             View Request
           </button>
+          <button @click="printTask"
+            class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Print
+          </button>
 
           <!-- Draft actions — only available when workflow_state is In Progress -->
           <template v-if="task.docstatus === 0 && isEditable">
@@ -1111,6 +1115,15 @@ function getStepIcon(state) {
   if (state === current) return '→'
   if (si < ci || current === 'Completed') return '✓'
   return (si + 1).toString()
+}
+
+function printTask() {
+  const id = task.value?.name || taskId
+  if (!id) return
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_maintenance_task?task_name=${encodeURIComponent(id)}`,
+    '_blank'
+  )
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

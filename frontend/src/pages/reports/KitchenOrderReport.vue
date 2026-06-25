@@ -3,12 +3,22 @@
     <div>
       <div class="flex justify-between items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">Kitchen Order Report</h1>
-        <button
-          @click="downloadCsv"
-          class="bg-green-600 text-white px-4 py-2 rounded-lg"
-        >
-          Download
-        </button>
+        <div class="flex items-center gap-3">
+
+            <button
+              @click="downloadCsv"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Download CSV
+            </button>
+            <button
+              @click="downloadPdf"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Download PDF
+            </button>
+
+        </div>
       </div>
       <p class="text-xs text-gray-400 mt-1">
         Track kitchen ticket volume, preparation stage, source mix, and completion performance.
@@ -369,6 +379,21 @@ function downloadCsv() {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+function downloadPdf() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    status: filters.value.status || '',
+    source: filters.value.source || '',
+    station: filters.value.station || '',
+    pos_profile: filters.value.pos_profile || '',
+  })
+  window.open(
+    `/api/method/rhohotel.rhocom_hotel.api.reports.download_kitchen_order_report?${params}`,
+    '_blank'
+  )
 }
 
 onMounted(async () => {

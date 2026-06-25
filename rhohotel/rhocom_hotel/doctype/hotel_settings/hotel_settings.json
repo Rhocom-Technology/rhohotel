@@ -8,6 +8,10 @@
  "engine": "InnoDB",
  "field_order": [
   "sb_general",
+  "hotel_logo",
+  "hotel_tagline",
+  "hotel_address",
+  "cb_branding1",
   "default_customer",
   "cb_general1",
   "default_taxes_and_charges",
@@ -42,10 +46,18 @@
   "cb_reports1",
   "corporate_billing_print_format",
   "corporate_account_statement_print_format",
-  "asset_maintenance_print_format",
+  "maintenance_task_print_format",
+  "guest_ledger_print_format",
+  "kitchen_order_print_format",
+  "complimentary_house_use_print_format",
   "hall_booking_print_format",
   "shift_print_format",
   "shift_preference_manager_print_format",
+  "reservation_print_format",
+  "checkin_folio_print_format",
+  "corporate_bill_print_format",
+  "room_record_print_format",
+  "complimentary_print_format",
   "sb_iptv_settings",
   "iptv_api_key",
   "sb_lock_integration",
@@ -63,6 +75,28 @@
    "fieldname": "sb_general",
    "fieldtype": "Section Break",
    "label": "General"
+  },
+  {
+   "fieldname": "hotel_logo",
+   "fieldtype": "Attach Image",
+   "label": "Hotel Logo",
+   "description": "Used in all print formats and reports. Upload a high-resolution PNG or SVG."
+  },
+  {
+   "fieldname": "hotel_tagline",
+   "fieldtype": "Data",
+   "label": "Hotel Tagline",
+   "description": "Short tagline shown under the hotel name on print formats (e.g. 'Luxury & Comfort')."
+  },
+  {
+   "fieldname": "hotel_address",
+   "fieldtype": "Small Text",
+   "label": "Hotel Address",
+   "description": "Full address shown on invoices and print formats."
+  },
+  {
+   "fieldname": "cb_branding1",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "default_customer",
@@ -259,9 +293,27 @@
    "options": "Print Format"
   },
   {
-   "fieldname": "asset_maintenance_print_format",
+   "fieldname": "maintenance_task_print_format",
    "fieldtype": "Link",
-   "label": "Asset Maintenance Report",
+   "label": "Maintenance Task",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "guest_ledger_print_format",
+   "fieldtype": "Link",
+   "label": "Guest Ledger",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "kitchen_order_print_format",
+   "fieldtype": "Link",
+   "label": "Kitchen Order Report",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "complimentary_house_use_print_format",
+   "fieldtype": "Link",
+   "label": "Complimentary & House Use Report",
    "options": "Print Format"
   },
   {
@@ -350,6 +402,36 @@
    "fieldtype": "Int",
    "label": "Key Validity Buffer (minutes)",
    "description": "Extra minutes added to the checkout time when setting key validity. Gives staff time to retrieve cards after guest departure."
+  },
+  {
+   "fieldname": "reservation_print_format",
+   "fieldtype": "Link",
+   "label": "Reservation Confirmation",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "checkin_folio_print_format",
+   "fieldtype": "Link",
+   "label": "Guest Folio (Check-In)",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "corporate_bill_print_format",
+   "fieldtype": "Link",
+   "label": "Corporate Bill",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "room_record_print_format",
+   "fieldtype": "Link",
+   "label": "Room Record",
+   "options": "Print Format"
+  },
+  {
+   "fieldname": "complimentary_print_format",
+   "fieldtype": "Link",
+   "label": "Complimentary Record",
+   "options": "Print Format"
   }
  ],
  "issingle": 1,
