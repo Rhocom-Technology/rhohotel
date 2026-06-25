@@ -284,49 +284,38 @@ def download_night_audit_summary_report(
 
     rows = result.get("rows", [])
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": rows,
-        "summary": result.get("summary", {}),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":              rows,
+        "summary":           result.get("summary", {}),
         "payment_breakdown": result.get("payment_breakdown", []),
         "revenue_breakdown": result.get("revenue_breakdown", []),
-        "exceptions": result.get("exceptions", []),
-        "generated_at": format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "exceptions":        result.get("exceptions", []),
+        "generated_at":      format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":       frappe.session.user,
         "filters": {
-            "audit_date": audit_date or "",
-            "revenue_type": revenue_type or "All Revenue",
-            "pos_profile": pos_profile or "All POS Profiles",
-            "status": status or "All Status",
-            "search": search or "",
+            "audit_date":   audit_date or "",
+            "revenue_type": revenue_type or "",
+            "pos_profile":  pos_profile or "",
+            "status":       status or "",
+            "search":       search or "",
         },
         "totals": {
-            "gross_amount": sum(
-                flt(r.get("gross_amount"))
-                for r in rows
-            ),
-            "tax": sum(
-                flt(r.get("tax"))
-                for r in rows
-            ),
-            "discount": sum(
-                flt(r.get("discount"))
-                for r in rows
-            ),
-            "paid_amount": sum(
-                flt(r.get("paid_amount"))
-                for r in rows
-            ),
-            "outstanding_amount": sum(
-                flt(r.get("outstanding_amount"))
-                for r in rows
-            ),
+            "gross_amount":       sum(flt(r.get("gross_amount")) for r in rows),
+            "tax":                sum(flt(r.get("tax")) for r in rows),
+            "discount":           sum(flt(r.get("discount")) for r in rows),
+            "paid_amount":        sum(flt(r.get("paid_amount")) for r in rows),
+            "outstanding_amount": sum(flt(r.get("outstanding_amount")) for r in rows),
         },
     }
-
-    settings = frappe.get_single("Hotel Settings")
 
     print_format = settings.night_audit_print_format
 
@@ -351,7 +340,14 @@ def download_night_audit_summary_report(
         context
     )
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Night-Audit-Summary-{0}.pdf".format(
         audit_date or context["summary"].get("audit_date")
@@ -402,26 +398,31 @@ def download_corporate_account_statement_report(
             or customer
         )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": result.get("rows", []),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":            result.get("rows", []),
         "account_summary": result.get("account_summary", []),
-        "summary": result.get("summary", {}),
-        "generated_at": format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "summary":         result.get("summary", {}),
+        "generated_at":    format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":     frappe.session.user,
         "filters": {
-            "date_from": date_from or "",
-            "date_to": date_to or "",
-            "customer": customer or "",
-            "customer_label": customer_label,
-            "transaction_type": transaction_type or "All Transactions",
-            "search": search or "",
+            "date_from":        date_from or "",
+            "date_to":          date_to or "",
+            "customer":         customer or "",
+            "customer_label":   customer_label,
+            "transaction_type": transaction_type or "",
+            "search":           search or "",
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.corporate_account_statement_print_format
 
     if not print_format:
@@ -440,7 +441,14 @@ def download_corporate_account_statement_report(
 
     html = frappe.render_template(html_template, context)
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Corporate-Account-Statement-{0}-to-{1}.pdf".format(
         date_from or "from",
@@ -518,13 +526,14 @@ def download_corporate_billing_statement_report(
         "company_summary": result.get("company_summary", []),
         "aging_breakdown": result.get("aging_breakdown", []),
         "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":  frappe.session.user,
         "filters": {
-            "date_from": date_from or "",
-            "date_to": date_to or "",
-            "company": company or "All Companies",
-            "status": status or "All Status",
-            "aging_bucket": aging_bucket or "All Aging",
-            "search": search or "",
+            "date_from":    date_from or "",
+            "date_to":      date_to or "",
+            "company":      company or "",
+            "status":       status or "",
+            "aging_bucket": aging_bucket or "",
+            "search":       search or "",
         },
         "totals": {
             "billed_amount": sum(flt(r.get("billed_amount")) for r in rows),
@@ -544,7 +553,14 @@ def download_corporate_billing_statement_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Corporate-Billing-Statement-{0}-to-{1}.pdf".format(
         date_from or "from",
@@ -610,30 +626,35 @@ def download_pos_sales_performance_report(
         or "Hotel"
     )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "sales": sales,
-        "shifts": result.get("shifts", []),
-        "top_items": result.get("top_items", []),
-        "summary": summary,
-        "totals": totals,
-        "payment_breakdown": _build_pos_payment_breakdown(sales),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "sales":               sales,
+        "shifts":              result.get("shifts", []),
+        "top_items":           result.get("top_items", []),
+        "summary":             summary,
+        "totals":              totals,
+        "payment_breakdown":   _build_pos_payment_breakdown(sales),
         "cashier_performance": _build_pos_cashier_performance(sales),
-        "generated_at": result.get("generated_at") or format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "generated_at":        result.get("generated_at") or format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":         frappe.session.user,
         "filters": {
-            "date_from": result.get("filters", {}).get("date_from") or date_from or "",
-            "date_to": result.get("filters", {}).get("date_to") or date_to or "",
-            "pos_profile": pos_profile or "All POS Profiles",
-            "cashier": cashier or "All Cashiers",
-            "payment_mode": payment_mode or "All Payment Modes",
-            "search": search or "",
+            "date_from":    result.get("filters", {}).get("date_from") or date_from or "",
+            "date_to":      result.get("filters", {}).get("date_to") or date_to or "",
+            "pos_profile":  pos_profile or "",
+            "cashier":      cashier or "",
+            "payment_mode": payment_mode or "",
+            "search":       search or "",
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.pos_sales_print_format
 
     if not print_format:
@@ -645,7 +666,14 @@ def download_pos_sales_performance_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "POS-Sales-Performance-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or "from",
@@ -734,41 +762,45 @@ def download_housekeeping_productivity_report(
 
     summary = result.get("summary", {})
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
         "rows": rows,
         "summary": {
-            "rooms_assigned": summary.get("total_tasks", 0),
-            "rooms_cleaned": summary.get("rooms_cleaned", 0),
-            "rooms_inspected": summary.get("rooms_inspected", 0),
-            "avg_cleaning_time": summary.get("avg_duration", 0),
-            "guest_requests": summary.get("guest_requests", 0),
-            "maintenance_issues": summary.get("issue_count", 0),
-            "pending_tasks": summary.get("pending_tasks", 0),
+            "rooms_assigned":    len(rows),
+            "rooms_cleaned":     len([r for r in rows if r.get("status") in ["Cleaned", "Inspected", "Released", "Completed"]]),
+            "rooms_inspected":   len([r for r in rows if r.get("status") in ["Inspected", "Released"]]),
+            "avg_cleaning_time": (lambda completed: round(sum(cint(r.get("duration")) for r in completed) / len(completed)) if completed else 0)([r for r in rows if cint(r.get("duration")) > 0]),
+            "guest_requests":    sum(cint(r.get("guest_requests")) for r in rows),
+            "maintenance_issues": len([r for r in rows if r.get("status") == "Maintenance" or r.get("issue")]),
         },
-        "status_breakdown": _build_housekeeping_status_breakdown(rows),
+        "status_breakdown":        _build_housekeeping_status_breakdown(rows),
         "housekeeper_performance": _build_housekeeper_performance(rows),
-        "floor_performance": _build_floor_performance(rows),
-        "inspector_summary": _build_inspector_summary(rows),
+        "floor_performance":       _build_floor_performance(rows),
+        "inspector_summary":       _build_inspector_summary(rows),
         "totals": {
-            "duration": sum(cint(r.get("duration")) for r in rows),
+            "duration":       sum(cint(r.get("duration")) for r in rows),
             "guest_requests": sum(cint(r.get("guest_requests")) for r in rows),
         },
-        "generated_at": result.get("generated_at") or format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "generated_at": result.get("generated_at") or format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":  frappe.session.user,
         "filters": {
-            "date_from": result.get("filters", {}).get("date_from") or date_from or "",
-            "date_to": result.get("filters", {}).get("date_to") or date_to or "",
-            "housekeeper": housekeeper or "All Housekeepers",
-            "floor": floor or "All Floors",
-            "status": status or "All Statuses",
-            "search": search or "",
+            "date_from":   result.get("filters", {}).get("date_from") or date_from or "",
+            "date_to":     result.get("filters", {}).get("date_to") or date_to or "",
+            "housekeeper": housekeeper or "",
+            "floor":       floor or "",
+            "status":      status or "",
+            "search":      search or "",
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.housekeeping_productivity_print_format
 
     if not print_format:
@@ -780,7 +812,14 @@ def download_housekeeping_productivity_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Housekeeping-Productivity-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or "from",

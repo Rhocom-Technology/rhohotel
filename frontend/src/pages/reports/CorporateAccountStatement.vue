@@ -88,7 +88,7 @@
           :disabled="loading"
           class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
         >
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? 'Loading...' : 'Apply' }}
         </button>
       </div>
 
