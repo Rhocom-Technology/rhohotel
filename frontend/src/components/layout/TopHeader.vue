@@ -45,6 +45,8 @@ onMounted(() => { timer = setInterval(() => { now.value = new Date() }, 1000) })
 onUnmounted(() => clearInterval(timer))
 
 const pageMeta = {
+  'OwnerDashboard': { title: 'Owner Dashboard', subtitle: 'Executive finance cockpit for revenue, collections, occupancy, POS, and operational risk' },
+
   // Front Desk
   'RoomView':             { title: 'Front Desk Command Center', subtitle: 'Real-time room operations, overdue checkout watch, guest occupancy visibility' },
   'CheckIns':             { title: 'Check-in List', subtitle: 'Front desk • all guest check-in history and active stays' },

@@ -25,6 +25,10 @@
       </div>
     </div>
 
+    <div v-if="kitchenPrintError" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-700">
+      {{ kitchenPrintError }}
+    </div>
+
     <!-- Stats -->
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
       <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
@@ -241,10 +245,13 @@ import { createResource } from 'frappe-ui'
 import { useSessionStore } from '@/stores/session'
 import { ROLE_GROUPS } from '@/lib/permissions'
 import { callMethod } from '@/lib/api.js'
+import { printRawCommandsDirect } from '@/lib/posPrint'
+import { socket } from '@/lib/socket'
 import KitchenSettingsModal from '@/components/kitchen/KitchenSettingsModal.vue'
 
 const session = useSessionStore()
 const canEditKitchen = computed(() => session.hasAnyRole(ROLE_GROUPS.kitchenActions))
+const canReceiveKitchenAlerts = computed(() => session.isLoggedIn && session.hasAnyRole(ROLE_GROUPS.kitchenActions))
 
 const autoRefresh = ref(true)
 const showSettings = ref(false)
@@ -256,9 +263,14 @@ const posProfiles = ref([])
 const showDelayedOnly = ref(false)
 const updating = ref(null)  // ticket name being updated
 const clockNow = ref(Date.now())
-let lastTicketCount = 0
+const kitchenPrintError = ref('')
 let refreshInterval = null
 let countdownInterval = null
+let kitchenAudioContext = null
+let knownTicketIds = null
+const printedTicketIds = new Set(JSON.parse(sessionStorage.getItem('rhohotel_printed_kitchen_tickets') || '[]'))
+const failedPrintTicketIds = new Set()
+const activePrintTicketIds = new Set()
 
 const defaultKitchenSettings = {
   station: 'Hot Kitchen',
@@ -322,10 +334,27 @@ function saveKitchenSettings(nextSettings) {
   reloadStats()
 }
 
+function getKitchenAudioContext() {
+  if (kitchenAudioContext) return kitchenAudioContext
+  const AudioCtor = window.AudioContext || window.webkitAudioContext
+  if (!AudioCtor) return null
+  kitchenAudioContext = new AudioCtor()
+  return kitchenAudioContext
+}
+
+async function unlockKitchenAudio() {
+  try {
+    const ctx = getKitchenAudioContext()
+    if (ctx?.state === 'suspended') await ctx.resume()
+  } catch (_) {}
+}
+
 function playNewTicketSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    // Short double-beep: urgent but not annoying
+    const ctx = getKitchenAudioContext()
+    if (!ctx) return
+    if (ctx.state === 'suspended') ctx.resume();
+    // Short double-beep: urgent but not noisy.
     [[880, 0], [1046.5, 0.18]].forEach(([freq, delay]) => {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -334,13 +363,167 @@ function playNewTicketSound() {
       osc.type = 'square'
       osc.frequency.value = freq
       const t = ctx.currentTime + delay
-      gain.gain.setValueAtTime(0, t)
-      gain.gain.linearRampToValueAtTime(0.15, t + 0.01)
+      gain.gain.setValueAtTime(0.0001, t)
+      gain.gain.linearRampToValueAtTime(0.14, t + 0.01)
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14)
       osc.start(t)
       osc.stop(t + 0.14)
     })
   } catch (_) {}
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  }[char]))
+}
+
+function formatTicketDateTime(value) {
+  if (!value) return ''
+  const parsed = new Date(String(value).replace(' ', 'T'))
+  if (Number.isNaN(parsed.getTime())) return String(value)
+  return parsed.toLocaleString([], {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function normalizePrinterText(value) {
+  return String(value ?? '')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[^\x20-\x7E\n]/g, '')
+}
+
+function wrapPrinterText(value, width = 32) {
+  const words = normalizePrinterText(value).split(/\s+/).filter(Boolean)
+  const lines = []
+  let current = ''
+
+  for (const word of words) {
+    if (!current) {
+      current = word
+    } else if (`${current} ${word}`.length <= width) {
+      current = `${current} ${word}`
+    } else {
+      lines.push(current)
+      current = word
+    }
+  }
+
+  if (current) lines.push(current)
+  return lines.length ? lines : ['']
+}
+
+function centerPrinterText(value, width = 32) {
+  const text = normalizePrinterText(value).slice(0, width)
+  const left = Math.max(0, Math.floor((width - text.length) / 2))
+  return `${' '.repeat(left)}${text}`
+}
+
+function buildKitchenTicketRawCommands(ticket) {
+  const ESC = '\x1B'
+  const GS = '\x1D'
+  const width = 32
+  const lines = []
+
+  lines.push(`${ESC}@`)
+  lines.push(`${ESC}a\x01`)
+  lines.push(`${ESC}E\x01${centerPrinterText('KITCHEN TICKET', width)}${ESC}E\x00`)
+  lines.push(centerPrinterText(ticket.id || '', width))
+  lines.push(`${ESC}a\x00`)
+  lines.push('-'.repeat(width))
+  lines.push(`Where : ${normalizePrinterText(ticket.table_or_room || '-')}`.slice(0, width))
+  lines.push(`Source: ${normalizePrinterText(ticket.source || '-')}`.slice(0, width))
+  if (ticket.pos_profile) lines.push(`POS   : ${normalizePrinterText(ticket.pos_profile)}`.slice(0, width))
+  lines.push(`Sent  : ${normalizePrinterText(formatTicketDateTime(ticket.sent_at))}`.slice(0, width))
+  lines.push('-'.repeat(width))
+
+  for (const item of ticket.items || []) {
+    const qty = normalizePrinterText(item.qty || 0)
+    const name = normalizePrinterText(item.item_name || item.item_code || 'Item')
+    const itemLines = wrapPrinterText(`${qty} x ${name}`, width)
+    lines.push(`${ESC}E\x01${itemLines[0]}${ESC}E\x00`)
+    for (const continuation of itemLines.slice(1)) lines.push(continuation)
+    if (item.notes) {
+      for (const noteLine of wrapPrinterText(`Note: ${item.notes}`, width)) lines.push(noteLine)
+    }
+  }
+
+  if (ticket.notes) {
+    lines.push('-'.repeat(width))
+    for (const noteLine of wrapPrinterText(`ORDER NOTE: ${ticket.notes}`, width)) lines.push(noteLine)
+  }
+
+  lines.push('-'.repeat(width))
+  lines.push('\n\n')
+  lines.push(`${GS}V\x42\x00`)
+  return lines.join('\n')
+}
+
+async function printKitchenTicket(ticket) {
+  if (!ticket?.id || activePrintTicketIds.has(ticket.id)) return false
+
+  activePrintTicketIds.add(ticket.id)
+  try {
+    await printRawCommandsDirect(buildKitchenTicketRawCommands(ticket), { directTimeoutMs: 45000 })
+    kitchenPrintError.value = ''
+    return true
+  } catch (error) {
+    console.warn('[Kitchen Print] Direct print failed.', error)
+    const message = error?.message || 'Direct print failed'
+    kitchenPrintError.value = `${ticket.id} was not printed. ${message}. Check QZ Tray is running and allowed for this site.`
+    return false
+  } finally {
+    activePrintTicketIds.delete(ticket.id)
+  }
+}
+
+function rememberPrintedTicket(ticketId) {
+  printedTicketIds.add(ticketId)
+  failedPrintTicketIds.delete(ticketId)
+  sessionStorage.setItem('rhohotel_printed_kitchen_tickets', JSON.stringify([...printedTicketIds].slice(-100)))
+}
+
+async function notifyAndPrintKitchenTicket(ticket, { refresh = false } = {}) {
+  if (!canReceiveKitchenAlerts.value || !ticket?.id || printedTicketIds.has(ticket.id)) return
+  playNewTicketSound()
+  const printed = await printKitchenTicket(ticket)
+  if (printed) {
+    rememberPrintedTicket(ticket.id)
+  } else {
+    failedPrintTicketIds.add(ticket.id)
+  }
+  if (refresh) {
+    reloadTickets()
+    reloadStats()
+  }
+}
+
+function handleKitchenTicketCreated(ticket) {
+  notifyAndPrintKitchenTicket(ticket, { refresh: true })
+}
+
+function detectNewTicketsFromPoll(tickets) {
+  const ids = new Set((tickets || []).map((ticket) => ticket.id).filter(Boolean))
+  if (knownTicketIds === null) {
+    knownTicketIds = ids
+    return
+  }
+
+  for (const ticket of tickets || []) {
+    const shouldRetry = ticket.id && failedPrintTicketIds.has(ticket.id)
+    const isNewPending = ticket.status === 'Pending' && ticket.id && !knownTicketIds.has(ticket.id)
+    if (shouldRetry || isNewPending) notifyAndPrintKitchenTicket(ticket)
+  }
+  knownTicketIds = ids
 }
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -349,9 +532,7 @@ const ticketsResource = createResource({
   params: kitchenTicketParams(),
   auto: true,
   onSuccess(data) {
-    const count = (data || []).filter(t => t.status === 'Pending').length
-    if (count > lastTicketCount && lastTicketCount >= 0) playNewTicketSound()
-    lastTicketCount = count
+    detectNewTicketsFromPoll(data || [])
   },
 })
 
@@ -378,6 +559,9 @@ onMounted(async () => {
   countdownInterval = setInterval(() => {
     clockNow.value = Date.now()
   }, 1000)
+  socket?.on('rhohotel_kitchen_ticket_created', handleKitchenTicketCreated)
+  window.addEventListener('pointerdown', unlockKitchenAudio, { once: true })
+  window.addEventListener('keydown', unlockKitchenAudio, { once: true })
   // Load POS profile options for filter
   try {
     const profiles = await callMethod('rhohotel.restaurant.api.kitchen.get_kitchen_pos_profiles')
@@ -387,6 +571,9 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(refreshInterval)
   clearInterval(countdownInterval)
+  socket?.off('rhohotel_kitchen_ticket_created', handleKitchenTicketCreated)
+  window.removeEventListener('pointerdown', unlockKitchenAudio)
+  window.removeEventListener('keydown', unlockKitchenAudio)
 })
 
 // ── Stats ─────────────────────────────────────────────────────────────────

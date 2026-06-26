@@ -7,6 +7,9 @@ const router = createRouter({
   history: createWebHistory('/frontdesk/'),
   routes: [
     { path: '/', redirect: '/room-view' },
+
+    // Owner
+    { path: '/owner-dashboard', name: 'OwnerDashboard', component: () => import('@/pages/owner/OwnerDashboard.vue') },
     // { path: '/login', name: 'Login', component: () => import('@/pages/Login.vue') },
 
     // Front Desk

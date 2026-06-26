@@ -82,7 +82,7 @@ import { ref, computed } from 'vue'
 import {
   ChevronDown, LayoutGrid, Sparkles, Wrench, X,
   CreditCard, BarChart2, ShoppingCart, UtensilsCrossed,
-  Gift, Settings
+  Gift, Settings, Landmark
 } from 'lucide-vue-next'
 import { useSessionStore } from '@/stores/session'
 import { ROLE_GROUPS } from '@/lib/permissions'
@@ -102,7 +102,7 @@ function emitClose() {
   emit('close')
 }
 
-const openGroups = ref(['Front Desk'])
+const openGroups = ref(['Owner', 'Front Desk'])
 
 function toggleGroup(label) {
   const index = openGroups.value.indexOf(label)
@@ -114,6 +114,14 @@ function toggleGroup(label) {
 }
 
 const allNavGroups = [
+  {
+    label: 'Owner',
+    icon: Landmark,
+    allowedRoles: ROLE_GROUPS.owner,
+    children: [
+      { label: 'Owner Dashboard', to: '/owner-dashboard' },
+    ],
+  },
   {
     label: 'Front Desk',
     icon: LayoutGrid,
