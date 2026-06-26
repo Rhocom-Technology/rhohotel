@@ -1074,23 +1074,10 @@ function applyDiscount(discount) {
   emit('refresh');
 }
 
-function printReservation() {
-  // Logic to handle print based on selected format
-  const printContent = printFormat.value === 'summary' ? generateSummary() : generateDetailed();
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>Print Reservation</title>
-      </head>
-      <body>
-        <h1>${props.reservation.name}</h1>
-        ${printContent}
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
-  printWindow.print();
+async function printReservation() {
+  const id = props.reservation?.name
+  if (!id) return
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_reservation_confirmation?reservation_name=${encodeURIComponent(id)}`)
 }
 
 function generateSummary() {
@@ -1101,12 +1088,34 @@ function generateDetailed() {
   return `<p>Detailed Reservation Information for ${props.reservation.name}</p>`;
 }
 
-function printReservationPDF() {
-  const name = props.reservation?.name
-  if (!name) return
-  window.open(
-    `/api/method/rhohotel.rhocom_hotel.api.reports.download_reservation_confirmation?reservation_name=${encodeURIComponent(name)}`,
-    '_blank'
-  )
+async function printReservationPDF() {
+  const id = props.reservation?.name
+  if (!id) return
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_reservation_confirmation?reservation_name=${encodeURIComponent(id)}`)
+}
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
 }
 </script>

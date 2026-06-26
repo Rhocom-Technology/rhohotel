@@ -597,4 +597,4 @@ def download_shift_list_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"

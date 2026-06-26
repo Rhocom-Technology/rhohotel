@@ -150,7 +150,7 @@ def download_daily_occupancy_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type        = "pdf"
     
     
 
@@ -247,10 +247,10 @@ def download_guest_stay_history_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
-    
-    
-    
+    frappe.local.response.type        = "pdf"
+
+
+
 import frappe
 from frappe.utils import now_datetime, format_datetime, flt
 from frappe.utils.pdf import get_pdf
@@ -355,7 +355,7 @@ def download_night_audit_summary_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
     
     
     
@@ -457,7 +457,7 @@ def download_corporate_account_statement_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
     
     
     
@@ -569,9 +569,9 @@ def download_corporate_billing_statement_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
-    
-    
+    frappe.local.response.type = "pdf"
+
+
 import frappe
 from frappe.utils import now_datetime, format_datetime, flt
 from frappe.utils.pdf import get_pdf
@@ -682,7 +682,7 @@ def download_pos_sales_performance_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
 
 
 def _build_pos_payment_breakdown(sales):
@@ -828,7 +828,7 @@ def download_housekeeping_productivity_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
 
 
 def _build_housekeeping_status_breakdown(rows):
@@ -1034,7 +1034,7 @@ def download_reservation_confirmation(reservation_name=None):
 
     frappe.local.response.filename    = f"Reservation-{reservation_name}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1112,7 +1112,7 @@ def download_guest_folio(checkin_name=None):
 
     frappe.local.response.filename    = f"Guest-Folio-{checkin_name}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1159,7 +1159,7 @@ def download_corporate_bill(invoice_name=None):
 
     frappe.local.response.filename    = f"Corporate-Bill-{invoice_name}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1207,7 +1207,7 @@ def download_room_record(room_id=None):
     room_number = (room.get("room_number") or room_id).replace(" ", "-")
     frappe.local.response.filename    = f"Room-{room_number}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1255,7 +1255,7 @@ def download_complimentary_record(complimentary_name=None):
     guest_name = (record.get("guest") or "").strip().replace(" ", "-")
     frappe.local.response.filename    = f"Complimentary-{complimentary_name}-{guest_name}.pdf" if guest_name else f"Complimentary-{complimentary_name}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1307,7 +1307,7 @@ def download_maintenance_task(task_name=None):
 
     frappe.local.response.filename    = f"Maintenance-Task-{task_name}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1384,14 +1384,22 @@ def download_guest_ledger_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf  = get_pdf(html)
+    
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = f"Guest-Ledger-{context['filters']['date_from']}-to-{context['filters']['date_to']}.pdf"
     frappe.local.response.filename    = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
-
-
+    frappe.local.response.type        = "pdf"
+    
+    
 @frappe.whitelist()
 def download_kitchen_order_report(
     date_from=None,
@@ -1459,7 +1467,7 @@ def download_kitchen_order_report(
 
     frappe.local.response.filename    = f"Kitchen-Order-Report-{date_from}-to-{date_to}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"
 
 
 @frappe.whitelist()
@@ -1518,8 +1526,17 @@ def download_complimentary_house_use_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf  = get_pdf(html)
+    
+    
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     frappe.local.response.filename    = f"Complimentary-House-Use-{date_from}-to-{date_to}.pdf"
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type        = "download"
+    frappe.local.response.type        = "pdf"

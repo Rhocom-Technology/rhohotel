@@ -882,7 +882,7 @@ def download_hall_booking(booking_name):
 
     frappe.local.response.filename = "{0}.pdf".format(booking.name)
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
     
 
 def _validate_hall_available_for_booking(hall_name):

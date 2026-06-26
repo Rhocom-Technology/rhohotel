@@ -322,4 +322,4 @@ def download_preference_review_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
