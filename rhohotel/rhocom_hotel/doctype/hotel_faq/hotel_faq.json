@@ -6,20 +6,14 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "hotel",
   "page",
+  "category",
   "question",
   "answer",
   "published",
   "sort_order"
  ],
  "fields": [
-  {
-   "fieldname": "hotel",
-   "fieldtype": "Link",
-   "label": "Hotel",
-   "options": "Hotel Profile"
-  },
   {
    "fieldname": "page",
    "fieldtype": "Select",
@@ -46,12 +40,18 @@
    "fieldname": "sort_order",
    "fieldtype": "Int",
    "label": "Sort Order"
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "label": "Category",
+   "options": "General\nReservations & Bookings\nCheck-In & Check-Out Procedures\nRooms & Accommodation\nDining & Restaurants\nFacilities & Amenities\nPrice & Cancellation\nTransportation & Parking\nPolicies & Regulations\nEvents & Conferences"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-05-22 09:24:39.078755",
+ "modified": "2026-06-25 15:28:04.591786",
  "modified_by": "Administrator",
  "module": "Rhocom Hotel",
  "name": "Hotel FAQ",
