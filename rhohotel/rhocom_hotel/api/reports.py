@@ -2,6 +2,63 @@ import frappe
 from frappe.utils import now_datetime, format_datetime
 from frappe.utils.pdf import get_pdf
 
+
+def _logo_to_data_uri(logo_path):
+    """
+    Convert a Frappe file path like /files/logo.png to a base64 data URI
+    so wkhtmltopdf doesn't need to make a network request to fetch it.
+    Returns empty string if file not found or conversion fails.
+    """
+    if not logo_path:
+        return ""
+    try:
+        import base64, mimetypes, os
+        site_path = os.path.abspath(frappe.get_site_path())
+        if logo_path.startswith("/files/"):
+            abs_path = os.path.join(site_path, "public", logo_path.lstrip("/"))
+        elif logo_path.startswith("/private/files/"):
+            abs_path = os.path.join(site_path, logo_path.lstrip("/"))
+        else:
+            return logo_path
+        if not os.path.exists(abs_path):
+            return ""
+        mime, _ = mimetypes.guess_type(abs_path)
+        mime = mime or "image/png"
+        with open(abs_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:{mime};base64,{b64}"
+    except Exception:
+        return ""
+
+def _get_hotel_branding(settings, company):
+    """
+    Shared helper — returns (hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email)
+    from Hotel Settings and the Frappe Company record.
+    Used by all download functions so branding is never duplicated.
+    """
+    hotel_logo    = _logo_to_data_uri(settings.get("hotel_logo") or "")
+    hotel_tagline = settings.get("hotel_tagline") or ""
+    hotel_address = settings.get("hotel_address") or ""
+    hotel_phone   = ""
+    hotel_email   = ""
+    try:
+        company_doc = frappe.get_doc("Company", company)
+        hotel_phone = company_doc.get("phone_no") or ""
+        hotel_email = company_doc.get("email") or ""
+        if not hotel_address:
+            parts = [
+                company_doc.get("address_line1") or "",
+                company_doc.get("address_line2") or "",
+                company_doc.get("city") or "",
+                company_doc.get("state") or "",
+                company_doc.get("country") or "",
+            ]
+            hotel_address = ", ".join(p for p in parts if p)
+    except Exception:
+        pass
+    return hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email
+
+
 @frappe.whitelist()
 def download_daily_occupancy_report(
     date_from=None,
@@ -32,29 +89,31 @@ def download_daily_occupancy_report(
         or "Hotel"
     )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": result.get("rows", []),
-        "stats": result.get("stats", {}),
-        "totals": result.get("totals", {}),
-        "filters": result.get("filters", {}),
-        "generated_at": result.get("generated_at", ""),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "stats":         result.get("stats", {}),
+        "totals":        result.get("totals", {}),
+        "filters":       result.get("filters", {}),
+        "generated_at":  result.get("generated_at", ""),
+        "prepared_by":   frappe.session.user,
         "applied_filters": {
-            "room": room or "All Rooms",
-            "floor": floor or "All Floors",
-            "status": status or "All Status",
-            "payment": payment or "All Payment",
-            "search": search or "",
+            "room":        room or "",
+            "floor":       floor or "",
+            "status":      status or "",
+            "payment":     payment or "",
+            "search":      search or "",
             "overdue_only": "Yes" if str(overdue_only) == "1" else "No"
         }
     }
-
-    # html = frappe.render_template(
-    #     "rhohotel/rhocom_hotel/templates/reports/daily_occupancy_report.html",
-    #     context
-    # )
-    
-    settings = frappe.get_single("Hotel Settings")
 
     print_format = settings.daily_occupancy_print_format
 
@@ -75,7 +134,14 @@ def download_daily_occupancy_report(
         context
     )
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Daily-Occupancy-Report-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or date_from,
@@ -84,7 +150,7 @@ def download_daily_occupancy_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type        = "pdf"
     
     
 
@@ -124,23 +190,31 @@ def download_guest_stay_history_report(
         or "Hotel"
     )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": result.get("rows", []),
-        "stats": result.get("stats", {}),
-        "totals": result.get("totals", {}),
-        "filters": result.get("filters", {}),
-        "generated_at": result.get("generated_at", ""),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "stats":         result.get("stats", {}),
+        "totals":        result.get("totals", {}),
+        "filters":       result.get("filters", {}),
+        "generated_at":  result.get("generated_at", ""),
+        "prepared_by":   frappe.session.user,
         "applied_filters": {
-            "guest_type": guest_type or "All Guests",
-            "room_type": room_type or "All Room Types",
-            "payment": payment or "All Payment Status",
-            "source": source or "All Channels",
-            "search": search or ""
+            "guest_type": guest_type or "",
+            "room_type":  room_type or "",
+            "payment":    payment or "",
+            "source":     source or "",
+            "search":     search or ""
         }
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.guest_stay_history_print_format
 
     if not print_format:
@@ -157,7 +231,14 @@ def download_guest_stay_history_report(
 
     html = frappe.render_template(html_template, context)
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Guest-Stay-History-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or date_from,
@@ -166,10 +247,10 @@ def download_guest_stay_history_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
-    
-    
-    
+    frappe.local.response.type        = "pdf"
+
+
+
 import frappe
 from frappe.utils import now_datetime, format_datetime, flt
 from frappe.utils.pdf import get_pdf
@@ -203,49 +284,38 @@ def download_night_audit_summary_report(
 
     rows = result.get("rows", [])
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": rows,
-        "summary": result.get("summary", {}),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":              rows,
+        "summary":           result.get("summary", {}),
         "payment_breakdown": result.get("payment_breakdown", []),
         "revenue_breakdown": result.get("revenue_breakdown", []),
-        "exceptions": result.get("exceptions", []),
-        "generated_at": format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "exceptions":        result.get("exceptions", []),
+        "generated_at":      format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":       frappe.session.user,
         "filters": {
-            "audit_date": audit_date or "",
-            "revenue_type": revenue_type or "All Revenue",
-            "pos_profile": pos_profile or "All POS Profiles",
-            "status": status or "All Status",
-            "search": search or "",
+            "audit_date":   audit_date or "",
+            "revenue_type": revenue_type or "",
+            "pos_profile":  pos_profile or "",
+            "status":       status or "",
+            "search":       search or "",
         },
         "totals": {
-            "gross_amount": sum(
-                flt(r.get("gross_amount"))
-                for r in rows
-            ),
-            "tax": sum(
-                flt(r.get("tax"))
-                for r in rows
-            ),
-            "discount": sum(
-                flt(r.get("discount"))
-                for r in rows
-            ),
-            "paid_amount": sum(
-                flt(r.get("paid_amount"))
-                for r in rows
-            ),
-            "outstanding_amount": sum(
-                flt(r.get("outstanding_amount"))
-                for r in rows
-            ),
+            "gross_amount":       sum(flt(r.get("gross_amount")) for r in rows),
+            "tax":                sum(flt(r.get("tax")) for r in rows),
+            "discount":           sum(flt(r.get("discount")) for r in rows),
+            "paid_amount":        sum(flt(r.get("paid_amount")) for r in rows),
+            "outstanding_amount": sum(flt(r.get("outstanding_amount")) for r in rows),
         },
     }
-
-    settings = frappe.get_single("Hotel Settings")
 
     print_format = settings.night_audit_print_format
 
@@ -270,7 +340,14 @@ def download_night_audit_summary_report(
         context
     )
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Night-Audit-Summary-{0}.pdf".format(
         audit_date or context["summary"].get("audit_date")
@@ -278,7 +355,7 @@ def download_night_audit_summary_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
     
     
     
@@ -321,26 +398,31 @@ def download_corporate_account_statement_report(
             or customer
         )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "rows": result.get("rows", []),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":            result.get("rows", []),
         "account_summary": result.get("account_summary", []),
-        "summary": result.get("summary", {}),
-        "generated_at": format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "summary":         result.get("summary", {}),
+        "generated_at":    format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":     frappe.session.user,
         "filters": {
-            "date_from": date_from or "",
-            "date_to": date_to or "",
-            "customer": customer or "",
-            "customer_label": customer_label,
-            "transaction_type": transaction_type or "All Transactions",
-            "search": search or "",
+            "date_from":        date_from or "",
+            "date_to":          date_to or "",
+            "customer":         customer or "",
+            "customer_label":   customer_label,
+            "transaction_type": transaction_type or "",
+            "search":           search or "",
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.corporate_account_statement_print_format
 
     if not print_format:
@@ -359,7 +441,14 @@ def download_corporate_account_statement_report(
 
     html = frappe.render_template(html_template, context)
 
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Corporate-Account-Statement-{0}-to-{1}.pdf".format(
         date_from or "from",
@@ -368,7 +457,7 @@ def download_corporate_account_statement_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
     
     
     
@@ -413,20 +502,38 @@ def download_corporate_billing_statement_report(
 
     rows = result.get("rows", [])
 
+    # Pull hotel branding from Hotel Settings and Company record
+    settings = frappe.get_single("Hotel Settings")
+
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, hotel_company)
+    hotel_website = ""
+    try:
+        company_doc = frappe.get_doc("Company", hotel_company)
+        hotel_website = company_doc.get("website") or ""
+    except Exception:
+        pass
+
     context = {
         "company": hotel_company,
+        "hotel_logo": hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone": hotel_phone,
+        "hotel_email": hotel_email,
+        "hotel_website": hotel_website,
         "rows": rows,
         "summary": result.get("summary", {}),
         "company_summary": result.get("company_summary", []),
         "aging_breakdown": result.get("aging_breakdown", []),
         "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":  frappe.session.user,
         "filters": {
-            "date_from": date_from or "",
-            "date_to": date_to or "",
-            "company": company or "All Companies",
-            "status": status or "All Status",
-            "aging_bucket": aging_bucket or "All Aging",
-            "search": search or "",
+            "date_from":    date_from or "",
+            "date_to":      date_to or "",
+            "company":      company or "",
+            "status":       status or "",
+            "aging_bucket": aging_bucket or "",
+            "search":       search or "",
         },
         "totals": {
             "billed_amount": sum(flt(r.get("billed_amount")) for r in rows),
@@ -435,7 +542,6 @@ def download_corporate_billing_statement_report(
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.corporate_billing_print_format
 
     if not print_format:
@@ -447,7 +553,14 @@ def download_corporate_billing_statement_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Corporate-Billing-Statement-{0}-to-{1}.pdf".format(
         date_from or "from",
@@ -456,9 +569,9 @@ def download_corporate_billing_statement_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
-    
-    
+    frappe.local.response.type = "pdf"
+
+
 import frappe
 from frappe.utils import now_datetime, format_datetime, flt
 from frappe.utils.pdf import get_pdf
@@ -513,30 +626,35 @@ def download_pos_sales_performance_report(
         or "Hotel"
     )
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
-        "sales": sales,
-        "shifts": result.get("shifts", []),
-        "top_items": result.get("top_items", []),
-        "summary": summary,
-        "totals": totals,
-        "payment_breakdown": _build_pos_payment_breakdown(sales),
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "sales":               sales,
+        "shifts":              result.get("shifts", []),
+        "top_items":           result.get("top_items", []),
+        "summary":             summary,
+        "totals":              totals,
+        "payment_breakdown":   _build_pos_payment_breakdown(sales),
         "cashier_performance": _build_pos_cashier_performance(sales),
-        "generated_at": result.get("generated_at") or format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "generated_at":        result.get("generated_at") or format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":         frappe.session.user,
         "filters": {
-            "date_from": result.get("filters", {}).get("date_from") or date_from or "",
-            "date_to": result.get("filters", {}).get("date_to") or date_to or "",
-            "pos_profile": pos_profile or "All POS Profiles",
-            "cashier": cashier or "All Cashiers",
-            "payment_mode": payment_mode or "All Payment Modes",
-            "search": search or "",
+            "date_from":    result.get("filters", {}).get("date_from") or date_from or "",
+            "date_to":      result.get("filters", {}).get("date_to") or date_to or "",
+            "pos_profile":  pos_profile or "",
+            "cashier":      cashier or "",
+            "payment_mode": payment_mode or "",
+            "search":       search or "",
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.pos_sales_print_format
 
     if not print_format:
@@ -548,7 +666,14 @@ def download_pos_sales_performance_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "POS-Sales-Performance-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or "from",
@@ -557,7 +682,7 @@ def download_pos_sales_performance_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
 
 
 def _build_pos_payment_breakdown(sales):
@@ -637,41 +762,45 @@ def download_housekeeping_productivity_report(
 
     summary = result.get("summary", {})
 
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
     context = {
-        "company": company,
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
         "rows": rows,
         "summary": {
-            "rooms_assigned": summary.get("total_tasks", 0),
-            "rooms_cleaned": summary.get("rooms_cleaned", 0),
-            "rooms_inspected": summary.get("rooms_inspected", 0),
-            "avg_cleaning_time": summary.get("avg_duration", 0),
-            "guest_requests": summary.get("guest_requests", 0),
-            "maintenance_issues": summary.get("issue_count", 0),
-            "pending_tasks": summary.get("pending_tasks", 0),
+            "rooms_assigned":    len(rows),
+            "rooms_cleaned":     len([r for r in rows if r.get("status") in ["Cleaned", "Inspected", "Released", "Completed"]]),
+            "rooms_inspected":   len([r for r in rows if r.get("status") in ["Inspected", "Released"]]),
+            "avg_cleaning_time": (lambda completed: round(sum(cint(r.get("duration")) for r in completed) / len(completed)) if completed else 0)([r for r in rows if cint(r.get("duration")) > 0]),
+            "guest_requests":    sum(cint(r.get("guest_requests")) for r in rows),
+            "maintenance_issues": len([r for r in rows if r.get("status") == "Maintenance" or r.get("issue")]),
         },
-        "status_breakdown": _build_housekeeping_status_breakdown(rows),
+        "status_breakdown":        _build_housekeeping_status_breakdown(rows),
         "housekeeper_performance": _build_housekeeper_performance(rows),
-        "floor_performance": _build_floor_performance(rows),
-        "inspector_summary": _build_inspector_summary(rows),
+        "floor_performance":       _build_floor_performance(rows),
+        "inspector_summary":       _build_inspector_summary(rows),
         "totals": {
-            "duration": sum(cint(r.get("duration")) for r in rows),
+            "duration":       sum(cint(r.get("duration")) for r in rows),
             "guest_requests": sum(cint(r.get("guest_requests")) for r in rows),
         },
-        "generated_at": result.get("generated_at") or format_datetime(
-            now_datetime(),
-            "dd-MM-yyyy HH:mm:ss"
-        ),
+        "generated_at": result.get("generated_at") or format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+        "prepared_by":  frappe.session.user,
         "filters": {
-            "date_from": result.get("filters", {}).get("date_from") or date_from or "",
-            "date_to": result.get("filters", {}).get("date_to") or date_to or "",
-            "housekeeper": housekeeper or "All Housekeepers",
-            "floor": floor or "All Floors",
-            "status": status or "All Statuses",
-            "search": search or "",
+            "date_from":   result.get("filters", {}).get("date_from") or date_from or "",
+            "date_to":     result.get("filters", {}).get("date_to") or date_to or "",
+            "housekeeper": housekeeper or "",
+            "floor":       floor or "",
+            "status":      status or "",
+            "search":      search or "",
         },
     }
 
-    settings = frappe.get_single("Hotel Settings")
     print_format = settings.housekeeping_productivity_print_format
 
     if not print_format:
@@ -683,7 +812,14 @@ def download_housekeeping_productivity_report(
         frappe.throw("The selected Print Format has no HTML content.")
 
     html = frappe.render_template(html_template, context)
-    pdf = get_pdf(html)
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
 
     filename = "Housekeeping-Productivity-{0}-to-{1}.pdf".format(
         context["filters"].get("date_from") or "from",
@@ -692,7 +828,7 @@ def download_housekeeping_productivity_report(
 
     frappe.local.response.filename = filename
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
 
 
 def _build_housekeeping_status_breakdown(rows):
@@ -828,3 +964,579 @@ def _build_inspector_summary(rows):
             data[inspector]["rejected"] += 1
 
     return sorted(data.values(), key=lambda x: cint(x.get("inspected")), reverse=True)
+
+@frappe.whitelist()
+def download_reservation_confirmation(reservation_name=None):
+    if not reservation_name:
+        frappe.throw("Reservation name is required.")
+
+    doc = frappe.get_doc("Hotel Reservation", reservation_name)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    rooms = []
+    for room in (doc.rooms or []):
+        rooms.append({
+            "room_number":   room.room_number or "",
+            "room_type":     room.room_type or "",
+            "rate_per_night": flt(room.rate_per_night or 0),
+            "room_total":    flt(room.room_total or 0),
+            "occupant_name": room.occupant_name or "",
+        })
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "reservation": {
+            "name":                reservation_name,
+            "reservation_status":  doc.reservation_status or "",
+            "payment_status":      doc.payment_status or "",
+            "reservation_type":    doc.reservation_type or "",
+            "source_channel":      doc.source_channel or "",
+            "primary_guest_name":  doc.primary_guest_name or "",
+            "primary_guest_email": doc.primary_guest_email or "",
+            "primary_guest_phone": doc.primary_guest_phone or "",
+            "from_date":           str(doc.from_date or ""),
+            "to_date":             str(doc.to_date or ""),
+            "number_of_nights":    doc.number_of_nights or 0,
+            "booking_notes":       doc.booking_notes or "",
+            "subtotal":            flt(doc.subtotal or 0),
+            "discount_amount":     flt(doc.discount_amount or 0),
+            "total_amount":        flt(doc.total_amount or 0),
+            "rooms":               rooms,
+        },
+        "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.reservation_print_format
+
+    if not print_format:
+        frappe.throw("Please set Reservation Confirmation Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    frappe.local.response.filename    = f"Reservation-{reservation_name}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_guest_folio(checkin_name=None):
+    if not checkin_name:
+        frappe.throw("Check-in name is required.")
+
+    from rhohotel.rhocom_hotel.api.checkin import get_checkin_detail
+
+    data = get_checkin_detail(checkin_name)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    invoices = data.get("invoices") or []
+    payments = data.get("payments") or []
+
+    total_charges = sum(
+        flt(inv.get("amount") or 0)
+        for inv in invoices
+        if not inv.get("is_return")
+    )
+    total_credits = sum(
+        flt(inv.get("amount") or 0)
+        for inv in invoices
+        if inv.get("is_return")
+    )
+    total_paid = sum(
+        flt(pmt.get("paid_amount") or 0)
+        for pmt in payments
+        if pmt.get("docstatus") == 1
+    )
+    total_outstanding = sum(
+        flt(inv.get("outstanding_amount") or 0)
+        for inv in invoices
+        if not inv.get("is_return")
+    )
+    balance = total_outstanding - total_paid if total_outstanding else (total_charges - total_credits - total_paid)
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "checkin":       data,
+        "invoices":      invoices,
+        "payments":      payments,
+        "total_charges": total_charges,
+        "total_paid":    total_paid,
+        "total_outstanding": total_outstanding,
+        "balance":       balance,
+        "generated_at":  format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.checkin_folio_print_format
+
+    if not print_format:
+        frappe.throw("Please set Guest Folio Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    frappe.local.response.filename    = f"Guest-Folio-{checkin_name}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_corporate_bill(invoice_name=None):
+    if not invoice_name:
+        frappe.throw("Invoice name is required.")
+
+    from rhohotel.rhocom_hotel.api.corporate_billing import get_corporate_bill_detail
+
+    bill = get_corporate_bill_detail(invoice_name)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "bill":          bill,
+        "generated_at":  format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.corporate_bill_print_format
+
+    if not print_format:
+        frappe.throw("Please set Corporate Bill Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    frappe.local.response.filename    = f"Corporate-Bill-{invoice_name}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_room_record(room_id=None):
+    if not room_id:
+        frappe.throw("Room ID is required.")
+
+    from rhohotel.rhocom_hotel.api.room import get_room_detail
+
+    room = get_room_detail(room_id)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "room":          room,
+        "generated_at":  format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.room_record_print_format
+
+    if not print_format:
+        frappe.throw("Please set Room Record Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    room_number = (room.get("room_number") or room_id).replace(" ", "-")
+    frappe.local.response.filename    = f"Room-{room_number}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_complimentary_record(complimentary_name=None):
+    if not complimentary_name:
+        frappe.throw("Complimentary name is required.")
+
+    from rhohotel.rhocom_hotel.api.complimentary import get_complimentary
+
+    record = get_complimentary(complimentary_name)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "record":        record,
+        "generated_at":  format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.complimentary_print_format
+
+    if not print_format:
+        frappe.throw("Please set Complimentary Record Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    guest_name = (record.get("guest") or "").strip().replace(" ", "-")
+    frappe.local.response.filename    = f"Complimentary-{complimentary_name}-{guest_name}.pdf" if guest_name else f"Complimentary-{complimentary_name}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_maintenance_task(task_name=None):
+    if not task_name:
+        frappe.throw("Task name is required.")
+
+    from rhohotel.rhocom_hotel.api.maintenance_task import get_maintenance_task
+
+    task = get_maintenance_task(task_name)
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    # Convert request images to base64 to avoid wkhtmltopdf network errors
+    for img_key in ("request_image_1", "request_image_2", "request_image_3"):
+        if task.get(img_key):
+            task[img_key] = _logo_to_data_uri(task[img_key]) or ""
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "task":          task,
+        "generated_at":  format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.maintenance_task_print_format
+
+    if not print_format:
+        frappe.throw("Please set Maintenance Task Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    frappe.local.response.filename    = f"Maintenance-Task-{task_name}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_guest_ledger_report(
+    date_from=None,
+    date_to=None,
+    guest=None,
+    checkin_status=None,
+    room_type=None,
+    transaction_type=None,
+    search=None,
+    include_corporate=0,
+):
+    from rhohotel.rhocom_hotel.api.guest_ledger_report import get_guest_ledger_report
+
+    result = get_guest_ledger_report(
+        date_from=date_from,
+        date_to=date_to,
+        guest=guest,
+        checkin_status=checkin_status,
+        room_type=room_type,
+        transaction_type=transaction_type,
+        search=search,
+        include_corporate=include_corporate,
+    )
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    # Resolve guest name for display
+    guest_label = guest or "All Guests"
+    if guest:
+        try:
+            gname = frappe.db.get_value("Hotel Guest", guest, "guest_name")
+            if gname:
+                guest_label = gname
+        except Exception:
+            pass
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "summary":       result.get("summary", {}),
+        "filters": {
+            "date_from":        result.get("filters", {}).get("date_from") or date_from or "",
+            "date_to":          result.get("filters", {}).get("date_to") or date_to or "",
+            "guest":            guest_label,
+            "checkin_status":   checkin_status or "All",
+            "room_type":        room_type or "All Room Types",
+            "transaction_type": transaction_type or "All Transactions",
+        },
+        "generated_at":  result.get("generated_at") or format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.guest_ledger_print_format
+
+    if not print_format:
+        frappe.throw("Please set Guest Ledger Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
+
+    filename = f"Guest-Ledger-{context['filters']['date_from']}-to-{context['filters']['date_to']}.pdf"
+    frappe.local.response.filename    = filename
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+    
+    
+@frappe.whitelist()
+def download_kitchen_order_report(
+    date_from=None,
+    date_to=None,
+    status=None,
+    source=None,
+    station=None,
+    pos_profile=None,
+    search=None,
+    limit=500,
+):
+    from rhohotel.restaurant.api.kitchen import get_kitchen_order_report
+
+    result = get_kitchen_order_report(
+        date_from=date_from,
+        date_to=date_to,
+        status=status,
+        source=source,
+        station=station,
+        pos_profile=pos_profile,
+        search=search,
+        limit=limit,
+    )
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "summary":       result.get("summary", {}),
+        "filters": {
+            "date_from":   date_from or "",
+            "date_to":     date_to or "",
+            "status":      status or "All",
+            "source":      source or "All",
+            "station":     station or "All",
+            "pos_profile": pos_profile or "All",
+        },
+        "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.kitchen_order_print_format
+
+    if not print_format:
+        frappe.throw("Please set Kitchen Order Report Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    pdf  = get_pdf(html)
+
+    frappe.local.response.filename    = f"Kitchen-Order-Report-{date_from}-to-{date_to}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"
+
+
+@frappe.whitelist()
+def download_complimentary_house_use_report(
+    date_from=None,
+    date_to=None,
+    reservation_type=None,
+    status=None,
+    search=None,
+):
+    from rhohotel.rhocom_hotel.api.special_reservation_report import get_special_reservation_report
+
+    result = get_special_reservation_report(
+        date_from=date_from,
+        date_to=date_to,
+        reservation_type=reservation_type,
+        status=status,
+        search=search,
+    )
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.defaults.get_global_default("company")
+        or "Hotel"
+    )
+
+    settings = frappe.get_single("Hotel Settings")
+    hotel_logo, hotel_tagline, hotel_address, hotel_phone, hotel_email = _get_hotel_branding(settings, company)
+
+    context = {
+        "company":       company,
+        "hotel_logo":    hotel_logo,
+        "hotel_tagline": hotel_tagline,
+        "hotel_address": hotel_address,
+        "hotel_phone":   hotel_phone,
+        "hotel_email":   hotel_email,
+        "rows":          result.get("rows", []),
+        "summary":       result.get("summary", {}),
+        "filters": {
+            "date_from":        date_from or "",
+            "date_to":          date_to or "",
+            "reservation_type": reservation_type or "All Types",
+            "status":           status or "All",
+            "search":           search or "",
+        },
+        "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
+    }
+
+    print_format = settings.complimentary_house_use_print_format
+
+    if not print_format:
+        frappe.throw("Please set Complimentary & House Use Report Print Format in Hotel Settings.")
+
+    html_template = frappe.db.get_value("Print Format", print_format, "html")
+    if not html_template:
+        frappe.throw("The selected Print Format has no HTML content.")
+
+    html = frappe.render_template(html_template, context)
+    
+    
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "10mm",
+        "margin-bottom": "8mm",
+        "margin-left": "12mm",
+        "margin-right": "12mm",
+    })
+
+    frappe.local.response.filename    = f"Complimentary-House-Use-{date_from}-to-{date_to}.pdf"
+    frappe.local.response.filecontent = pdf
+    frappe.local.response.type        = "pdf"

@@ -539,17 +539,38 @@ function exportShifts() {
   URL.revokeObjectURL(url)
 }
 
-function printShifts() {
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
+
+async function printShifts() {
   const params = new URLSearchParams({
     department: department.value || '',
     week_start: isoDate(weekStart.value),
     shift_type: shiftType.value || '',
   })
-
-  window.open(
-    `/api/method/rhohotel.rhocom_hotel.api.shift_list.download_shift_list_report?${params.toString()}`,
-    '_blank'
-  )
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.shift_list.download_shift_list_report?${params.toString()}`)
 }
 
 watch([department, weekStart, shiftType], () => {

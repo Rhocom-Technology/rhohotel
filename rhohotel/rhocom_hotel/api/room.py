@@ -124,7 +124,8 @@ def get_room_detail(room_id):
         )
 
     # Amenities list
-    amenities = [row.amenity for row in (room.amenities or []) if row.amenity]
+    # amenities = [row.amenity for row in (room.amenities or []) if row.amenity]
+    amenities = [row.item for row in (room.amenities or []) if row.item]
 
     # Audit trail from Frappe Version log (wrapped defensively)
     audit = []

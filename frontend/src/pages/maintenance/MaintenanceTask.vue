@@ -75,6 +75,10 @@
             class="px-4 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
             View Request
           </button>
+          <button @click="printTask"
+            class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Print
+          </button>
 
           <!-- Draft actions — only available when workflow_state is In Progress -->
           <template v-if="task.docstatus === 0 && isEditable">
@@ -1127,11 +1131,40 @@ function getStepIcon(state) {
   return (si + 1).toString()
 }
 
+async function printTask() {
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_maintenance_task?task_name=${encodeURIComponent(task.value?.name || taskId)}`)
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 onMounted(() => {
   loadTask()
   loadDropdowns()
 })
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>
 
 <style scoped>

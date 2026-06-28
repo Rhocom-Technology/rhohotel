@@ -385,7 +385,7 @@ function resetFilters() {
   loadReview()
 }
 
-function printSummary() {
+async function printSummary() {
   const params = new URLSearchParams({
     department: department.value || '',
     week_start: isoDate(weekStart.value),
@@ -393,10 +393,7 @@ function printSummary() {
     search_text: searchText.value || '',
   })
 
-  window.open(
-    `/api/method/rhohotel.rhocom_hotel.api.shift_preference_manager.download_preference_review_report?${params.toString()}`,
-    '_blank'
-  )
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.shift_preference_manager.download_preference_review_report?${params.toString()}`)
 }
 
 function shiftClass(value) {
@@ -427,4 +424,29 @@ onMounted(async () => {
   await loadDepartments()
   await loadReview()
 })
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>

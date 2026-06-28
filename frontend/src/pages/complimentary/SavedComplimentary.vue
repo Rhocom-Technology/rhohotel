@@ -413,8 +413,10 @@ function cancelRecord() {
   cancelResource.fetch({ complimentary_name: route.params.id })
 }
 
-function printRecord() {
-  window.print()
+async function printRecord() {
+  const id = record.value?.name
+  if (!id) return
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_complimentary_record?complimentary_name=${encodeURIComponent(id)}`)
 }
 
 function startEdit() {
@@ -519,4 +521,29 @@ const canConsume = computed(() => ['Approved', 'In Progress'].includes(record.va
 const canCancel  = computed(() => !['Consumed', 'Cancelled', 'Expired'].includes(record.value?.status))
 
 onMounted(loadRecord)
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>

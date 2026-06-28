@@ -3,12 +3,22 @@
     <div>
       <div class="flex justify-between items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">Kitchen Order Report</h1>
-        <button
-          @click="downloadCsv"
-          class="bg-green-600 text-white px-4 py-2 rounded-lg"
-        >
-          Download
-        </button>
+        <div class="flex items-center gap-3">
+
+            <button
+              @click="downloadCsv"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Download CSV
+            </button>
+            <button
+              @click="downloadPdf"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Download PDF
+            </button>
+
+        </div>
       </div>
       <p class="text-xs text-gray-400 mt-1">
         Track kitchen ticket volume, preparation stage, source mix, and completion performance.
@@ -371,8 +381,45 @@ function downloadCsv() {
   URL.revokeObjectURL(url)
 }
 
+async function downloadPdf() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    status: filters.value.status || '',
+    source: filters.value.source || '',
+    station: filters.value.station || '',
+    pos_profile: filters.value.pos_profile || '',
+  })
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_kitchen_order_report?${params}`)
+}
+
 onMounted(async () => {
   await loadProfiles()
   await fetchReport()
 })
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>

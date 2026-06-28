@@ -20,7 +20,7 @@
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-4 flex items-center justify-end gap-2">
       <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         @click="$router.push('/billing/corporate')">Back to List</button>
-      <button class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print Bill</button>
+<button @click="printBill" class="px-4 py-2 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Print Bill</button>
       <button v-if="bill.status === 'Overdue' || bill.status === 'Unpaid'"
         class="px-4 py-2 text-xs font-medium text-yellow-700 border border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors">Send Reminder</button>
       <button v-if="bill.status !== 'Paid'"
@@ -372,8 +372,39 @@ function statusBadgeClass(s) {
   }[s] || 'bg-gray-100 text-gray-500'
 }
 
+async function printBill() {
+  const id = route.params.id
+  if (!id) return
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_corporate_bill?invoice_name=${encodeURIComponent(id)}`)
+}
+
 onMounted(() => {
   fetchBill()
   loadPaymentModes()
 })
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>

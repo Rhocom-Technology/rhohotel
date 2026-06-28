@@ -5,12 +5,20 @@
         <h1 class="text-2xl font-bold text-gray-900">Complimentary & House Use Report</h1>
         <p class="text-xs text-gray-400 mt-1">Internal stays, complimentary stays, authorisation, occupancy, and theoretical room revenue.</p>
       </div>
-      <button
-        @click="downloadCsv"
-        class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
-      >
-        Export CSV
-      </button>
+      <div class="flex items-center gap-3">
+          <button
+            @click="downloadCsv"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            Export CSV
+          </button>
+          <button
+            @click="downloadPdf"
+            class="px-4 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            Export PDF
+          </button>
+      </div>
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 px-6 py-5">
@@ -48,7 +56,7 @@
         </div>
         <button @click="resetFilters" class="px-5 py-2.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Reset</button>
         <button @click="fetchReport" :disabled="loading" class="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? 'Loading...' : 'Apply' }}
         </button>
       </div>
       <p v-if="errorMessage" class="text-xs text-red-600 mt-3">{{ errorMessage }}</p>
@@ -240,6 +248,42 @@ function downloadCsv() {
   link.click()
   URL.revokeObjectURL(link.href)
 }
+async function downloadPdf() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    reservation_type: filters.value.reservation_type || '',
+    status: filters.value.status || '',
+    search: filters.value.search || '',
+  })
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_complimentary_house_use_report?${params}`)
+}
+
 
 onMounted(fetchReport)
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>

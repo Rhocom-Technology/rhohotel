@@ -863,6 +863,8 @@ def download_hall_booking(booking_name):
     if not html_template:
         frappe.throw("The selected Hall Booking Print Format has no HTML content.")
 
+    from frappe.utils import now_datetime, format_datetime
+
     context = {
         "booking": booking,
         "additional_billings": booking.get("additional_billings", []),
@@ -872,6 +874,7 @@ def download_hall_booking(booking_name):
             or frappe.defaults.get_global_default("company")
             or "Hotel"
         ),
+        "generated_at": format_datetime(now_datetime(), "dd-MM-yyyy HH:mm:ss"),
     }
 
     html = frappe.render_template(html_template, context)
@@ -879,7 +882,7 @@ def download_hall_booking(booking_name):
 
     frappe.local.response.filename = "{0}.pdf".format(booking.name)
     frappe.local.response.filecontent = pdf
-    frappe.local.response.type = "download"
+    frappe.local.response.type = "pdf"
     
 
 def _validate_hall_available_for_booking(hall_name):

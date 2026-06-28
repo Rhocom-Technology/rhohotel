@@ -635,7 +635,7 @@ function printReport() {
 }
 
 
-function downloadReport() {
+async function downloadReport() {
   const params = new URLSearchParams({
     date_from: filters.value.dateFrom || '',
     date_to: filters.value.dateTo || '',
@@ -646,9 +646,31 @@ function downloadReport() {
     search: searchQuery.value || '',
   })
 
-  window.open(
-    `/api/method/rhohotel.rhocom_hotel.api.reports.download_guest_stay_history_report?${params.toString()}`,
-    '_blank'
-  )
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_guest_stay_history_report?${params.toString()}`)
+}
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
 }
 </script>

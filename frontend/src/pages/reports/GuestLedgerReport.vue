@@ -3,12 +3,28 @@
     <div>
       <div class="flex justify-between items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">Guest Ledger Report</h1>
-        <button
-          @click="downloadCsv"
-          class="bg-green-600 text-white px-4 py-2 rounded-lg"
-        >
-          Download
-        </button>
+        <div class="flex items-center gap-3">
+
+          <button
+            @click="downloadCsv"
+            class="bg-green-600 text-white px-4 py-2 rounded-lg"
+          >
+            Download CSV
+          </button>
+            <button
+             @click="downloadPdf"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg"
+            >
+              Download PDF
+            </button>
+
+<!--     
+            <button @click="downloadPdf"
+            class="px-4 py-2 text-xs font-semibold rounded-lg text-white bg-green-600">
+            Download  PDF
+          </button> -->
+        </div>
+
       </div>
       <p class="text-xs text-gray-400 mt-1">
         Guest folio transaction ledger in debit/credit format with running balance.
@@ -534,7 +550,45 @@ function downloadCsv() {
   URL.revokeObjectURL(url)
 }
 
+async function downloadPdf() {
+  const params = new URLSearchParams({
+    date_from: filters.value.date_from || '',
+    date_to: filters.value.date_to || '',
+    guest: filters.value.guest || '',
+    checkin_status: filters.value.checkin_status || '',
+    room_type: filters.value.room_type || '',
+    transaction_type: filters.value.transaction_type || '',
+  })
+  await printPdf(`/api/method/rhohotel.rhocom_hotel.api.reports.download_guest_ledger_report?${params.toString()}`)
+}
+
+
 onMounted(() => {
   fetchReport()
 })
+
+async function printPdf(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) throw new Error('Failed to fetch PDF')
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:0;visibility:hidden;'
+    iframe.src = objectUrl
+    document.body.appendChild(iframe)
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(objectUrl)
+        }, 1000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('Print error:', err)
+  }
+}
 </script>
