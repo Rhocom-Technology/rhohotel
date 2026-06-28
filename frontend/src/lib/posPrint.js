@@ -9,12 +9,12 @@ let reservedPreviewWindow = null
 
 function directPrintTimeout(timeoutMs) {
   return new Promise((_, reject) => {
-    window.setTimeout(() => reject(new Error(`Direct POS print timed out after ${timeoutMs}ms`)), timeoutMs)
+    window.setTimeout(() => reject(new Error(`Direct print timed out after ${timeoutMs}ms`)), timeoutMs)
   })
 }
 
 function assertDirectPrintActive(session) {
-  if (session && !session.active) throw new Error('Direct POS print timed out')
+  if (session && !session.active) throw new Error('Direct print timed out')
 }
 
 function loadScript(src) {
@@ -68,7 +68,7 @@ async function connectQZ() {
   } catch (error) {
     if (error?.message === 'Unable to establish connection with QZ') {
       window.location.assign('qz:launch')
-      await qz.websocket.connect({ retries: 3, delay: 1 })
+      await qz.websocket.connect({ retries: 15, delay: 1 })
     } else {
       throw error
     }
@@ -152,6 +152,39 @@ export function openReservedPrintPreview(doctype, name, printFormat = null) {
   }
   reservedPreviewWindow = null
   return true
+}
+
+
+async function printRawCommandsDirectInternal(rawCommands, { session = null } = {}) {
+  if (!rawCommands) throw new Error('Raw print commands are required')
+
+  assertDirectPrintActive(session)
+  const qz = await connectQZ()
+  assertDirectPrintActive(session)
+  const printerName = await getPrinterName(qz)
+  if (!printerName) throw new Error('No default printer found')
+  assertDirectPrintActive(session)
+
+  const config = qz.configs.create(printerName)
+  await qz.print(config, [rawCommands])
+  assertDirectPrintActive(session)
+
+  return { printerName }
+}
+
+export async function printRawCommandsDirect(rawCommands, { directTimeoutMs = POS_DIRECT_PRINT_TIMEOUT_MS } = {}) {
+  const session = { active: true }
+  try {
+    const result = await Promise.race([
+      printRawCommandsDirectInternal(rawCommands, { session }),
+      directPrintTimeout(directTimeoutMs),
+    ])
+    session.active = false
+    return result
+  } catch (error) {
+    session.active = false
+    throw error
+  }
 }
 
 export async function printPOSInvoiceDirect(invoiceName, { session = null } = {}) {

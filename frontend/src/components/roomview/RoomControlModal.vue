@@ -159,8 +159,11 @@
                 class="px-4 py-2.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
                 @click="goToReservation">Open Reservation</button>
               <button v-if="isReserved"
-                class="px-4 py-2.5 text-xs font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                @click="goCheckInFromReservation">Check In Guest</button>
+                :disabled="!canCheckInReservedRoom"
+                class="px-4 py-2.5 text-xs font-bold rounded-lg transition-colors disabled:cursor-not-allowed"
+                :class="canCheckInReservedRoom ? 'text-white bg-green-600 hover:bg-green-700' : 'text-gray-500 bg-gray-100 border border-gray-200'"
+                :title="canCheckInReservedRoom ? 'Check in guest' : reservationCheckInBlockedMessage"
+                @click="goCheckInFromReservation">{{ canCheckInReservedRoom ? 'Check In Guest' : 'Check In (Invoice Required)' }}</button>
               <button v-if="!isReady && !isReserved" class="px-4 py-2.5 text-xs font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
                 @click="goCheckout">Check-out</button>
               <button v-if="!isReady && !isReserved" class="px-4 py-2.5 text-xs font-bold text-white bg-teal-500 rounded-lg hover:bg-teal-600 transition-colors"
@@ -197,6 +200,26 @@ const isReady = computed(() =>
 )
 
 const isReserved = computed(() => props.room.status === 'Reserved')
+
+const reservationType = computed(() => String(props.room.reservation_type || '').trim().toLowerCase())
+const groupBillingMode = computed(() => String(props.room.group_billing_mode || '').trim().toLowerCase())
+const isSplitGroupReservation = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('split'))
+const isCentralGroupReservation = computed(() => reservationType.value === 'group' && groupBillingMode.value.startsWith('central'))
+const hasReservationInvoice = computed(() => Boolean(props.room.sales_invoice || props.room.reservation_has_posted_invoice))
+
+const canCheckInReservedRoom = computed(() => {
+  if (!isReserved.value) return false
+  if (isSplitGroupReservation.value) return Boolean(props.room.split_invoice)
+  if (reservationType.value === 'individual' || reservationType.value === 'corporate' || isCentralGroupReservation.value) {
+    return hasReservationInvoice.value
+  }
+  return true
+})
+
+const reservationCheckInBlockedMessage = computed(() => {
+  if (isSplitGroupReservation.value) return 'Invoice is required before check-in for this room.'
+  return 'Invoice is required before check-in for this reservation.'
+})
 
 // Check-in detail (fetched when modal opens if there is an active check-in)
 const checkinDetail = ref(null)
@@ -263,6 +286,11 @@ function goToReservation() {
 }
 
 function goCheckInFromReservation() {
+  if (!canCheckInReservedRoom.value) {
+    blockError.value = reservationCheckInBlockedMessage.value
+    return
+  }
+
   emit('close')
   const query = {
     room: props.room.room_number || props.room.name,

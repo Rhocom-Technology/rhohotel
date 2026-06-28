@@ -1147,6 +1147,7 @@ def apply_maintenance_workflow(task_name, action):
                         "error": "Cannot approve: insufficient stock or missing warehouse.<br><br>" + "<br>".join(stock_errors)
                     }
             try:
+                _snapshot_parts_available_qty(task)
                 task._create_stock_entries()
             except Exception:
                 frappe.log_error(
@@ -1165,6 +1166,40 @@ def apply_maintenance_workflow(task_name, action):
         frappe.set_user(requesting_user)
 
 # ── Task detail ────────────────────────────────────────────────────────────────
+
+def _get_part_available_qty(item_code, warehouse=None):
+    if not item_code:
+        return 0
+
+    if warehouse:
+        return frappe.db.sql(
+            """
+            SELECT COALESCE(SUM(actual_qty), 0)
+            FROM `tabBin`
+            WHERE item_code = %s AND warehouse = %s
+            """,
+            (item_code, warehouse),
+        )[0][0] or 0
+
+    return frappe.db.sql(
+        """
+        SELECT COALESCE(SUM(actual_qty), 0)
+        FROM `tabBin`
+        WHERE item_code = %s
+        """,
+        (item_code,),
+    )[0][0] or 0
+
+
+def _snapshot_parts_available_qty(task):
+    for part in list(task.parts_used or []) + list(task.parts_returned or []):
+        if not part.item_code:
+            continue
+        qty = _get_part_available_qty(part.item_code, part.warehouse)
+        part.available_qty = qty
+        if part.name:
+            frappe.db.set_value(part.doctype, part.name, "available_qty", qty)
+
 
 @frappe.whitelist()
 def get_maintenance_task(task_name):
@@ -1393,6 +1428,7 @@ def save_maintenance_task(task_name, task_data, parts_used=None, parts_returned=
                     "quantity": p.quantity,
                     "uom": p.uom or "",
                     "warehouse": p.warehouse or "",
+                    "available_qty": p.available_qty or 0,
                     "cost": p.cost or 0,
                     "stock_entry": p.stock_entry,
                 })
@@ -1404,6 +1440,7 @@ def save_maintenance_task(task_name, task_data, parts_used=None, parts_returned=
                         "quantity": p.get("qty") or p.get("quantity") or 1,
                         "uom": p.get("uom") or "",
                         "warehouse": p.get("warehouse") or "",
+                        "available_qty": p.get("available_qty") or 0,
                         "cost": p.get("cost") or 0,
                     })
 
@@ -1423,6 +1460,7 @@ def save_maintenance_task(task_name, task_data, parts_used=None, parts_returned=
                     "quantity": p.quantity,
                     "uom": p.uom or "",
                     "warehouse": p.warehouse or "",
+                    "available_qty": p.available_qty or 0,
                     "cost": p.cost or 0,
                     "stock_entry": p.stock_entry,
                 })
@@ -1434,6 +1472,7 @@ def save_maintenance_task(task_name, task_data, parts_used=None, parts_returned=
                         "quantity": p.get("qty") or p.get("quantity") or 1,
                         "uom": p.get("uom") or "",
                         "warehouse": p.get("warehouse") or "",
+                        "available_qty": p.get("available_qty") or 0,
                         "cost": p.get("cost") or 0,
                     })
 
@@ -1541,29 +1580,7 @@ def get_warehouses_for_parts(company=None):
 
 @frappe.whitelist()
 def get_item_available_qty(item_code, warehouse=None):
-    if not item_code:
-        return {"available_qty": 0}
-
-    if warehouse:
-        qty = frappe.db.sql(
-            """
-            SELECT COALESCE(SUM(actual_qty), 0)
-            FROM `tabBin`
-            WHERE item_code = %s AND warehouse = %s
-            """,
-            (item_code, warehouse),
-        )[0][0] or 0
-    else:
-        qty = frappe.db.sql(
-            """
-            SELECT COALESCE(SUM(actual_qty), 0)
-            FROM `tabBin`
-            WHERE item_code = %s
-            """,
-            (item_code,),
-        )[0][0] or 0
-
-    return {"available_qty": qty}
+    return {"available_qty": _get_part_available_qty(item_code, warehouse)}
 
 
 @frappe.whitelist()
@@ -1602,6 +1619,7 @@ def create_maintenance_task(task_data, parts_used=None):
                         "quantity": p.get("qty") or p.get("quantity") or 1,
                         "uom": p.get("uom") or "",
                         "warehouse": p.get("warehouse") or "",
+                        "available_qty": p.get("available_qty") or 0,
                         "cost": p.get("cost") or 0,
                     })
 

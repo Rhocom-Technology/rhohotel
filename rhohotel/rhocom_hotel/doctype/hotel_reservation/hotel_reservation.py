@@ -117,6 +117,40 @@ def _mark_reservation_room_checked_in(row_name, check_in_reference, check_in_tim
     )
 
 
+def _has_reservation_invoice_for_check_in(doc):
+    if getattr(doc, "sales_invoice", None):
+        return True
+
+    for invoice_row in doc.get("reservation_invoices") or []:
+        if getattr(invoice_row, "invoice", None) and not getattr(invoice_row, "is_return", 0):
+            return True
+
+    return False
+
+
+def _reservation_room_has_required_invoice(doc, room_row):
+    if _is_group_split_billing(doc):
+        return bool(getattr(room_row, "split_invoice", None))
+
+    reservation_type = (getattr(doc, "reservation_type", "") or "").strip().lower()
+    billing_mode = (getattr(doc, "group_billing_mode", "") or "").strip().lower()
+
+    if reservation_type in ("individual", "corporate"):
+        return _has_reservation_invoice_for_check_in(doc)
+
+    if reservation_type == "group" and billing_mode.startswith("central"):
+        return _has_reservation_invoice_for_check_in(doc)
+
+    return True
+
+
+def _reservation_check_in_invoice_required_message(doc, room_row=None):
+    if _is_group_split_billing(doc) and room_row:
+        return _("Invoice is required before check-in for room {0}.").format(getattr(room_row, "room_number", ""))
+
+    return _("Invoice is required before check-in for this reservation.")
+
+
 def link_reservation_invoices_to_check_in(reservation_name, check_in_name, room_row_name=None):
     """Back-link submitted reservation invoices to a Hotel Room Check In.
 
@@ -867,6 +901,9 @@ def check_in_reservation_room(reservation_name, room_row_name):
         return {"status": "success", "message": f"Room {row.room_number} already checked in.",
                 "check_in_reference": row.check_in_reference}
 
+    if not _reservation_room_has_required_invoice(doc, row):
+        return {"status": "error", "message": _reservation_check_in_invoice_required_message(doc, row)}
+
     try:
         from rhohotel.rhocom_hotel.doctype.hotel_settings.hotel_settings import get_default_check_in_datetime
 
@@ -994,6 +1031,10 @@ def bulk_check_in_reservation(reservation_name):
         try:
             if row.status == STATUS_CHECKED_IN or row.check_in_reference:
                 already_checked_in += 1
+                continue
+
+            if not _reservation_room_has_required_invoice(doc, row):
+                errors.append(_reservation_check_in_invoice_required_message(doc, row))
                 continue
 
             nights = cint(row.number_of_nights or doc.number_of_nights or 1)

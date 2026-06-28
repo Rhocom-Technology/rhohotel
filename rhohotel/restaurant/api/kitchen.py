@@ -114,6 +114,10 @@ def send_to_kitchen(items, pos_invoice=None, kitchen_note=None, table_or_room=No
     ticket.insert()
     frappe.db.commit()
 
+    payload = _get_ticket_event_payload(ticket.name)
+    for room in ("all", "website"):
+        frappe.publish_realtime("rhohotel_kitchen_ticket_created", payload, room=room)
+
     return {
         "ticket": ticket.name,
         "item_codes": [row["item_code"] for row in normalized_items],
@@ -153,6 +157,34 @@ def get_sent_to_kitchen_items(pos_invoice):
 # ─────────────────────────────────────────────────────────────────────────────
 # Kitchen Board
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _get_ticket_event_payload(ticket_name):
+    ticket = frappe.get_doc("Kitchen Order Ticket", ticket_name)
+    pos_profile = ""
+    if ticket.pos_invoice:
+        pos_profile = frappe.db.get_value("POS Invoice", ticket.pos_invoice, "pos_profile") or ""
+
+    return {
+        "id": ticket.name,
+        "pos_invoice": ticket.pos_invoice,
+        "table_or_room": ticket.table_or_room,
+        "source": ticket.source,
+        "chef_station": ticket.chef_station,
+        "status": ticket.status,
+        "notes": ticket.notes,
+        "sent_at": cstr(ticket.sent_at),
+        "pos_profile": pos_profile,
+        "items": [
+            {
+                "item_code": row.item_code,
+                "item_name": row.item_name,
+                "qty": row.quantity,
+                "notes": row.notes,
+            }
+            for row in ticket.items
+        ],
+    }
+
 
 def _coerce_delay_minutes(value, fallback):
     return max(1, int(flt(value) or fallback))

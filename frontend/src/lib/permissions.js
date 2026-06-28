@@ -8,6 +8,9 @@
  */
 
 const ROLE_GROUPS = {
+  // Executive owner dashboard
+  owner: ['Hotel Owner'],
+
   // Front Desk module
   frontDesk: ['Hotel Receptionist', 'Front Desk Manager'],
 
@@ -79,6 +82,9 @@ const ROLE_GROUPS = {
  * Order matters — more specific prefixes should come before less specific ones.
  */
 export const ROUTE_PERMISSIONS = [
+  // Owner
+  { prefix: '/owner-dashboard', roles: ROLE_GROUPS.owner },
+
   // Front Desk
   { prefix: '/room-view', roles: ROLE_GROUPS.frontDesk },
   { prefix: '/available-rooms', roles: ROLE_GROUPS.frontDesk },
@@ -176,6 +182,9 @@ export function getRequiredRoles(path) {
 export function getFirstAllowedRoute(userRoles) {
   if (userRoles.includes('System Manager') || userRoles.includes('Hotel Manager')) {
     return '/room-view'
+  }
+  if (userRoles.includes('Hotel Owner')) {
+    return '/owner-dashboard'
   }
 
   for (const entry of ROUTE_PERMISSIONS) {

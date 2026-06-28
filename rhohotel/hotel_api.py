@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import json
-
+from frappe.utils import validate_email_address
 import frappe
 import requests
 from frappe.utils import cint, date_diff, flt, getdate, nowdate
@@ -221,6 +221,9 @@ def _verify_paystack_signature(payload_bytes, signature_header, secret_key):
     Verify Paystack webhook HMAC-SHA512 signature.
     Returns True if valid, False otherwise.
     """
+    if isinstance(payload_bytes, str):
+        payload_bytes = payload_bytes.encode("utf-8")
+    
     expected = hmac.new(
         secret_key.encode("utf-8"),
         payload_bytes,
@@ -257,7 +260,7 @@ def _create_invoice_for_online_reservation(reservation_name):
     if not customer:
         customer = frappe.db.get_value(
             "Customer",
-            {"customer_name": doc.primary_guest_name or ""},
+            {"customer_name": doc.primary_guest_name or "","email_id": doc.primary_guest_email or "",},
             "name",
         )
     if not customer:
@@ -265,7 +268,7 @@ def _create_invoice_for_online_reservation(reservation_name):
             "doctype":        "Customer",
             "customer_name":  doc.primary_guest_name or reservation_name,
             "customer_type":  "Individual",
-            "customer_group": frappe.db.get_default("customer_group") or "Individual",
+            "customer_group": "Individual",
             "territory":      frappe.db.get_default("territory")       or "Nigeria",
             "mobile_no":      doc.primary_guest_phone or "",
             "email_id":       doc.primary_guest_email or "",
@@ -310,9 +313,10 @@ def _create_invoice_for_online_reservation(reservation_name):
         "posting_date":  frappe.utils.today(),
         "due_date":      str(doc.to_date or frappe.utils.today()),
         "update_stock":  0,
+        "taxes_and_charges": "",
         "items":         items,
     })
-    si.set_taxes()
+    # si.set_taxes()
     previous_user = frappe.session.user
     try:
         frappe.set_user("Administrator")
@@ -345,11 +349,23 @@ def _confirm_reservation_after_payment(reservation_name, paystack_reference, amo
     Fully idempotent — safe to call multiple times for the same reservation
     (handles duplicate webhook deliveries gracefully).
     """
+    
+    current = frappe.db.get_value("Hotel Reservation",reservation_name,["reservation_status", "payment_status"],as_dict=True,)
+    if current and current.reservation_status == "Confirmed" and current.payment_status == "Paid":
+        return frappe.get_doc("Hotel Reservation", reservation_name)
+    
     doc = frappe.get_doc("Hotel Reservation", reservation_name)
-
-    # Already confirmed and paid — nothing to do
-    if doc.reservation_status == "Confirmed" and doc.payment_status == "Paid":
-        return doc
+    
+    if doc.reservation_status in ("Expired", "Cancelled"):
+        frappe.log_error(
+            f"Payment received for {doc.reservation_status} reservation {reservation_name}. "
+            f"Paystack reference: {paystack_reference}. Manual refund required.",
+            "confirm_payment – reservation no longer active",
+        )
+        frappe.throw(
+            f"Reservation {reservation_name} is {doc.reservation_status}. "
+            f"Payment cannot be applied. Please contact the hotel for a refund."
+        )
 
     # 1. Update reservation status and submit the document
     # Submission is required so ERPNext can create accounting entries against it.
@@ -710,6 +726,8 @@ def submit_online_reservation(
         return {"success": False, "message": "Guest name is required."}
     if not guest_email:
         return {"success": False, "message": "Guest email is required."}
+    if not validate_email_address(guest_email):
+        return {"success": False, "message": "Invalid email address."}
     if not check_in_date:
         return {"success": False, "message": "Check-in date is required."}
     if not check_out_date:
@@ -952,7 +970,7 @@ def create_reservation_payment_link(reservation_name=None):
         return {"success": False, "message": "Reservation total is zero. Cannot create payment link."}
 
     # Paystack requires amount in kobo (× 100, integer)
-    amount_kobo = int(amount_naira * 100)
+    amount_kobo = round(amount_naira * 100)
 
     payload = {
         "email":     doc.primary_guest_email or "guest@hotel.com",

@@ -834,6 +834,10 @@ stock_entry: p.stock_entry || ''
 stock_entry: p.stock_entry || ''
     }))
 
+    if (stockItems.value.length) {
+      await refreshCurrentAvailableQty()
+    }
+
   } catch (e) {
     const msg = e?.message || String(e)
     if (msg.toLowerCase().includes('you can only view') || msg.toLowerCase().includes('permissionerror') || e?.exc_type === 'PermissionError') {
@@ -853,6 +857,16 @@ async function loadDropdowns() {
   ])
   stockItems.value = itemRes || []
   warehouses.value = whRes || []
+  await refreshCurrentAvailableQty()
+}
+
+async function refreshCurrentAvailableQty() {
+  const rows = [...partsUsed.value, ...partsReturned.value]
+    .filter(part => part.item_code && !part.stock_entry)
+
+  for (const part of rows) {
+    await refreshAvailableQty(part)
+  }
 }
 
 async function onPartSelect(part, items = stockItems.value) {
