@@ -243,7 +243,7 @@
                 "Front Desk User",
                 "Hotel Receptionist",
                 "Hotel Reservation User",
-                "Housekeeper",
+                "House keeper",
                 "Housekeeping Manager",
                 "Kitchen Staff",
                 "Maintenance Manager",
@@ -292,13 +292,13 @@
 
             const roleData = await roleRes.json();
             const userRoles = roleData.message?.roles || [];
-           
 
 
 
-              
+
+
                // 3. CHECK ROLES — System Manager and Administrator always go to /app
-                const isAdministrator = userRoles.includes('System Manager') 
+                const isAdministrator = userRoles.includes('System Manager')
                     || userRoles.includes('Administrator')
 
                 const redirectToFrontDesk = !isAdministrator && userRoles.some(role =>
