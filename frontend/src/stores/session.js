@@ -121,6 +121,7 @@ export const useSessionStore = defineStore('session', () => {
   const user = ref(null)
   const fullName = ref('')
   const roles = ref([])
+  const hasDeskAccess = ref(false)
   const initialized = ref(false)
 
   let initializePromise = null
@@ -128,6 +129,7 @@ export const useSessionStore = defineStore('session', () => {
   function clearProfile() {
     fullName.value = ''
     roles.value = []
+    hasDeskAccess.value = false
   }
 
   async function loadUserProfile() {
@@ -140,6 +142,7 @@ export const useSessionStore = defineStore('session', () => {
       const data = await callMethod('rhohotel.api.get_current_user_info', {}, { method: 'GET' })
       fullName.value = data?.full_name || user.value
       roles.value = Array.isArray(data?.roles) ? data.roles : []
+      hasDeskAccess.value = Boolean(data?.has_desk_access)
     } catch {
       clearProfile()
     }
@@ -208,6 +211,7 @@ export const useSessionStore = defineStore('session', () => {
     user,
     fullName,
     roles,
+    hasDeskAccess,
     initialized,
     isLoggedIn,
     displayName,

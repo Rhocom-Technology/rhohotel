@@ -15,6 +15,16 @@
       </div>
     </div>
     <div class="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+      <a
+        v-if="session.hasDeskAccess"
+        href="/app"
+        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-white/10 hover:text-white sm:px-3"
+        title="Switch to ERP Desk"
+        aria-label="Switch to ERP Desk"
+      >
+        <ExternalLink class="h-4 w-4" />
+        <span class="hidden sm:inline">ERP Desk</span>
+      </a>
       <div class="hidden text-white text-sm font-medium italic lg:block">
         {{ greeting }}, {{ session.displayName }}
       </div>
@@ -32,7 +42,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import { Menu } from 'lucide-vue-next'
+import { ExternalLink, Menu } from 'lucide-vue-next'
 
 const emit = defineEmits(['open-sidebar'])
 

@@ -21,9 +21,11 @@ def get_current_user_info():
 	user = frappe.session.user
 	full_name = frappe.db.get_value("User", user, "full_name") or user
 	roles = frappe.get_roles(user)
+	user_type = frappe.db.get_value("User", user, "user_type")
 	return {
 		"full_name": full_name,
 		"roles": roles,
+		"has_desk_access": user != "Guest" and user_type == "System User",
 	}
 
 

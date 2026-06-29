@@ -4,6 +4,7 @@
 *.swp
 tags
 node_modules
+rhohotel/public/frontend/
 __pycache__
 .idea/modules.xml
 .idea/projectSettingsUpdater.xml
