@@ -1,0 +1,160 @@
+<!-- Fixed Top Navigation Bar -->
+<nav id="heroNavbar" class="navbar navbar-expand-lg fixed-top custom-navbar">
+	<div class="container px-4 px-md-5">
+
+		<!-- Customized Clean Hamburger Trigger -->
+		<button class="navbar-toggler custom-toggler order-1" type="button" onclick="openMenu()">
+			<span></span>
+			<span></span>
+			<span></span>
+		</button>
+
+		<!-- Desktop Links (Left-aligned, Ultra-Compact Group) -->
+		<div class="collapse navbar-collapse order-3 order-lg-1 flex-grow-0" id="mainNavbar">
+			<ul class="navbar-nav compact-nav-links">
+				<li class="nav-item"><a
+					class="nav-link {% if current_page == 'home' %}active{% endif %}"
+					href="/">Home</a></li>
+				<li class="nav-item"><a
+					class="nav-link {% if current_page == 'rooms' %}active{% endif %}"
+					href="/rooms">Rooms</a></li>
+				<!-- Refined Amenities to Dropdown named 'Spaces' -->
+				<li class="nav-item dropdown custom-dropdown">
+					<a class="nav-link dropdown-toggle" href="/#" id="spacesDropdown" role="button"
+					   data-bs-toggle="dropdown" aria-expanded="false">
+						Experiences
+					</a>
+					<ul class="dropdown-menu border-0" aria-labelledby="spacesDropdown">
+						<li><a
+							class="dropdown-item {% if current_page == 'gym' %}active{% endif %}"
+							href="/gym">Gym</a></li>
+						<li><a
+							class="dropdown-item {% if current_page == 'spa' %}active{% endif %}"
+							href="/spa">Spa</a></li>
+						<li><a
+							class="dropdown-item {% if current_page == 'dining' %}active{% endif %}"
+							href="/dining">Restaurant</a></li>
+						<li><a
+							class="dropdown-item {% if current_page == 'events' %}active{% endif %}"
+							href="/events">Events & Halls</a></li>
+					</ul>
+				</li>
+			</ul>
+		</div>
+
+		<!-- Absolute Centered Brand Mark -->
+		<a class="navbar-brand-centered order-2" href="/#">
+			<span class="brand-top">WELLS</span>
+			<span class="brand-bottom">CARLTON</span>
+		</a>
+
+		<!-- Right-aligned Actions Panel (Balanced with Login) -->
+		<div class="d-none d-sm-flex align-items-center gap-4 order-4 ms-auto ms-lg-0">
+			{% if frappe.session.user and frappe.session.user != "Guest" %}
+			<div class="dropdown custom-dropdown">
+				<button class="btn web-nav-user-btn dropdown-toggle" type="button"
+				        data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="web-nav-user-avatar">
+                {{ frappe.session.user[0].upper() }}
+            </span>
+					<span class="web-nav-user-name d-none d-xl-inline">
+                {{ frappe.session.user.split('@')[0] }}
+            </span>
+				</button>
+				<ul class="dropdown-menu dropdown-menu-end web-nav-dropdown border-0">
+					<li>
+						<div class="web-nav-dropdown-header">
+							<div class="web-nav-dropdown-email">{{ frappe.session.user }}</div>
+						</div>
+					</li>
+					<li>
+						<hr class="dropdown-divider my-1">
+					</li>
+					<li>
+						<a class="dropdown-item" href="/me">
+							<i class="fa-solid fa-user me-2"></i> My Profile
+						</a>
+					</li>
+					<li>
+						<a class="dropdown-item" href="/app">
+							<i class="fa-solid fa-gauge me-2"></i> Switch To Desk
+						</a>
+					</li>
+					<li>
+						<hr class="dropdown-divider my-1">
+					</li>
+					<li>
+						<a class="dropdown-item web-nav-logout" href="#"
+						   onclick="hotelLogout(); return false;">
+							<i class="fa-solid fa-right-from-bracket me-2"></i> Logout
+						</a>
+					</li>
+				</ul>
+			</div>
+			{% else %}
+			<a href="/login" class="nav-link contact-link login-link">Login</a>
+			{% endif %}
+			<a href="/contact" class="nav-link contact-link">Contact Us</a>
+			<a href="/booking" class="btn btn-custom btn-nav-large px-4 py-2.5">Book Now</a>
+		</div>
+
+	</div>
+</nav>
+
+<!-- Full-screen Mobile Overlay Drawer -->
+<div class="mobile-overlay" id="mobileMenu">
+	<div class="mobile-header">
+		<span class="fw-bold tracking-wider text-uppercase text-accent-light">Navigation</span>
+		<span onclick="closeMenu()" class="mobile-close">&times;</span>
+	</div>
+
+	<div class="mobile-body">
+		<div class="mobile-section">
+			<h6>Explore Our Property</h6>
+			<a href="/">Home</a>
+			<a href="/rooms">Rooms & Suites</a>
+
+			<!-- Expanded Spaces Sub-links for Mobile Navigation Clarity -->
+			<div class="mobile-nested-group ps-2 my-2">
+				<span class="mobile-sub-heading d-block text-uppercase">Featured Spaces</span>
+				<a href="/gym" class="py-1 ps-2 opacity-75 fs-6">- Gym</a>
+				<a href="/spa" class="py-1 ps-2 opacity-75 fs-6">- Spa</a>
+				<a href="/dining" class="py-1 ps-2 opacity-75 fs-6">- Restaurant</a>
+				<a href="/events" class="py-1 ps-2 opacity-75 fs-6">- Events & Halls</a>
+			</div>
+
+			<a href="/contact">Contact Us</a>
+
+			<!-- Dynamic Frappe User Authentication Block -->
+			{% if frappe.session.user and frappe.session.user != "Guest" %}
+			<!-- Logged-in User Account Group -->
+			<div class="mobile-nested-group ps-2 my-2 web-nav-mobile-user">
+                <span class="mobile-sub-heading d-block text-uppercase d-flex align-items-center gap-2">
+                    <span class="web-nav-user-avatar-sm">
+                        {{ frappe.session.user[0].upper() }}
+                    </span>
+                    Account ({{ frappe.session.user.split('@')[0] }})
+                </span>
+				<div class="mobile-user-email px-2 mb-1">{{ frappe.session.user }}</div>
+
+				<a href="/me" class="py-1 ps-2 opacity-75 fs-6">
+					<i class="fa-solid fa-user me-2 fa-sm"></i> My Profile
+				</a>
+				<a href="/app" class="py-1 ps-2 opacity-75 fs-6">
+					<i class="fa-solid fa-gauge me-2 fa-sm"></i> Switch To Desk
+				</a>
+				<a href="#" onclick="hotelLogout(); return false;" class="py-1 ps-2 text-danger opacity-75 fs-6">
+					<i class="fa-solid fa-right-from-bracket me-2 fa-sm"></i> Logout
+				</a>
+			</div>
+			{% else %}
+			<!-- Anonymous Guest Login link -->
+			<a href="/login"><i class="fa-solid fa-right-to-bracket me-2"></i> Login</a>
+			{% endif %}
+		</div>
+
+		<div class="mobile-section pt-2">
+			<a href="/booking" class="btn btn-custom w-100 py-3 text-center d-block">Book Your Stay Now</a>
+		</div>
+	</div>
+</div>

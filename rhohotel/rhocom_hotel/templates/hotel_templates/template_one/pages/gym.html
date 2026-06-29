@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#0C3989' }};
+  --web-secondary: {{ hotel.secondary_color or '#124B6B' }};
+  --web-accent: {{ hotel.accent_color or '#9B362D' }};
+">
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/navbar.html" %}
+{% set gym_media = page_media.get("gym", {}) %}
+{% set general_media = page_media.get("general", {}) %}
+
+{% set gym_hero_images = gym_media.get("hero_image", []) %}
+{% set gym_main_images = gym_media.get("main_image", []) %}
+{% set gym_side_images = gym_media.get("side_image", []) %}
+{% set gym_card_images = gym_media.get("card_image", []) %}
+{% set gym_background_images = gym_media.get("background_image", []) %}
+{% set gym_cta_images = gym_media.get("cta_image", []) %}
+{# --- IMPORTED GYM DETAIL IMAGES HERE --- #}
+{% set gym_detail_images = gym_media.get("detail_image", []) %}
+
+{% set general_background_images = general_media.get("background_image", []) %}
+{% set general_cta_images = general_media.get("cta_image", []) %}
+
+{% if gym_hero_images|length > 0 %}
+{% set gym_hero_image = gym_hero_images[0].image %}
+{% set gym_hero_alt = gym_hero_images[0].alt_text or "Gym at " ~ (hotel.hotel_name or "Hotel") %}
+{% else %}
+{% set gym_hero_image = "" %}
+{% set gym_hero_alt = "Gym at " ~ (hotel.hotel_name or "Hotel") %}
+{% endif %}
+
+{% if gym_main_images|length > 0 %}
+{% set gym_main_image = gym_main_images[0].image %}
+{% set gym_main_alt = gym_main_images[0].alt_text or "Hotel fitness area" %}
+{% else %}
+{% set gym_main_image = "" %}
+{% set gym_main_alt = "Hotel fitness area" %}
+{% endif %}
+
+{% if gym_side_images|length > 0 %}
+{% set gym_side_image = gym_side_images[0].image %}
+{% set gym_side_alt = gym_side_images[0].alt_text or "Fitness equipment detail" %}
+{% else %}
+{% set gym_side_image = "" %}
+{% set gym_side_alt = "Fitness equipment detail" %}
+{% endif %}
+
+{% if gym_background_images|length > 0 %}
+{% set gym_background_image = gym_background_images[0].image %}
+{% elif general_background_images|length > 0 %}
+{% set gym_background_image = general_background_images[0].image %}
+{% else %}
+{% set gym_background_image = "" %}
+{% endif %}
+
+{% if gym_cta_images|length > 0 %}
+{% set gym_cta_image = gym_cta_images[0].image %}
+{% set gym_cta_alt = gym_cta_images[0].alt_text or "Stay Well During Your Visit" %}
+{% elif general_cta_images|length > 0 %}
+{% set gym_cta_image = general_cta_images[0].image %}
+{% set gym_cta_alt = general_cta_images[0].alt_text or "Stay Well During Your Visit" %}
+{% else %}
+{% set gym_cta_image = "" %}
+{% set gym_cta_alt = "Stay Well During Your Visit" %}
+{% endif %}
+
+<header class="hms-restaurant-split-hero position-relative overflow-hidden">
+
+	<div class="restaurant-hero-mobile-bg d-lg-none">
+		{% if gym_hero_image and gym_hero_image|trim != "" %}
+		<img src="{{ gym_hero_image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_hero_alt }}">
+		{% else %}
+		<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+		{% endif %}
+		<div class="restaurant-hero-mobile-overlay"></div>
+	</div>
+
+	<div class="container-fluid p-0 h-100 position-relative z-3">
+		<div class="row g-0 h-100 align-items-center">
+
+			<div class="col-lg-6 hms-hero-left-split position-relative d-none d-lg-block">
+				<div class="w-100 h-100">
+					{% if gym_hero_image and gym_hero_image|trim != "" %}
+					<img src="{{ gym_hero_image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_hero_alt }}">
+					{% else %}
+					<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+					{% endif %}
+					<div class="restaurant-hero-desktop-left-overlay"></div>
+				</div>
+
+				<div class="restaurant-hero-nested-floating-box">
+					{% if gym_main_image and gym_main_image|trim != "" %}
+					<img src="{{ gym_main_image }}" class="restaurant-floating-photo" alt="{{ gym_main_alt }}">
+					{% else %}
+					<div class="restaurant-floating-photo hms-hero-gradient-fallback" style="min-height: 250px;"></div>
+					{% endif %}
+				</div>
+			</div>
+
+			<div class="col-lg-6 hms-hero-right-split d-flex flex-column justify-content-center">
+				<div class="restaurant-hero-content-wrapper px-4 px-md-5 mx-xl-5">
+
+                    <span class="text-uppercase tracking-widest fw-black d-block mb-2 text-accent-theme" style="font-size: 0.75rem; letter-spacing: 4px !important;">
+                        Fitness & Strength
+                    </span>
+
+					<h1 class="display-4 fw-black text-uppercase tracking-tight text-accent-theme mb-4">
+						Elevate Energy <br>& Stay Strong
+					</h1>
+
+					<p class="text-accent-theme leading-relaxed mb-4">
+						Achieve your health goals in an inspiring, high-end environment. Our fitness spaces are designed with modern equipment, open layouts, and dedicated zones to keep your routine balanced and energized.
+					</p>
+
+					<div class="pt-2">
+						<a href="#gym-booking" class="btn hms-restaurant-action-btn px-4 py-3 fw-bold text-white text-uppercase shadow-sm" style="font-size: 0.8rem; letter-spacing: 1px;">
+							Join a Class <i class="bi bi-arrow-right ms-2"></i>
+						</a>
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+</header>
+
+
+<section class="hms-dual-composite-section py-5 bg-white overflow-visible">
+	<div class="container px-4 px-md-5 py-md-4">
+		<div class="row g-5 align-items-center">
+
+			<div class="col-lg-5 order-2 order-lg-1">
+				<div class="hms-pyramid-grid-container">
+
+					<div class="hms-pyramid-row-top d-flex justify-content-center">
+						<div class="hms-small-thumb-box shadow">
+							{% if gym_detail_images|length > 0 and gym_detail_images[0].image|trim != "" %}
+							<img src="{{ gym_detail_images[0].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_detail_images[0].alt_text or 'Cardio Equipment Close-up' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+					</div>
+
+					<div class="hms-pyramid-row-bottom d-flex justify-content-center gap-4">
+						<div class="hms-small-thumb-box shadow">
+							{% if gym_detail_images|length > 1 and gym_detail_images[1].image|trim != "" %}
+							<img src="{{ gym_detail_images[1].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_detail_images[1].alt_text or 'Yoga Studio Space' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+						<div class="hms-small-thumb-box shadow">
+							{% if gym_detail_images|length > 2 and gym_detail_images[2].image|trim != "" %}
+							<img src="{{ gym_detail_images[2].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_detail_images[2].alt_text or 'Weights Racks Setup' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+					</div>
+
+				</div>
+			</div>
+
+			<div class="col-lg-7 order-1 order-lg-2">
+				<div class="hms-double-layer-wrapper position-relative mx-auto ms-lg-auto me-lg-0">
+
+					<div class="hms-stack-base-card rounded-2 overflow-hidden shadow">
+						{% if gym_side_image and gym_side_image|trim != "" %}
+						<img src="{{ gym_side_image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_side_alt }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+						{% endif %}
+					</div>
+
+					<div class="hms-stack-floating-card rounded-2 overflow-hidden shadow-lg border border-white border-4">
+						{% if gym_detail_images|length > 3 and gym_detail_images[3].image|trim != "" %}
+						<img src="{{ gym_detail_images[3].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_detail_images[3].alt_text or 'Athlete Exercising Accent Card' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+						{% endif %}
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+</section>
+
+
+<section class="hms-venues-grid-section py-5 bg-light">
+	<div class="container px-4 px-md-5 py-md-4">
+
+		<div class="row mb-5">
+			<div class="col-lg-6">
+				<div class="d-flex align-items-center gap-2 mb-2">
+					<span class="hms-venue-dot"></span>
+					<span class="text-uppercase tracking-widest text-muted fw-bold" style="font-size: 0.72rem; letter-spacing: 3px !important;">Zones & Studios</span>
+				</div>
+				<h2 class="h1 fw-black text-dark text-uppercase tracking-tight m-0">
+					Our Training <span class="text-accent-theme">Spaces</span>
+				</h2>
+			</div>
+			<div class="col-lg-6 d-flex align-items-center">
+				<p class="text-muted m-0 pt-3 pt-lg-0 max-w-text">
+					Discover specialized training spaces designed for your unique routine. Every area is well-ventilated, fully equipped, and built for optimal workout performance.
+				</p>
+			</div>
+		</div>
+
+		<div class="row g-4">
+
+			<div class="col-lg-7">
+				<div class="hms-venue-card featured-venue position-relative rounded-2 overflow-hidden shadow-sm bg-white h-100">
+					<div class="hms-venue-img-box">
+						{% if gym_card_images|length > 0 and gym_card_images[0].image|trim != "" %}
+						<img src="{{ gym_card_images[0].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_card_images[0].alt_text or 'Strength & Weights Area' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback" style="min-height: 250px;"></div>
+						{% endif %}
+					</div>
+					<div class="hms-venue-meta-box p-4">
+						<div class="d-flex justify-content-between align-items-start mb-2">
+							<h3 class="h4 fw-black text-dark m-0 text-uppercase">Strength Zone</h3>
+							<span class="badge hms-capacity-badge">Free Weights</span>
+						</div>
+						<p class="text-muted small mb-4">Build and tone with our comprehensive line of strength gear, custom selectorized machines, resistance setups, and multi-functional lifting stations.</p>
+
+						<div class="d-flex flex-wrap gap-3 text-muted small border-top pt-3">
+							<span><i class="bi bi-check2-circle me-1"></i> Lifting Platforms</span>
+							<span><i class="bi bi-check2-circle me-1"></i> Premium Dumbbells</span>
+							<span><i class="bi bi-check2-circle me-1"></i> Resistance Racks</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="col-lg-5">
+				<div class="hms-venue-card position-relative rounded-2 overflow-hidden shadow-sm bg-white h-100">
+					<div class="hms-venue-img-box standard-height">
+						{% if gym_card_images|length > 1 and gym_card_images[1].image|trim != "" %}
+						<img src="{{ gym_card_images[1].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_card_images[1].alt_text or 'Cardio Training Studio' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback" style="min-height: 200px;"></div>
+						{% endif %}
+					</div>
+					<div class="hms-venue-meta-box p-4">
+						<div class="d-flex justify-content-between align-items-start mb-2">
+							<h3 class="h5 fw-black text-dark m-0 text-uppercase">Cardio Deck</h3>
+							<span class="badge hms-capacity-badge">Endurance</span>
+						</div>
+						<p class="text-muted small mb-4">Boost stamina using top-tier treadmills, smart indoor bikes, rowers, and ellipticals facing expansive floor-to-ceiling windows.</p>
+
+						<div class="d-flex flex-wrap gap-3 text-muted small border-top pt-3">
+							<span><i class="bi bi-check2-circle me-1"></i> Smart Treadmills</span>
+							<span><i class="bi bi-check2-circle me-1"></i> Rowers & Bikes</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="col-md-6">
+				<div class="hms-venue-card position-relative rounded-2 overflow-hidden shadow-sm bg-white h-100">
+					<div class="hms-venue-img-box standard-height">
+						{% if gym_card_images|length > 2 and gym_card_images[2].image|trim != "" %}
+						<img src="{{ gym_card_images[2].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_card_images[2].alt_text or 'Yoga and Pilates Studio' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback" style="min-height: 200px;"></div>
+						{% endif %}
+					</div>
+					<div class="hms-venue-meta-box p-4">
+						<div class="d-flex justify-content-between align-items-start mb-2">
+							<h3 class="h5 fw-black text-dark m-0 text-uppercase">Mind & Body Studio</h3>
+							<span class="badge hms-capacity-badge">Flexibility</span>
+						</div>
+						<p class="text-muted small mb-4">A bright and tranquil hardwood studio space entirely dedicated to stretching, group yoga routines, and holistic movement practices.</p>
+
+						<div class="d-flex flex-wrap gap-3 text-muted small border-top pt-3">
+							<span><i class="bi bi-check2-circle me-1"></i> Yoga Mats & Blocks</span>
+							<span><i class="bi bi-check2-circle me-1"></i> Balance Balls</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="col-md-6">
+				<div class="hms-venue-card position-relative rounded-2 overflow-hidden shadow-sm bg-white h-100">
+					<div class="hms-venue-img-box standard-height">
+						{% if gym_card_images|length > 3 and gym_card_images[3].image|trim != "" %}
+						<img src="{{ gym_card_images[3].image }}" class="w-100 h-100 object-fit-cover" alt="{{ gym_card_images[3].alt_text or 'Personal Training Suite' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback" style="min-height: 200px;"></div>
+						{% endif %}
+					</div>
+					<div class="hms-venue-meta-box p-4">
+						<div class="d-flex justify-content-between align-items-start mb-2">
+							<h3 class="h5 fw-black text-dark m-0 text-uppercase">Private Coaching</h3>
+							<span class="badge hms-capacity-badge">One-on-One</span>
+						</div>
+						<p class="text-muted small mb-4">Work directly with our experienced training coaches inside a private, distraction-free environment tailored around your fitness plan.</p>
+
+						<div class="d-flex flex-wrap gap-3 text-muted small border-top pt-3">
+							<span><i class="bi bi-check2-circle me-1"></i> Fitness Planning</span>
+							<span><i class="bi bi-check2-circle me-1"></i> Private Lockers</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+		</div>
+	</div>
+</section>
+
+
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/footer.html" %}
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/scripts.html" %}
+
+</body>
+
+</html>
