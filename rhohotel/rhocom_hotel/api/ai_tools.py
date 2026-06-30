@@ -13,12 +13,22 @@ import json
 
 # ── Occupancy ────────────────────────────────────────────────────────────────
 
+def _room_is_under_maintenance(room):
+	status = (room.get("status") or "").strip().lower()
+	operational_status = (room.get("operational_status") or "").strip().lower()
+	return (
+		status in ("maintenance", "unavailable", "out of service")
+		or bool(room.get("maintenance_flag"))
+		or operational_status in ("out of service", "blocked")
+	)
+
+
 def get_occupancy_summary():
 	"""Current hotel room occupancy counts and percentage."""
 	try:
 		rooms = frappe.get_all(
 			"Hotel Room",
-			fields=["name", "occupancy_status", "room_type", "floor"],
+			fields=["name", "status", "operational_status", "maintenance_flag", "room_type", "floor"],
 			limit_page_length=0,
 		)
 		total = len(rooms)
@@ -26,11 +36,11 @@ def get_occupancy_summary():
 			return {"total_rooms": 0, "occupied": 0, "vacant": 0, "maintenance": 0, "occupancy_pct": 0}
 
 		def _match(r, *values):
-			return (r.get("occupancy_status") or "").lower() in values
+			return (r.get("status") or "").strip().lower() in values
 
-		occupied = sum(1 for r in rooms if _match(r, "occupied"))
-		vacant = sum(1 for r in rooms if _match(r, "vacant"))
-		maintenance = sum(1 for r in rooms if _match(r, "maintenance", "unavailable", "out of service"))
+		maintenance = sum(1 for r in rooms if _room_is_under_maintenance(r))
+		occupied = sum(1 for r in rooms if not _room_is_under_maintenance(r) and _match(r, "occupied"))
+		vacant = sum(1 for r in rooms if not _room_is_under_maintenance(r) and _match(r, "vacant"))
 
 		return {
 			"total_rooms": total,
@@ -544,10 +554,14 @@ def get_dirty_vacant_rooms():
 	try:
 		vacant_rooms = frappe.get_all(
 			"Hotel Room",
-			filters={"occupancy_status": "Vacant"},
-			fields=["name", "room_type", "floor"],
+			filters={"status": "Vacant", "maintenance_flag": 0},
+			fields=["name", "room_type", "floor", "operational_status"],
 			limit_page_length=0,
 		)
+		vacant_rooms = [
+			r for r in vacant_rooms
+			if (r.get("operational_status") or "In Service") == "In Service"
+		]
 		if not vacant_rooms:
 			return {"dirty_vacant_rooms": [], "count": 0}
 
@@ -584,14 +598,14 @@ def get_dirty_vacant_rooms():
 # ── Maintenance Blocked Rooms ─────────────────────────────────────────────────
 
 def get_maintenance_blocked_rooms():
-	"""Rooms with occupancy_status 'Maintenance' — currently out of service."""
+	"""Rooms currently blocked for maintenance or out of service."""
 	try:
-		blocked = frappe.get_all(
+		rooms = frappe.get_all(
 			"Hotel Room",
-			filters={"occupancy_status": ["in", ["Maintenance", "Unavailable", "Out of Service"]]},
-			fields=["name", "room_type", "floor"],
+			fields=["name", "room_type", "floor", "status", "operational_status", "maintenance_flag"],
 			limit_page_length=0,
 		)
+		blocked = [r for r in rooms if _room_is_under_maintenance(r)]
 		return {"maintenance_blocked_rooms": [dict(r) for r in blocked], "count": len(blocked)}
 	except Exception as e:
 		frappe.log_error(f"AI tool get_maintenance_blocked_rooms: {e}", "AI Tool Error")

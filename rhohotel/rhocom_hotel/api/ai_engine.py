@@ -531,6 +531,14 @@ _INSIGHT_PROMPTS = {
 		"precisely, and end with one specific next action. Use \u20a6 for currency.\n\n"
 		"Billing Data:\n{context}\n\nSummary:"
 	),
+	"owner_finance_dashboard_summary": (
+		"You are a hotel owner finance AI. Based on this owner dashboard data, write a concise "
+		"3-4 sentence executive finance summary for the hotel owner. Cover period revenue, "
+		"collections/outstanding balances, profitability, cashflow, occupancy economics, and any "
+		"watchlist or operational risks that materially affect cash or profit. Use \u20a6 for currency, "
+		"be specific with numbers, and end with one priority action for management.\n\n"
+		"Owner Finance Dashboard:\n{context}\n\nExecutive Summary:"
+	),
 	"corporate_bill_summary": (
 		"You are a hotel finance AI. Based on this corporate invoice, write a 2-sentence status "
 		"summary: state the payment position, flag any overdue risk, and recommend the single most "
