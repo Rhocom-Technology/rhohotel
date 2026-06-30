@@ -57,10 +57,7 @@
           <p class="text-xs text-gray-500 mb-1.5">Method</p>
           <select v-model="filterMethod" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none text-gray-600">
             <option value="">All Methods</option>
-            <option value="Cash">Cash</option>
-            <option value="Card">Card</option>
-            <option value="POS">POS</option>
-            <option value="Bank Transfer">Bank Transfer</option>
+            <option v-for="mode in paymentModes" :key="mode.name" :value="mode.name">{{ mode.name }}</option>
           </select>
         </div>
         <div class="w-full sm:min-w-[120px] sm:flex-1">
@@ -264,10 +261,7 @@
                 <p class="text-xs text-gray-500 mb-1.5">Mode of Payment <span class="text-red-500">*</span></p>
                 <select v-model="receiveForm.mode_of_payment" class="w-full px-3 py-2.5 text-xs border border-gray-200 rounded-lg focus:outline-none">
                   <option value="">Select mode</option>
-                  <option>Cash</option>
-                  <option>Card</option>
-                  <option>POS</option>
-                  <option>Bank Transfer</option>
+                  <option v-for="mode in paymentModes" :key="mode.name" :value="mode.name">{{ mode.name }}</option>
                 </select>
               </div>
             </div>
@@ -308,7 +302,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { createResource } from 'frappe-ui'
 import { callMethod } from '@/lib/api'
 
@@ -322,6 +316,7 @@ const selectedPayment = ref(null)
 const showReceiveModal = ref(false)
 const receivingPayment = ref(false)
 const receiveError = ref('')
+const paymentModes = ref([])
 const receiveForm = ref({
   check_in: '',
   paid_amount: '',
@@ -345,6 +340,20 @@ const checkInResource = createResource({
 
 const checkins = computed(() => checkInResource.data || [])
 const checkinOptions = computed(() => checkins.value)
+
+async function loadPaymentModes() {
+  try {
+    paymentModes.value = await callMethod('frappe.client.get_list', {
+      doctype: 'Mode of Payment',
+      fields: ['name'],
+      filters: { disabled: 0 },
+      order_by: 'name asc',
+      limit_page_length: 500,
+    }) || []
+  } catch {
+    paymentModes.value = []
+  }
+}
 
 const payments = computed(() => (paymentResource.data || []).map((row) => {
   const amount = Number(row.received_amount || row.paid_amount || 0)
@@ -433,6 +442,7 @@ function formatPaymentDate(dateValue, timeValue) {
 
 function openReceivePayment() {
   receiveError.value = ''
+  if (!paymentModes.value.length) loadPaymentModes()
   showReceiveModal.value = true
 }
 
@@ -500,5 +510,9 @@ async function submitReceivePayment() {
 
 watch([search, filterMethod, filterStatus, filterDate], () => {
   page.value = 1
+})
+
+onMounted(() => {
+  loadPaymentModes()
 })
 </script>

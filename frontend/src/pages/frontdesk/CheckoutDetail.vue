@@ -328,11 +328,20 @@
 
     <div v-if="showLateCheckoutPrompt" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div class="w-full max-w-md bg-white rounded-xl border border-gray-200 shadow-xl">
-        <div class="px-6 py-5 border-b border-gray-100">
-          <p class="text-sm font-bold text-gray-900">Charge Late Check-out?</p>
-          <p class="text-xs text-gray-500 mt-1">
-            {{ formatHoursLate(data.late_checkout_charge?.hours_late) }} overdue • {{ formatCurrency(lateCheckoutAmount) }}
-          </p>
+        <div class="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-bold text-gray-900">Charge Late Check-out?</p>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ formatHoursLate(data.late_checkout_charge?.hours_late) }} overdue • {{ formatCurrency(lateCheckoutAmount) }}
+            </p>
+          </div>
+          <button @click="showLateCheckoutPrompt = false"
+            type="button"
+            aria-label="Close"
+            title="Close"
+            class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+            <X class="w-4 h-4" />
+          </button>
         </div>
         <div class="px-6 py-5">
           <p class="text-xs text-gray-600 leading-relaxed">
@@ -361,6 +370,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
+import { X } from 'lucide-vue-next'
 import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import { callMethodForm } from '@/lib/api'
 import { parseServerDate } from '@/lib/utils'
