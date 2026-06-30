@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/head.html" %}
+</head>
+
+
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#0C3989' }};
+  --web-secondary: {{ hotel.secondary_color or '#124B6B' }};
+  --web-accent: {{ hotel.accent_color or '#9B362D' }};
+">
+
+<H1>TEST</H1>
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/navbar.html" %}
+{% set booking_media = page_media.get("booking", {}) %}
+{% set general_media = page_media.get("general", {}) %}
+
+{% set booking_hero_images = booking_media.get("hero_image", []) %}
+{% set booking_main_images = booking_media.get("main_image", []) %}
+{% set booking_side_images = booking_media.get("side_image", []) %}
+{% set booking_card_images = booking_media.get("card_image", []) %}
+{% set booking_background_images = booking_media.get("background_image", []) %}
+{% set booking_cta_images = booking_media.get("cta_image", []) %}
+{# --- IMPORTED DETAIL IMAGES FOR INVERTED PYRAMID FRAME --- #}
+{% set booking_detail_images = booking_media.get("detail_image", []) %}
+
+{% set general_background_images = general_media.get("background_image", []) %}
+{% set general_cta_images = general_media.get("cta_image", []) %}
+
+{% if booking_hero_images|length > 0 %}
+{% set booking_hero_image = booking_hero_images[0].image %}
+{% set booking_hero_alt = booking_hero_images[0].alt_text or "Secure your luxurious suite reservations at " ~ (hotel.hotel_name or "Hotel") %}
+{% else %}
+{% set booking_hero_image = "" %}
+{% set booking_hero_alt = "Secure your luxurious suite reservations at " ~ (hotel.hotel_name or "Hotel") %}
+{% endif %}
+
+{% if booking_main_images|length > 0 %}
+{% set booking_main_image = booking_main_images[0].image %}
+{% set booking_main_alt = booking_main_images[0].alt_text or "Bespoke executive lounge suite presentation" %}
+{% else %}
+{% set booking_main_image = "" %}
+{% set booking_main_alt = "Bespoke executive lounge suite presentation" %}
+{% endif %}
+
+{% if booking_side_images|length > 0 %}
+{% set booking_side_image = booking_side_images[0].image %}
+{% set booking_side_alt = booking_side_images[0].alt_text or "VIP personalized check-in reception services" %}
+{% else %}
+{% set booking_side_image = "" %}
+{% set booking_side_alt = "VIP personalized check-in reception services" %}
+{% endif %}
+
+{% if booking_background_images|length > 0 %}
+{% set booking_background_image = booking_background_images[0].image %}
+{% elif general_background_images|length > 0 %}
+{% set booking_background_image = general_background_images[0].image %}
+{% else %}
+{% set booking_background_image = "" %}
+{% endif %}
+
+{% if booking_cta_images|length > 0 %}
+{% set booking_cta_image = booking_cta_images[0].image %}
+{% set booking_cta_alt = booking_cta_images[0].alt_text or "Confirm Luxury Stay Reservation" %}
+{% elif general_cta_images|length > 0 %}
+{% set booking_cta_image = general_cta_images[0].image %}
+{% set booking_cta_alt = general_cta_images[0].alt_text or "Confirm Luxury Stay Reservation" %}
+{% else %}
+{% set booking_cta_image = "" %}
+{% set booking_cta_alt = "Confirm Luxury Stay Reservation" %}
+{% endif %}
+
+
+<!-- ==========================================
+HMS BOOKING CENTER SPLIT HERO SECTION
+========================================== -->
+<header class="hms-restaurant-split-hero position-relative overflow-hidden">
+
+	<!-- Mobile Background Engine (Active only < 992px) -->
+	<div class="restaurant-hero-mobile-bg d-lg-none">
+		{% if booking_hero_image and booking_hero_image|trim != "" %}
+		<img src="{{ booking_hero_image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_hero_alt }}">
+		{% else %}
+		<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+		{% endif %}
+		<div class="restaurant-hero-mobile-overlay"></div>
+	</div>
+
+	<div class="container-fluid p-0 h-100 position-relative z-3">
+		<div class="row g-0 h-100 align-items-center">
+
+			<!-- LEFT PANEL: Half-screen graphic space on desktop containing the layered portrait box -->
+			<div class="col-lg-6 hms-hero-left-split position-relative d-none d-lg-block">
+				<div class="w-100 h-100">
+					{% if booking_hero_image and booking_hero_image|trim != "" %}
+					<img src="{{ booking_hero_image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_hero_alt }}">
+					{% else %}
+					<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+					{% endif %}
+				</div>
+
+				<!-- Floating Portrait Box nesting inside the left half boundary -->
+				<div class="restaurant-hero-nested-floating-box">
+					{% if booking_main_image and booking_main_image|trim != "" %}
+					<img src="{{ booking_main_image }}" class="restaurant-floating-photo" alt="{{ booking_main_alt }}">
+					{% else %}
+					<div class="restaurant-floating-photo hms-hero-gradient-fallback" style="min-height: 250px;"></div>
+					{% endif %}
+				</div>
+			</div>
+
+			<!-- RIGHT PANEL: Narrative presentation box -->
+			<div class="col-lg-6 hms-hero-right-split d-flex flex-column justify-content-center">
+				<div class="restaurant-hero-content-wrapper px-4 px-md-5 mx-xl-5">
+
+                        <span
+	                        class="text-uppercase tracking-widest fw-black d-block mb-2 text-accent-theme"
+	                        style="font-size: 0.75rem; letter-spacing: 4px !important;">
+                            Reservations Desk
+                        </span>
+
+					<h1 class="display-4 fw-black text-uppercase tracking-tight text-accent-theme mb-4">
+						Secure Your <br>Stay & Spaces
+					</h1>
+
+					<p class="text-accent-theme leading-relaxed mb-4">
+						Plan your luxury getaway or execute spectacular corporate events. Check
+						live availability
+						instantly and transition directly to our concierge team to finalize your
+						elite itinerary.
+					</p>
+
+					<div class="d-flex flex-wrap gap-3 pt-2">
+						<a href="#booking-engine-core"
+						   class="btn hms-restaurant-action-btn hms-btn-primary px-4 py-3 fw-bold text-white text-uppercase shadow-sm"
+						   style="font-size: 0.8rem; letter-spacing: 1px;">
+							Begin Booking <i class="bi bi-chevron-down ms-2"></i>
+						</a>
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+</header>
+
+
+<!-- ==========================================
+HMS COMPOSITE LAYERED SHOWCASE (HEADER-BLEED)
+========================================== -->
+<section class="hms-dual-composite-section py-5 bg-white overflow-visible">
+	<div class="container px-4 px-md-5 py-md-4">
+		<div class="row g-5 align-items-center">
+
+			<!-- LEFT COLUMN: Three small images arranged in an inverted triangle configuration -->
+			<div class="col-lg-5 order-2 order-lg-1">
+				<div class="hms-pyramid-grid-container">
+
+					<!-- Top Centralized Image Element -->
+					<div class="hms-pyramid-row-top d-flex justify-content-center">
+						<div class="hms-small-thumb-box shadow">
+							{% if booking_detail_images|length > 0 and booking_detail_images[0].image|trim != "" %}
+							<img src="{{ booking_detail_images[0].image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_detail_images[0].alt_text or 'Luxury room premium linens' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+					</div>
+
+					<!-- Bottom Two Split Images Row Component -->
+					<div class="hms-pyramid-row-bottom d-flex justify-content-center gap-4">
+						<div class="hms-small-thumb-box shadow">
+							{% if booking_detail_images|length > 1 and booking_detail_images[1].image|trim != "" %}
+							<img src="{{ booking_detail_images[1].image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_detail_images[1].alt_text or 'Elite butler welcoming hospitality' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+						<div class="hms-small-thumb-box shadow">
+							{% if booking_detail_images|length > 2 and booking_detail_images[2].image|trim != "" %}
+							<img src="{{ booking_detail_images[2].image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_detail_images[2].alt_text or 'Premium bathroom spa setups' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+					</div>
+
+				</div>
+			</div>
+
+			<!-- RIGHT COLUMN: Massive Composite Image Stack Bleeding Upwards into Hero Section Area -->
+			<div class="col-lg-7 order-1 order-lg-2">
+				<div class="hms-double-layer-wrapper position-relative mx-auto ms-lg-auto me-lg-0">
+
+					<!-- Base Foundation Image Frame (Massive Size Variant) -->
+					<div class="hms-stack-base-card rounded-2 overflow-hidden shadow">
+						{% if booking_side_image and booking_side_image|trim != "" %}
+						<img src="{{ booking_side_image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_side_alt }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+						{% endif %}
+					</div>
+
+					<!-- Floating Frame Layered cleanly over the Left Boundary Edge -->
+					<div
+						class="hms-stack-floating-card rounded-2 overflow-hidden shadow-lg border border-white border-4">
+						{% if booking_detail_images|length > 3 and booking_detail_images[3].image|trim != "" %}
+						<img src="{{ booking_detail_images[3].image }}" class="w-100 h-100 object-fit-cover" alt="{{ booking_detail_images[3].alt_text or 'Exclusive tier room scenery view' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+						{% endif %}
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+</section>
+
+
+<!-- ==========================================
+HMS BOOKING PORTAL MATRIX WORKSPACE
+========================================== -->
+<section id="booking-engine-core" class="hms-venues-grid-section py-5 bg-light">
+	<div class="container px-4 px-md-5 py-md-4">
+
+		<!-- Section Architecture Header -->
+		<div class="row mb-5 align-items-center">
+			<div class="col-lg-6">
+				<div class="d-flex align-items-center gap-2 mb-2">
+					<span class="hms-venue-dot"></span>
+					<span class="text-uppercase tracking-widest text-muted fw-bold"
+					      style="font-size: 0.72rem; letter-spacing: 3px !important;">Booking Portal v1.0</span>
+				</div>
+				<h2 class="h1 fw-black text-dark text-uppercase tracking-tight m-0">
+					Reservation <span class="text-accent-theme">Engine</span>
+				</h2>
+			</div>
+			<div class="col-lg-6">
+				<p class="text-muted m-0 pt-3 pt-lg-0 max-w-text small">
+					Select your service profile below to initiate availability checks. Once
+					confirmed, you can
+					instantly proceed to schedule real-world hotel tours or process secure payments
+					via your
+					concierge agent.
+				</p>
+			</div>
+		</div>
+
+		<!-- THE MAIN MATRIX HUB (Bento Container) -->
+		<div class="bg-white rounded-2 shadow-sm border border-light p-4 p-md-5">
+
+			<!-- =========================================================
+		   SUB-WORKSPACE STEP 1: INITIAL SEARCH FORM
+		   ========================================================= -->
+			<div id="booking-form-workspace">
+
+				<!-- STEP INTERFACE SWITCHER (PILLS ENGINE) -->
+				<div class="d-flex justify-content-center mb-5">
+					<div
+						class="hms-booking-toggle-pill p-1 d-inline-flex rounded-3 bg-light border">
+						<button type="button"
+						        class="btn active px-4 py-2 text-uppercase fw-bold tracking-wider"
+						        id="roomToggleBtn" onclick="switchBookingTab('rooms')">
+							<i class="bi bi-door-open-fill me-2"></i> Book Luxury Rooms
+						</button>
+						<button type="button"
+						        class="btn px-4 py-2 text-uppercase fw-bold tracking-wider"
+						        id="eventToggleBtn" onclick="switchBookingTab('events')">
+							<i class="bi bi-buildings-fill me-2"></i> Book Event Halls
+						</button>
+					</div>
+				</div>
+
+				<!-- TAB CONTAINER 1: ROOM RESERVATION CORE -->
+				<div id="roomBookingTab" class="hms-booking-pane active">
+					<!-- ACTION INTERCEPT: Prevents real loads and triggers the step transition layout -->
+					<form action="#" method="POST"
+					      onsubmit="event.preventDefault(); handleSearchSubmitAndSwap();">
+						<div class="row g-4">
+
+							<div class="col-md-4">
+								<label
+									class="form-label small text-uppercase fw-black text-muted tracking-wide">Check-In
+									Date</label>
+								<input type="date" id="input_checkin"
+								       class="form-control rounded-1 py-2" required>
+							</div>
+
+							<div class="col-md-4">
+								<label
+									class="form-label small text-uppercase fw-black text-muted tracking-wide">Check-Out
+									Date</label>
+								<input type="date" id="input_checkout"
+								       class="form-control rounded-1 py-2" required>
+							</div>
+
+							<div class="col-md-4">
+								<label
+									class="form-label small text-uppercase fw-black text-muted tracking-wide">Length
+									of Stay (Nights)</label>
+								<input type="number" id="input_nights"
+								       class="form-control rounded-1 py-2" min="1"
+								       placeholder="" readonly required>
+							</div>
+
+							<div class="col-md-4">
+								<label
+									class="form-label small text-uppercase fw-black text-muted tracking-wide">Number
+									of Adults</label>
+								<div class="input-group">
+									<button class="btn btn-outline-secondary px-3" type="button"
+									        onclick="decrementValue('adultsCount')">-
+									</button>
+									<input type="number"
+									       class="form-control text-center py-2 fw-bold"
+									       id="adultsCount" value="2" min="1" max="20"
+									       onchange="validateInputField(this, 1)">
+									<button class="btn btn-outline-secondary px-3" type="button"
+									        onclick="incrementValue('adultsCount')">+
+									</button>
+								</div>
+							</div>
+
+							<div class="col-md-4">
+								<label
+									class="form-label small text-uppercase fw-black text-muted tracking-wide">Number
+									of Children</label>
+								<div class="input-group">
+									<button class="btn btn-outline-secondary px-3" type="button"
+									        onclick="decrementValue('childrenCount')">-
+									</button>
+									<input type="number"
+									       class="form-control text-center py-2 fw-bold"
+									       id="childrenCount" value="0" min="0" max="20"
+									       onchange="validateInputField(this, 0)">
+									<button class="btn btn-outline-secondary px-3" type="button"
+									        onclick="incrementValue('childrenCount')">+
+									</button>
+								</div>
+							</div>
+
+							<div class="col-md-4">
+								<label
+									class="form-label small text-uppercase fw-black text-muted tracking-wide">Number
+									of Rooms</label>
+								<input type="number" class="form-control rounded-1 py-2" min="1"
+								       max="10" value="1" id="input_rooms"
+								       required>
+							</div>
+
+							<div
+								class="col-12 pt-4 border-top mt-5 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3">
+                                    <span class="text-muted small"><i
+	                                    class="bi bi-info-circle me-1"></i> Next step
+                                        reveals real-time available suites matching your criteria.</span>
+								<button type="submit"
+								        class="btn hms-restaurant-action-btn hms-btn-primary px-lg-5 py-3 fw-bold text-white text-uppercase"
+								        style="font-size: 0.85rem; letter-spacing: 1px;">
+									Check Room Availability <i class="bi bi-arrow-right ms-2"></i>
+								</button>
+							</div>
+
+						</div>
+					</form>
+				</div>
+
+				<!-- TAB CONTAINER 2: EVENT RESERVATION CORE -->
+				<div id="eventBookingTab" class="hms-booking-pane d-none">
+
+					<form id="eventBookingForm">
+						<div class="row g-4">
+
+							<div class="col-lg-7">
+								<div class="card border rounded-3 p-4 bg-white shadow-sm h-100">
+									<h6 class="fw-black text-uppercase text-dark tracking-tight mb-4" style="font-size: 0.9rem;">
+										<i class="bi bi-sliders text-accent-theme me-2"></i>Logistics & Contact Profile
+									</h6>
+
+									<div class="row g-3">
+										<div class="col-12">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Organizer / Corporate Name</label>
+											<input type="text" id="eventName" class="form-control rounded-2 py-2 small" placeholder="Corporate / Organizer Name" required>
+										</div>
+
+										<div class="col-md-6">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Email Address</label>
+											<input type="email" id="eventEmail" class="form-control rounded-2 py-2 small" placeholder="contact@company.com" required>
+										</div>
+
+										<div class="col-md-6">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Phone Number</label>
+											<input type="tel" id="eventPhone" class="form-control rounded-2 py-2 small" placeholder="Mobile line" required>
+										</div>
+
+										<div class="col-md-6 mt-3">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Event Category Arrangement</label>
+											<select class="form-select rounded-2 py-2 small" id="eventTypeSelect" required>
+												<option value="" disabled selected>Select event category...</option>
+												{% for type in event_types %}
+												<option value="{{ type }}">{{ type }}</option>
+												{% endfor %}
+											</select>
+										</div>
+
+										<div class="col-md-6 mt-3">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Preferred Operational Hall</label>
+											<select class="form-select rounded-2 py-2 small" id="eventHall" required>
+												<option value="" disabled selected>Select location choice...</option>
+												{% for hall in halls %}
+												<option value="{{ hall.name }}"
+												        data-rate="{{ hall.rate or 0 }}"
+												        data-type="{{ hall.hall_type or N/A}}"
+												        data-capacity="{{ hall.capacity or 0 }}">
+													{{ hall.hall_name }}
+												</option>
+												{% endfor %}
+											</select>
+										</div>
+
+										<div class="col-12" id="hallSummary" style="display: none;">
+											<div class="card border rounded-2 p-3 bg-light position-relative overflow-hidden shadow-sm mt-2">
+												<div class="row align-items-center g-3">
+													<div class="col-sm-7 border-sm-end" style="border-color: #dee2e6 !important;">
+														<span class="badge text-uppercase tracking-wider px-2 py-1 mb-1 text-white" id="hallType" style="background-color: var(--web-accent, #9B362D); font-size: 0.55rem;">-</span>
+														<h5 class="fw-black text-dark text-uppercase m-0 tracking-tight" id="hallName" style="font-size:0.95rem;">-</h5>
+
+														<small class="text-muted d-block mt-1 fw-bold text-uppercase" style="font-size: 0.65rem;">
+															Arrangement: <span class="text-dark" id="summaryEventType">—</span>
+														</small>
+													</div>
+													<div class="col-sm-5 ps-sm-3">
+														<div class="row g-2 font-monospace" style="font-size:0.72rem;">
+															<div class="col-12 mb-1">
+																<span class="text-muted uppercase fw-bold" style="font-size: 0.55rem;">CAPACITY:</span>
+																<strong class="text-dark" id="hallCapacity">—</strong>
+															</div>
+															<div class="col-12">
+																<span class="text-muted uppercase fw-bold" style="font-size: 0.55rem;">RATE:</span>
+																<strong class="text-accent-theme" id="hallRate">—</strong>
+															</div>
+														</div>
+													</div>
+												</div>
+											</div>
+										</div>
+
+										<div class="col-md-6 mt-3">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Event Commences</label>
+											<input type="datetime-local" class="form-control rounded-2 py-2 small" id="eventStartDateTime" required>
+										</div>
+
+										<div class="col-md-6 mt-3">
+											<label class="form-label small text-uppercase fw-black text-muted tracking-wide" style="font-size: 0.62rem;">Event Concludes</label>
+											<input type="datetime-local" class="form-control rounded-2 py-2 small" id="eventEndDateTime" required>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="col-lg-5">
+								<div class="card border rounded-3 p-4 bg-white shadow-sm d-flex flex-column justify-content-between h-100">
+									<div>
+										<h6 class="fw-black text-uppercase text-dark tracking-tight mb-4" style="font-size: 0.9rem;">
+											<i class="bi bi-receipt-cutoff text-accent-theme me-2"></i>Live Estimate Matrix
+										</h6>
+
+										<div class="border rounded-2 p-3 bg-light font-monospace" style="font-size: 0.78rem;">
+											<div class="d-flex justify-content-between py-2 border-bottom border-dashed text-muted">
+												<span>Rate Per Day:</span>
+												<div><span class="fw-bold text-dark" id="ratePerDay">-</span></div>
+											</div>
+											<div class="d-flex justify-content-between py-2 border-bottom border-dashed text-muted">
+												<span>Duration:</span>
+												<div><span class="fw-bold text-dark" id="totalDays">0</span> Day(s)</div>
+											</div>
+											<div class="d-flex justify-content-between pt-3 mt-2">
+												<span class="text-uppercase fw-black text-secondary small">Total Estimate:</span>
+												<div class="fw-black text-accent-theme h5 m-0"><span id="totalAmount">0</span></div>
+											</div>
+										</div>
+									</div>
+
+									<div class="mt-4 border-top pt-3 text-start">
+										<p class="text-danger mb-3 leading-normal" style="font-size: 0.65rem;">
+											<i class="bi bi-exclamation-triangle-fill me-1"></i>
+											<strong>Automated Holding Slip:</strong> Submitting hooks an instant viewing hold on the venue space. Unpaid holding windows recycle automatically.
+										</p>
+										<button type="submit" id="eventSubmitBtn" class="btn btn-dark w-100 py-3 text-uppercase fw-bold tracking-wide shadow-sm" style="font-size: 0.78rem; letter-spacing: 0.5px;">
+											Check Availability & Book Hold <i class="bi bi-calendar-plus ms-2"></i>
+										</button>
+									</div>
+								</div>
+							</div>
+
+						</div>
+					</form>
+
+					<div id="bookingSuccessCard" class="d-none mt-4 text-start">
+						<div class="alert alert-success rounded-2 p-3 mb-4 shadow-sm d-print-none">
+							<div>
+								<strong>Important:</strong> Your booking is currently <strong>on hold</strong>.
+								Please <strong>copy this reference or take a screenshot</strong>.
+								Our team will reach out to you shortly to finalize payment.
+								If you don't hear from us within 24 hours, please call us to confirm your
+								inspection and payment, as the hall remains available to other guests
+								until your reservation is fully paid and confirmed.
+							</div>
+						</div>
+
+						<div class="card border rounded-3 p-4 p-md-5 bg-white shadow-sm position-relative overflow-hidden mx-auto" style="max-width: 800px; border-top: 5px solid var(--web-accent, #9B362D) !important;">
+							<div class="row align-items-start g-3 mb-4 border-bottom pb-4">
+								<div class="col-sm-7">
+									<h5 class="fw-black text-dark text-uppercase tracking-tight m-0">EVENT HOLD VOUCHER</h5>
+									<span class="badge bg-warning text-dark mt-2 px-2 py-1 text-uppercase fw-black" style="font-size: 0.6rem;">Viewing Hold Pending</span>
+								</div>
+								<div class="col-sm-5 text-sm-end">
+									<span class="text-uppercase text-muted d-block fw-bold" style="font-size: 0.55rem;">Reference Code</span>
+									<span class="fw-black h5 text-accent-theme text-uppercase tracking-wider font-monospace" id="successReference">EVT-XXXXXX</span>
+								</div>
+							</div>
+
+							<div class="row g-4 mb-4 border-bottom pb-4">
+								<div class="col-md-5 border-md-end border-light">
+									<h6 class="text-uppercase fw-black text-muted tracking-wide mb-3" style="font-size: 0.65rem;">Organizer Profile</h6>
+									<div class="mb-2">
+										<span class="text-muted d-block" style="font-size: 0.55rem;">Name</span>
+										<strong class="text-dark small" id="successName">—</strong>
+									</div>
+									<div class="mb-2">
+										<span class="text-muted d-block" style="font-size: 0.55rem;">Email Address</span>
+										<strong class="text-dark small text-break" id="successEmail">—</strong>
+									</div>
+									<div>
+										<span class="text-muted d-block" style="font-size: 0.55rem;">Phone</span>
+										<strong class="text-dark small" id="successPhone">—</strong>
+									</div>
+								</div>
+
+								<div class="col-md-7 ps-md-4">
+									<h6 class="text-uppercase fw-black text-muted tracking-wide mb-3" style="font-size: 0.65rem;">Specifications</h6>
+									<div class="mb-2">
+										<span class="text-muted d-block" style="font-size: 0.55rem;">Venue Space</span>
+										<strong class="text-dark text-uppercase small" id="successHall">—</strong>
+									</div>
+									<div class="mb-2">
+										<span class="text-muted d-block" style="font-size: 0.55rem;">Event Type</span>
+										<strong class="text-dark small" id="successEventType">—</strong>
+									</div>
+								</div>
+							</div>
+
+							<div class="row align-items-center bg-light rounded-2 p-3 g-3 font-monospace">
+								<div class="col-sm-6">
+									<span class="text-muted small d-block" style="font-size: 0.55rem;">Duration</span>
+									<div><strong class="text-dark small m-0" id="successTotalDays">0</strong> Day(s)</div>
+								</div>
+								<div class="col-sm-6 text-sm-end">
+									<span class="text-muted small d-block" style="font-size: 0.55rem;">Total Estimate</span>
+									<div class="text-accent-theme h6 fw-black m-0"><span id="successTotalAmount">0.00</span></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+			</div>
+
+			<!-- =========================================================
+		   SUB-WORKSPACE STEP 2: ROOM SELECTION RESULTS (Hidden on load)
+		   ========================================================= -->
+			<div id="booking-results-workspace" class="d-none">
+
+				<!-- STEPPER FLOW BAR -->
+				<div class="hms-stepper-flow-bar row g-0 text-center border-bottom mb-5 pb-4">
+					<div class="col-3 hms-step-node passed">
+						<span class="step-number shadow-sm"><i class="bi bi-check-lg"></i></span>
+						<span class="step-label d-block text-uppercase fw-bold mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">1. Criteria</span>
+					</div>
+					<div class="col-3 hms-step-node active">
+						<span class="step-number shadow-sm">2</span>
+						<span class="step-label d-block text-uppercase fw-black mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">2. Choose Rooms</span>
+					</div>
+					<div class="col-3 hms-step-node incoming">
+						<span class="step-number shadow-sm">3</span>
+						<span class="step-label d-block text-uppercase fw-bold mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">3. Hold Details</span>
+					</div>
+					<div class="col-3 hms-step-node incoming">
+						<span class="step-number shadow-sm">4</span>
+						<span class="step-label d-block text-uppercase fw-bold mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">4. Complete Hold</span>
+					</div>
+				</div>
+
+				<!-- LIVE SELECTION SUMMARY ANCHOR BAR -->
+				<div class="hms-selection-summary-anchor rounded-2 p-3 bg-light border mb-5">
+					<div class="row g-3 align-items-center text-center text-md-start">
+						<div class="col-md-9">
+							<div
+								class="d-flex flex-wrap gap-4 align-items-center justify-content-center justify-content-md-start">
+								<div>
+                                        <span
+	                                        class="text-uppercase text-muted d-block fw-bold mb-1"
+	                                        style="font-size: 0.65rem; letter-spacing: 0.5px;">Timeline Range</span>
+									<strong class="text-dark small" id="summaryDatesLabel"><i
+										class="bi bi-calendar3 me-1 text-accent-theme"></i> Loading
+										Range...</strong>
+								</div>
+								<div class="border-start d-none d-md-block"
+								     style="height: 25px; border-color: #dee2e6 !important;"></div>
+								<div>
+                                        <span
+	                                        class="text-uppercase text-muted d-block fw-bold mb-1"
+	                                        style="font-size: 0.65rem; letter-spacing: 0.5px;">Duration</span>
+									<strong class="text-dark small" id="summaryNightsLabel">0
+										Nights</strong>
+								</div>
+								<div class="border-start d-none d-md-block"
+								     style="height: 25px; border-color: #dee2e6 !important;"></div>
+								<div>
+                                        <span
+	                                        class="text-uppercase text-muted d-block fw-bold mb-1"
+	                                        style="font-size: 0.65rem; letter-spacing: 0.5px;">Composition Pool</span>
+									<strong class="text-dark small" id="summaryCompositionLabel"><i
+										class="bi bi-people-fill me-1 text-accent-theme"></i> 2
+										Adults</strong>
+								</div>
+							</div>
+						</div>
+						<div class="col-md-3 text-center text-md-end">
+							<button type="button"
+							        class="btn btn-sm btn-outline-secondary px-3 text-uppercase fw-bold"
+							        style="font-size: 0.7rem; letter-spacing: 0.5px;"
+							        onclick="revertToSearchCriteria();">
+								<i class="bi bi-pencil-square me-1"></i> Modify Search
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- ROOM INVENTORY DISCOVERY GRID -->
+				<div class="row g-4 mb-5" id="availableRoomsContainer">
+				</div>
+
+				<div id="noRoomsFallbackAlert" class="alert alert-dark text-center border p-5 d-none">
+					<i class="bi bi-door-closed fs-1 d-block mb-3 text-muted"></i>
+					<h5 class="fw-black text-uppercase">No Premium Suites Available</h5>
+					<p class="text-muted small m-0">We couldn't find available openings matching your selected criteria. Try adjusting your timeline parameters or room counts.</p>
+				</div>
+
+				<!-- STICKY ACTION TOTAL FOOTER PANEL -->
+				<div
+					class="hms-sticky-booking-footer border-top pt-4 mt-5 bg-white position-sticky bottom-0 start-0 end-0 py-3 z-3 shadow-lg rounded-2 px-3 border">
+					<div class="row align-items-center justify-content-between g-3">
+						<div class="col-sm-6 text-center text-sm-start">
+                                <span class="text-uppercase text-muted d-block fw-bold"
+                                      style="font-size: 0.65rem; letter-spacing: 0.5px;"
+                                      id="stickyTotalRoomsLabel">0
+                                    Rooms Selected</span>
+							<h3 class="fw-black text-dark m-0" id="stickyTotalCostLabel">₦0.00</h3>
+						</div>
+						<div class="col-sm-6 text-center text-sm-end">
+							<button type="button"
+							        class="btn hms-restaurant-action-btn hms-btn-primary px-5 py-3 text-uppercase fw-bold text-white shadow-sm w-100 w-sm-auto"
+							        id="stickyBookBtn"
+							        style="font-size: 0.82rem; letter-spacing: 1px;"
+							        onclick="executeRoomBookingHoldTransition();" disabled>
+								Confirm Choices & Proceed <i class="bi bi-chevron-right ms-2"></i>
+							</button>
+						</div>
+					</div>
+				</div>
+
+
+			</div>
+
+			<!-- =========================================================
+		   SUB-WORKSPACE STEP 3: GUEST DETAILS & VERIFICATION (Hidden on load)
+		   ========================================================= -->
+			<div id="booking-verification-workspace" class="d-none">
+
+				<!-- STEPPER FLOW BAR (Step 3 Highlighted) -->
+				<div class="hms-stepper-flow-bar row g-0 text-center border-bottom mb-5 pb-4">
+					<div class="col-3 hms-step-node passed">
+						<span class="step-number shadow-sm"><i class="bi bi-check-lg"></i></span>
+						<span class="step-label d-block text-uppercase fw-bold mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">1. Criteria</span>
+					</div>
+					<div class="col-3 hms-step-node passed">
+						<span class="step-number shadow-sm"><i class="bi bi-check-lg"></i></span>
+						<span class="step-label d-block text-uppercase fw-bold mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">2. Choose Rooms</span>
+					</div>
+					<div class="col-3 hms-step-node active">
+						<span class="step-number shadow-sm">3</span>
+						<span class="step-label d-block text-uppercase fw-black mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">3. Verification Details</span>
+					</div>
+					<div class="col-3 hms-step-node incoming">
+						<span class="step-number shadow-sm">4</span>
+						<span class="step-label d-block text-uppercase fw-bold mt-2"
+						      style="font-size: 0.7rem; letter-spacing: 0.5px;">4. Complete Process</span>
+					</div>
+				</div>
+
+				<form id="hmsGuestVerificationForm" onsubmit="event.preventDefault();">
+					<div class="row g-4">
+
+						<!-- LEFT HAND FIELD COLUMN: Summaries and Editable Occupants -->
+						<div class="col-lg-7">
+							<div class="card border rounded-2 p-4 mb-4 bg-light">
+								<h5 class="fw-black text-uppercase text-dark tracking-tight border-bottom pb-2 mb-3"
+								    style="font-size: 0.85rem; letter-spacing: 0.5px;">
+									<i class="bi bi-info-square me-2 text-accent-theme"></i>
+									Reservation Parameter
+									Summary
+								</h5>
+
+								<div class="row g-3">
+									<div class="col-sm-6">
+                                            <span class="text-uppercase text-muted d-block fw-bold"
+                                                  style="font-size: 0.65rem;">Timeline Range</span>
+										<span class="fw-bold text-dark small" id="step3DatesLabel">—</span>
+									</div>
+									<div class="col-sm-6">
+                                            <span class="text-uppercase text-muted d-block fw-bold"
+                                                  style="font-size: 0.65rem;">Selected Accommodations</span>
+										<span class="fw-bold text-accent-theme small"
+										      id="step3SelectedRoomsLabel">—</span>
+									</div>
+
+									<!-- LIVE EDITABLE OCCUPANTS POOL -->
+									<div class="col-sm-6 pt-2">
+										<label
+											class="form-label small text-uppercase fw-black text-muted tracking-wide"
+											style="font-size: 0.65rem;">Number of Adults</label>
+										<div class="input-group input-group-sm"
+										     style="max-width: 140px;">
+											<button class="btn btn-outline-secondary px-2"
+											        type="button"
+											        onclick="decrementValue('step3AdultsCount')">-
+											</button>
+											<input type="number"
+											       class="form-control text-center py-1 fw-bold"
+											       id="step3AdultsCount" value="2" min="1" max="20"
+											       onchange="validateInputField(this, 1)">
+											<button class="btn btn-outline-secondary px-2"
+											        type="button"
+											        onclick="incrementValue('step3AdultsCount')">+
+											</button>
+										</div>
+									</div>
+									<div class="col-sm-6 pt-2">
+										<label
+											class="form-label small text-uppercase fw-black text-muted tracking-wide"
+											style="font-size: 0.65rem;">Number of Children</label>
+										<div class="input-group input-group-sm"
+										     style="max-width: 140px;">
+											<button class="btn btn-outline-secondary px-2"
+											        type="button"
+											        onclick="decrementValue('step3ChildrenCount')">
+												-
+											</button>
+											<input type="number"
+											       class="form-control text-center py-1 fw-bold"
+											       id="step3ChildrenCount" value="0" min="0"
+											       max="20"
+											       onchange="validateInputField(this, 0)">
+											<button class="btn btn-outline-secondary px-2"
+											        type="button"
+											        onclick="incrementValue('step3ChildrenCount')">
+												+
+											</button>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- GUEST PROFILE FIELDS -->
+							<div class="card border rounded-2 p-4 bg-white shadow-sm">
+								<h5 class="fw-black text-uppercase text-dark tracking-tight border-bottom pb-2 mb-3"
+								    style="font-size: 0.85rem; letter-spacing: 0.5px;">
+									<i class="bi bi-person-bounding-box me-2 text-accent-theme"></i>
+									Primary Guest
+									Profile Information
+								</h5>
+								<div class="row g-3">
+									<div class="col-12">
+										<label
+											class="form-label small text-uppercase fw-black text-muted tracking-wide">Full
+											Name</label>
+										<input type="text" id="guestFullName"
+										       class="form-control rounded-1 py-2"
+										       placeholder="e.g., Chidi Okafor" required>
+									</div>
+									<div class="col-md-6">
+										<label
+											class="form-label small text-uppercase fw-black text-muted tracking-wide">Email
+											Address</label>
+										<input type="email" id="guestEmail"
+										       class="form-control rounded-1 py-2"
+										       placeholder="chidi@example.com" required>
+									</div>
+									<div class="col-md-6">
+										<label
+											class="form-label small text-uppercase fw-black text-muted tracking-wide">Phone
+											Number</label>
+										<input type="tel" id="guestPhone"
+										       class="form-control rounded-1 py-2"
+										       placeholder="+234..." required>
+									</div>
+									<div class="col-12">
+										<label
+											class="form-label small text-uppercase fw-black text-muted tracking-wide">Special
+											Notes / Request</label>
+										<textarea id="guestNotes"
+										          class="form-control rounded-1 py-2" rows="3"
+										          placeholder="Specify airport pickups, dietary restrictions, or early arrivals if required..."></textarea>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- RIGHT HAND COLUMN: PRICING LEDGER & TRANSACTION GATEWAY BUTTONS -->
+						<div class="col-lg-5">
+							<div
+								class="card border rounded-2 p-4 bg-white shadow-sm position-sticky"
+								style="top: 100px;">
+								<h5 class="fw-black text-uppercase text-dark tracking-tight border-bottom pb-2 mb-3"
+								    style="font-size: 0.85rem; letter-spacing: 0.5px;">
+									<i class="bi bi-credit-card-2-front me-2 text-accent-theme"></i>
+									Settlement
+									Ledger
+								</h5>
+
+								<div
+									class="d-flex justify-content-between align-items-center py-2 border-bottom border-dashed">
+									<span class="text-muted small">Accommodation Base Total</span>
+									<span class="fw-bold text-dark" id="step3BaseTotalDisplay">₦0.00</span>
+								</div>
+								<div
+									class="d-flex justify-content-between align-items-center py-2 border-bottom border-dashed">
+									<span
+										class="text-muted small">VAT / Service Surcharge (0%)</span>
+									<span class="text-muted small">Included</span>
+								</div>
+								<div
+									class="d-flex justify-content-between align-items-center py-3 mb-4">
+                                        <span class="fw-black text-uppercase text-dark"
+                                              style="font-size: 0.75rem;">Total Estimated Settlement</span>
+									<h4 class="fw-black text-accent-theme m-0"
+									    id="step3GrandTotalDisplay">₦0.00
+									</h4>
+								</div>
+
+								<div class="d-flex flex-column gap-2">
+									<!-- PROMINENT PAY NOW BUTTON -->
+									<button type="button"
+									        class="btn btn-primary py-3 fw-bold text-white text-uppercase"
+									        style="font-size: 0.85rem; letter-spacing: 1px;"
+									        onclick="processPaystackEngineGateway();">
+										<i class="bi bi-lightning-charge-fill me-2"></i> Pay Now
+									</button>
+
+									<!-- PLACE ON HOLD BUTTON -->
+									<button type="button"
+									        class="btn btn-outline-secondary py-3 fw-bold text-uppercase"
+									        style="font-size: 0.8rem; letter-spacing: 1px;"
+									        onclick="processPayLaterHoldRequest();">
+										<i class="bi bi-clock-history me-2"></i> Place On Hold (Pay
+										Later)
+									</button>
+
+									<button type="button"
+									        class="btn btn-link btn-sm text-muted text-uppercase fw-bold mt-2"
+									        style="font-size: 0.65rem;"
+									        onclick="revertToRoomSelectionGrid();">
+										<i class="bi bi-arrow-left me-1"></i> Modify Room
+										Selections
+									</button>
+								</div>
+							</div>
+						</div>
+
+					</div>
+				</form>
+
+			</div>
+
+			<!-- =========================================================
+		   SUB-WORKSPACE STEP 4: CONFIRMATION & RECEIPTS PORTAL
+		   ========================================================= -->
+			<div id="booking-confirmation-workspace" class="d-none">
+
+				<!-- STEPPER FLOW BAR (Step 4 Highlighted) -->
+				<div
+					class="hms-stepper-flow-bar row g-0 text-center border-bottom mb-5 pb-4 d-print-none">
+					<div class="col-3 hms-step-node passed"><span class="step-number shadow-sm"><i
+						class="bi bi-check-lg"></i></span><span
+						class="step-label d-block text-uppercase fw-bold mt-2"
+						style="font-size: 0.7rem;">1.
+                                Criteria</span></div>
+					<div class="col-3 hms-step-node passed"><span class="step-number shadow-sm"><i
+						class="bi bi-check-lg"></i></span><span
+						class="step-label d-block text-uppercase fw-bold mt-2"
+						style="font-size: 0.7rem;">2.
+                                Choose Rooms</span></div>
+					<div class="col-3 hms-step-node passed"><span class="step-number shadow-sm"><i
+						class="bi bi-check-lg"></i></span><span
+						class="step-label d-block text-uppercase fw-bold mt-2"
+						style="font-size: 0.7rem;">3.
+                                Verification</span></div>
+					<div class="col-3 hms-step-node active"><span
+						class="step-number shadow-sm">4</span><span
+						class="step-label d-block text-uppercase fw-black mt-2"
+						style="font-size: 0.7rem; letter-spacing: 0.5px;">4. Complete Manifest</span>
+					</div>
+				</div>
+
+				<!-- PERSISTENT BOOTSTRAP HOLD ALERT BANNER -->
+				<div
+					class="alert alert-warning border border-warning rounded-2 p-4 mb-4 shadow-sm d-none d-print-none"
+					role="alert" id="bootstrapHoldAlert">
+					<div class="d-flex gap-3">
+						<i class="bi bi-exclamation-triangle-fill text-warning fs-3"></i>
+						<div>
+							<h5 class="alert-heading fw-black text-uppercase tracking-tight mb-1"
+							    style="font-size: 0.95rem;">Temporary Holding Window Activated</h5>
+							<p class="m-0 small text-muted leading-normal">
+								Your room inventory selections are securely locked. You must settle
+								payment within
+								**15 minutes** or this reservation hold recycles back into public
+								circulation.
+							</p>
+						</div>
+					</div>
+				</div>
+
+				<!-- ACTIONABLE USER REMINDER BADGE FOR SCREENSHOTS/DOWNLOADS -->
+				<div
+					class="alert alert-info border border-info rounded-2 p-3 mb-4 shadow-sm d-print-none"
+					id="screenshotRecommendationBadge">
+					<div class="d-flex align-items-center gap-2 small fw-bold text-dark">
+						<i class="bi bi-phone-vibrate text-info fs-5"></i>
+						<span>Tip: Please take a quick screenshot or click "Print / Save PDF" below to keep a hard
+                                copy of your booking voucher securely on your device!</span>
+					</div>
+				</div>
+
+				<!-- BEAUTIFUL PREMIUM DIGITAL VOUCHER & RECEIPT SHEET -->
+				<div
+					class="card border rounded-3 p-4 p-md-5 bg-white shadow-sm position-relative overflow-hidden mx-auto"
+					style="max-width: 800px; border-top: 5px solid #111 !important;"
+					id="printableReceiptCard">
+
+					<!-- Top Receipt Header Banner -->
+					<div class="row align-items-start g-3 mb-4 border-bottom pb-4 text-start">
+						<div class="col-sm-6">
+							<h4 class="fw-black text-dark text-uppercase tracking-tight m-0"
+							    style="letter-spacing: 1px;">HMS RESERVATION VOUCHER</h4>
+							<p class="text-muted small m-0">Automated Enterprise Portal
+								Transaction</p>
+							<span class="badge mt-2 px-3 py-2 text-uppercase fw-black shadow-sm"
+							      id="receiptStatusBadge"
+							      style="font-size: 0.65rem; letter-spacing: 0.5px;">Paid /
+                                    Confirmed</span>
+						</div>
+						<div class="col-sm-6 text-sm-end">
+                                <span class="text-uppercase text-muted d-block fw-bold"
+                                      style="font-size: 0.62rem;">Reservation Number</span>
+							<span class="fw-black h5 text-dark text-uppercase tracking-wider"
+							      id="manifestTokenString">HMS-79A8B2X</span>
+							<span class="text-muted d-block small mt-1"
+							      id="receiptGeneratedTimestamp">Generated:
+                                    Just Now</span>
+						</div>
+					</div>
+
+					<!-- Segmented Data Logs Matrix -->
+					<div class="row text-start g-4 mb-4">
+
+						<!-- Guest Profile Segment -->
+						<div class="col-md-5 border-end border-light">
+							<h6 class="text-uppercase fw-black text-muted tracking-wide mb-3"
+							    style="font-size: 0.7rem;"><i class="bi bi-person me-1"></i> Guest
+								Profile</h6>
+							<div class="mb-2">
+                                    <span class="text-uppercase text-muted d-block"
+                                          style="font-size: 0.58rem;">Full
+                                        Guest Name</span>
+								<strong class="text-dark small" id="receiptGuestName">—</strong>
+							</div>
+							<div class="mb-2">
+                                    <span class="text-uppercase text-muted d-block"
+                                          style="font-size: 0.58rem;">Email
+                                        Address</span>
+								<strong class="text-dark small" id="receiptGuestEmail">—</strong>
+							</div>
+							<div>
+                                    <span class="text-uppercase text-muted d-block"
+                                          style="font-size: 0.58rem;">Phone
+                                        Number</span>
+								<strong class="text-dark small" id="receiptGuestPhone">—</strong>
+							</div>
+						</div>
+
+						<!-- Reservation Matrix Segment -->
+						<div class="col-md-7">
+							<h6 class="text-uppercase fw-black text-muted tracking-wide mb-3"
+							    style="font-size: 0.7rem;"><i
+								class="bi bi-calendar-check me-1"></i> Stay
+								Specifications</h6>
+							<div class="row g-2">
+								<div class="col-sm-6">
+                                        <span class="text-uppercase text-muted d-block"
+                                              style="font-size: 0.58rem;">Check-In Date</span>
+									<strong class="text-dark small"
+									        id="receiptCheckInDate">—</strong>
+								</div>
+								<div class="col-sm-6">
+                                        <span class="text-uppercase text-muted d-block"
+                                              style="font-size: 0.58rem;">Check-Out Date</span>
+									<strong class="text-dark small"
+									        id="receiptCheckOutDate">—</strong>
+								</div>
+								<div class="col-sm-6">
+                                        <span class="text-uppercase text-muted d-block"
+                                              style="font-size: 0.58rem;">Duration of Stay</span>
+									<strong class="text-accent-theme small"
+									        id="receiptNightsCount">—</strong>
+								</div>
+								<div class="col-sm-6">
+                                        <span class="text-uppercase text-muted d-block"
+                                              style="font-size: 0.58rem;">Occupancy Pool</span>
+									<strong class="text-dark small"
+									        id="receiptComposition">—</strong>
+								</div>
+								<div class="col-12 mt-2">
+                                        <span class="text-uppercase text-muted d-block"
+                                              style="font-size: 0.58rem;">Special Requests / Memo</span>
+									<p class="text-muted small m-0 leading-tight style-italic"
+									   id="receiptNotesProfile">—</p>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Itemized Ledger Cost Table -->
+					<div class="text-start mb-4">
+						<h6 class="text-uppercase fw-black text-muted tracking-wide mb-2"
+						    style="font-size: 0.7rem;"><i class="bi bi-receipt-cutoff me-1"></i>
+							Financial Summary
+						</h6>
+						<div class="table-responsive border rounded-1">
+							<table class="table table-sm table-striped m-0 small">
+								<thead class="bg-light text-uppercase font-monospace"
+								       style="font-size: 0.65rem;">
+								<tr>
+									<th class="p-2">Description Item</th>
+									<th class="p-2 text-end">Total Base Ledger Amount</th>
+								</tr>
+								</thead>
+								<tbody>
+								<tr>
+									<td class="p-2 text-dark font-monospace"
+									    id="receiptRoomsProfile">Selected
+										Room Suites
+									</td>
+									<td class="p-2 text-end fw-bold text-dark"
+									    id="receiptBaseAmountLine">₦0.00
+									</td>
+								</tr>
+								<tr>
+									<td class="p-2 text-muted">VAT & Surcharges (0.00%)</td>
+									<td class="p-2 text-end text-muted">Inclusive</td>
+								</tr>
+								<tr class="table-dark text-white fw-bold">
+									<td class="p-2 text-uppercase tracking-wider"
+									    style="font-size: 0.65rem;">
+										Total Settlement Final Figure
+									</td>
+									<td class="p-2 text-end h6 fw-black m-0"
+									    id="receiptFinalAmount">₦0.00
+									</td>
+								</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<!-- Bottom Footer Stamp -->
+					<div class="border-top pt-3 text-center">
+						<p class="text-muted font-monospace m-0"
+						   style="font-size: 0.6rem; letter-spacing: 0.5px;">
+							Thank you for choosing luxury hospitality operations. We look forward
+							to your arrival.
+						</p>
+					</div>
+				</div>
+
+				<!-- UTILITY CONTROL CONTROLS -->
+				<div class="d-flex flex-wrap justify-content-center gap-3 mt-4 d-print-none">
+					<button type="button"
+					        class="btn btn-dark px-4 py-2 text-uppercase fw-bold shadow-sm"
+					        style="font-size: 0.75rem;" onclick="printReceipt();">
+						<i class="bi bi-printer-fill me-2"></i> Print / Save as PDF
+					</button>
+					<button type="button"
+					        class="btn btn-outline-secondary px-4 py-2 text-uppercase fw-bold shadow-sm"
+					        style="font-size: 0.75rem;" onclick="location.reload();">
+						<i class="bi bi-arrow-clockwise me-1"></i> Return to Engine Terminal
+					</button>
+				</div>
+
+			</div>
+
+		</div>
+	</div>
+</section>
+
+
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/footer.html" %}
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/scripts.html" %}
+<script src="/assets/rhohotel/hotel_templates/template_one/js/booking.js"></script>
+<script src="/assets/rhohotel/hotel_templates/template_one/js/events.js"></script>
+</body>
+
+</html>

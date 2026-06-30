@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/head.html" %}
+</head>
+
+<body style="
+  --web-primary: {{ hotel.primary_color or '#0C3989' }};
+  --web-secondary: {{ hotel.secondary_color or '#124B6B' }};
+  --web-accent: {{ hotel.accent_color or '#9B362D' }};
+">
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/navbar.html" %}
+
+{% set contact_media = page_media.get("contact", {}) %}
+{% set general_media = page_media.get("general", {}) %}
+
+{% set contact_hero_images = contact_media.get("hero_image", []) %}
+{% set contact_main_images = contact_media.get("main_image", []) %}
+{% set contact_side_images = contact_media.get("side_image", []) %}
+{% set contact_card_images = contact_media.get("card_image", []) %}
+{% set contact_background_images = contact_media.get("background_image", []) %}
+{% set contact_cta_images = contact_media.get("cta_image", []) %}
+{# --- IMPORTED CONTACT DETAIL IMAGES HERE --- #}
+{% set contact_detail_images = contact_media.get("detail_image", []) %}
+
+{% set general_background_images = general_media.get("background_image", []) %}
+{% set general_cta_images = general_media.get("cta_image", []) %}
+
+{% if contact_hero_images|length > 0 %}
+{% set contact_hero_image = contact_hero_images[0].image %}
+{% set contact_hero_alt = contact_hero_images[0].alt_text or "Contact Office at " ~ (hotel.hotel_name or "Hotel") %}
+{% else %}
+{% set contact_hero_image = "" %}
+{% set contact_hero_alt = "Contact Office at " ~ (hotel.hotel_name or "Hotel") %}
+{% endif %}
+
+{% if contact_main_images|length > 0 %}
+{% set contact_main_image = contact_main_images[0].image %}
+{% set contact_main_alt = contact_main_images[0].alt_text or "Concierge Assistance desk" %}
+{% else %}
+{% set contact_main_image = "" %}
+{% set contact_main_alt = "Concierge Assistance desk" %}
+{% endif %}
+
+{% if contact_side_images|length > 0 %}
+{% set contact_side_image = contact_side_images[0].image %}
+{% set contact_side_alt = contact_side_images[0].alt_text or "Lobby hospitality area" %}
+{% else %}
+{% set contact_side_image = "" %}
+{% set contact_side_alt = "Lobby hospitality area" %}
+{% endif %}
+
+{% if contact_background_images|length > 0 %}
+{% set contact_background_image = contact_background_images[0].image %}
+{% elif general_background_images|length > 0 %}
+{% set contact_background_image = general_background_images[0].image %}
+{% else %}
+{% set contact_background_image = "" %}
+{% endif %}
+
+{% if contact_cta_images|length > 0 %}
+{% set contact_cta_image = contact_cta_images[0].image %}
+{% set contact_cta_alt = contact_cta_images[0].alt_text or "Get in Touch" %}
+{% elif general_cta_images|length > 0 %}
+{% set contact_cta_image = general_cta_images[0].image %}
+{% set contact_cta_alt = general_cta_images[0].alt_text or "Get in Touch" %}
+{% else %}
+{% set contact_cta_image = "" %}
+{% set contact_cta_alt = "Get in Touch" %}
+{% endif %}
+
+<!-- ==========================================
+HMS LUXURY CONTACT SPLIT HERO SECTION
+========================================== -->
+<header class="hms-restaurant-split-hero position-relative overflow-hidden">
+
+	<!-- Mobile Background Engine (Active only < 992px) -->
+	<div class="restaurant-hero-mobile-bg d-lg-none">
+		{% if contact_hero_image and contact_hero_image|trim != "" %}
+		<img src="{{ contact_hero_image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_hero_alt }}">
+		{% else %}
+		<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+		{% endif %}
+		<div class="restaurant-hero-mobile-overlay"></div>
+	</div>
+
+	<div class="container-fluid p-0 h-100 position-relative z-3">
+		<div class="row g-0 h-100 align-items-center">
+
+			<!-- LEFT PANEL: Half-screen graphic space on desktop containing the layered portrait box -->
+			<div class="col-lg-6 hms-hero-left-split position-relative d-none d-lg-block">
+				<div class="w-100 h-100">
+					{% if contact_hero_image and contact_hero_image|trim != "" %}
+					<img src="{{ contact_hero_image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_hero_alt }}">
+					{% else %}
+					<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+					{% endif %}
+				</div>
+
+				<!-- Floating Portrait Box nesting inside the left half boundary -->
+				<div class="restaurant-hero-nested-floating-box">
+					{% if contact_main_image and contact_main_image|trim != "" %}
+					<img src="{{ contact_main_image }}" class="restaurant-floating-photo" alt="{{ contact_main_alt }}">
+					{% else %}
+					<div class="restaurant-floating-photo hms-hero-gradient-fallback" style="min-height: 250px;"></div>
+					{% endif %}
+				</div>
+			</div>
+
+			<!-- RIGHT PANEL: Narrative presentation box + Two Action Buttons -->
+			<div class="col-lg-6 hms-hero-right-split d-flex flex-column justify-content-center">
+				<div class="restaurant-hero-content-wrapper px-4 px-md-5 mx-xl-5">
+
+                    <span
+	                    class="text-uppercase tracking-widest fw-black d-block mb-2 text-accent-theme"
+	                    style="font-size: 0.75rem; letter-spacing: 4px !important;">
+                        Get In Touch
+                    </span>
+
+					<h1 class="display-4 fw-black text-uppercase tracking-tight text-accent-theme mb-4">
+						Connect With <br>Our Concierge
+					</h1>
+
+					<p class="text-accent-theme leading-relaxed mb-4">
+						Have questions about room bookings, event halls, spa reservations, or gym
+						memberships? Reach out directly via phone or messaging for instant
+						hospitality assistance.
+					</p>
+
+					<!-- Two Button Interface using Hero Design Assets -->
+					<div class="d-flex flex-wrap gap-3 pt-2">
+						<a href="{{ hotel.phone }}"
+						   class="btn hms-restaurant-action-btn hms-btn-primary px-4 py-3 fw-bold text-white text-uppercase shadow-sm"
+						   style="font-size: 0.8rem; letter-spacing: 1px;">
+							<i class="bi bi-telephone-fill me-2"></i> Call Us Now
+						</a>
+						<a href="https://wa.me/{{ hotel.whatsapp }}" target="_blank"
+						   class="btn hms-restaurant-action-btn hms-btn-whatsapp px-4 py-3 fw-bold text-white text-uppercase shadow-sm"
+						   style="font-size: 0.8rem; letter-spacing: 1px;">
+							<i class="bi bi-whatsapp me-2"></i> WhatsApp
+						</a>
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+</header>
+
+
+<!-- ==========================================
+   HMS COMPOSITE LAYERED SHOWCASE (HEADER-BLEED)
+   ========================================== -->
+<section class="hms-dual-composite-section py-5 bg-white overflow-visible">
+	<div class="container px-4 px-md-5 py-md-4">
+		<div class="row g-5 align-items-center">
+
+			<!-- LEFT COLUMN: Three small images arranged in an inverted triangle configuration -->
+			<div class="col-lg-5 order-2 order-lg-1">
+				<div class="hms-pyramid-grid-container">
+
+					<!-- Top Centralized Image Element -->
+					<div class="hms-pyramid-row-top d-flex justify-content-center">
+						<div class="hms-small-thumb-box shadow">
+							{% if contact_detail_images|length > 0 and contact_detail_images[0].image|trim != "" %}
+							<img src="{{ contact_detail_images[0].image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_detail_images[0].alt_text or 'Lobby entrance aesthetic' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+					</div>
+
+					<!-- Bottom Two Split Images Row Component -->
+					<div class="hms-pyramid-row-bottom d-flex justify-content-center gap-4">
+						<div class="hms-small-thumb-box shadow">
+							{% if contact_detail_images|length > 1 and contact_detail_images[1].image|trim != "" %}
+							<img src="{{ contact_detail_images[1].image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_detail_images[1].alt_text or 'Guest management reception' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+						<div class="hms-small-thumb-box shadow">
+							{% if contact_detail_images|length > 2 and contact_detail_images[2].image|trim != "" %}
+							<img src="{{ contact_detail_images[2].image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_detail_images[2].alt_text or 'Customer support workspace' }}">
+							{% else %}
+							<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+							{% endif %}
+						</div>
+					</div>
+
+				</div>
+			</div>
+
+			<!-- RIGHT COLUMN: Massive Composite Image Stack Bleeding Upwards into Hero Section Area -->
+			<div class="col-lg-7 order-1 order-lg-2">
+				<div class="hms-double-layer-wrapper position-relative mx-auto ms-lg-auto me-lg-0">
+
+					<!-- Base Foundation Image Frame (Massive Size Variant) -->
+					<div class="hms-stack-base-card rounded-2 overflow-hidden shadow">
+						{% if contact_side_image and contact_side_image|trim != "" %}
+						<img src="{{ contact_side_image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_side_alt }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+						{% endif %}
+					</div>
+
+					<!-- Floating Frame Layered cleanly over the Left Boundary Edge -->
+					<div
+						class="hms-stack-floating-card rounded-2 overflow-hidden shadow-lg border border-white border-4">
+						{% if contact_detail_images|length > 3 and contact_detail_images[3].image|trim != "" %}
+						<img src="{{ contact_detail_images[3].image }}" class="w-100 h-100 object-fit-cover" alt="{{ contact_detail_images[3].alt_text or 'Bespoke hotel service graphic' }}">
+						{% else %}
+						<div class="w-100 h-100 hms-hero-gradient-fallback"></div>
+						{% endif %}
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+	</div>
+</section>
+
+
+<!-- ==========================================
+   HMS CONTACT FORM, ADDRESS & SOCIALS GRID
+   ========================================== -->
+<section class="hms-venues-grid-section py-5 bg-light">
+	<div class="container px-4 px-md-5 py-md-4">
+
+		<div class="row g-5">
+
+			<!-- LEFT COLUMN: Contact Form Box -->
+			<div class="col-lg-7">
+				<div class="bg-white p-4 p-md-5 rounded-2 shadow-sm border border-light">
+
+					<div class="d-flex align-items-center gap-2 mb-2">
+						<span class="hms-venue-dot"></span>
+						<span class="text-uppercase tracking-widest text-muted fw-bold"
+						      style="font-size: 0.72rem; letter-spacing: 3px !important;">Inquiry Desk</span>
+					</div>
+					<h2 class="h3 fw-black text-dark text-uppercase tracking-tight mb-4">Send Us A
+						<span class="text-accent-theme">Message</span></h2>
+
+					<form class="web-form" id="contactForm">
+						<div class="row g-3">
+							<div class="col-md-6">
+								<label class="form-label small text-uppercase fw-bold text-muted">Full
+									Name</label>
+								<input name="full_name" type="text" class="form-control rounded-1 py-2 fs-6"
+								       placeholder="Your name" required>
+							</div>
+							<div class="col-md-6">
+								<label class="form-label small text-uppercase fw-bold text-muted">Email
+									Address</label>
+								<input name="email" type="email" class="form-control rounded-1 py-2 fs-6"
+								       placeholder="Your email address" required>
+							</div>
+							<div class="col-md-6">
+								<label class="form-label small text-uppercase fw-bold text-muted">Phone
+									Number</label>
+								<input name="phone" type="tel" class="form-control rounded-1 py-2 fs-6"
+								       placeholder="+234 8087120188" required>
+							</div>
+							<div class="col-md-6">
+								<label class="form-label small text-uppercase fw-bold text-muted">Subject
+									/ Department</label>
+								<select name="enquiry_type" class="form-select rounded-1 py-2 fs-6">
+									<option>General</option>
+									<option>Room Booking</option>
+									{% if hotel.enable_events %}
+									<option>Events & Halls</option>
+									{% endif %}
+
+									{% if hotel.enable_spa %}
+									<option>Spa</option>
+									{% endif %}
+
+									{% if hotel.enable_dining %}
+									<option>Dining</option>
+									{% endif %}
+
+									{% if hotel.enable_gym %}
+									<option>Gym</option>
+									{% endif %}
+								</select>
+							</div>
+							<div class="col-12">
+								<label class="form-label small text-uppercase fw-bold text-muted">Your
+									Message</label>
+								<textarea name="message" class="form-control rounded-1 py-2 fs-6" rows="4"
+								          placeholder="How can we assist you today?"
+								          required></textarea>
+							</div>
+							<div class="col-12 pt-2">
+								<button type="submit"
+								        class="btn hms-restaurant-action-btn w-100 py-3 fw-bold text-white text-uppercase"
+								        style="font-size: 0.85rem; letter-spacing: 1px;">
+									Submit Form <i class="bi bi-send ms-2"></i>
+								</button>
+							</div>
+						</div>
+					</form>
+
+				</div>
+			</div>
+
+			<!-- RIGHT COLUMN: Address Blocks & Social Connections -->
+			<div class="col-lg-5 d-flex flex-column justify-content-between">
+
+				<!-- Address Box -->
+				<div class="bg-white p-4 rounded-2 shadow-sm border border-light mb-4 flex-grow-1">
+					<div class="d-flex align-items-center gap-2 mb-3">
+						<i class="bi bi-geo-alt-fill text-accent-theme fs-4"></i>
+						<h3 class="h5 fw-black text-dark m-0 text-uppercase tracking-wide">Physical
+							Address</h3>
+					</div>
+					<p class="text-muted small leading-relaxed mb-0">
+						{{ hotel.address or "Visit our front desk for directions and guest support." }}
+					</p>
+				</div>
+
+				<!-- Operating Hours Box -->
+				<div class="bg-white p-4 rounded-2 shadow-sm border border-light mb-4 flex-grow-1">
+					<div class="d-flex align-items-center gap-2 mb-3">
+						<i class="bi bi-clock-fill text-accent-theme fs-4"></i>
+						<h3 class="h5 fw-black text-dark m-0 text-uppercase tracking-wide">
+							Availability</h3>
+					</div>
+					<p class="text-muted small leading-relaxed mb-2"><strong>Front Desk
+						Support:</strong> 24 Hours / 7 Days</p>
+					<p class="text-muted small leading-relaxed mb-0"><strong>Email:</strong> {{ hotel.email or "reservations@example.com" }}
+					</p>
+				</div>
+
+				<!-- High-End Social Footprint Box -->
+				<div class="bg-white p-4 rounded-2 shadow-sm border border-light flex-grow-1">
+					<div class="d-flex align-items-center gap-2 mb-3">
+						<i class="bi bi-share-fill text-accent-theme fs-5"></i>
+						<h3 class="h5 fw-black text-dark m-0 text-uppercase tracking-wide">Digital
+							Network</h3>
+					</div>
+					<p class="text-muted small mb-3">Follow us online for updates, custom fitness
+						tips, and virtual wellness tours.</p>
+
+					<!-- Clean Icon Grid -->
+					{% if hotel.social_links %}
+					<div class="d-flex gap-2">
+						{% for social in hotel.social_links %}
+						{% if social.is_visible and social.url %}
+						<a href="{{ social.url }}"
+						   class="hms-social-icon-btn d-flex align-items-center justify-content-center rounded-1 text-dark border"
+						   aria-label="{{ social.platform }}"
+						   target="_blank">
+							{# Fallback to 'bi bi-link-45deg' if icon_class is missing #}
+							<i class="{{ social.icon_class or 'bi bi-link-45deg' }}"></i>
+						</a>
+						{% endif %}
+						{% endfor %}
+					</div>
+					{% endif %}
+				</div>
+
+			</div>
+
+		</div>
+
+	</div>
+</section>
+
+
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/footer.html" %}
+{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/scripts.html" %}
+<script src="/assets/rhohotel/hotel_templates/template_two/js/contact.js"></script>
+
+</body>
+
+</html>

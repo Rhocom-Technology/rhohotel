@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	{% include "rhocom_hotel/templates/hotel_templates/template_one/includes/head.html" %}
+</head>
+<body class="hms-auth-body" style="
+  --web-primary: {{ hotel.primary_color or '#0C3989' }};
+  --web-secondary: {{ hotel.secondary_color or '#124B6B' }};
+  --web-accent: {{ hotel.accent_color or '#9B362D' }};
+">
+
+<!-- Floating Back to Website Action Badge -->
+<a href="/" class="hms-auth-back-nav">
+	<i class="bi bi-arrow-left-short fs-4"></i>
+	<span>Back to Website</span>
+</a>
+
+<!-- Ambient Abstract Background Graphic Rings -->
+<div class="hms-auth-blur-circle circle-1"></div>
+<div class="hms-auth-blur-circle circle-2"></div>
+
+<div
+	class="container d-flex align-items-center justify-content-center min-vh-100 position-relative z-10">
+	<div class="hms-auth-glass-card">
+
+		<!-- Branding Header -->
+		<div class="text-center mb-4">
+			<span class="hms-auth-subtitle">Exquisite Accommodations</span>
+			<h2 class="hms-auth-title text-white mt-1">Welcome Back</h2>
+			<p class="text-white-50 small">Access your custom room booking portfolio management
+				matrix</p>
+		</div>
+
+		<!-- Form Wrapper Block -->
+		<form id="login-form">
+
+			<!-- Email Entry -->
+			<div class="mb-3">
+				<label class="form-label hms-auth-label">Email Address</label>
+				<div class="input-group hms-auth-input-group">
+					<span class="input-group-text"><i
+						class="bi bi-envelope text-white-50"></i></span>
+					<input id="usr" type="text" class="form-control" placeholder="name@example.com"
+					       required autocomplete="email">
+				</div>
+			</div>
+
+			<!-- Password Entry -->
+			<div class="mb-3">
+				<div class="d-flex justify-content-between align-items-center mb-1">
+					<label class="form-label hms-auth-label mb-0">Password</label>
+					<a href="/forgot-password" class="hms-auth-link-alt small">Forgot Password?</a>
+				</div>
+				<div class="input-group hms-auth-input-group">
+					<span class="input-group-text"><i class="bi bi-shield-lock text-white-50"></i></span>
+					<input id="pwd" type="password" class="form-control" placeholder="••••••••" required>
+				</div>
+			</div>
+
+			<!-- Remember Processing Token Switch -->
+			<div class="form-check hms-auth-checkbox mb-4">
+				<input class="form-check-input" type="checkbox" id="rememberMe">
+				<label class="form-check-label small text-white-50" for="rememberMe">
+					Keep me signed in on this client instance
+				</label>
+			</div>
+
+			<!-- Submission Action Trigger -->
+			<button id="loginBtn" type="submit" class="btn hms-btn-auth w-100 py-3 fw-bold mb-3">
+				Secure Authorization Access <i class="bi bi-arrow-right ms-2"></i>
+			</button>
+
+			<!-- Registration Route Redirect Anchor -->
+			<div class="text-center mt-4 pt-3 border-top border-white border-opacity-10">
+				<span class="text-white-50 small">New to our premium collections?</span>
+				<a href="/" class="hms-auth-link ms-2 fw-bold small">Home</a>
+			</div>
+
+		</form>
+
+		<div id="loginError" class="mt-3 text-center"></div>
+	</div>
+</div>
+
+<script>
+	document.addEventListener("DOMContentLoaded", function () {
+		const pwd = document.getElementById("pwd");
+		const toggle = document.getElementById("togglePassword");
+
+		toggle.addEventListener("click", function () {
+			const isHidden = pwd.type === "password";
+
+			pwd.type = isHidden ? "text" : "password";
+
+			toggle.innerHTML = isHidden
+				? '<i class="bi bi-eye-slash"></i>'
+				: '<i class="bi bi-eye"></i>';
+		});
+	});
+
+	document.getElementById("login-form").addEventListener("submit", async function (e) {
+		e.preventDefault();
+
+		const usr = document.getElementById("usr").value.trim();
+		const pwd = document.getElementById("pwd").value;
+		const btn = document.getElementById("loginBtn");
+
+		const originalText = btn.innerHTML;
+
+		const frontDeskRoles = [
+			"Facility Manager",
+			"Front Desk",
+			"Front Desk Manager",
+			"Front Desk User",
+			"Hotel Receptionist",
+			"Hotel Reservation User",
+			"House keeper",
+			"Housekeeping Manager",
+			"Kitchen Staff",
+			"Maintenance Manager",
+			"Maintenance Technician",
+			"Maintenance User",
+			"Restaurant Cashier",
+			"Restaurant Manager",
+			"Restaurant Waiter",
+			"Sales User",
+			"Sales Manager",
+			"Stock Manager",
+			"Stock User",
+			"Technician"
+		];
+
+		btn.disabled = true;
+		btn.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-2"></span>
+        Signing you in...
+    `;
+
+		try {
+			// 1. LOGIN
+			const response = await fetch("/api/method/login", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				credentials: "same-origin",
+				body: JSON.stringify({usr, pwd})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok || data.exc) {
+				throw new Error("Login failed");
+			}
+
+			// 2. GET ROLES
+			const roleRes = await fetch("/api/method/rhohotel.api.get_current_user_info", {
+				method: "GET",
+				credentials: "include",
+				headers: {
+					"Accept": "application/json",
+					"X-Frappe-Site-Name": window.location.hostname,
+				}
+			});
+
+			const roleData = await roleRes.json();
+			const userRoles = roleData.message?.roles || [];
+
+
+			// 3. CHECK ROLES — System Manager and Administrator always go to /app
+			const isAdministrator = userRoles.includes('System Manager')
+				|| userRoles.includes('Administrator')
+
+			const redirectToFrontDesk = !isAdministrator && userRoles.some(role =>
+				frontDeskRoles.includes(role)
+			);
+
+			btn.innerHTML = `
+                    <i class="bi bi-check-circle me-2"></i>
+                    Login Successful
+                `;
+
+			// 4. REDIRECT — honour redirect_to param if present
+			const params = new URLSearchParams(window.location.search)
+			const redirectTo = params.get('redirect_to') || params.get('redirect-to')
+
+			setTimeout(() => {
+				if (redirectTo && redirectTo.startsWith('/frontdesk')) {
+					window.location.href = redirectTo
+				} else {
+					window.location.href = redirectToFrontDesk ? "/frontdesk" : "/app"
+				}
+			}, 800);
+		} catch (err) {
+			console.error("Login error:", err);
+
+			btn.disabled = false;
+			btn.innerHTML = originalText;
+
+			document.getElementById("loginError").innerHTML = `
+            <div class="alert alert-danger mb-0">
+                Invalid email or password.
+            </div>
+        `;
+		}
+	});
+</script>
+
+</body>
+</html>

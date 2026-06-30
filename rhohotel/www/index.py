@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from rhohotel.rhocom_hotel.api.hall_booking import get_halls
+from collections import OrderedDict
 
 no_cache = 1
 
@@ -60,6 +61,7 @@ def get_context(context):
 	context.home_rooms = get_home_rooms()
 	context.page_media = get_page_media()
 	context.halls = get_halls()
+	context.faqs = get_faqs(page)
 
 	# IMPORTANT: THIS FIXES YOUR ERROR
 	context.body_template = (
@@ -357,3 +359,30 @@ def get_event_halls():
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "Hotel Event Hall Fetch Error")
 		return []
+
+def get_faqs(page):
+	faqs = frappe.get_all(
+		"Hotel FAQ",
+		filters={
+			"page": page,
+			"published": 1,
+		},
+		fields=[
+			"category",
+			"question",
+			"answer",
+		],
+		order_by="category asc, sort_order asc",
+	)
+
+	grouped = OrderedDict()
+
+	for faq in faqs:
+		category = faq.category or "General"
+
+		if category not in grouped:
+			grouped[category] = []
+
+		grouped[category].append(faq)
+
+	return grouped

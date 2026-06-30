@@ -1,0 +1,127 @@
+<div class="modal fade" id="logoutModal" tabindex="-1">
+	<div class="modal-dialog">
+		<div class="modal-content glass-card">
+
+			<div class="modal-header ">
+				<h5 class="modal-title fw-bold">
+					Confirm
+				</h5>
+
+				<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal">
+				</button>
+			</div>
+
+			<div class="modal-body">
+				Are you sure you want to log out?
+			</div>
+
+			<div class="modal-footer">
+				<button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">
+					No
+				</button>
+
+				<button type="button" id="confirmLogoutBtn" class="btn btn-dark">
+					Yes
+				</button>
+			</div>
+
+		</div>
+	</div>
+</div>
+
+
+<section class="fancy-cta-section py-5 position-relative overflow-hidden">
+	<div class="cta-glass-overlay"></div>
+	<div class="container px-4 px-md-5 position-relative z-3 py-5 text-center">
+		<div class="row justify-content-center">
+			<div class="col-lg-8">
+                    <span class="d-block text-uppercase fw-black text-accent letter-spacing-2 mb-3">Reservations
+                        Open</span>
+				<h2 class="display-5 text-white text-uppercase fw-black mb-4">Secure Your Luxury Haven</h2>
+				<p class="text-white-50 fs-5 mb-5 max-w-xl mx-auto font-weight-light">
+					Escape into a refined ecosystem of luxury, privacy, and impeccable service. Your customized
+					sanctuary layout is prepared and waiting for your check-in parameters.
+				</p>
+				<div class="d-flex flex-column flex-sm-row justify-content-center align-items-center gap-3">
+					<a href="#" class="btn btn-custom btn-nav-large px-5 py-3 text-uppercase">Reserve Your Suite
+						Now</a>
+					<a href="tel:+12345678"
+					   class="btn btn-outline-white px-5 py-3 text-uppercase fw-bold letter-spacing-1">Speak with
+						Concierge</a>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
+
+
+<footer class="luxury-footer-system pt-5 pb-4 position-relative">
+	<div class="container px-4 px-md-5 pt-3">
+		<div class="row g-5 border-bottom border-secondary-subtle pb-5">
+
+			<div class="col-lg-3 col-sm-6">
+				<h5 class="footer-title text-uppercase mb-4">Wells Carlton</h5>
+				<p class="small text-muted leading-relaxed mb-0">
+					A timeless statement of modern elegance, architecture, and luxury execution. Built to host
+					global travelers seeking sanctuary.
+				</p>
+			</div>
+
+			<div class="col-lg-3 col-sm-6">
+				<h5 class="footer-title text-uppercase mb-4">Discover Spaces</h5>
+				<ul class="list-unstyled footer-link-list d-flex flex-column gap-2.5">
+					<li><a href="/rooms">The Luxury Rooms</a></li>
+					{% if hotel.enable_spa %}
+					<li><a href="/spa">Spa</a></li>
+					{% endif %}
+					{% if hotel.enable_gym %}
+					<li><a href="/gym">Elite Fitness Center</a></li>
+					{% endif %}
+					{% if hotel.enable_dining %}
+					<li><a href="/dining">Dining</a></li>
+					{% endif %}
+				</ul>
+			</div>
+
+			<div class="col-lg-3 col-sm-6">
+				<h5 class="footer-title text-uppercase mb-4">Contact Info</h5>
+				<ul class="list-unstyled footer-contact-details d-flex flex-column gap-2">
+					<li class="small text-muted"><strong class="text-primary-theme">Address:</strong> {{ hotel.address or "Visit our front desk for directions and guest support." }}</li>
+					<li class="small text-muted"><strong class="text-primary-theme">Phone:</strong> {{ hotel.phone or "+234 800 000 0000" }} </li>
+					<li class="small text-muted"><strong class="text-primary-theme">Email:</strong>
+						{{ hotel.email or "reservations@example.com" }}</li>
+				</ul>
+			</div>
+
+			<div class="col-lg-3 col-sm-6">
+				<h5 class="footer-title text-uppercase mb-4">Follow Us</h5>
+				<p class="small text-muted mb-3">Connect with our social media networks for daily property updates:
+				</p>
+				{% if hotel.social_links %}
+				<div class="d-flex gap-3 social-icon-row">
+					{% for social in hotel.social_links %}
+					{% if social.is_visible and social.url %}
+					<a href="{{ social.url }}" aria-label="{{ social.platform }}"><i class="{{ social.icon_class or 'fa-solid fa-link' }} fs-5"></i></a>
+					{% endif %}
+					{% endfor %}
+				</div>
+				{% endif %}
+			</div>
+
+		</div>
+
+		<div class="row pt-4 align-items-center">
+			<div class="col-sm-6">
+				<p class="small text-muted mb-0">&copy; {{ hotel.hotel_name }}. All Rights Reserved.</p>
+			</div>
+			<div class="col-sm-6 text-sm-end mt-3 mt-sm-0 position-relative">
+				<button onclick="scrollToTop()" class="btn btn-scroll-top border-0 p-2" id="scrollTopBtn"
+				        aria-label="Scroll back to top area">
+                        <span class="small text-uppercase tracking-wider fw-bold text-primary-theme me-2">Back To
+                            Top</span>
+					<i class="bi bi-arrow-up-square-fill fs-4 text-primary-theme align-middle"></i>
+				</button>
+			</div>
+		</div>
+	</div>
+</footer>
