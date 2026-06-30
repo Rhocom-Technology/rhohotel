@@ -340,7 +340,7 @@
           </p>
         </div>
         <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
-          <button @click="continueCheckout(false)"
+          <button v-if="isFrontDeskManager" @click="continueCheckout(false)"
             class="px-4 py-2 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
             Skip Charge
           </button>
@@ -360,12 +360,15 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useSessionStore } from '@/stores/session'
 import ReceivePaymentModal from '@/components/checkin/ReceivePaymentModal.vue'
 import { callMethodForm } from '@/lib/api'
 import { parseServerDate } from '@/lib/utils'
 
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
+const isFrontDeskManager = computed(() => session.hasAnyRole(['Front Desk Manager']))
 
 const loading = ref(true)
 const loadError = ref('')
@@ -498,6 +501,11 @@ async function finalizeCheckout() {
 }
 
 function continueCheckout(chargeLateCheckout) {
+  if (!chargeLateCheckout && !isFrontDeskManager.value) {
+    checkoutError.value = 'Only Front Desk Manager can skip late check-out charges.'
+    showLateCheckoutPrompt.value = false
+    return
+  }
   lateCheckoutDecision.value = !!chargeLateCheckout
   showLateCheckoutPrompt.value = false
   finalizeCheckout()

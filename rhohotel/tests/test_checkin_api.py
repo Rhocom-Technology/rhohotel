@@ -196,6 +196,25 @@ class TestHotelSettingsCheckInTime(unittest.TestCase):
         self.assertEqual(result, datetime(2026, 6, 8, 16, 30, 0))
 
 
+class TestLateCheckoutSkipPermission(unittest.TestCase):
+    def test_late_checkout_skip_requires_front_desk_manager(self):
+        with (
+            patch.object(checkin_api, "_get_late_checkout_charge_preview", return_value={"amount": 1500}),
+            patch.object(checkin_api.frappe, "session", types.SimpleNamespace(user="agent.com"), create=True),
+            patch.object(checkin_api.frappe, "get_roles", return_value=["Front Desk Agent"], create=True),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Only Front Desk Manager"):
+                checkin_api._enforce_late_checkout_skip_permission("CHK-LATE-DUE")
+
+    def test_late_checkout_skip_allows_front_desk_manager(self):
+        with (
+            patch.object(checkin_api, "_get_late_checkout_charge_preview", return_value={"amount": 1500}),
+            patch.object(checkin_api.frappe, "session", types.SimpleNamespace(user="manager.com"), create=True),
+            patch.object(checkin_api.frappe, "get_roles", return_value=["Front Desk Manager"], create=True),
+        ):
+            checkin_api._enforce_late_checkout_skip_permission("CHK-LATE-DUE")
+
+
 class TestLateCheckoutApproval(unittest.TestCase):
     def test_approved_late_checkout_does_not_return_charge(self):
         with patch.object(

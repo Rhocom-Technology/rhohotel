@@ -1307,6 +1307,11 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None, charge_
             check_in_name,
             reference_datetime=check_out_datetime,
         )
+    else:
+        _enforce_late_checkout_skip_permission(
+            check_in_name,
+            reference_datetime=check_out_datetime,
+        )
 
     from rhohotel.rhocom_hotel.utils.folio import sync_checkin_folio_totals
 
@@ -1362,6 +1367,24 @@ def process_checkout(check_in_name, remarks="", check_out_datetime=None, charge_
         "late_checkout_invoice": late_checkout_invoice,
         "lock_cancellation": lock_cancellation,
     }
+
+
+def _can_skip_late_checkout_charge():
+    if frappe.session.user == "Administrator":
+        return True
+    return "Front Desk Manager" in frappe.get_roles(frappe.session.user)
+
+
+def _enforce_late_checkout_skip_permission(check_in_name, reference_datetime=None):
+    late_checkout_charge = _get_late_checkout_charge_preview(
+        check_in_name,
+        reference_datetime=reference_datetime,
+    )
+    if not late_checkout_charge or flt(late_checkout_charge.get("amount")) <= 0:
+        return
+
+    if not _can_skip_late_checkout_charge():
+        frappe.throw("Only Front Desk Manager can skip late check-out charges.")
 
 
 def _get_late_checkout_charge_preview(check_in_name, reference_datetime=None):
