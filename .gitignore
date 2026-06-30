@@ -10,3 +10,4 @@ __pycache__
 .idea/projectSettingsUpdater.xml
 .gitignore
 .idea/workspace.xml
+rhohotel/public/frontend

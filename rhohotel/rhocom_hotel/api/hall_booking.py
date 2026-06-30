@@ -813,6 +813,7 @@ def download_hall_booking(booking_name):
         frappe.throw("Booking name is required.")
 
     booking = frappe.get_doc("Hall Booking", booking_name)
+    booking.hall_display_name = frappe.db.get_value("Hall", booking.hall, "hall_name") or booking.hall
 
     invoice_grand_total = 0.0
     outstanding_amount = 0.0

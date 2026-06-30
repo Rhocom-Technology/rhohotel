@@ -313,10 +313,17 @@
             <p class="text-gray-400 mb-1">Booking Date</p>
             <p class="font-semibold text-gray-900">{{ formatDate(reservation.creation) }}</p>
           </div>
-          <div v-if="reservation.special_requests">
-            <p class="text-gray-400 mb-1">Special Requests</p>
-            <p class="font-semibold text-gray-900">{{ reservation.special_requests }}</p>
+          <div v-if="reservation.booking_notes" class="col-span-3">
+            <p class="text-gray-400 mb-1">Special Requests / Booking Notes</p>
+            <div class="mt-1 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+              <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M7 8h10M7 12h6m-6 4h10M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+              </svg>
+              <p class="text-sm text-amber-900 whitespace-pre-wrap">{{ reservation.booking_notes }}</p>
+            </div>
           </div>
+          
           <div v-if="reservation.internal_notes || reservation.notes">
             <p class="text-gray-400 mb-1">Notes</p>
             <p class="font-semibold text-gray-900">{{ reservation.internal_notes || reservation.notes }}</p>
