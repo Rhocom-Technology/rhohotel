@@ -1086,7 +1086,8 @@ body {
 		z-index: 10;
 	}
 
-	.rooms-floating-photo {
+	.rooms-floating-photo,
+	.home-hero-img{
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
@@ -2642,7 +2643,7 @@ input[type="number"] {
    ========================================== */
 
 .hms-auth-body {
-	background-color: #051430; /* Dark premium base backdrop layer */
+	background-color: var(--web-primary); /* Dark premium base backdrop layer */
 	overflow-x: hidden;
 	position: relative;
 	font-family: inherit;
@@ -2659,7 +2660,7 @@ input[type="number"] {
 .hms-auth-blur-circle.circle-1 {
 	width: 400px;
 	height: 400px;
-	background: var(--web-primary);
+	background: var(--web-secondary);
 	top: -10%;
 	left: -10%;
 }
@@ -2765,7 +2766,7 @@ input[type="number"] {
 }
 
 .hms-btn-auth:hover {
-	background-color: #822b24;
+	background-color: var(--web-secondary);
 	transform: translateY(-2px);
 	box-shadow: 0 10px 20px rgba(155, 55, 48, 0.2);
 }
@@ -3005,9 +3006,7 @@ input[type="number"] {
 	background: radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
 }
 
-.home-hero-img{
-	height: 800px;
-}
+
 
 .roomSwiper {
 	position: relative;
@@ -3077,3 +3076,4 @@ input[type="number"] {
 	object-fit: cover;
 	max-height: 500px; /* Keeps layout proportional */
 }
+
