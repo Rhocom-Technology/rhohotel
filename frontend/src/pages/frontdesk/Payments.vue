@@ -342,16 +342,23 @@ const checkins = computed(() => checkInResource.data || [])
 const checkinOptions = computed(() => checkins.value)
 
 async function loadPaymentModes() {
+  const args = {
+    doctype: 'Mode of Payment',
+    fields: ['name'],
+    filters: { enabled: 1 },
+    order_by: 'name asc',
+    limit_page_length: 500,
+  }
+
   try {
-    paymentModes.value = await callMethod('frappe.client.get_list', {
-      doctype: 'Mode of Payment',
-      fields: ['name'],
-      filters: { disabled: 0 },
-      order_by: 'name asc',
-      limit_page_length: 500,
-    }) || []
+    paymentModes.value = await callMethod('frappe.client.get_list', args) || []
   } catch {
-    paymentModes.value = []
+    try {
+      const { filters, ...fallbackArgs } = args
+      paymentModes.value = await callMethod('frappe.client.get_list', fallbackArgs) || []
+    } catch {
+      paymentModes.value = []
+    }
   }
 }
 
